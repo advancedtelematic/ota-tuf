@@ -1,30 +1,36 @@
 package com.advancedtelematic.ota_tuf.daemon
 
 import akka.actor.Status.{Failure, Success}
-import cats.syntax.show.toShowOps
 import akka.actor.{Actor, ActorLogging, Props, Status, SupervisorStrategy}
+
+import akka.routing.RoundRobinPool
+import cats.syntax.show.toShowOps
+import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair
 import com.advancedtelematic.ota_tuf.daemon.KeyGeneratorLeader.Tick
+import com.advancedtelematic.ota_tuf.data.DataType.KeyId._
 import com.advancedtelematic.ota_tuf.data.DataType.{Key, KeyGenRequest}
 import com.advancedtelematic.ota_tuf.data.{KeyGenRequestStatus, KeyType}
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}
+import com.advancedtelematic.ota_tuf.vault.VaultClient
+import com.advancedtelematic.ota_tuf.vault.VaultClient.VaultKey
 import slick.driver.MySQLDriver.api._
-import akka.pattern.pipe
-import akka.routing.RoundRobinPool
-import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair
-import com.advancedtelematic.ota_tuf.data.DataType.KeyId._
 
 import scala.async.Async._
 import scala.concurrent.duration._
 
+import akka.pattern.pipe
+
 object KeyGeneratorLeader {
   case object Tick
 
-  def props()(implicit db: Database): Props = Props(new KeyGeneratorLeader())
+  def props(vaultClient: VaultClient)(implicit db: Database): Props = Props(new KeyGeneratorLeader(vaultClient))
 }
 
-class KeyGeneratorLeader()(implicit db: Database) extends Actor with ActorLogging with KeyGenRequestSupport {
+class KeyGeneratorLeader(vaultClient: VaultClient)(implicit val db: Database) extends Actor with ActorLogging with KeyGenRequestSupport {
 
-  import context.dispatcher
+  implicit val ec = context.dispatcher
+
+  private val WORKER_COUNT = 10
 
   override def preStart(): Unit = {
     self ! Tick
@@ -32,11 +38,13 @@ class KeyGeneratorLeader()(implicit db: Database) extends Actor with ActorLoggin
 
   // override def postRestart(reason: Throwable): Unit = ()
 
-  private val routerProps = RoundRobinPool(10)
-    .withSupervisorStrategy(SupervisorStrategy.defaultStrategy)
-    .props(KeyGeneratorWorker.props())
+  private val router = {
+    val routerProps = RoundRobinPool(WORKER_COUNT)
+      .withSupervisorStrategy(SupervisorStrategy.defaultStrategy)
+      .props(KeyGeneratorWorker.props(vaultClient))
 
-  private val router = context.system.actorOf(routerProps)
+     context.system.actorOf(routerProps)
+   }
 
   def waiting(totalTasks: Int, remaining: Int): Receive =
     if(remaining == 0) {
@@ -65,8 +73,7 @@ class KeyGeneratorLeader()(implicit db: Database) extends Actor with ActorLoggin
     case Tick =>
       log.info("Tick")
 
-      // TODO: Be careful with starvation
-      val f = keyGenRepo.findPending().map { m =>
+      val f = keyGenRepo.findPending(limit = WORKER_COUNT * 4).map { m =>
         m.foreach { router ! _ }
         m.size
       }
@@ -76,17 +83,16 @@ class KeyGeneratorLeader()(implicit db: Database) extends Actor with ActorLoggin
 }
 
 object KeyGeneratorWorker {
-  def props()(implicit db: Database): Props = Props(new KeyGeneratorWorker())
+  def props(vaultClient: VaultClient)(implicit db: Database): Props = Props(new KeyGeneratorWorker(vaultClient))
 }
 
-class KeyGeneratorWorker()(implicit db: Database) extends Actor
+class KeyGeneratorWorker(vaultClient: VaultClient)(implicit val db: Database) extends Actor
   with ActorLogging
   with KeyGenRequestSupport
   with KeyRepositorySupport {
 
   import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair._
-
-  import context.dispatcher
+  implicit val ec = context.dispatcher
 
   override def receive: Receive = {
     case kgr: KeyGenRequest =>
@@ -95,7 +101,11 @@ class KeyGeneratorWorker()(implicit db: Database) extends Actor
       val f = async {
         val keyPair = RsaKeyPair.generate(kgr.size)
         val key = Key(kgr.id, KeyType.RSA, keyPair.getPublic.show)
+
         val newKeyGnr = await(keyGenRepo.persistGenerated(kgr, key, keyRepo))
+
+        val vaultKey = VaultKey(kgr.id, key.keyType, key.publicKey, keyPair.getPrivate.show)
+        await(vaultClient.createKey(vaultKey))
 
         log.info("Generated Key {}", key.id.show)
         Success(newKeyGnr)
@@ -104,12 +114,9 @@ class KeyGeneratorWorker()(implicit db: Database) extends Actor
       f.recoverWith {
         case ex ⇒
           log.error("Key generation failed: {}", ex.getMessage)
-
           keyGenRepo
             .setStatus(kgr.id, KeyGenRequestStatus.ERROR)
             .map(_ => Failure(ex))
       }.pipeTo(sender)
-
-    // TODO: store private key in vault
   }
 }

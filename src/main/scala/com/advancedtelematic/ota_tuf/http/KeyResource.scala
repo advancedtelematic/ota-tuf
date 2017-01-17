@@ -12,7 +12,7 @@ import org.genivi.sota.marshalling.CirceMarshallingSupport._
 import io.circe.generic.auto._
 
 class KeyResource()
-                 (implicit db: Database, ec: ExecutionContext, mat: Materializer) extends KeyGenRequestSupport {
+                 (implicit val db: Database, val ec: ExecutionContext, mat: Materializer) extends KeyGenRequestSupport {
 
   import akka.http.scaladsl.server.Directives._
 

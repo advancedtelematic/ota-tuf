@@ -6,20 +6,21 @@ import cats.Show
 import com.advancedtelematic.ota_tuf.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.data.KeyType.KeyType
-import org.genivi.sota.data.SlickEnum
+import io.circe._
+import org.genivi.sota.data.{CirceEnum, SlickEnum}
 import slick.ast.BaseTypedType
 import slick.driver.MySQLDriver.api._
 import slick.jdbc.JdbcType
 
 import scala.reflect.ClassTag
 
-object KeyGenRequestStatus extends Enumeration with SlickEnum {
+object KeyGenRequestStatus extends CirceEnum with SlickEnum {
   type KeyGenRequestStatus = Value
 
   val REQUESTED, GENERATED, ERROR = Value
 }
 
-object KeyType extends Enumeration with SlickEnum {
+object KeyType extends CirceEnum with SlickEnum {
   type KeyType = Value
 
   val RSA = Value
@@ -37,6 +38,9 @@ object UUIDKey {
 
     implicit def dbMapping(implicit ct: ClassTag[Self]): JdbcType[Self] with BaseTypedType[Self] =
       MappedColumnType.base[Self, String](_.uuid.toString, (s: String) => fromJava(UUID.fromString(s)))
+
+    implicit val encoder: Encoder[Self] = Encoder[String].contramap(_.uuid.toString)
+    implicit val decoder: Decoder[Self] = Decoder[String].map(s => fromJava(UUID.fromString(s)))
   }
 
   abstract class UUIDKey {

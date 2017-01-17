@@ -1,14 +1,18 @@
 package com.advancedtelematic.daemon
 
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.Uri
+import akka.stream.ActorMaterializer
 import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.ota_tuf.daemon.KeyGeneratorLeader
 import com.advancedtelematic.ota_tuf.data.DataType.{KeyGenRequest, KeyId}
 import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus
+import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}
+import com.advancedtelematic.ota_tuf.vault.{VaultClient, VaultClientImpl}
 import com.advancedtelematic.util.OtaTufSpec
 import org.genivi.sota.core.DatabaseSpec
-import org.scalatest.{BeforeAndAfterAll, Inspectors}
+import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
 import org.scalatest.concurrent.PatienceConfiguration.{Interval, Timeout}
 import org.scalatest.concurrent.Eventually
 import org.scalatest.time.{Milliseconds, Seconds, Span}
@@ -25,7 +29,7 @@ class KeyGeneratorLeaderSpec extends OtaTufSpec with TestKitBase with DatabaseSp
 
   implicit val ec = ExecutionContext.global
 
-  lazy val actorRef = system.actorOf(KeyGeneratorLeader.props())
+  lazy val actorRef = system.actorOf(KeyGeneratorLeader.props(fakeVault))
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -42,21 +46,11 @@ class KeyGeneratorLeaderSpec extends OtaTufSpec with TestKitBase with DatabaseSp
   private val interval = Interval(Span(200, Milliseconds))
 
   test("processes pending generation requests") {
-    val keyGenReq = KeyGenRequest(KeyId.generate(), KeyGenRequestStatus.REQUESTED)
-    keyGenRepo.persist(keyGenReq).futureValue
-
-    eventually(timeout, interval) {
-      keyGenRepo.find(keyGenReq.id).futureValue.status shouldBe KeyGenRequestStatus.GENERATED
-    }
+    expectGenerated(KeyGenRequestStatus.GENERATED)
   }
 
   test("retries periodically for new pending requests") {
-    val keyGenReq = KeyGenRequest(KeyId.generate(), KeyGenRequestStatus.REQUESTED)
-    keyGenRepo.persist(keyGenReq).futureValue
-
-    eventually(timeout, interval) {
-      keyGenRepo.find(keyGenReq.id).futureValue.status shouldBe KeyGenRequestStatus.GENERATED
-    }
+    expectGenerated(KeyGenRequestStatus.GENERATED)
 
     val keyGenReqs = Future.sequence {
       (1 to 20).map { _ ⇒
@@ -75,17 +69,18 @@ class KeyGeneratorLeaderSpec extends OtaTufSpec with TestKitBase with DatabaseSp
   }
 
   test("recovers when single worker fails") {
-    val keyGenReq = KeyGenRequest(KeyId.generate(), KeyGenRequestStatus.REQUESTED, size = -1)
-    keyGenRepo.persist(keyGenReq).futureValue
+    expectGenerated(KeyGenRequestStatus.ERROR, size = -1)
 
-    eventually(timeout, interval) {
-      keyGenRepo.find(keyGenReq.id).futureValue.status shouldBe KeyGenRequestStatus.ERROR
-    }
+    expectGenerated(KeyGenRequestStatus.GENERATED)
 
-    val otherKeyGenReq = KeyGenRequest(KeyId.generate(), KeyGenRequestStatus.REQUESTED)
-    keyGenRepo.persist(otherKeyGenReq).futureValue
+    expectGenerated(KeyGenRequestStatus.GENERATED)
+  }
+
+  def expectGenerated(newStatus: KeyGenRequestStatus, size: Int = 512): Assertion = {
+    val keyGenRequest = KeyGenRequest(KeyId.generate(), KeyGenRequestStatus.REQUESTED, size = size)
+    keyGenRepo.persist(keyGenRequest).futureValue
     eventually(timeout, interval) {
-      keyGenRepo.find(otherKeyGenReq.id).futureValue.status shouldBe KeyGenRequestStatus.GENERATED
+      keyGenRepo.find(keyGenRequest.id).futureValue.status shouldBe newStatus
     }
   }
 }

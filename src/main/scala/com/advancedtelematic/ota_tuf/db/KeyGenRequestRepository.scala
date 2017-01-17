@@ -9,8 +9,13 @@ import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus.KeyGenRequestStatu
 
 import scala.concurrent.{ExecutionContext, Future}
 
-trait KeyGenRequestSupport {
-  def keyGenRepo(implicit db: Database, ec: ExecutionContext) = new KeyGenRequestRepository()
+trait DatabaseSupport {
+  implicit val ec: ExecutionContext
+  implicit  val db: Database
+}
+
+trait KeyGenRequestSupport extends DatabaseSupport {
+  lazy val keyGenRepo = new KeyGenRequestRepository()
 }
 
 protected class KeyGenRequestRepository()(implicit db: Database, ec: ExecutionContext) {
@@ -54,8 +59,8 @@ protected class KeyGenRequestRepository()(implicit db: Database, ec: ExecutionCo
   }
 }
 
-trait KeyRepositorySupport {
-  def keyRepo(implicit db: Database, ec: ExecutionContext) = new KeyRepository()
+trait KeyRepositorySupport extends DatabaseSupport {
+  lazy val keyRepo = new KeyRepository()
 }
 
 class KeyRepository()(implicit db: Database, ec: ExecutionContext) {

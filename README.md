@@ -1,8 +1,11 @@
-# ATS service Blueprint
+# Ota-tuf
 
-Someone did it so you don't have to.
+## Running
 
-Build up on this template to create a new service in the ATS infrastructure.
+You'll need vault:
+    
+    docker run -it -e VAULT_DEV_ROOT_TOKEN_ID=f8c637c5-b762-e6a7-7974-bf45d3061106 -p 8200:8200 vault
+    vault mount -path=ota-tuf/keys generic
 
 ## Running tests
 
