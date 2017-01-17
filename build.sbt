@@ -8,44 +8,58 @@ resolvers += "ATS Releases" at "http://nexus.prod01.internal.advancedtelematic.c
 
 resolvers += "ATS Snapshots" at "http://nexus.prod01.internal.advancedtelematic.com:8081/content/repositories/snapshots"
 
-libraryDependencies ++= {
-  val akkaV = "2.4.14"
-  val akkaHttpV = "10.0.0"
-  val scalaTestV = "3.0.0"
-  val slickV = "3.1.1"
-  val sotaV = "0.2.53"
+def itFilter(name: String): Boolean = name endsWith "IntegrationSpec"
 
-  Seq(
-    "com.typesafe.akka" %% "akka-actor" % akkaV,
-    "com.typesafe.akka" %% "akka-stream" % akkaV,
-    "com.typesafe.akka" %% "akka-http" % akkaHttpV,
-    "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV,
-    "com.typesafe.akka" %% "akka-slf4j" % akkaV,
-    "org.scalatest"     %% "scalatest" % scalaTestV % "test",
+def unitFilter(name: String): Boolean = !itFilter(name)
 
-    "ch.qos.logback" % "logback-classic" % "1.1.3",
+lazy val ItTest = config("it").extend(Test)
 
-    "org.genivi" %% "sota-common" % sotaV,
-    "org.genivi" %% "sota-common-db-test" % sotaV % "test",
+lazy val UnitTest = config("ut").extend(Test)
 
-    "org.bouncycastle" % "bcprov-jdk15on" % "1.56",
-    "org.bouncycastle" % "bcpkix-jdk15on" % "1.56",
+lazy val root = (project in file("."))
+  .enablePlugins(BuildInfoPlugin)
+  .configs(ItTest)
+  .settings(inConfig(ItTest)(Defaults.testTasks): _*)
+  .configs(UnitTest)
+  .settings(inConfig(UnitTest)(Defaults.testTasks): _*)
+  .settings(testOptions in UnitTest := Seq(Tests.Filter(unitFilter)))
+  .settings(testOptions in IntegrationTest := Seq(Tests.Filter(itFilter)))
+  .settings(Seq(libraryDependencies ++= {
+    val akkaV = "2.4.14"
+    val akkaHttpV = "10.0.0"
+    val scalaTestV = "3.0.0"
+    val slickV = "3.1.1"
+    val sotaV = "0.2.53"
 
-    "org.scala-lang.modules" %% "scala-async" % "0.9.6",
+    Seq(
+      "com.typesafe.akka" %% "akka-actor" % akkaV,
+      "com.typesafe.akka" %% "akka-stream" % akkaV,
+      "com.typesafe.akka" %% "akka-http" % akkaHttpV,
+      "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV,
+      "com.typesafe.akka" %% "akka-slf4j" % akkaV,
+      "org.scalatest"     %% "scalatest" % scalaTestV % "test",
 
-    "com.typesafe.slick" %% "slick" % slickV,
-    "com.typesafe.slick" %% "slick-hikaricp" % slickV,
-    "org.mariadb.jdbc" % "mariadb-java-client" % "1.4.4",
-    "org.flywaydb" % "flyway-core" % "4.0.3"
-  )
-}
+      "ch.qos.logback" % "logback-classic" % "1.1.3",
 
-enablePlugins(BuildInfoPlugin)
+      "org.genivi" %% "sota-common" % sotaV,
+      "org.genivi" %% "sota-common-db-test" % sotaV % "test",
+
+      "org.bouncycastle" % "bcprov-jdk15on" % "1.56",
+      "org.bouncycastle" % "bcpkix-jdk15on" % "1.56",
+
+      "org.scala-lang.modules" %% "scala-async" % "0.9.6",
+
+      "com.typesafe.slick" %% "slick" % slickV,
+      "com.typesafe.slick" %% "slick-hikaricp" % slickV,
+      "org.mariadb.jdbc" % "mariadb-java-client" % "1.4.4",
+      "org.flywaydb" % "flyway-core" % "4.0.3"
+    )
+  }))
+
 
 buildInfoOptions += BuildInfoOption.ToMap
 
 buildInfoOptions += BuildInfoOption.BuildTime
-
 
 flywayUrl := sys.env.getOrElse("DB_URL", "jdbc:mysql://localhost:3306/ota_tuf")
 

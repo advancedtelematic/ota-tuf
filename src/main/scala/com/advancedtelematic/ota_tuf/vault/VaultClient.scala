@@ -3,23 +3,29 @@ package com.advancedtelematic.ota_tuf.vault
 import cats.syntax.show._
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
+import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.Uri.Path._
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.HttpMethods._
+import akka.http.scaladsl.unmarshalling.{FromEntityUnmarshaller, Unmarshaller}
 import akka.stream.Materializer
-import com.advancedtelematic.ota_tuf.data.DataType.{Key, KeyId}
+import com.advancedtelematic.ota_tuf.data.DataType.KeyId
 import com.advancedtelematic.ota_tuf.data.KeyType.KeyType
 import com.advancedtelematic.ota_tuf.vault.VaultClient.VaultKey
-import io.circe.Encoder
+import io.circe.{Decoder, Encoder, HCursor}
 
 import scala.concurrent.Future
 import scala.util.control.NoStackTrace
 import io.circe.generic.semiauto._
 import io.circe.syntax._
+import io.circe.jawn
+
+import scala.reflect.ClassTag
 
 trait VaultClient {
   def createKey(key: VaultKey): Future[Unit]
+
+  def findKey(keyId: KeyId): Future[VaultKey]
 }
 
 object VaultClient {
@@ -29,6 +35,7 @@ object VaultClient {
 
   object VaultKey {
     implicit val encoder: Encoder[VaultKey] = deriveEncoder[VaultKey]
+    implicit val decoder: Decoder[VaultKey] = deriveDecoder[VaultKey]
   }
 
   def apply(host: Uri, token: String)(implicit system: ActorSystem, mat: Materializer): VaultClient = new VaultClientImpl(host, token)
@@ -47,17 +54,40 @@ class VaultClientImpl(vaultHost: Uri, token: String)(implicit system: ActorSyste
   override def createKey(key: VaultKey): Future[Unit] = {
     val req = HttpRequest(POST, vaultHost.withPath(mountPath / key.id.show))
       .withEntity(key.asJson.noSpaces)
-    execute(req)
+    execute[Unit](req)
   }
 
-  private def execute(request: HttpRequest): Future[Unit] = {
+  override def findKey(keyId: KeyId): Future[VaultKey] = {
+    val req = HttpRequest(GET, vaultHost.withPath(mountPath / keyId.show))
+    execute[VaultKey](req)
+  }
+
+  private def execute[T](request: HttpRequest)
+                        (implicit ct: ClassTag[T], um: FromEntityUnmarshaller[T]): Future[T] = {
     val authRequest = request.addHeader(RawHeader("X-Vault-Token", token))
 
     _http.singleRequest(authRequest).flatMap {
-      case HttpResponse(status, _, _, _) if status.isSuccess() =>
-        Future.successful(())
+      case r @ HttpResponse(status, _, _, _) if status.isSuccess() =>
+        um(r.entity)
       case r =>
         Future.failed(VaultError(s"Unexpected response from vault: $r"))
     }
+  }
+
+  implicit private def vaultResponseUnmarshaller[T](implicit dec: Decoder[T], ct: ClassTag[T]): FromEntityUnmarshaller[T] = {
+    if(ct.runtimeClass == classOf[Unit])
+      Unmarshaller.strict(_ => ().asInstanceOf[T])
+    else
+      Unmarshaller
+        .stringUnmarshaller
+        .forContentTypes(ContentTypes.`application/json`)
+        .map { data =>
+          val json = jawn
+            .parse(data)
+            .map(j => HCursor.fromCursor(j.cursor).downField("data"))
+            .valueOr(throw _)
+
+          json.as[T].valueOr(throw _)
+        }
   }
 }

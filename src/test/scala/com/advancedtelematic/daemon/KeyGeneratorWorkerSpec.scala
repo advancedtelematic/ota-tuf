@@ -1,14 +1,11 @@
 package com.advancedtelematic.daemon
 
 import akka.actor.{ActorSystem, Status}
-import akka.http.scaladsl.model.Uri
-import akka.stream.ActorMaterializer
 import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.ota_tuf.daemon.KeyGeneratorWorker
 import com.advancedtelematic.ota_tuf.data.DataType.{KeyGenRequest, KeyId}
 import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}
-import com.advancedtelematic.ota_tuf.vault.VaultClient
 import com.advancedtelematic.util.OtaTufSpec
 import org.genivi.sota.core.DatabaseSpec
 
@@ -18,7 +15,7 @@ import scala.concurrent.duration._
 class KeyGeneratorWorkerSpec extends OtaTufSpec with TestKitBase with DatabaseSpec with ImplicitSender
   with KeyRepositorySupport
   with KeyGenRequestSupport {
-  override implicit lazy val system: ActorSystem = ActorSystem("KeyGeneratorWorkerSpec")
+  override implicit lazy val system: ActorSystem = ActorSystem("KeyGeneratorWorkerIntegrationSpec")
 
   implicit val ec = ExecutionContext.global
 
@@ -32,7 +29,7 @@ class KeyGeneratorWorkerSpec extends OtaTufSpec with TestKitBase with DatabaseSp
     keyRepo.find(keyid).futureValue.publicKey should include("BEGIN PUBLIC KEY")
   }
 
-  test("XXX sends back Failure if something bad happens") {
+  test("sends back Failure if something bad happens") {
     actorRef ! KeyGenRequest(KeyId.generate(), KeyGenRequestStatus.REQUESTED, size = -1)
     val exception = expectMsgType[Status.Failure](3.seconds)
     exception.cause shouldBe a[IllegalArgumentException]
@@ -54,7 +51,7 @@ class KeyGeneratorWorkerSpec extends OtaTufSpec with TestKitBase with DatabaseSp
     actorRef ! KeyGenRequest(keyid, KeyGenRequestStatus.REQUESTED)
     expectMsgType[Status.Success](3.seconds)
 
-    fakeVault.keys.get(keyid).publicKey should include("BEGIN PUBLIC KEY")
-    fakeVault.keys.get(keyid).privateKey should include("BEGIN RSA PRIVATE KEY")
+    fakeVault.findKey(keyid).futureValue.publicKey should include("BEGIN PUBLIC KEY")
+    fakeVault.findKey(keyid).futureValue.privateKey should include("BEGIN RSA PRIVATE KEY")
   }
 }
