@@ -3,9 +3,12 @@ package com.advancedtelematic.ota_tuf
 import java.security.Security
 
 import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server.{Directives, Route}
 import akka.stream.Materializer
-import com.advancedtelematic.ota_tuf.http.ServiceBlueprintRoutes
+import com.advancedtelematic.ota_tuf.http.OtaTufRoutes
+import com.advancedtelematic.ota_tuf.repo_store.RoleKeyStoreHttpClient
+import com.advancedtelematic.ota_tuf.vault.VaultClient
 import com.typesafe.config.ConfigFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.genivi.sota.db.{BootMigrations, DatabaseConfig}
@@ -20,6 +23,9 @@ trait Settings {
 
   val host = config.getString("server.host")
   val port = config.getInt("server.port")
+
+  lazy val vaultAddr = Uri(config.getString("vault.address"))
+  lazy val vaultToken = config.getString("vault.token")
 }
 
 object Boot extends BootApp
@@ -37,9 +43,15 @@ object Boot extends BootApp
 
   log.info(s"Starting $version on http://$host:$port")
 
+  lazy val vaultClient = VaultClient(vaultAddr, vaultToken)
+
+  val localRoleKeyStore = Uri.from(host = host, port = port, path = "/api/v1")
+
+  lazy val keyStoreClient = new RoleKeyStoreHttpClient(localRoleKeyStore)
+
   val routes: Route =
     (versionHeaders(version) & logResponseMetrics(projectName)) {
-      new ServiceBlueprintRoutes().routes
+      new OtaTufRoutes(vaultClient, keyStoreClient).routes
     }
 
   Http().bindAndHandle(routes, host, port)

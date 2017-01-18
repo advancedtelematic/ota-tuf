@@ -1,6 +1,5 @@
 package com.advancedtelematic.ota_tuf.vault
 
-import cats.syntax.show._
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
@@ -9,7 +8,7 @@ import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.HttpMethods._
 import akka.http.scaladsl.unmarshalling.{FromEntityUnmarshaller, Unmarshaller}
 import akka.stream.Materializer
-import com.advancedtelematic.ota_tuf.data.DataType.KeyId
+import com.advancedtelematic.ota_tuf.data.DataType.{KeyGenId, KeyId}
 import com.advancedtelematic.ota_tuf.data.KeyType.KeyType
 import com.advancedtelematic.ota_tuf.vault.VaultClient.VaultKey
 import io.circe.{Decoder, Encoder, HCursor}
@@ -18,9 +17,9 @@ import scala.concurrent.Future
 import scala.util.control.NoStackTrace
 import io.circe.generic.semiauto._
 import io.circe.syntax._
-import io.circe.jawn
 
 import scala.reflect.ClassTag
+import org.genivi.sota.marshalling.CirceInstances._
 
 trait VaultClient {
   def createKey(key: VaultKey): Future[Unit]
@@ -29,8 +28,6 @@ trait VaultClient {
 }
 
 object VaultClient {
-  import KeyId._
-
   case class VaultKey(id: KeyId, keyType: KeyType, publicKey: String, privateKey: String)
 
   object VaultKey {
@@ -52,13 +49,13 @@ class VaultClientImpl(vaultHost: Uri, token: String)(implicit system: ActorSyste
   case class VaultError(msg: String) extends Throwable(msg) with NoStackTrace
 
   override def createKey(key: VaultKey): Future[Unit] = {
-    val req = HttpRequest(POST, vaultHost.withPath(mountPath / key.id.show))
+    val req = HttpRequest(POST, vaultHost.withPath(mountPath / key.id.get))
       .withEntity(key.asJson.noSpaces)
     execute[Unit](req)
   }
 
   override def findKey(keyId: KeyId): Future[VaultKey] = {
-    val req = HttpRequest(GET, vaultHost.withPath(mountPath / keyId.show))
+    val req = HttpRequest(GET, vaultHost.withPath(mountPath / keyId.get))
     execute[VaultKey](req)
   }
 
@@ -82,12 +79,11 @@ class VaultClientImpl(vaultHost: Uri, token: String)(implicit system: ActorSyste
         .stringUnmarshaller
         .forContentTypes(ContentTypes.`application/json`)
         .map { data =>
-          val json = jawn
+          io.circe.parser
             .parse(data)
             .map(j => HCursor.fromCursor(j.cursor).downField("data"))
+            .flatMap(_.as[T])
             .valueOr(throw _)
-
-          json.as[T].valueOr(throw _)
         }
   }
 }

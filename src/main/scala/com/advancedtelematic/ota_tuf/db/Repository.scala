@@ -1,0 +1,214 @@
+package com.advancedtelematic.ota_tuf.db
+
+import com.advancedtelematic.ota_tuf.data.DataType.{GroupId, Key, KeyId, Role}
+import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus
+import org.genivi.sota.http.Errors.{EntityAlreadyExists, MissingEntity}
+import slick.driver.MySQLDriver.api._
+import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus.KeyGenRequestStatus
+import com.advancedtelematic.ota_tuf.data.RepositoryDataType.{SignedRole, TargetItem}
+import com.advancedtelematic.ota_tuf.data.RoleType.RoleType
+
+import scala.concurrent.{ExecutionContext, Future}
+
+trait DatabaseSupport {
+  implicit val ec: ExecutionContext
+  implicit  val db: Database
+}
+
+trait KeyGenRequestSupport extends DatabaseSupport {
+  lazy val keyGenRepo = new KeyGenRequestRepository()
+}
+
+protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: ExecutionContext) {
+  import com.advancedtelematic.ota_tuf.data.DataType._
+  import org.genivi.sota.db.SlickExtensions._
+  import org.genivi.sota.db.Operators._
+  import org.genivi.sota.refined.SlickRefined._
+  import Schema.keyGenRequests
+
+  val keyGenRequestNotFound = MissingEntity(classOf[KeyGenRequest])
+
+  def persist(keyGenRequest: KeyGenRequest): Future[KeyGenRequest] = {
+    db.run(persistAction(keyGenRequest))
+  }
+
+  def persistAll(reqs: Seq[KeyGenRequest]): Future[Seq[KeyGenRequest]] =
+    db.run {
+      DBIO.sequence {
+        reqs.map(persistAction)
+      }.transactionally
+    }
+
+  def persistGenerated(keyGenRequest: KeyGenRequest, key: Key, keyRepository: KeyRepository): Future[KeyGenRequest] = {
+    val dbIO = for {
+      _ ← setStatusAction(keyGenRequest.id, KeyGenRequestStatus.GENERATED)
+      _ ← keyRepository.persistAction(key)
+    } yield keyGenRequest.copy(status = KeyGenRequestStatus.GENERATED)
+
+    db.run(dbIO.transactionally)
+  }
+
+  def setStatus(genId: KeyGenId, status: KeyGenRequestStatus): Future[KeyGenId] =
+    db.run(setStatusAction(genId, status))
+
+  def findPending(limit: Int = 1024): Future[Seq[KeyGenRequest]] =
+    db.run(keyGenRequests.filter(_.status === KeyGenRequestStatus.REQUESTED).take(limit).result)
+
+  def find(genId: KeyGenId): Future[KeyGenRequest] = {
+    db.run(keyGenRequests.filter(_.id === genId).result.failIfNotSingle(keyGenRequestNotFound))
+  }
+
+  def findBy(groupId: GroupId): Future[Seq[KeyGenRequest]] =
+    db.run {
+      keyGenRequests
+        .filter(_.groupId === groupId)
+        .result
+    }
+
+  protected [db] def setStatusAction(id: KeyGenId, status: KeyGenRequestStatus): DBIO[KeyGenId] =
+    keyGenRequests
+      .filter(_.id === id)
+      .map(_.status)
+      .update(status)
+      .handleSingleUpdateError(MissingEntity(classOf[KeyGenRequest]))
+      .map(_ => id)
+
+
+  protected [db] def persistAction(keyGenRequest: KeyGenRequest): DBIO[KeyGenRequest] = {
+    (keyGenRequests += keyGenRequest)
+      .handleIntegrityErrors(EntityAlreadyExists(classOf[KeyGenRequest]))
+      .map(_ => keyGenRequest)
+  }
+}
+
+trait KeyRepositorySupport extends DatabaseSupport {
+  lazy val keyRepo = new KeyRepository()
+}
+
+object KeyRepository {
+  val KeyNotFound = MissingEntity(classOf[Key])
+}
+
+protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext) {
+  import org.genivi.sota.db.SlickExtensions._
+  import org.genivi.sota.refined.SlickRefined._
+
+  import Schema.{keys, roles}
+  import KeyRepository._
+
+
+  protected[db] def persist(key: Key): Future[Unit] = db.run(persistAction(key))
+
+  def find(keyId: KeyId): Future[Key] =
+    db.run(keys.filter(_.id === keyId).result.failIfNotSingle(KeyNotFound))
+
+  def groupKeys(groupId: GroupId, roleType: RoleType): Future[Seq[Key]] =
+    db.run {
+      roles.join(keys).on(_.id === _.roleId)
+        .filter(_._1.groupId === groupId)
+        .filter(_._1.roleType === roleType)
+        .map(_._2)
+        .result
+    }
+
+
+  def keysFor(groupId: GroupId): Future[Seq[Key]] =
+    db.run {
+      roles.join(keys).on(_.id === _.roleId)
+        .filter(_._1.groupId === groupId)
+        .map(_._2)
+        .result
+    }
+
+  def groupKeysByRole(groupId: GroupId): Future[Map[RoleType, (Role, Seq[Key])]] = {
+    db.run {
+      val groupKeys = roles
+        .filter(_.groupId === groupId)
+        .join(keys).on(_.id === _.roleId)
+        .result
+
+      groupKeys.map { roleKeys =>
+        roleKeys
+          .groupBy(_._1.roleType)
+          .filter { case (_, values) => values.nonEmpty }
+          .mapValues { keysSeq =>
+            (keysSeq.head._1, keysSeq.map(_._2))
+          }
+      }
+    }
+  }
+
+  protected [db] def persistAction(key: Key): DBIO[Unit] = {
+    Schema.keys.insertOrUpdate(key).map(_ ⇒ ())
+  }
+}
+
+trait RoleRepositorySupport extends DatabaseSupport {
+  lazy val roleRepo = new RoleRepository()
+}
+
+protected [db] class RoleRepository()(implicit db: Database, ec: ExecutionContext) {
+  import org.genivi.sota.db.SlickExtensions._
+  import org.genivi.sota.refined.SlickRefined._
+
+  def persist(role: Role): Future[Role] =
+    db.run((Schema.roles += role).map(_ => role))
+}
+
+
+trait TargetItemRepositorySupport extends DatabaseSupport {
+  lazy val targetItemRepo = new TargetItemRepository()
+}
+
+protected [db] class TargetItemRepository()(implicit db: Database, ec: ExecutionContext) {
+  import org.genivi.sota.db.SlickExtensions._
+  import org.genivi.sota.refined.SlickRefined._
+
+  import Schema.targetItems
+
+  def persist(targetItem: TargetItem): Future[TargetItem] =
+    db.run(targetItems.insertOrUpdate(targetItem).map(_ => targetItem))
+
+  def findFor(groupId: GroupId): Future[Seq[TargetItem]] =
+    db.run {
+      targetItems.filter(_.groupId === groupId).result
+    }
+}
+
+trait SignedRoleRepositorySupport extends DatabaseSupport {
+  lazy val signedRoleRepo = new SignedRoleRepository()
+}
+
+object SignedRoleRepository {
+  val SignedRoleNotFound = MissingEntity(classOf[SignedRole])
+}
+
+protected[db] class SignedRoleRepository()(implicit db: Database, ec: ExecutionContext) {
+
+  import org.genivi.sota.db.SlickExtensions._
+  import org.genivi.sota.refined.SlickRefined._
+
+  import Schema.signedRoles
+  import SignedRoleRepository.SignedRoleNotFound
+
+  def persist(signedRole: SignedRole): Future[SignedRole] =
+    db.run(persistAction(signedRole))
+
+  private def persistAction(signedRole: SignedRole): DBIO[SignedRole] =
+    signedRoles.insertOrUpdate(signedRole).map(_ => signedRole)
+
+  def persistAll(signedRoles: SignedRole*): Future[Seq[SignedRole]] =
+    db.run {
+      DBIO.sequence(signedRoles.map(persistAction)).transactionally
+    }
+
+  def find(groupId: GroupId, roleType: RoleType): Future[SignedRole] =
+    db.run {
+      signedRoles
+        .filter(_.groupId === groupId)
+        .filter(_.roleType === roleType)
+        .result
+        .headOption
+        .failIfNone(SignedRoleNotFound)
+    }
+}

@@ -5,8 +5,8 @@ import akka.http.scaladsl.model.Uri
 import akka.stream.ActorMaterializer
 import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.ota_tuf.daemon.KeyGeneratorLeader
-import com.advancedtelematic.ota_tuf.data.DataType.{KeyGenRequest, KeyId}
-import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus
+import com.advancedtelematic.ota_tuf.data.DataType.{GroupId, KeyGenId, KeyGenRequest, KeyId, RoleId}
+import com.advancedtelematic.ota_tuf.data.{KeyGenRequestStatus, RoleType}
 import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.ota_tuf.vault.{VaultClient, VaultClientImpl}
@@ -54,7 +54,8 @@ class KeyGeneratorLeaderSpec extends OtaTufSpec with TestKitBase with DatabaseSp
 
     val keyGenReqs = Future.sequence {
       (1 to 20).map { _ ⇒
-        val otherKeyGenReq = KeyGenRequest(KeyId.generate(), KeyGenRequestStatus.REQUESTED)
+        val groupId = GroupId.generate()
+        val otherKeyGenReq = KeyGenRequest(KeyGenId.generate(), groupId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT)
         keyGenRepo.persist(otherKeyGenReq).map(_.id)
       }
     }
@@ -77,7 +78,8 @@ class KeyGeneratorLeaderSpec extends OtaTufSpec with TestKitBase with DatabaseSp
   }
 
   def expectGenerated(newStatus: KeyGenRequestStatus, size: Int = 512): Assertion = {
-    val keyGenRequest = KeyGenRequest(KeyId.generate(), KeyGenRequestStatus.REQUESTED, size = size)
+    val groupId = GroupId.generate()
+    val keyGenRequest = KeyGenRequest(KeyGenId.generate(), groupId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = size)
     keyGenRepo.persist(keyGenRequest).futureValue
     eventually(timeout, interval) {
       keyGenRepo.find(keyGenRequest.id).futureValue.status shouldBe newStatus

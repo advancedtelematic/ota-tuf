@@ -1,18 +1,26 @@
 package com.advancedtelematic.ota_tuf.data
 
+import java.security.PublicKey
 import java.util.UUID
 
+import akka.http.scaladsl.model.Uri
+import akka.http.scaladsl.server.PathMatchers
 import cats.Show
+import com.advancedtelematic.ota_tuf.crypt.{RsaKeyPair, Sha256Digest}
+import com.advancedtelematic.ota_tuf.data.DataType.GroupId
 import com.advancedtelematic.ota_tuf.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.data.KeyType.KeyType
-import io.circe._
+import com.advancedtelematic.ota_tuf.data.RepositoryDataType.HashMethod.HashMethod
+import com.advancedtelematic.ota_tuf.data.RoleType.RoleType
+import com.advancedtelematic.ota_tuf.data.SignatureMethod.SignatureMethod
+import eu.timepit.refined.api.{Refined, Validate}
+import io.circe.Json
 import org.genivi.sota.data.{CirceEnum, SlickEnum}
-import slick.ast.BaseTypedType
-import slick.driver.MySQLDriver.api._
-import slick.jdbc.JdbcType
+import com.advancedtelematic.ota_tuf.http.CanonicalJson._
+import io.circe.syntax._
 
-import scala.reflect.ClassTag
+import scala.util.Try
 
 object KeyGenRequestStatus extends CirceEnum with SlickEnum {
   type KeyGenRequestStatus = Value
@@ -26,38 +34,96 @@ object KeyType extends CirceEnum with SlickEnum {
   val RSA = Value
 }
 
-object UUIDKey {
-  abstract class UUIDKeyObj {
-    type Self <: UUIDKey
+object SignatureMethod extends CirceEnum {
+  type SignatureMethod = Value
 
-    implicit val abstractKeyShow = Show.show[Self](_.uuid.toString)
+  val RSASSA_PSS = Value("rsassa-pss")
+}
 
-    def generate(): Self = fromJava(UUID.randomUUID())
+object RoleType extends CirceEnum with SlickEnum {
+  type RoleType = Value
 
-    protected def fromJava(value: UUID): Self
+  val ROOT, SNAPSHOT, TARGETS, TIMESTAMP = Value
 
-    implicit def dbMapping(implicit ct: ClassTag[Self]): JdbcType[Self] with BaseTypedType[Self] =
-      MappedColumnType.base[Self, String](_.uuid.toString, (s: String) => fromJava(UUID.fromString(s)))
+  val ALL = List(ROOT, SNAPSHOT, TARGETS, TIMESTAMP)
 
-    implicit val encoder: Encoder[Self] = Encoder[String].contramap(_.uuid.toString)
-    implicit val decoder: Decoder[Self] = Decoder[String].map(s => fromJava(UUID.fromString(s)))
-  }
+  implicit val show = Show.show[Value](_.toString.toLowerCase)
 
-  abstract class UUIDKey {
-    val uuid: UUID
+  val Path = PathMatchers.Segment.flatMap(v => Try(withName(v.toUpperCase)).toOption)
+
+  val JsonRoleTypeMetaPath = PathMatchers.Segment.flatMap { str =>
+    val (roleTypeStr, _) = str.splitAt(str.indexOf(".json"))
+    Try(RoleType.withName(roleTypeStr.toUpperCase)).toOption
   }
 }
 
 object DataType {
-  object KeyId extends UUIDKeyObj {
-    type Self = KeyId
+  case class KeyGenId(uuid: UUID) extends UUIDKey
+  object KeyGenId extends UUIDKeyObj[KeyGenId]
 
-    override protected def fromJava(value: UUID): KeyId = KeyId(value)
+  case class RoleId(uuid: UUID) extends UUIDKey
+  object RoleId extends UUIDKeyObj[RoleId]
+
+  case class GroupId(uuid: UUID) extends UUIDKey
+  object GroupId extends UUIDKeyObj[GroupId]
+
+  case class ValidKeyId()
+  type KeyId = Refined[String, ValidKeyId]
+  implicit val validKeyId: Validate.Plain[String, ValidKeyId] =
+    ValidationUtils.validHexValidation(ValidKeyId(), length = 64)
+
+  case class ValidSignature()
+  case class
+  Signature(hex: Refined[String, ValidSignature], method: SignatureMethod = SignatureMethod.RSASSA_PSS)
+  implicit val validSignature: Validate.Plain[String, ValidSignature] =
+    ValidationUtils.validHexValidation(ValidSignature(), length = 256)
+
+  case class KeyGenRequest(id: KeyGenId, groupId: GroupId,
+                           status: KeyGenRequestStatus, roleType: RoleType,
+                           keySize: Int = 1024, threshold: Int = 1)
+
+  case class Key(id: KeyId, roleId: RoleId, keyType: KeyType, publicKey: PublicKey)
+
+  case class Role(id: RoleId, groupId: GroupId, roleType: RoleType, threshold: Int = 1)
+}
+
+object RepositoryDataType {
+
+  object HashMethod extends CirceEnum {
+    type HashMethod = Value
+
+    val SHA256 = Value("sha256")
   }
 
-  case class KeyId(uuid: UUID) extends UUIDKey
+  case class Checksum(method: HashMethod, hash: Refined[String, ValidChecksum])
 
-  case class KeyGenRequest(id: KeyId, status: KeyGenRequestStatus, size: Int = 512)
+  case class ValidChecksum()
+  implicit val validChecksumValidate: Validate.Plain[String, ValidChecksum] =
+    ValidationUtils.validHexValidation(ValidChecksum(), length = 64)
 
-  case class Key(id: KeyId, keyType: KeyType, publicKey: String)
+  case class TargetItem(groupId: GroupId, filename: String, uri: Uri, checksum: Checksum, length: Long)
+
+  case class SignedRole(groupId: GroupId, roleType: RoleType, content: Json, checksum: Checksum, length: Long)
+
+  object SignedRole {
+    def withChecksum(groupId: GroupId, roleType: RoleType, content: Json): SignedRole = {
+      val canonicalJson = content.canonical
+      val checksum = Sha256Digest.digest(canonicalJson.getBytes)
+      SignedRole(groupId, roleType, content, checksum, canonicalJson.length)
+    }
+  }
+}
+
+
+protected[data] object ValidationUtils {
+  def validHex(length: Long, str: String): Boolean = {
+    str.length == length && str.forall(h => ('0' to '9').contains(h) || ('a' to 'f').contains(h))
+  }
+
+  def validHexValidation[T](v: T, length: Int): Validate.Plain[String, T] =
+    Validate.fromPredicate(
+      hash => validHex(length, hash),
+      hash => s"$hash is not a $length hex string",
+      v
+    )
 }

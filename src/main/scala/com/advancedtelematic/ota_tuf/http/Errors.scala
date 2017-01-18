@@ -5,9 +5,11 @@ import org.genivi.sota.http.Errors.RawError
 import org.genivi.sota.rest.ErrorCode
 
 object ErrorCodes {
-  val BlueprintMissing = ErrorCode("blueprint_missing")
+  val KeysNotReady = ErrorCode("keys_not_ready")
+  val RoleKeysNotFound = ErrorCode("role_keys_not_found")
 }
 
 object Errors {
-  val BlueprintMissing = RawError(ErrorCodes.BlueprintMissing, StatusCodes.PreconditionFailed, "blueprint reference does not exist")
+  val KeysNotReady = RawError(ErrorCodes.KeysNotReady, StatusCodes.Locked, "A key generation request exists")
+  val RoleKeysNotFound = RawError(ErrorCodes.RoleKeysNotFound, StatusCodes.NotFound, "There are no keys for this groupid/roletype")
 }

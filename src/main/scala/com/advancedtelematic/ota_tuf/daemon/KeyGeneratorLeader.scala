@@ -2,23 +2,24 @@ package com.advancedtelematic.ota_tuf.daemon
 
 import akka.actor.Status.{Failure, Success}
 import akka.actor.{Actor, ActorLogging, Props, Status, SupervisorStrategy}
-
 import akka.routing.RoundRobinPool
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair
 import com.advancedtelematic.ota_tuf.daemon.KeyGeneratorLeader.Tick
-import com.advancedtelematic.ota_tuf.data.DataType.KeyId._
-import com.advancedtelematic.ota_tuf.data.DataType.{Key, KeyGenRequest}
+import com.advancedtelematic.ota_tuf.data.DataType.{Key, KeyGenRequest, Role, RoleId}
 import com.advancedtelematic.ota_tuf.data.{KeyGenRequestStatus, KeyType}
-import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}
+import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport, RoleRepositorySupport}
 import com.advancedtelematic.ota_tuf.vault.VaultClient
 import com.advancedtelematic.ota_tuf.vault.VaultClient.VaultKey
 import slick.driver.MySQLDriver.api._
 
 import scala.async.Async._
 import scala.concurrent.duration._
-
 import akka.pattern.pipe
+import org.slf4j.LoggerFactory
+
+import scala.concurrent.{ExecutionContext, Future}
+
 
 object KeyGeneratorLeader {
   case object Tick
@@ -35,8 +36,6 @@ class KeyGeneratorLeader(vaultClient: VaultClient)(implicit val db: Database) ex
   override def preStart(): Unit = {
     self ! Tick
   }
-
-  // override def postRestart(reason: Throwable): Unit = ()
 
   private val router = {
     val routerProps = RoundRobinPool(WORKER_COUNT)
@@ -82,6 +81,34 @@ class KeyGeneratorLeader(vaultClient: VaultClient)(implicit val db: Database) ex
   }
 }
 
+
+class KeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database, val ec: ExecutionContext)
+  extends KeyGenRequestSupport
+    with KeyRepositorySupport
+    with RoleRepositorySupport {
+
+  import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair._
+
+  private lazy val _log = LoggerFactory.getLogger(this.getClass)
+
+  def processGenerationRequest(kgr: KeyGenRequest): Future[Key] =
+    async {
+      val role = Role(RoleId.generate(), kgr.groupId, kgr.roleType, kgr.threshold)
+      await(roleRepo.persist(role))
+
+      val keyPair = RsaKeyPair.generate(kgr.keySize)
+      val key = Key(keyPair.id, role.id, KeyType.RSA, keyPair.getPublic)
+
+      val vaultKey = VaultKey(key.id, key.keyType, key.publicKey.show, keyPair.getPrivate.show)
+      await(vaultClient.createKey(vaultKey))
+
+      await(keyGenRepo.persistGenerated(kgr, key, keyRepo))
+
+      _log.info("Generated Key {}", key.id.get)
+      key
+    }
+}
+
 object KeyGeneratorWorker {
   def props(vaultClient: VaultClient)(implicit db: Database): Props = Props(new KeyGeneratorWorker(vaultClient))
 }
@@ -89,34 +116,25 @@ object KeyGeneratorWorker {
 class KeyGeneratorWorker(vaultClient: VaultClient)(implicit val db: Database) extends Actor
   with ActorLogging
   with KeyGenRequestSupport
-  with KeyRepositorySupport {
+  with KeyRepositorySupport
+  with RoleRepositorySupport {
 
-  import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair._
   implicit val ec = context.dispatcher
+
+  val keyGenRequestOp = new KeyGenerationOp(vaultClient)
 
   override def receive: Receive = {
     case kgr: KeyGenRequest =>
       log.info(s"Received key gen request for {}", kgr.id.show)
 
-      val f = async {
-        val keyPair = RsaKeyPair.generate(kgr.size)
-        val key = Key(kgr.id, KeyType.RSA, keyPair.getPublic.show)
-
-        val newKeyGnr = await(keyGenRepo.persistGenerated(kgr, key, keyRepo))
-
-        val vaultKey = VaultKey(kgr.id, key.keyType, key.publicKey, keyPair.getPrivate.show)
-        await(vaultClient.createKey(vaultKey))
-
-        log.info("Generated Key {}", key.id.show)
-        Success(newKeyGnr)
-      }
-
-      f.recoverWith {
-        case ex ⇒
-          log.error("Key generation failed: {}", ex.getMessage)
-          keyGenRepo
-            .setStatus(kgr.id, KeyGenRequestStatus.ERROR)
-            .map(_ => Failure(ex))
-      }.pipeTo(sender)
+      keyGenRequestOp.processGenerationRequest(kgr)
+        .map(Success)
+        .recoverWith {
+          case ex ⇒
+            log.error("Key generation failed: {}", ex.getMessage)
+            keyGenRepo
+              .setStatus(kgr.id, KeyGenRequestStatus.ERROR)
+              .map(_ => Failure(ex))
+        }.pipeTo(sender)
   }
 }

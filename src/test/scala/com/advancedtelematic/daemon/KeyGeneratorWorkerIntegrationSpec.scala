@@ -5,15 +5,14 @@ import akka.http.scaladsl.model.Uri
 import akka.stream.ActorMaterializer
 import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.ota_tuf.daemon.KeyGeneratorWorker
-import com.advancedtelematic.ota_tuf.data.DataType.{KeyGenRequest, KeyId}
-import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus
+import com.advancedtelematic.ota_tuf.data.DataType.{GroupId, Key, KeyGenId, KeyGenRequest, KeyId, RoleId}
+import com.advancedtelematic.ota_tuf.data.{KeyGenRequestStatus, RoleType}
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.ota_tuf.vault.VaultClient
 import com.advancedtelematic.util.OtaTufSpec
 import org.genivi.sota.core.DatabaseSpec
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 
 class KeyGeneratorWorkerIntegrationSpec extends OtaTufSpec
   with TestKitBase
@@ -33,11 +32,17 @@ class KeyGeneratorWorkerIntegrationSpec extends OtaTufSpec
   val actorRef = system.actorOf(KeyGeneratorWorker.props(vault))
 
   test("adds key to vault") {
-    val keyid = KeyId.generate()
-    actorRef ! KeyGenRequest(keyid, KeyGenRequestStatus.REQUESTED)
-    expectMsgType[Status.Success](3.seconds)
+    val keyid = KeyGenId.generate()
+    val groupId = GroupId.generate()
+    val request = KeyGenRequest(keyid, groupId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT)
+    keyGenRepo.persist(request)
+    actorRef ! request
 
-    vault.findKey(keyid).futureValue.publicKey should include("BEGIN PUBLIC KEY")
-    vault.findKey(keyid).futureValue.privateKey should include("BEGIN RSA PRIVATE KEY")
+    val key = expectMsgPF() {
+      case Status.Success(t: Key) => t
+    }
+
+    vault.findKey(key.id).futureValue.publicKey should include("BEGIN PUBLIC KEY")
+    vault.findKey(key.id).futureValue.privateKey should include("BEGIN RSA PRIVATE KEY")
   }
 }

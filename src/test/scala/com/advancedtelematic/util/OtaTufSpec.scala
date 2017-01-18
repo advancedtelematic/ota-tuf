@@ -15,6 +15,7 @@ import org.scalatest.{FunSuite, Matchers}
 import scala.concurrent.Future
 
 abstract class OtaTufSpec extends FunSuite with Matchers with ScalaFutures {
+
   Security.addProvider(new BouncyCastleProvider())
 
   val fakeVault = new VaultClient {
