@@ -53,6 +53,8 @@ docker_vault policy-write ota-tuf /tmp/resources/vault_policy.hcl
 
 docker_vault mount -path=ota-tuf/keys generic
 
+docker_vault token-create -policy ota-tuf -id="74e0216d-cc15-5ab9-454d-908a04d14787"
+
 TRIES=60
 TIMEOUT=1s
 
