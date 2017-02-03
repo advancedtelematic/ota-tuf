@@ -1,6 +1,6 @@
 package com.advancedtelematic.ota_tuf.db
 
-import com.advancedtelematic.ota_tuf.data.DataType.{GroupId, Key, KeyId, Role}
+import com.advancedtelematic.ota_tuf.data.DataType.{RepoId, Key, KeyId, Role}
 import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus
 import org.genivi.sota.http.Errors.{EntityAlreadyExists, MissingEntity}
 import slick.driver.MySQLDriver.api._
@@ -58,10 +58,10 @@ protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: Execut
     db.run(keyGenRequests.filter(_.id === genId).result.failIfNotSingle(keyGenRequestNotFound))
   }
 
-  def findBy(groupId: GroupId): Future[Seq[KeyGenRequest]] =
+  def findBy(repoId: RepoId): Future[Seq[KeyGenRequest]] =
     db.run {
       keyGenRequests
-        .filter(_.groupId === groupId)
+        .filter(_.repoId === repoId)
         .result
     }
 
@@ -102,32 +102,32 @@ protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext
   def find(keyId: KeyId): Future[Key] =
     db.run(keys.filter(_.id === keyId).result.failIfNotSingle(KeyNotFound))
 
-  def groupKeys(groupId: GroupId, roleType: RoleType): Future[Seq[Key]] =
+  def repoKeys(repoId: RepoId, roleType: RoleType): Future[Seq[Key]] =
     db.run {
       roles.join(keys).on(_.id === _.roleId)
-        .filter(_._1.groupId === groupId)
+        .filter(_._1.repoId === repoId)
         .filter(_._1.roleType === roleType)
         .map(_._2)
         .result
     }
 
 
-  def keysFor(groupId: GroupId): Future[Seq[Key]] =
+  def keysFor(repoId: RepoId): Future[Seq[Key]] =
     db.run {
       roles.join(keys).on(_.id === _.roleId)
-        .filter(_._1.groupId === groupId)
+        .filter(_._1.repoId === repoId)
         .map(_._2)
         .result
     }
 
-  def groupKeysByRole(groupId: GroupId): Future[Map[RoleType, (Role, Seq[Key])]] = {
+  def repoKeysByRole(repoId: RepoId): Future[Map[RoleType, (Role, Seq[Key])]] = {
     db.run {
-      val groupKeys = roles
-        .filter(_.groupId === groupId)
+      val repoKeys = roles
+        .filter(_.repoId === repoId)
         .join(keys).on(_.id === _.roleId)
         .result
 
-      groupKeys.map { roleKeys =>
+      repoKeys.map { roleKeys =>
         roleKeys
           .groupBy(_._1.roleType)
           .filter { case (_, values) => values.nonEmpty }
@@ -169,9 +169,9 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
   def persist(targetItem: TargetItem): Future[TargetItem] =
     db.run(targetItems.insertOrUpdate(targetItem).map(_ => targetItem))
 
-  def findFor(groupId: GroupId): Future[Seq[TargetItem]] =
+  def findFor(repoId: RepoId): Future[Seq[TargetItem]] =
     db.run {
-      targetItems.filter(_.groupId === groupId).result
+      targetItems.filter(_.repoId === repoId).result
     }
 }
 
@@ -202,10 +202,10 @@ protected[db] class SignedRoleRepository()(implicit db: Database, ec: ExecutionC
       DBIO.sequence(signedRoles.map(persistAction)).transactionally
     }
 
-  def find(groupId: GroupId, roleType: RoleType): Future[SignedRole] =
+  def find(repoId: RepoId, roleType: RoleType): Future[SignedRole] =
     db.run {
       signedRoles
-        .filter(_.groupId === groupId)
+        .filter(_.repoId === repoId)
         .filter(_.roleType === roleType)
         .result
         .headOption

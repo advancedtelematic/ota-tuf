@@ -5,7 +5,7 @@ import akka.http.scaladsl.model.Uri
 import akka.stream.ActorMaterializer
 import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.ota_tuf.daemon.KeyGeneratorWorker
-import com.advancedtelematic.ota_tuf.data.DataType.{GroupId, Key, KeyGenId, KeyGenRequest, KeyId, RoleId}
+import com.advancedtelematic.ota_tuf.data.DataType.{RepoId, Key, KeyGenId, KeyGenRequest, KeyId, RoleId}
 import com.advancedtelematic.ota_tuf.data.{KeyGenRequestStatus, RoleType}
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.ota_tuf.vault.VaultClient
@@ -33,8 +33,8 @@ class KeyGeneratorWorkerIntegrationSpec extends OtaTufSpec
 
   test("adds key to vault") {
     val keyid = KeyGenId.generate()
-    val groupId = GroupId.generate()
-    val request = KeyGenRequest(keyid, groupId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT)
+    val repoId = RepoId.generate()
+    val request = KeyGenRequest(keyid, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT)
     keyGenRepo.persist(request)
     actorRef ! request
 

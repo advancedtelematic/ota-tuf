@@ -2,7 +2,7 @@ package com.advancedtelematic.ota_tuf.http
 
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server.Directives
-import com.advancedtelematic.ota_tuf.data.DataType.GroupId
+import com.advancedtelematic.ota_tuf.data.DataType.RepoId
 import com.advancedtelematic.ota_tuf.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import io.circe.{Decoder, Encoder}
 import io.circe.generic.semiauto._
@@ -20,21 +20,21 @@ class RepoResource(roleKeyStore: RoleKeyStoreClient)
                   (implicit val db: Database, val ec: ExecutionContext) extends Directives
   with TargetItemRepositorySupport with SignedRoleRepositorySupport {
 
-  val targetRoleGeneration = new SignedRoleGeneration(roleKeyStore)
+  val signedRoleGeneration = new SignedRoleGeneration(roleKeyStore)
 
   val route =
-    pathPrefix("repo" / GroupId.Path) { groupId =>
+    pathPrefix("repo" / RepoId.Path) { repoId =>
       path("targets" / Segment) { filename =>
         (post & entity(as[RequestTargetItem])) { clientItem =>
-          val item = TargetItem(groupId, filename, clientItem.uri, clientItem.checksum, clientItem.length)
-          val f = targetRoleGeneration.addToTarget(item)
+          val item = TargetItem(repoId, filename, clientItem.uri, clientItem.checksum, clientItem.length)
+          val f = signedRoleGeneration.addToTarget(item)
           complete(f)
         }
       } ~
       path(RoleType.JsonRoleTypeMetaPath) { roleType =>
         get {
           val f = signedRoleRepo
-            .find(groupId, roleType)
+            .find(repoId, roleType)
             .map(_.content)
 
           complete(f)

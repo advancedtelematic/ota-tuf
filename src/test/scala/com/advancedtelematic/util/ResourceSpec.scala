@@ -7,7 +7,7 @@ import java.util.concurrent.ConcurrentHashMap
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair
 import com.advancedtelematic.ota_tuf.data.ClientDataType.{ClientKey, ClientSignature, RoleKeys, RootRole, SignatureToClientSignatureOps, SignedPayload}
-import com.advancedtelematic.ota_tuf.data.DataType.GroupId
+import com.advancedtelematic.ota_tuf.data.DataType.RepoId
 import com.advancedtelematic.ota_tuf.data.RoleType.RoleType
 import com.advancedtelematic.ota_tuf.http.OtaTufRoutes
 import io.circe.{Encoder, Json}
@@ -29,16 +29,16 @@ import scala.util.Try
 
 object FakeRoleStore extends RoleKeyStoreClient {
 
-  def publicKey(groupId: GroupId): PublicKey =
-    keys.asScala(groupId).getPublic
+  def publicKey(repoId: RepoId): PublicKey =
+    keys.asScala(repoId).getPublic
 
-  private def keyPair(groupId: GroupId): KeyPair =
-    keys.asScala(groupId)
+  private def keyPair(repoId: RepoId): KeyPair =
+    keys.asScala(repoId)
 
-  private val keys = new ConcurrentHashMap[GroupId, KeyPair]()
+  private val keys = new ConcurrentHashMap[RepoId, KeyPair]()
 
-  def rootRole(groupId: GroupId) = {
-    val rootKey = keys.asScala(groupId)
+  def rootRole(repoId: RepoId) = {
+    val rootKey = keys.asScala(repoId)
     val clientKeys = Map(rootKey.id -> ClientKey(KeyType.RSA, rootKey.getPublic))
 
     val roles = RoleType.ALL.map { role =>
@@ -48,21 +48,21 @@ object FakeRoleStore extends RoleKeyStoreClient {
     RootRole(clientKeys, roles, version = 1)
   }
 
-  def generateKey(groupId: GroupId): KeyPair = {
+  def generateKey(repoId: RepoId): KeyPair = {
     val rootKey = RsaKeyPair.generate(1024)
-    keys.put(groupId, rootKey)
+    keys.put(repoId, rootKey)
   }
 
-  override def sign[T: Encoder](groupId: GroupId, roleType: RoleType, payload: T): Future[SignedPayload[Json]] = {
-    val signature = signWithRoot(groupId, payload)
+  override def sign[T: Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[Json]] = {
+    val signature = signWithRoot(repoId, payload)
     FastFuture.successful(SignedPayload(List(signature), payload.asJson))
   }
 
-  override def fetchRootRole(groupId: GroupId): Future[SignedPayload[Json]] = {
+  override def fetchRootRole(repoId: RepoId): Future[SignedPayload[Json]] = {
     Future.fromTry {
       Try {
-        val role = rootRole(groupId)
-        val signature = signWithRoot(groupId, role)
+        val role = rootRole(repoId)
+        val signature = signWithRoot(repoId, role)
         SignedPayload(List(signature), role.asJson)
       }.recover {
         case ex: NoSuchElementException =>
@@ -71,8 +71,8 @@ object FakeRoleStore extends RoleKeyStoreClient {
     }
   }
 
-  private def signWithRoot[T : Encoder](groupId: GroupId, payload: T): ClientSignature = {
-    val key = keyPair(groupId)
+  private def signWithRoot[T : Encoder](repoId: RepoId, payload: T): ClientSignature = {
+    val key = keyPair(repoId)
     RsaKeyPair
       .sign(key.getPrivate, payload.asJson.canonical.getBytes)
       .toClient(key.id)

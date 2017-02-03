@@ -6,8 +6,8 @@ import java.util.UUID
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server.PathMatchers
 import cats.Show
-import com.advancedtelematic.ota_tuf.crypt.{RsaKeyPair, Sha256Digest}
-import com.advancedtelematic.ota_tuf.data.DataType.GroupId
+import com.advancedtelematic.ota_tuf.crypt.Sha256Digest
+import com.advancedtelematic.ota_tuf.data.DataType.RepoId
 import com.advancedtelematic.ota_tuf.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.data.KeyType.KeyType
@@ -64,8 +64,8 @@ object DataType {
   case class RoleId(uuid: UUID) extends UUIDKey
   object RoleId extends UUIDKeyObj[RoleId]
 
-  case class GroupId(uuid: UUID) extends UUIDKey
-  object GroupId extends UUIDKeyObj[GroupId]
+  case class RepoId(uuid: UUID) extends UUIDKey
+  object RepoId extends UUIDKeyObj[RepoId]
 
   case class ValidKeyId()
   type KeyId = Refined[String, ValidKeyId]
@@ -78,13 +78,13 @@ object DataType {
   implicit val validSignature: Validate.Plain[String, ValidSignature] =
     ValidationUtils.validHexValidation(ValidSignature(), length = 256)
 
-  case class KeyGenRequest(id: KeyGenId, groupId: GroupId,
+  case class KeyGenRequest(id: KeyGenId, repoId: RepoId,
                            status: KeyGenRequestStatus, roleType: RoleType,
                            keySize: Int = 1024, threshold: Int = 1)
 
   case class Key(id: KeyId, roleId: RoleId, keyType: KeyType, publicKey: PublicKey)
 
-  case class Role(id: RoleId, groupId: GroupId, roleType: RoleType, threshold: Int = 1)
+  case class Role(id: RoleId, repoId: RepoId, roleType: RoleType, threshold: Int = 1)
 }
 
 object RepositoryDataType {
@@ -101,15 +101,15 @@ object RepositoryDataType {
   implicit val validChecksumValidate: Validate.Plain[String, ValidChecksum] =
     ValidationUtils.validHexValidation(ValidChecksum(), length = 64)
 
-  case class TargetItem(groupId: GroupId, filename: String, uri: Uri, checksum: Checksum, length: Long)
+  case class TargetItem(repoId: RepoId, filename: String, uri: Uri, checksum: Checksum, length: Long)
 
-  case class SignedRole(groupId: GroupId, roleType: RoleType, content: Json, checksum: Checksum, length: Long)
+  case class SignedRole(repoId: RepoId, roleType: RoleType, content: Json, checksum: Checksum, length: Long)
 
   object SignedRole {
-    def withChecksum(groupId: GroupId, roleType: RoleType, content: Json): SignedRole = {
+    def withChecksum(repoId: RepoId, roleType: RoleType, content: Json): SignedRole = {
       val canonicalJson = content.canonical
       val checksum = Sha256Digest.digest(canonicalJson.getBytes)
-      SignedRole(groupId, roleType, content, checksum, canonicalJson.length)
+      SignedRole(repoId, roleType, content, checksum, canonicalJson.length)
     }
   }
 }

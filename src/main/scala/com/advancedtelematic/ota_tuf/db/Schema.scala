@@ -19,21 +19,21 @@ object Schema {
 
   class KeyGenRequestTable(tag: Tag) extends Table[KeyGenRequest](tag, "key_gen_requests") {
     def id = column[KeyGenId]("id", O.PrimaryKey)
-    def groupId = column[GroupId]("group_id")
+    def repoId = column[RepoId]("repo_id")
     def status = column[KeyGenRequestStatus]("status")
     def roleType = column[RoleType]("role_type")
     def keySize = column[Int]("key_size")
     def threshold = column[Int]("threshold")
 
-    def uniqueGroupIdRoleTypeIdx = index("key_gen_requests_unique_idx", (groupId, roleType), unique = true)
+    def uniqueRepoIdRoleTypeIdx = index("key_gen_requests_unique_idx", (repoId, roleType), unique = true)
 
-    override def * = (id, groupId, status, roleType, keySize, threshold) <> ((KeyGenRequest.apply _).tupled, KeyGenRequest.unapply)
+    override def * = (id, repoId, status, roleType, keySize, threshold) <> ((KeyGenRequest.apply _).tupled, KeyGenRequest.unapply)
   }
 
   protected [db] val keyGenRequests = TableQuery[KeyGenRequestTable]
 
   class KeyTable(tag: Tag) extends Table[Key](tag, "keys") {
-    def id = column[KeyId]("key_id")
+    def id = column[KeyId]("key_id", O.PrimaryKey)
     def roleId = column[RoleId]("role_id")
     def keyType = column[KeyType]("key_type")
     def publicKey = column[PublicKey]("public_key")
@@ -47,41 +47,41 @@ object Schema {
 
   class RoleTable(tag: Tag) extends Table[Role](tag, "roles") {
     def id = column[RoleId]("role_id", O.PrimaryKey)
-    def groupId = column[GroupId]("group_id")
+    def repoId = column[RepoId]("repo_id")
     def roleType = column[RoleType]("role_type")
     def threshold = column[Int]("threshold")
 
-    def uniqueGroupIdRoleTypeIdx = index("roles_unique_idx", (groupId, roleType), unique = true)
+    def uniqueRepoIdRoleTypeIdx = index("roles_unique_idx", (repoId, roleType), unique = true)
 
-    override def * = (id, groupId, roleType, threshold) <> ((Role.apply _).tupled, Role.unapply)
+    override def * = (id, repoId, roleType, threshold) <> ((Role.apply _).tupled, Role.unapply)
   }
 
   protected [db] val roles = TableQuery[RoleTable]
 
   class TargetItemTable(tag: Tag) extends Table[TargetItem](tag, "target_items") {
-    def groupId = column[GroupId]("group_id")
+    def repoId = column[RepoId]("repo_id")
     def filename = column[String]("filename")
     def uri = column[Uri]("uri")
     def checksum = column[Checksum]("checksum")
     def length = column[Long]("length")
 
-    def pk = primaryKey("target_items_pk", (groupId, filename))
+    def pk = primaryKey("target_items_pk", (repoId, filename))
 
-    override def * = (groupId, filename, uri, checksum, length) <> ((TargetItem.apply _).tupled, TargetItem.unapply)
+    override def * = (repoId, filename, uri, checksum, length) <> ((TargetItem.apply _).tupled, TargetItem.unapply)
   }
 
   protected [db] val targetItems = TableQuery[TargetItemTable]
 
   class SignedRoleTable(tag: Tag) extends Table[SignedRole](tag, "signed_roles") {
-    def groupId = column[GroupId]("group_id")
+    def repoId = column[RepoId]("repo_id")
     def roleType = column[RoleType]("role_type")
     def content = column[Json]("content")
     def checksum = column[Checksum]("checksum")
     def length = column[Long]("length")
 
-    def pk = primaryKey("signed_role_pk", (groupId, roleType))
+    def pk = primaryKey("signed_role_pk", (repoId, roleType))
 
-    override def * = (groupId, roleType, content, checksum, length) <> ((SignedRole.apply _).tupled, SignedRole.unapply)
+    override def * = (repoId, roleType, content, checksum, length) <> ((SignedRole.apply _).tupled, SignedRole.unapply)
   }
 
   protected [db] val signedRoles = TableQuery[SignedRoleTable]

@@ -2,25 +2,25 @@ ALTER DATABASE CHARACTER SET utf8 COLLATE utf8_unicode_ci;
 
 create table `roles` (
   `role_id` CHAR(36) NOT NULL PRIMARY KEY,
-  `group_id` CHAR(36) NOT NULL,
+  `repo_id` CHAR(36) NOT NULL,
   `role_type` ENUM('ROOT', 'SNAPSHOT', 'TARGETS', 'TIMESTAMP') NOT NULL,
   `threshold` INTEGER NOT NULL,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT roles_unique_idx UNIQUE (`role_type`, `group_id`)
+  CONSTRAINT roles_unique_idx UNIQUE (`role_type`, `repo_id`)
 )
 ;
 
 CREATE TABLE `key_gen_requests` (
   `id` char(36) NOT NULL,
-  `group_id` char(36) NOT NULL,
+  `repo_id` char(36) NOT NULL,
   `status` ENUM('REQUESTED', 'GENERATED', 'ERROR') NOT NULL,
   `role_type` ENUM('ROOT', 'SNAPSHOT', 'TARGETS', 'TIMESTAMP') NOT NULL,
   `key_size` INTEGER NOT NULL,
   `threshold` INTEGER NOT NULL,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT key_gen_requests_unique_idx UNIQUE (`role_type`, `group_id`),
+  CONSTRAINT key_gen_requests_unique_idx UNIQUE (`role_type`, `repo_id`),
   PRIMARY KEY (`id`)
 )
 ;
@@ -37,37 +37,37 @@ CREATE TABLE `keys` (
 )
 ;
 
-create table `group_roles_keys` (
-  `group_id` char(36) NOT NULL,
+create table `repo_roles_keys` (
+  `repo_id` char(36) NOT NULL,
   `key_id` VARCHAR(254) NOT NULL,
   `role_type` ENUM('ROOT', 'SNAPSHOT', 'TARGETS', 'TIMESTAMP') NOT NULL,
   `threshold` INTEGER NOT NULL,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`group_id`, `role_type`)
+  PRIMARY KEY (`repo_id`, `role_type`)
 )
 ;
 
 create table `target_items` (
-  `group_id` char(36) NOT NULL,
+  `repo_id` char(36) NOT NULL,
   `filename` VARCHAR(254) NOT NULL,
   `uri` varchar(254) NOT NULL,
   `checksum` varchar(254) NOT NULL,
   `length` BIGINT NOT NULL,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  primary key(`group_id`,`filename`)
+  primary key(`repo_id`,`filename`)
 )
 ;
 
 create table `signed_roles` (
-  `group_id` char(36) NOT NULL,
+  `repo_id` char(36) NOT NULL,
   `role_type` ENUM('ROOT', 'SNAPSHOT', 'TARGETS', 'TIMESTAMP') NOT NULL,
   `checksum` varchar(254) NOT NULL,
   `content` TEXT NOT NULL,
   `length` BIGINT NOT NULL,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  primary key(`group_id`,`role_type`)
+  primary key(`repo_id`,`role_type`)
 )
 ;

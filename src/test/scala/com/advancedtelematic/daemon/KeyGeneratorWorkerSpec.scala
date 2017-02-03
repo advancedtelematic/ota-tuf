@@ -3,7 +3,7 @@ package com.advancedtelematic.daemon
 import akka.actor.{ActorSystem, Status}
 import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.ota_tuf.daemon.KeyGeneratorWorker
-import com.advancedtelematic.ota_tuf.data.DataType.{GroupId, Key, KeyGenId, KeyGenRequest}
+import com.advancedtelematic.ota_tuf.data.DataType.{RepoId, Key, KeyGenId, KeyGenRequest}
 import com.advancedtelematic.ota_tuf.data.{KeyGenRequestStatus, RoleType}
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.util.OtaTufSpec
@@ -26,8 +26,8 @@ class KeyGeneratorWorkerSpec extends OtaTufSpec with TestKitBase with DatabaseSp
 
   def keyGenRequest: Future[KeyGenRequest] = {
     val keyGenId = KeyGenId.generate()
-    val groupId = GroupId.generate()
-    keyGenRepo.persist(KeyGenRequest(keyGenId, groupId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT))
+    val repoId = RepoId.generate()
+    keyGenRepo.persist(KeyGenRequest(keyGenId, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT))
   }
 
   test("generates a key for a key gen request") {
@@ -51,22 +51,22 @@ class KeyGeneratorWorkerSpec extends OtaTufSpec with TestKitBase with DatabaseSp
       case Status.Success(t: Key) => t
     }
 
-    val keys = keyRepo.keysFor(keyGenReq.groupId).futureValue
+    val keys = keyRepo.keysFor(keyGenReq.repoId).futureValue
 
     keys.map(_.id) should contain(key.id)
   }
 
   test("sends back Failure if something bad happens") {
-    val groupId = GroupId.generate()
-    actorRef ! KeyGenRequest(KeyGenId.generate(), groupId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT)
+    val repoId = RepoId.generate()
+    actorRef ! KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT)
     val exception = expectMsgType[Status.Failure](3.seconds)
     exception.cause shouldBe a[MissingEntity]
   }
 
   test("keys with an error are marked as error") {
     val keyGenId = KeyGenId.generate()
-    val groupId = GroupId.generate()
-    val kgr = keyGenRepo.persist(KeyGenRequest(keyGenId, groupId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = -1)).futureValue
+    val repoId = RepoId.generate()
+    val kgr = keyGenRepo.persist(KeyGenRequest(keyGenId, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = -1)).futureValue
     actorRef ! kgr
 
     val exception = expectMsgType[Status.Failure](3.seconds)

@@ -5,7 +5,7 @@ import java.security.{PrivateKey, PublicKey}
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair
 import com.advancedtelematic.ota_tuf.data.ClientDataType.{ClientSignature, SignedPayload}
-import com.advancedtelematic.ota_tuf.data.DataType.{GroupId, Key, Signature}
+import com.advancedtelematic.ota_tuf.data.DataType.{RepoId, Key, Signature}
 import com.advancedtelematic.ota_tuf.data.RoleType.RoleType
 import com.advancedtelematic.ota_tuf.db.KeyRepositorySupport
 import com.advancedtelematic.ota_tuf.vault.VaultClient
@@ -29,8 +29,8 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
 
   import CanonicalJson._
 
-  def signFor[T : Encoder](groupId: GroupId, roleType: RoleType, payload: T): Future[SignedPayload[T]] = {
-    val roleKeys = keyRepo.groupKeys(groupId, roleType)
+  def signFor[T : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]] = {
+    val roleKeys = keyRepo.repoKeys(repoId, roleType)
 
     roleKeys.flatMap {
       case Nil =>

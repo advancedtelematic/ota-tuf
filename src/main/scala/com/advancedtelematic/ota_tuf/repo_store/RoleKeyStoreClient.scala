@@ -9,7 +9,7 @@ import akka.stream.ActorMaterializer
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.ota_tuf.data.ClientDataType.SignedPayload
 import com.advancedtelematic.ota_tuf.data.Codecs._
-import com.advancedtelematic.ota_tuf.data.DataType.GroupId
+import com.advancedtelematic.ota_tuf.data.DataType.RepoId
 import com.advancedtelematic.ota_tuf.data.RoleType.RoleType
 import io.circe.{Encoder, Json}
 import org.genivi.sota.http.Errors.RawError
@@ -20,9 +20,9 @@ import scala.reflect.ClassTag
 trait RoleKeyStoreClient {
   val RootRoleNotFound = RawError(ErrorCode("root_role_not_found"), StatusCodes.FailedDependency, "root role was not found in upstream key store")
 
-  def sign[T : Encoder](groupId: GroupId, roleType: RoleType, payload: T): Future[SignedPayload[Json]]
+  def sign[T : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[Json]]
 
-  def fetchRootRole(groupId: GroupId): Future[SignedPayload[Json]]
+  def fetchRootRole(repoId: RepoId): Future[SignedPayload[Json]]
 }
 
 class RoleKeyStoreHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer) extends RoleKeyStoreClient {
@@ -35,15 +35,15 @@ class RoleKeyStoreHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorM
 
   private def KeyStoreError(msg: String) = RawError(ErrorCode("key_store_remote_error"), StatusCodes.BadGateway, msg)
 
-  override def sign[T : Encoder](groupId: GroupId, roleType: RoleType, payload: T): Future[SignedPayload[Json]] = {
+  override def sign[T : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[Json]] = {
     val entity = HttpEntity(ContentTypes.`application/json`, payload.asJson.noSpaces)
-    val req = HttpRequest(HttpMethods.POST, uri = uri.withPath(uri.path / groupId.show / roleType.toString), entity = entity)
+    val req = HttpRequest(HttpMethods.POST, uri = uri.withPath(uri.path / repoId.show / roleType.toString), entity = entity)
 
     execHttp[SignedPayload[Json]](req)()
   }
 
-  override def fetchRootRole(groupId: GroupId): Future[SignedPayload[Json]] = {
-    val req = HttpRequest(HttpMethods.GET, uri = uri.withPath(uri.path / groupId.show))
+  override def fetchRootRole(repoId: RepoId): Future[SignedPayload[Json]] = {
+    val req = HttpRequest(HttpMethods.GET, uri = uri.withPath(uri.path / repoId.show))
 
     execHttp[SignedPayload[Json]](req) {
       case response if response.status == StatusCodes.NotFound =>

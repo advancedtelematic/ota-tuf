@@ -25,25 +25,25 @@ class RootRoleResource(vaultClient: VaultClient)
   val roleSigning = new RoleSigning(vaultClient)
 
   val route =
-    pathPrefix("root" / GroupId.Path) { groupId =>
+    pathPrefix("root" / RepoId.Path) { repoId =>
       pathEnd {
         (post & entity(as[ClientRootGenRequest])) { (genRequest: ClientRootGenRequest) =>
           require(genRequest.threshold == 1, "threshold > 1 not supported")
 
           val f = rootRoleGeneration
-            .createDefaultGenRequest(groupId, genRequest.threshold)
+            .createDefaultGenRequest(repoId, genRequest.threshold)
             .map(StatusCodes.Accepted -> _)
 
           complete(f)
         } ~
           get {
-            val f = rootRoleGeneration.findSigned(groupId)
+            val f = rootRoleGeneration.findSigned(repoId)
             complete(f)
           }
       } ~
       path(RoleType.Path) { roleType =>
         (post & entity(as[Json])) { payload =>
-          val f = roleSigning.signFor(groupId, roleType, payload)
+          val f = roleSigning.signFor(repoId, roleType, payload)
           complete(f)
         }
       }

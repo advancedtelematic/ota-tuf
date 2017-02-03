@@ -3,7 +3,7 @@ package com.advancedtelematic.ota_tuf.roles
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.ota_tuf.data.ClientDataType._
 import com.advancedtelematic.ota_tuf.data.Codecs._
-import com.advancedtelematic.ota_tuf.data.DataType.{GroupId, KeyGenId, KeyGenRequest}
+import com.advancedtelematic.ota_tuf.data.DataType.{RepoId, KeyGenId, KeyGenRequest}
 import com.advancedtelematic.ota_tuf.data.RoleType.show
 import com.advancedtelematic.ota_tuf.data.{KeyGenRequestStatus, RoleType}
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepository, KeyRepositorySupport}
@@ -23,27 +23,27 @@ class RootRoleGeneration(vaultClient: VaultClient)
 
   val roleSigning = new RoleSigning(vaultClient)
 
-  def createDefaultGenRequest(groupId: GroupId, threshold: Int): Future[Seq[KeyGenId]] = {
+  def createDefaultGenRequest(repoId: RepoId, threshold: Int): Future[Seq[KeyGenId]] = {
     val reqs = DEFAULT_ROLES.map { roleType =>
-      KeyGenRequest(KeyGenId.generate(), groupId, KeyGenRequestStatus.REQUESTED, roleType, DEFAULT_KEY_SIZE, threshold)
+      KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, roleType, DEFAULT_KEY_SIZE, threshold)
     }
 
     keyGenRepo.persistAll(reqs).map(_.map(_.id))
   }
 
-  def findSigned(groupId: GroupId): Future[SignedPayload[RootRole]] = {
+  def findSigned(repoId: RepoId): Future[SignedPayload[RootRole]] = {
     async {
-      await(ensureKeysGenerated(groupId))
+      await(ensureKeysGenerated(repoId))
 
-      val groupKeys = await(keyRepo.groupKeysByRole(groupId))
+      val repoKeys = await(keyRepo.repoKeysByRole(repoId))
 
-      val keys = groupKeys.values.flatMap(_._2).toList.distinct
+      val keys = repoKeys.values.flatMap(_._2).toList.distinct
 
       val clientKeys = keys.map { key =>
         key.id -> ClientKey(key.keyType, key.publicKey)
       }.toMap
 
-      val roles = groupKeys
+      val roles = repoKeys
         .map { case (roleType, (role, roleKeys)) =>
           roleType.show -> RoleKeys(roleKeys.map(_.id), role.threshold)
       }
@@ -54,8 +54,8 @@ class RootRoleGeneration(vaultClient: VaultClient)
     }
   }
 
-  private def ensureKeysGenerated(groupId: GroupId): Future[Unit] =
-    keyGenRepo.findBy(groupId).flatMap { keyGenReqs =>
+  private def ensureKeysGenerated(repoId: RepoId): Future[Unit] =
+    keyGenRepo.findBy(repoId).flatMap { keyGenReqs =>
       if(keyGenReqs.isEmpty)
         Future.failed(KeyRepository.KeyNotFound)
       else if(keyGenReqs.exists(_.status != KeyGenRequestStatus.GENERATED))

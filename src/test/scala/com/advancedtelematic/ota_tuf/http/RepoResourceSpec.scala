@@ -2,7 +2,7 @@ package com.advancedtelematic.ota_tuf.http
 
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import com.advancedtelematic.ota_tuf.data.RepoClientDataType.RoleTypeToMetaPathOp
-import com.advancedtelematic.ota_tuf.data.DataType.GroupId
+import com.advancedtelematic.ota_tuf.data.DataType.RepoId
 import com.advancedtelematic.util.{OtaTufSpec, ResourceSpec}
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.ota_tuf.crypt.{RsaKeyPair, Sha256Digest}
@@ -22,7 +22,7 @@ import org.scalatest.prop.Whenever
 class RepoResourceSpec extends OtaTufSpec
   with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever {
 
-  val groupId = GroupId.generate()
+  val repoId = RepoId.generate()
 
   val testFile = {
     val checksum = Sha256Digest.digest("hi".getBytes)
@@ -31,15 +31,15 @@ class RepoResourceSpec extends OtaTufSpec
 
   override def beforeAll(): Unit = {
     super.beforeAll()
-    fakeRoleStore.generateKey(groupId)
+    fakeRoleStore.generateKey(repoId)
   }
 
   test("POST returns latest signed json") {
-    Post(apiUri(s"repo/${groupId.show}/targets/myfile"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
       val signedPayload = responseAs[SignedPayload[Json]]
-      signaturesShouldBeValid(groupId, signedPayload)
+      signaturesShouldBeValid(repoId, signedPayload)
 
       val signed = signedPayload.signed
       val targetsRole = signed.as[TargetsRole].valueOr(throw _)
@@ -48,11 +48,11 @@ class RepoResourceSpec extends OtaTufSpec
   }
 
   test("POST returns json with previous elements") {
-    Post(apiUri(s"repo/${groupId.show}/targets/myfile01"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
-    Post(apiUri(s"repo/${groupId.show}/targets/myfile02"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/myfile02"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
       val signed = responseAs[SignedPayload[Json]].signed
@@ -64,7 +64,7 @@ class RepoResourceSpec extends OtaTufSpec
   }
 
   test("POST returns json with valid hashes") {
-    Post(apiUri(s"repo/${groupId.show}/targets/myfile"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
       val signed = responseAs[SignedPayload[Json]].signed
@@ -75,79 +75,79 @@ class RepoResourceSpec extends OtaTufSpec
   }
 
   test("fails if there is no root.json available") {
-    val unexistingGroupId = GroupId.generate()
+    val unexistingRepoId = RepoId.generate()
 
-    Post(apiUri(s"repo/${unexistingGroupId.show}/targets/otherfile"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${unexistingRepoId.show}/targets/otherfile"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.FailedDependency
     }
   }
 
   test("GET for each role type returns the signed json with valid signatures") {
-    Post(apiUri(s"repo/${groupId.show}/targets/myfile"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
     forAll(RoleType.ALL.reverse) { roleType =>
-      Get(apiUri(s"repo/${groupId.show}/$roleType.json")) ~> routes ~> check {
+      Get(apiUri(s"repo/${repoId.show}/$roleType.json")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
 
         println(responseAs[SignedPayload[Json]].asJson.spaces2)
 
         val signedPayload = responseAs[SignedPayload[Json]]
-        signaturesShouldBeValid(groupId, signedPayload)
+        signaturesShouldBeValid(repoId, signedPayload)
       }
     }
   }
 
   test("GET on timestamp.json returns a valid Timestamp role") {
-    val newGroupId = createRepo()
+    val newRepoId = createRepo()
 
-    Get(apiUri(s"repo/${newGroupId.show}/timestamp.json")) ~> routes ~> check {
+    Get(apiUri(s"repo/${newRepoId.show}/timestamp.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      signaturesShouldBeValid(newGroupId, responseAs[SignedPayload[TimestampRole]])
+      signaturesShouldBeValid(newRepoId, responseAs[SignedPayload[TimestampRole]])
     }
   }
 
   test("GET on snapshot.json returns a valid Snapshot role") {
-    val newGroupId = createRepo()
+    val newRepoId = createRepo()
 
-    Get(apiUri(s"repo/${newGroupId.show}/snapshot.json")) ~> routes ~> check {
+    Get(apiUri(s"repo/${newRepoId.show}/snapshot.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      signaturesShouldBeValid(newGroupId, responseAs[SignedPayload[SnapshotRole]])
+      signaturesShouldBeValid(newRepoId, responseAs[SignedPayload[SnapshotRole]])
     }
   }
 
   test("GET on targets.json returns a valid Targets role") {
-    val newGroupId = createRepo()
+    val newRepoId = createRepo()
 
-    Get(apiUri(s"repo/${newGroupId.show}/targets.json")) ~> routes ~> check {
+    Get(apiUri(s"repo/${newRepoId.show}/targets.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      signaturesShouldBeValid(newGroupId, responseAs[SignedPayload[TargetsRole]])
+      signaturesShouldBeValid(newRepoId, responseAs[SignedPayload[TargetsRole]])
     }
   }
 
   test("GET on root.json returns a valid Root role") {
-    val newGroupId = createRepo()
+    val newRepoId = createRepo()
 
-    Get(apiUri(s"repo/${newGroupId.show}/root.json")) ~> routes ~> check {
+    Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      signaturesShouldBeValid(newGroupId, responseAs[SignedPayload[RootRole]])
+      signaturesShouldBeValid(newRepoId, responseAs[SignedPayload[RootRole]])
     }
   }
 
   test("POST a new target updates snapshot.json") {
     val snapshotRole =
-      Get(apiUri(s"repo/${groupId.show}/snapshot.json")) ~> routes ~> check {
+      Get(apiUri(s"repo/${repoId.show}/snapshot.json")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
         responseAs[SignedPayload[SnapshotRole]]
       }
 
-    Post(apiUri(s"repo/${groupId.show}/targets/changesnapshot"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/changesnapshot"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
     val newTimestampRole =
-      Get(apiUri(s"repo/${groupId.show}/snapshot.json"), testFile) ~> routes ~> check {
+      Get(apiUri(s"repo/${repoId.show}/snapshot.json"), testFile) ~> routes ~> check {
         status shouldBe StatusCodes.OK
         responseAs[SignedPayload[SnapshotRole]]
       }
@@ -159,17 +159,17 @@ class RepoResourceSpec extends OtaTufSpec
 
   test("POST a new target updates timestamp.json") {
     val timestampRole =
-      Get(apiUri(s"repo/${groupId.show}/timestamp.json")) ~> routes ~> check {
+      Get(apiUri(s"repo/${repoId.show}/timestamp.json")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
         responseAs[SignedPayload[TimestampRole]]
       }
 
-    Post(apiUri(s"repo/${groupId.show}/targets/changets"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/changets"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
     val newTimestampRole =
-      Get(apiUri(s"repo/${groupId.show}/timestamp.json"), testFile) ~> routes ~> check {
+      Get(apiUri(s"repo/${repoId.show}/timestamp.json"), testFile) ~> routes ~> check {
         status shouldBe StatusCodes.OK
         responseAs[SignedPayload[TimestampRole]]
       }
@@ -180,21 +180,21 @@ class RepoResourceSpec extends OtaTufSpec
   }
 
   test("SnapshotRole includes signed jsons lengths") {
-    val newGroupid = createRepo()
+    val newRepoId = createRepo()
 
     val targetsRole =
-      Get(apiUri(s"repo/${newGroupid.show}/targets.json")) ~> routes ~> check {
+      Get(apiUri(s"repo/${newRepoId.show}/targets.json")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
         responseAs[SignedPayload[TargetsRole]]
       }
 
     val rootRole =
-      Get(apiUri(s"repo/${newGroupid.show}/root.json")) ~> routes ~> check {
+      Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
         responseAs[SignedPayload[RootRole]]
       }
 
-    Get(apiUri(s"repo/${newGroupid.show}/snapshot.json")) ~> routes ~> check {
+    Get(apiUri(s"repo/${newRepoId.show}/snapshot.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       val signed = responseAs[SignedPayload[SnapshotRole]].signed
 
@@ -207,19 +207,19 @@ class RepoResourceSpec extends OtaTufSpec
   }
 
   test("GET snapshots.json returns json with valid hashes") {
-    val newGroupid = createRepo()
+    val newRepoId = createRepo()
 
-    Post(apiUri(s"repo/${newGroupid.show}/targets/myfile"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${newRepoId.show}/targets/myfile"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
-    Get(apiUri(s"repo/${newGroupid.show}/targets.json")) ~> routes ~> check {
+    Get(apiUri(s"repo/${newRepoId.show}/targets.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       val targetsRole = responseAs[SignedPayload[TargetsRole]]
 
       val targetsCheckSum = Sha256Digest.digest(targetsRole.asJson.canonical.getBytes)
 
-      Get(apiUri(s"repo/${newGroupid.show}/snapshot.json")) ~> routes ~> check {
+      Get(apiUri(s"repo/${newRepoId.show}/snapshot.json")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
         val snapshotRole = responseAs[SignedPayload[SnapshotRole]].signed
 
@@ -230,22 +230,22 @@ class RepoResourceSpec extends OtaTufSpec
     }
   }
 
-  def signaturesShouldBeValid[T : Encoder](groupId: GroupId, signedPayload: SignedPayload[T]): Assertion = {
+  def signaturesShouldBeValid[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Assertion = {
     val signature = signedPayload.signatures.head.toSignature
     val signed = signedPayload.signed
 
-    val isValid = RsaKeyPair.isValid(fakeRoleStore.publicKey(groupId), signature, signed.asJson.canonical.getBytes)
+    val isValid = RsaKeyPair.isValid(fakeRoleStore.publicKey(repoId), signature, signed.asJson.canonical.getBytes)
     isValid shouldBe true
   }
 
-  def createRepo(): GroupId = {
-    val newGroupId = GroupId.generate()
-    fakeRoleStore.generateKey(newGroupId)
+  def createRepo(): RepoId = {
+    val newRepoId = RepoId.generate()
+    fakeRoleStore.generateKey(newRepoId)
 
-    Post(apiUri(s"repo/${newGroupId.show}/targets/myfile01"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${newRepoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
-    newGroupId
+    newRepoId
   }
 }

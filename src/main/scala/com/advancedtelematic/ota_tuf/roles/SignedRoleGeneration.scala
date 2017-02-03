@@ -3,7 +3,7 @@ package com.advancedtelematic.ota_tuf.roles
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import com.advancedtelematic.ota_tuf.data.Codecs._
-import com.advancedtelematic.ota_tuf.data.DataType.GroupId
+import com.advancedtelematic.ota_tuf.data.DataType.RepoId
 import com.advancedtelematic.ota_tuf.data.RepoClientDataType._
 import com.advancedtelematic.ota_tuf.data.RepositoryDataType.{SignedRole, TargetItem}
 import com.advancedtelematic.ota_tuf.data.RoleType
@@ -24,21 +24,21 @@ extends SignedRoleRepositorySupport {
   val targetRoleGeneration = new TargetRoleGeneration(roleSigningClient)
 
   def addToTarget(targetItem: TargetItem): Future[Json] = {
-    val groupId = targetItem.groupId
+    val repoId = targetItem.repoId
 
     async {
       val expireAt = defaultExpire
 
-      val signedRoot = await(fetchRootRole(groupId))
+      val signedRoot = await(fetchRootRole(repoId))
 
       val targetRole = await(targetRoleGeneration.updateRoleWith(targetItem, expireAt))
-      val signedTarget = await(signRole(groupId, RoleType.TARGETS, targetRole))
+      val signedTarget = await(signRole(repoId, RoleType.TARGETS, targetRole))
 
       val snapshotRole = genSnapshotRole(signedRoot, signedTarget, expireAt)
-      val signedSnapshot = await(signRole(groupId, RoleType.SNAPSHOT, snapshotRole))
+      val signedSnapshot = await(signRole(repoId, RoleType.SNAPSHOT, snapshotRole))
 
       val timestampRole = genTimestampRole(signedSnapshot, expireAt)
-      val signedTimestamp = await(signRole(groupId, RoleType.TIMESTAMP, timestampRole))
+      val signedTimestamp = await(signRole(repoId, RoleType.TIMESTAMP, timestampRole))
 
       val persistF = signedRoleRepo.persistAll(signedTarget, signedSnapshot, signedTimestamp)
       await(persistF)
@@ -47,15 +47,15 @@ extends SignedRoleRepositorySupport {
     }
   }
 
-  def signRole[T : Encoder](groupId: GroupId, roleType: RoleType, role: T): Future[SignedRole] = {
-    roleSigningClient.sign(groupId, roleType, role).map { jsonRole =>
-      SignedRole.withChecksum(groupId, roleType, jsonRole.asJson)
+  def signRole[T : Encoder](repoId: RepoId, roleType: RoleType, role: T): Future[SignedRole] = {
+    roleSigningClient.sign(repoId, roleType, role).map { jsonRole =>
+      SignedRole.withChecksum(repoId, roleType, jsonRole.asJson)
     }
   }
 
-  def fetchRootRole(groupId: GroupId): Future[SignedRole] = {
-    roleSigningClient.fetchRootRole(groupId).flatMap { rootRoleJson =>
-      val signedRoot = SignedRole.withChecksum(groupId, RoleType.ROOT, rootRoleJson.asJson)
+  def fetchRootRole(repoId: RepoId): Future[SignedRole] = {
+    roleSigningClient.fetchRootRole(repoId).flatMap { rootRoleJson =>
+      val signedRoot = SignedRole.withChecksum(repoId, RoleType.ROOT, rootRoleJson.asJson)
       signedRoleRepo.persist(signedRoot)
     }
   }
@@ -81,11 +81,11 @@ protected class TargetRoleGeneration(roleSigningClient: RoleKeyStoreClient)
   def updateRoleWith(targetItem: TargetItem, expireAt: Instant): Future[TargetsRole] = {
     targetItemRepo
       .persist(targetItem)
-      .flatMap(_ => generate(targetItem.groupId, expireAt))
+      .flatMap(_ => generate(targetItem.repoId, expireAt))
   }
 
-  private def generate(groupId: GroupId, expireAt: Instant): Future[TargetsRole] = {
-    targetItemRepo.findFor(groupId).map { targetItems =>
+  private def generate(repoId: RepoId, expireAt: Instant): Future[TargetsRole] = {
+    targetItemRepo.findFor(repoId).map { targetItems =>
       val targets = targetItems.map { item =>
         val hashes = Map(item.checksum.method -> item.checksum.hash)
         item.filename -> ClientTargetItem(hashes, item.length)

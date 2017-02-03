@@ -1,11 +1,11 @@
 package com.advancedtelematic.ota_tuf.http
 
 import akka.http.scaladsl.model.StatusCodes
-import com.advancedtelematic.ota_tuf.data.DataType.{GroupId, Key, KeyGenId}
+import com.advancedtelematic.ota_tuf.data.DataType.{RepoId, Key, KeyGenId}
 import com.advancedtelematic.util.{OtaTufSpec, ResourceSpec}
 import io.circe.generic.auto._
 import org.genivi.sota.marshalling.CirceMarshallingSupport._
-import GroupId._
+import RepoId._
 import cats.syntax.show._
 import com.advancedtelematic.ota_tuf.daemon.KeyGenerationOp
 import com.advancedtelematic.ota_tuf.data.ClientDataType._
@@ -33,19 +33,19 @@ class RootRoleResourceSpec extends OtaTufSpec
   override implicit def patienceConfig = PatienceConfig(timeout = Span(3, Seconds), interval = Span(100, Millis))
 
   test("POST returns Accepted") {
-    Post(apiUri(s"root/${GroupId.generate().show}"), ClientRootGenRequest()) ~> routes ~> check {
+    Post(apiUri(s"root/${RepoId.generate().show}"), ClientRootGenRequest()) ~> routes ~> check {
       status shouldBe StatusCodes.Accepted
     }
   }
 
   test("POST creates key gen request for all types of roles") {
-    val groupId = GroupId.generate()
+    val repoId = RepoId.generate()
 
-    Post(apiUri(s"root/${groupId.show}"), ClientRootGenRequest()) ~> routes ~> check {
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest()) ~> routes ~> check {
       status shouldBe StatusCodes.Accepted
     }
 
-    val requests = keyGenRepo.findBy(groupId).futureValue
+    val requests = keyGenRepo.findBy(repoId).futureValue
 
     requests.size shouldBe RoleType.ALL.size
 
@@ -53,13 +53,13 @@ class RootRoleResourceSpec extends OtaTufSpec
   }
 
   test("POST creates all roles") {
-    val groupId = GroupId.generate()
+    val repoId = RepoId.generate()
 
-    Post(apiUri(s"root/${groupId.show}"), ClientRootGenRequest()) ~> routes ~> check {
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest()) ~> routes ~> check {
       status shouldBe StatusCodes.Accepted
     }
 
-    val requests = keyGenRepo.findBy(groupId).futureValue
+    val requests = keyGenRepo.findBy(repoId).futureValue
 
     requests.size shouldBe RoleType.ALL.size
 
@@ -67,43 +67,43 @@ class RootRoleResourceSpec extends OtaTufSpec
   }
 
   test("POST fails if key for role already exists") {
-    val groupId = GroupId.generate()
+    val repoId = RepoId.generate()
 
-    Post(apiUri(s"root/${groupId.show}"), ClientRootGenRequest()) ~> routes ~> check {
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest()) ~> routes ~> check {
       status shouldBe StatusCodes.Accepted
     }
 
-    Post(apiUri(s"root/${groupId.show}"), ClientRootGenRequest()) ~> routes ~> check {
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest()) ~> routes ~> check {
       status shouldBe StatusCodes.Conflict
     }
   }
 
   test("GET returns NotFound if keys do not exist") {
-    val groupId = GroupId.generate()
+    val repoId = RepoId.generate()
 
-    Get(apiUri(s"root/${groupId.show}")) ~> routes ~> check {
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
     }
   }
 
   test("GET returns Locked if keys are not ready") {
-    val groupId = GroupId.generate()
+    val repoId = RepoId.generate()
 
-    Post(apiUri(s"root/${groupId.show}"), ClientRootGenRequest()) ~> routes ~> check {
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest()) ~> routes ~> check {
       status shouldBe StatusCodes.Accepted
     }
 
-    Get(apiUri(s"root/${groupId.show}")) ~> routes ~> check {
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
       status shouldBe StatusCodes.Locked
     }
   }
 
   test("GET returns 200 if keys are ready") {
-    val groupId = GroupId.generate()
+    val repoId = RepoId.generate()
 
-    generateRootRole(groupId).futureValue
+    generateRootRole(repoId).futureValue
 
-    Get(apiUri(s"root/${groupId.show}")) ~> routes ~> check {
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
       println(responseAs[Json].spaces2)
@@ -124,8 +124,8 @@ class RootRoleResourceSpec extends OtaTufSpec
   }
 
 
-  def generateRootRole(groupId: GroupId): Future[Seq[Key]] = {
-    Post(apiUri(s"root/${groupId.show}"), ClientRootGenRequest()) ~> routes ~> check {
+  def generateRootRole(repoId: RepoId): Future[Seq[Key]] = {
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest()) ~> routes ~> check {
       status shouldBe StatusCodes.Accepted
 
       val ids = responseAs[Seq[KeyGenId]]
@@ -140,14 +140,14 @@ class RootRoleResourceSpec extends OtaTufSpec
     }
   }
 
-  test("POST to groupId/roletype signs any payload with existing keys ") {
-    val groupId = GroupId.generate()
+  test("POST to repoId/roletype signs any payload with existing keys ") {
+    val repoId = RepoId.generate()
 
-    generateRootRole(groupId).futureValue
+    generateRootRole(repoId).futureValue
 
     val toSignPayload = Json.fromFields(List("some" -> Json.fromString("signed stuff")))
 
-    Post(apiUri(s"root/${groupId.show}/targets"), toSignPayload) ~> routes ~> check {
+    Post(apiUri(s"root/${repoId.show}/targets"), toSignPayload) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
       val signedPayload = responseAs[SignedPayload[Json]]
@@ -156,7 +156,7 @@ class RootRoleResourceSpec extends OtaTufSpec
 
       signedPayload.signatures shouldNot be(empty)
 
-      val targetKey = keyRepo.groupKeys(groupId, RoleType.TARGETS).futureValue.head
+      val targetKey = keyRepo.repoKeys(repoId, RoleType.TARGETS).futureValue.head
 
       signedPayload.signed shouldBe toSignPayload
 
@@ -169,10 +169,10 @@ class RootRoleResourceSpec extends OtaTufSpec
     }
   }
 
-  test("returns 404 if there are no keys for given group/roletype") {
-    val groupId = GroupId.generate()
+  test("returns 404 if there are no keys for given repo/roletype") {
+    val repoId = RepoId.generate()
 
-    Post(apiUri(s"root/${groupId.show}/targets"), Json.Null) ~> routes ~> check {
+    Post(apiUri(s"root/${repoId.show}/targets"), Json.Null) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
     }
   }
