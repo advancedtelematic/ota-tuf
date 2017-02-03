@@ -15,6 +15,7 @@ export IMAGE_ARTIFACT=${REGISTRY}/${IMAGE_NAME}:${DOCKER_TAG}
 export USE_MEM="1024.0"
 export USE_CPU="0.5"
 export JVM_OPTS="-Xmx512m"
+export VAULT_MOUNT="/ota-tuf/keys/$DEPLOY_ENV"
 
 # Merge service environment variables with secrets from this vault endpoint.
 export CATALOG_ADDR="http://catalog.gw.prod01.internal.advancedtelematic.com"

@@ -3,6 +3,8 @@
 set -u
 
 docker rm --force ota_tuf-mariadb || true
+docker rm --force ota_tuf-vault || true
+
 
 mkdir ota_tuf_entrypoint.d/ || true
 
@@ -13,6 +15,20 @@ FLUSH PRIVILEGES;
 " > ota_tuf_entrypoint.d/db_user.sql
 
 MYSQL_PORT=${MYSQL_PORT-3306}
+
+docker run -d \
+       --name ota_tuf-vault \
+       -e VAULT_DEV_ROOT_TOKEN_ID=f8c637c5-b762-e6a7-7974-bf45d3061106 \
+       -p 8200:8200 vault
+
+function docker_vault() {
+    docker run --cap-add IPC_LOCK \
+           --link ota_tuf-vault \
+           -e VAULT_TOKEN=f8c637c5-b762-e6a7-7974-bf45d3061106 \
+           -e VAULT_ADDR=http://ota_tuf-vault:8200 \
+           --volume $(pwd)/src/main/resources:/tmp/resources \
+           vault $*
+}
 
 docker run -d \
   --name ota_tuf-mariadb \
@@ -33,8 +49,13 @@ function mysqladmin_alive {
            mysqladmin ping --protocol=TCP -h ota_tuf-mariadb -P 3306 -u root -proot
 }
 
+docker_vault policy-write ota-tuf /tmp/resources/vault_policy.hcl
+
+docker_vault mount -path=ota-tuf/keys generic
+
 TRIES=60
 TIMEOUT=1s
+
 
 for t in `seq $TRIES`; do
     res=$(mysqladmin_alive || true)
@@ -48,4 +69,3 @@ for t in `seq $TRIES`; do
 done
 
 exit -1
-

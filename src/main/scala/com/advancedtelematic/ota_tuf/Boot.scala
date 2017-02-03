@@ -26,6 +26,7 @@ trait Settings {
 
   lazy val vaultAddr = Uri(config.getString("vault.address"))
   lazy val vaultToken = config.getString("vault.token")
+  lazy val vaultMount = config.getString("vault.mount")
 }
 
 object Boot extends BootApp
@@ -43,7 +44,7 @@ object Boot extends BootApp
 
   log.info(s"Starting $version on http://$host:$port")
 
-  lazy val vaultClient = VaultClient(vaultAddr, vaultToken)
+  lazy val vaultClient = VaultClient(vaultAddr, vaultToken, vaultMount)
 
   val localRoleKeyStore = Uri.from(host = host, port = port, path = "/api/v1")
 

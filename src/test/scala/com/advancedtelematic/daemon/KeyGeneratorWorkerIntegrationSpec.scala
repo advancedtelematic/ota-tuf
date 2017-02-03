@@ -27,7 +27,7 @@ class KeyGeneratorWorkerIntegrationSpec extends OtaTufSpec
 
   implicit val mat = ActorMaterializer()
 
-  lazy val vault = VaultClient(vaultAddr, vaultToken)
+  lazy val vault = VaultClient(vaultAddr, vaultToken, vaultMount)
 
   val actorRef = system.actorOf(KeyGeneratorWorker.props(vault))
 

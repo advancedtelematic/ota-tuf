@@ -6,6 +6,7 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.Uri.Path._
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.HttpMethods._
+import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.unmarshalling.{FromEntityUnmarshaller, Unmarshaller}
 import akka.stream.Materializer
 import com.advancedtelematic.ota_tuf.data.DataType.{KeyGenId, KeyId}
@@ -35,16 +36,17 @@ object VaultClient {
     implicit val decoder: Decoder[VaultKey] = deriveDecoder[VaultKey]
   }
 
-  def apply(host: Uri, token: String)(implicit system: ActorSystem, mat: Materializer): VaultClient = new VaultClientImpl(host, token)
+  def apply(host: Uri, token: String, mount: String)(implicit system: ActorSystem, mat: Materializer): VaultClient =
+    new VaultClientImpl(host, token, mount)
 }
 
-class VaultClientImpl(vaultHost: Uri, token: String)(implicit system: ActorSystem, mat: Materializer) extends VaultClient {
+class VaultClientImpl(vaultHost: Uri, token: String, mount: String)(implicit system: ActorSystem, mat: Materializer) extends VaultClient {
   import VaultKey._
   import system.dispatcher
 
   private val _http = Http()
 
-  private val mountPath = Empty / "v1" / "ota-tuf" / "keys"
+  private val mountPath = Empty / "v1" / mount
 
   case class VaultError(msg: String) extends Throwable(msg) with NoStackTrace
 

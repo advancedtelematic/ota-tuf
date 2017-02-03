@@ -230,6 +230,8 @@ class RepoResourceSpec extends OtaTufSpec
     }
   }
 
+
+
   def signaturesShouldBeValid[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Assertion = {
     val signature = signedPayload.signatures.head.toSignature
     val signed = signedPayload.signed

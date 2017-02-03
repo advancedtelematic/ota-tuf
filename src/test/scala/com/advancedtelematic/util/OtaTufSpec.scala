@@ -35,4 +35,6 @@ abstract class OtaTufSpec extends FunSuite with Matchers with ScalaFutures {
   lazy val vaultAddr = Uri(config.getString("vault.address"))
 
   lazy val vaultToken = config.getString("vault.token")
+
+  lazy val vaultMount = config.getString("vault.mount")
 }
