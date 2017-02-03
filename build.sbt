@@ -1,4 +1,4 @@
-name := "ota_tuf"
+name := "ota-tuf"
 organization := "com.advancedtelematic.com"
 scalaVersion := "2.11.8"
 
