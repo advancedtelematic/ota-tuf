@@ -3,18 +3,17 @@ package com.advancedtelematic.util
 import java.security.Security
 import java.util.concurrent.ConcurrentHashMap
 
-import akka.http.scaladsl.model.Uri
+import com.advancedtelematic.ota_tuf.Settings
 import com.advancedtelematic.ota_tuf.data.DataType.KeyId
 import com.advancedtelematic.ota_tuf.vault.VaultClient
 import com.advancedtelematic.ota_tuf.vault.VaultClient.VaultKey
-import com.typesafe.config.ConfigFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{FunSuite, Matchers}
 
 import scala.concurrent.Future
 
-abstract class OtaTufSpec extends FunSuite with Matchers with ScalaFutures {
+abstract class OtaTufSpec extends FunSuite with Matchers with ScalaFutures with Settings {
 
   Security.addProvider(new BouncyCastleProvider())
 
@@ -29,12 +28,4 @@ abstract class OtaTufSpec extends FunSuite with Matchers with ScalaFutures {
     override def findKey(keyId: KeyId): Future[VaultKey] =
       Future.successful(keys.get(keyId))
   }
-
-  private lazy val config = ConfigFactory.load()
-
-  lazy val vaultAddr = Uri(config.getString("vault.address"))
-
-  lazy val vaultToken = config.getString("vault.token")
-
-  lazy val vaultMount = config.getString("vault.mount")
 }

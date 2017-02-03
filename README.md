@@ -9,14 +9,8 @@ You'll need vault installed (v0.5.2):
     vault policy-write ota-tuf src/main/resources/vault_policy.hcl
     vault mount -path=ota-tuf/keys generic
 
-    export VAULT_TOKEN=$(vault token-create -format json -policy ota-tuf  | jq -r .auth.client_token)
+    vault token-create -format json -policy ota-tuf -id="74e0216d-cc15-5ab9-454d-908a04d14787"
     
-You'll need `VAULT_TOKEN` set before starting the app or running tests.
-
-Alternatively, you can just use the root token for development:
-
-    export VAULT_TOKEN="f8c637c5-b762-e6a7-7974-bf45d3061106"
-
 ## Running tests
 
 You'll need a mariadb instance running with the users configured in
