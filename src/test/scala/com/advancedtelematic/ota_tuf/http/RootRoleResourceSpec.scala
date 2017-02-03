@@ -1,8 +1,8 @@
 package com.advancedtelematic.ota_tuf.http
 
 import akka.http.scaladsl.model.StatusCodes
-import com.advancedtelematic.ota_tuf.data.DataType.{RepoId, Key, KeyGenId}
-import com.advancedtelematic.util.{OtaTufSpec, ResourceSpec}
+import com.advancedtelematic.ota_tuf.data.DataType.{Key, KeyGenId, RepoId}
+import com.advancedtelematic.util.{LongTest, OtaTufSpec, ResourceSpec}
 import io.circe.generic.auto._
 import org.genivi.sota.marshalling.CirceMarshallingSupport._
 import RepoId._
@@ -24,13 +24,12 @@ class RootRoleResourceSpec extends OtaTufSpec
   with KeyGenRequestSupport
   with KeyRepositorySupport
   with PatienceConfiguration
-  with Inspectors {
+  with Inspectors
+  with LongTest {
 
   implicit val ec = ExecutionContext.global
 
   val keyGenerationOp = new KeyGenerationOp(fakeVault)
-
-  override implicit def patienceConfig = PatienceConfig(timeout = Span(3, Seconds), interval = Span(100, Millis))
 
   test("POST returns Accepted") {
     Post(apiUri(s"root/${RepoId.generate().show}"), ClientRootGenRequest()) ~> routes ~> check {

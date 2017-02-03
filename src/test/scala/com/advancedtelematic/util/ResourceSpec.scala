@@ -80,13 +80,13 @@ object FakeRoleStore extends RoleKeyStoreClient {
   }
 }
 
-trait ResourceSpec extends OtaTufSpec with ScalatestRouteTest with DatabaseSpec {
+trait ResourceSpec extends OtaTufSpec
+  with ScalatestRouteTest
+  with DatabaseSpec
+  with LongHttpRequest {
   def apiUri(path: String): String = "/api/v1/" + path
 
   val fakeRoleStore = FakeRoleStore
 
   lazy val routes = new OtaTufRoutes(fakeVault, fakeRoleStore).routes
-
-  implicit def default(implicit system: ActorSystem) =
-    RouteTestTimeout(10.seconds.dilated(system))
 }

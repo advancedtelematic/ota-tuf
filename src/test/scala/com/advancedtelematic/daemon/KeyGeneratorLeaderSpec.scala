@@ -1,16 +1,13 @@
 package com.advancedtelematic.daemon
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.model.Uri
-import akka.stream.ActorMaterializer
 import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.ota_tuf.daemon.KeyGeneratorLeader
-import com.advancedtelematic.ota_tuf.data.DataType.{RepoId, KeyGenId, KeyGenRequest, KeyId, RoleId}
+import com.advancedtelematic.ota_tuf.data.DataType.{KeyGenId, KeyGenRequest, KeyId, RepoId, RoleId}
 import com.advancedtelematic.ota_tuf.data.{KeyGenRequestStatus, RoleType}
 import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}
-import com.advancedtelematic.ota_tuf.vault.{VaultClient, VaultClientImpl}
-import com.advancedtelematic.util.OtaTufSpec
+import com.advancedtelematic.util.{LongTest, OtaTufSpec}
 import org.genivi.sota.core.DatabaseSpec
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
 import org.scalatest.concurrent.PatienceConfiguration.{Interval, Timeout}
@@ -24,7 +21,9 @@ class KeyGeneratorLeaderSpec extends OtaTufSpec with TestKitBase with DatabaseSp
   with KeyGenRequestSupport
   with Eventually
   with BeforeAndAfterAll
-  with Inspectors {
+  with Inspectors
+  with LongTest {
+
   override implicit lazy val system: ActorSystem = ActorSystem(this.getClass.getSimpleName)
 
   implicit val ec = ExecutionContext.global
