@@ -3,7 +3,7 @@ package com.advancedtelematic.daemon
 import akka.actor.{ActorSystem, Status}
 import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.ota_tuf.daemon.KeyGeneratorWorker
-import com.advancedtelematic.ota_tuf.data.DataType.{RepoId, Key, KeyGenId, KeyGenRequest}
+import com.advancedtelematic.ota_tuf.data.DataType.{Key, KeyGenId, KeyGenRequest, RepoId}
 import com.advancedtelematic.ota_tuf.data.{KeyGenRequestStatus, RoleType}
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.util.OtaTufSpec
@@ -11,18 +11,23 @@ import org.genivi.sota.core.DatabaseSpec
 import org.genivi.sota.http.Errors.MissingEntity
 import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair.keyShow
 import cats.syntax.show.toShowOps
+import org.scalatest.concurrent.PatienceConfiguration
+import org.scalatest.time.{Seconds, Span}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 
 class KeyGeneratorWorkerSpec extends OtaTufSpec with TestKitBase with DatabaseSpec with ImplicitSender
   with KeyRepositorySupport
-  with KeyGenRequestSupport {
+  with KeyGenRequestSupport
+  with PatienceConfiguration {
   override implicit lazy val system: ActorSystem = ActorSystem("KeyGeneratorWorkerIntegrationSpec")
 
   implicit val ec = ExecutionContext.global
 
   val actorRef = system.actorOf(KeyGeneratorWorker.props(fakeVault))
+
+  override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
 
   def keyGenRequest: Future[KeyGenRequest] = {
     val keyGenId = KeyGenId.generate()

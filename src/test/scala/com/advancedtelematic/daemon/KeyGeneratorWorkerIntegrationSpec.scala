@@ -29,8 +29,6 @@ class KeyGeneratorWorkerIntegrationSpec extends OtaTufSpec
 
   lazy val vault = VaultClient(vaultAddr, vaultToken, vaultMount)
 
-  println(s"Using $vaultAddr $vaultToken")
-
   val actorRef = system.actorOf(KeyGeneratorWorker.props(vault))
 
   test("adds key to vault") {
