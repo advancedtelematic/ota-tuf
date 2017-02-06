@@ -8,7 +8,7 @@ import org.genivi.sota.db.{BootMigrations, DatabaseConfig}
 import org.genivi.sota.http.{BootApp, HealthResource}
 import org.genivi.sota.monitoring.{DatabaseMetrics, MetricsSupport}
 
-class KeyGenerationDaemon extends BootApp
+object KeyGenerationDaemon extends BootApp
     with Settings
     with VersionInfo
     with BootMigrations
