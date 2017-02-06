@@ -35,7 +35,7 @@
     }]
   },
   {
-  "id": "${JOB_NAME}",
+  "id": "${JOB_NAME}-daemon",
   "uris": ["/root/docker.tar.gz"],
   "constraints": [["rack_id", "CLUSTER", "stateless"]],
   "cpus": $USE_CPU,
@@ -57,7 +57,7 @@
     }
   },
   "env": {
-    "SERVICE_NAME": "${JOB_NAME}",
+    "SERVICE_NAME": "${JOB_NAME}-daemon",
     "SERVICE_SCOPE": "internal",
     "SERVICE_TYPE": "http",
     "SERVICE_IMAGE": "${IMAGE_ARTIFACT}",
