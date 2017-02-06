@@ -56,6 +56,7 @@ lazy val root = (project in file("."))
     )
   }))
 
+mainClass in Compile := Some("com.advancedtelematic.ota_tuf.Boot")
 
 buildInfoOptions += BuildInfoOption.ToMap
 
