@@ -46,7 +46,7 @@ object Boot extends BootApp
 
   lazy val vaultClient = VaultClient(vaultAddr, vaultToken, vaultMount)
 
-  val localRoleKeyStore = Uri.from(host = host, port = port, path = "/api/v1")
+  val localRoleKeyStore = Uri.from(scheme = "http", host = host, port = port, path = "/api/v1")
 
   lazy val keyStoreClient = new RoleKeyStoreHttpClient(localRoleKeyStore)
 
