@@ -39,8 +39,13 @@ protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: Execut
       }.transactionally
     }
 
-  def persistGenerated(keyGenRequest: KeyGenRequest, key: Key, keyRepository: KeyRepository): Future[KeyGenRequest] = {
+  def persistGenerated(keyGenRequest: KeyGenRequest,
+                       key: Key,
+                       role: Role,
+                       keyRepository: KeyRepository,
+                       roleRepository: RoleRepository): Future[KeyGenRequest] = {
     val dbIO = for {
+      _ <- roleRepository.persistAction(role)
       _ ← setStatusAction(keyGenRequest.id, KeyGenRequestStatus.GENERATED)
       _ ← keyRepository.persistAction(key)
     } yield keyGenRequest.copy(status = KeyGenRequestStatus.GENERATED)
@@ -152,7 +157,10 @@ protected [db] class RoleRepository()(implicit db: Database, ec: ExecutionContex
   import org.genivi.sota.refined.SlickRefined._
 
   def persist(role: Role): Future[Role] =
-    db.run((Schema.roles += role).map(_ => role))
+    db.run(persistAction(role))
+
+  protected [db] def persistAction(role: Role): DBIO[Role] =
+      (Schema.roles += role).map(_ => role)
 }
 
 

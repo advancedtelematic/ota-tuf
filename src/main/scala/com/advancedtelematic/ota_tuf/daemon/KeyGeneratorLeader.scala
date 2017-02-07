@@ -94,15 +94,13 @@ class KeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database, val e
   def processGenerationRequest(kgr: KeyGenRequest): Future[Key] =
     async {
       val role = Role(RoleId.generate(), kgr.repoId, kgr.roleType, kgr.threshold)
-      await(roleRepo.persist(role))
 
       val keyPair = RsaKeyPair.generate(kgr.keySize)
       val key = Key(keyPair.id, role.id, KeyType.RSA, keyPair.getPublic)
 
       val vaultKey = VaultKey(key.id, key.keyType, key.publicKey.show, keyPair.getPrivate.show)
       await(vaultClient.createKey(vaultKey))
-
-      await(keyGenRepo.persistGenerated(kgr, key, keyRepo))
+      await(keyGenRepo.persistGenerated(kgr, key, role, keyRepo, roleRepo))
 
       _log.info("Generated Key {}", key.id.get)
       key
