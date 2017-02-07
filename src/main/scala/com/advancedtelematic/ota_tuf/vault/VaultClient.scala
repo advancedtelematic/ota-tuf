@@ -37,10 +37,10 @@ object VaultClient {
   }
 
   def apply(host: Uri, token: String, mount: String)(implicit system: ActorSystem, mat: Materializer): VaultClient =
-    new VaultClientImpl(host, token, mount)
+    new VaultHttpClient(host, token, mount)
 }
 
-class VaultClientImpl(vaultHost: Uri, token: String, mount: String)(implicit system: ActorSystem, mat: Materializer) extends VaultClient {
+class VaultHttpClient(vaultHost: Uri, token: String, mount: String)(implicit system: ActorSystem, mat: Materializer) extends VaultClient {
   import VaultKey._
   import system.dispatcher
 

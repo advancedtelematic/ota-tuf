@@ -37,13 +37,13 @@ class RoleKeyStoreHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorM
 
   override def sign[T : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[Json]] = {
     val entity = HttpEntity(ContentTypes.`application/json`, payload.asJson.noSpaces)
-    val req = HttpRequest(HttpMethods.POST, uri = uri.withPath(uri.path / repoId.show / roleType.toString), entity = entity)
+    val req = HttpRequest(HttpMethods.POST, uri = uri.withPath(uri.path / "root" / repoId.show / roleType.show), entity = entity)
 
     execHttp[SignedPayload[Json]](req)()
   }
 
   override def fetchRootRole(repoId: RepoId): Future[SignedPayload[Json]] = {
-    val req = HttpRequest(HttpMethods.GET, uri = uri.withPath(uri.path / repoId.show))
+    val req = HttpRequest(HttpMethods.GET, uri = uri.withPath(uri.path / "root" / repoId.show))
 
     execHttp[SignedPayload[Json]](req) {
       case response if response.status == StatusCodes.NotFound =>
