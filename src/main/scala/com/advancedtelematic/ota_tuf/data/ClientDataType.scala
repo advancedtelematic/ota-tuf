@@ -36,11 +36,6 @@ object ClientDataType {
 }
 
 object RepoClientDataType {
-  case class TargetsRole(expires: Instant,
-                         targets: Map[String, ClientTargetItem],
-                         version: Int,
-                         _type: String = "Targets")
-
   type ClientHashes = Map[HashMethod, Refined[String, ValidChecksum]]
 
   case class ClientTargetItem(hashes: ClientHashes,
@@ -69,15 +64,23 @@ object RepoClientDataType {
     }
   }
 
+  trait VersionedRole {
+    val version: Int
+  }
+
+  case class TargetsRole(expires: Instant,
+                         targets: Map[String, ClientTargetItem],
+                         version: Int,
+                         _type: String = "Targets") extends VersionedRole
+
   case class SnapshotRole(meta: Map[MetaPath, MetaItem],
                           expires: Instant,
                           version: Int,
-                          _type: String = "Snapshot")
+                          _type: String = "Snapshot") extends VersionedRole
 
   case class TimestampRole(
                             meta: Map[MetaPath, MetaItem],
                             expires: Instant,
                             version: Int,
-                            _type: String = "Timestamp"
-                          )
+                            _type: String = "Timestamp") extends VersionedRole
 }

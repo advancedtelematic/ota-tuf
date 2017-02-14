@@ -78,10 +78,11 @@ object Schema {
     def content = column[Json]("content")
     def checksum = column[Checksum]("checksum")
     def length = column[Long]("length")
+    def version = column[Int]("version")
 
     def pk = primaryKey("signed_role_pk", (repoId, roleType))
 
-    override def * = (repoId, roleType, content, checksum, length) <> ((SignedRole.apply _).tupled, SignedRole.unapply)
+    override def * = (repoId, roleType, content, checksum, length, version) <> ((SignedRole.apply _).tupled, SignedRole.unapply)
   }
 
   protected [db] val signedRoles = TableQuery[SignedRoleTable]

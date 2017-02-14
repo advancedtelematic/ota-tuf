@@ -28,7 +28,7 @@ with KeyGenRequestSupport {
   override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
 
   val rootGeneration = new RootRoleGeneration(fakeVault)
-  val keyGeneratioOp = new KeyGenerationOp(fakeVault)
+  val keyGenerationOp = new KeyGenerationOp(fakeVault)
 
   test("root role payload must be signed with root key") {
     val repoId = RepoId.generate()
@@ -38,7 +38,7 @@ with KeyGenRequestSupport {
     async {
       await(keyGenRepo.persist(rootKeyGenRequest))
 
-      await(keyGeneratioOp.processGenerationRequest(rootKeyGenRequest))
+      await(keyGenerationOp.processGenerationRequest(rootKeyGenRequest))
 
       val signed = await(rootGeneration.findSigned(repoId))
 

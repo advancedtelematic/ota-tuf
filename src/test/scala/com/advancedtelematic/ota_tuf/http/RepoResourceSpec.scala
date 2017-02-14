@@ -15,9 +15,12 @@ import com.advancedtelematic.ota_tuf.data.Codecs._
 import com.advancedtelematic.ota_tuf.data.RepoClientDataType.{SnapshotRole, TargetsRole, TimestampRole}
 import com.advancedtelematic.ota_tuf.data.RepositoryDataType.HashMethod
 import com.advancedtelematic.ota_tuf.data.RoleType
+import com.advancedtelematic.ota_tuf.db.{Schema, SignedRoleRepositorySupport}
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
 import io.circe.syntax._
 import org.scalatest.prop.Whenever
+
+import scala.concurrent.ExecutionContext
 
 class RepoResourceSpec extends OtaTufSpec
   with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever {
@@ -230,7 +233,34 @@ class RepoResourceSpec extends OtaTufSpec
     }
   }
 
+  test("Bumps version number when adding a new target") {
+    val newRepoId = createRepo()
 
+    Post(apiUri(s"repo/${newRepoId.show}/targets/myfile"), testFile) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Get(apiUri(s"repo/${newRepoId.show}/snapshot.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val targetsRole = responseAs[SignedPayload[SnapshotRole]]
+
+      targetsRole.signed.version shouldBe 2
+    }
+
+    Get(apiUri(s"repo/${newRepoId.show}/targets.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val targetsRole = responseAs[SignedPayload[TargetsRole]]
+
+      targetsRole.signed.version shouldBe 2
+    }
+
+    Get(apiUri(s"repo/${newRepoId.show}/timestamp.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val targetsRole = responseAs[SignedPayload[TimestampRole]]
+
+      targetsRole.signed.version shouldBe 2
+    }
+  }
 
   def signaturesShouldBeValid[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Assertion = {
     val signature = signedPayload.signatures.head.toSignature

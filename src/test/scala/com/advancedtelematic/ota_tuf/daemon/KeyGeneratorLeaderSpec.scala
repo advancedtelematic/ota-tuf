@@ -1,9 +1,8 @@
-package com.advancedtelematic.daemon
+package com.advancedtelematic.ota_tuf.daemon
 
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKitBase}
-import com.advancedtelematic.ota_tuf.daemon.KeyGeneratorLeader
-import com.advancedtelematic.ota_tuf.data.DataType.{KeyGenId, KeyGenRequest, KeyId, RepoId, RoleId}
+import com.advancedtelematic.ota_tuf.data.DataType.{KeyGenId, KeyGenRequest, RepoId}
 import com.advancedtelematic.ota_tuf.data.{KeyGenRequestStatus, RoleType}
 import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}

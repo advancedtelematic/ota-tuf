@@ -1,4 +1,4 @@
-package com.advancedtelematic.daemon
+package com.advancedtelematic.ota_tuf.daemon
 
 import akka.actor.{ActorSystem, Status}
 import akka.testkit.{ImplicitSender, TestKitBase}

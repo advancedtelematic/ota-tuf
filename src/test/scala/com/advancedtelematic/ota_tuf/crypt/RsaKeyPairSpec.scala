@@ -1,6 +1,5 @@
-package com.advancedtelematic.crypt
+package com.advancedtelematic.ota_tuf.crypt
 
-import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair
 import com.advancedtelematic.util.OtaTufSpec
 import cats.syntax.show._
 import RsaKeyPair._

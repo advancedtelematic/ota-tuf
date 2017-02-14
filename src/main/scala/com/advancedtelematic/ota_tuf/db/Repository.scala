@@ -1,12 +1,14 @@
 package com.advancedtelematic.ota_tuf.db
 
-import com.advancedtelematic.ota_tuf.data.DataType.{RepoId, Key, KeyId, Role}
-import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus
-import org.genivi.sota.http.Errors.{EntityAlreadyExists, MissingEntity}
+import akka.http.scaladsl.model.{StatusCode, StatusCodes}
+import com.advancedtelematic.ota_tuf.data.DataType.{Key, KeyId, RepoId, Role}
+import com.advancedtelematic.ota_tuf.data.{KeyGenRequestStatus, RoleType}
+import org.genivi.sota.http.Errors.{EntityAlreadyExists, MissingEntity, RawError}
 import slick.driver.MySQLDriver.api._
 import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.data.RepositoryDataType.{SignedRole, TargetItem}
 import com.advancedtelematic.ota_tuf.data.RoleType.RoleType
+import org.genivi.sota.rest.ErrorCode
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -189,12 +191,14 @@ trait SignedRoleRepositorySupport extends DatabaseSupport {
 
 object SignedRoleRepository {
   val SignedRoleNotFound = MissingEntity(classOf[SignedRole])
+  def InvalidVersionBumpError(oldVersion: Int, newVersion: Int) =
+    RawError(ErrorCode("invalid_version_bump"), StatusCodes.Conflict, s"Cannot bump version from $oldVersion to $newVersion")
 }
 
 protected[db] class SignedRoleRepository()(implicit db: Database, ec: ExecutionContext) {
-
   import org.genivi.sota.db.SlickExtensions._
   import org.genivi.sota.refined.SlickRefined._
+  import SignedRoleRepository.InvalidVersionBumpError
 
   import Schema.signedRoles
   import SignedRoleRepository.SignedRoleNotFound
@@ -202,8 +206,16 @@ protected[db] class SignedRoleRepository()(implicit db: Database, ec: ExecutionC
   def persist(signedRole: SignedRole): Future[SignedRole] =
     db.run(persistAction(signedRole))
 
-  private def persistAction(signedRole: SignedRole): DBIO[SignedRole] =
-    signedRoles.insertOrUpdate(signedRole).map(_ => signedRole)
+  private def persistAction(signedRole: SignedRole): DBIO[SignedRole] = {
+    signedRoles
+      .filter(_.repoId === signedRole.repoId)
+      .filter(_.roleType === signedRole.roleType)
+      .result
+      .headOption
+      .flatMap(ensureVersionBumpIsValid(signedRole))
+      .flatMap(_ => signedRoles.insertOrUpdate(signedRole))
+      .map(_ => signedRole)
+  }
 
   def persistAll(signedRoles: SignedRole*): Future[Seq[SignedRole]] =
     db.run {
@@ -218,5 +230,12 @@ protected[db] class SignedRoleRepository()(implicit db: Database, ec: ExecutionC
         .result
         .headOption
         .failIfNone(SignedRoleNotFound)
+    }
+
+  private def ensureVersionBumpIsValid(signedRole: SignedRole)(oldSignedRole: Option[SignedRole]): DBIO[Unit] =
+    oldSignedRole match {
+      case Some(sr) if signedRole.roleType != RoleType.ROOT && sr.version != signedRole.version - 1 =>
+        DBIO.failed(InvalidVersionBumpError(sr.version, signedRole.version))
+      case _ => DBIO.successful(())
     }
 }

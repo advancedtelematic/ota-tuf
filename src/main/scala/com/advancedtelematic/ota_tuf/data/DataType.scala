@@ -98,18 +98,19 @@ object RepositoryDataType {
   case class Checksum(method: HashMethod, hash: Refined[String, ValidChecksum])
 
   case class ValidChecksum()
+
   implicit val validChecksumValidate: Validate.Plain[String, ValidChecksum] =
     ValidationUtils.validHexValidation(ValidChecksum(), length = 64)
 
   case class TargetItem(repoId: RepoId, filename: String, uri: Uri, checksum: Checksum, length: Long)
 
-  case class SignedRole(repoId: RepoId, roleType: RoleType, content: Json, checksum: Checksum, length: Long)
+  case class SignedRole(repoId: RepoId, roleType: RoleType, content: Json, checksum: Checksum, length: Long, version: Int)
 
   object SignedRole {
-    def withChecksum(repoId: RepoId, roleType: RoleType, content: Json): SignedRole = {
+    def withChecksum(repoId: RepoId, roleType: RoleType, content: Json, version: Int): SignedRole = {
       val canonicalJson = content.canonical
       val checksum = Sha256Digest.digest(canonicalJson.getBytes)
-      SignedRole(repoId, roleType, content, checksum, canonicalJson.length)
+      SignedRole(repoId, roleType, content, checksum, canonicalJson.length, version)
     }
   }
 }

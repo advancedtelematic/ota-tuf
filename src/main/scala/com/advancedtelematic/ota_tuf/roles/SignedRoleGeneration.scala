@@ -1,4 +1,4 @@
-package com.advancedtelematic.ota_tuf.roles
+ package com.advancedtelematic.ota_tuf.roles
 
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -13,6 +13,7 @@ import com.advancedtelematic.ota_tuf.repo_store.RoleKeyStoreClient
 import io.circe.syntax._
 import io.circe.{Encoder, Json}
 import slick.driver.MySQLDriver.api._
+import com.advancedtelematic.ota_tuf.db.SignedRoleRepository.SignedRoleNotFound
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
@@ -31,13 +32,16 @@ extends SignedRoleRepositorySupport {
 
       val signedRoot = await(fetchRootRole(repoId))
 
-      val targetRole = await(targetRoleGeneration.updateRoleWith(targetItem, expireAt))
+      val targetVersion = await(nextVersion(repoId, RoleType.TARGETS))
+      val targetRole = await(targetRoleGeneration.updateRoleWith(targetItem, expireAt, targetVersion))
       val signedTarget = await(signRole(repoId, RoleType.TARGETS, targetRole))
 
-      val snapshotRole = genSnapshotRole(signedRoot, signedTarget, expireAt)
+      val snapshotVersion = await(nextVersion(repoId, RoleType.SNAPSHOT))
+      val snapshotRole = genSnapshotRole(signedRoot, signedTarget, expireAt, snapshotVersion)
       val signedSnapshot = await(signRole(repoId, RoleType.SNAPSHOT, snapshotRole))
 
-      val timestampRole = genTimestampRole(signedSnapshot, expireAt)
+      val timestampVersion = await(nextVersion(repoId, RoleType.TIMESTAMP))
+      val timestampRole = genTimestampRole(signedSnapshot, expireAt, timestampVersion)
       val signedTimestamp = await(signRole(repoId, RoleType.TIMESTAMP, timestampRole))
 
       val persistF = signedRoleRepo.persistAll(signedTarget, signedSnapshot, signedTimestamp)
@@ -47,27 +51,44 @@ extends SignedRoleRepositorySupport {
     }
   }
 
-  def signRole[T : Encoder](repoId: RepoId, roleType: RoleType, role: T): Future[SignedRole] = {
+  def signRole[T <: VersionedRole : Encoder](repoId: RepoId, roleType: RoleType, role: T): Future[SignedRole] = {
     roleSigningClient.sign(repoId, roleType, role).map { jsonRole =>
-      SignedRole.withChecksum(repoId, roleType, jsonRole.asJson)
+      SignedRole.withChecksum(repoId, roleType, jsonRole.asJson, role.version)
     }
   }
 
   def fetchRootRole(repoId: RepoId): Future[SignedRole] = {
     roleSigningClient.fetchRootRole(repoId).flatMap { rootRoleJson =>
-      val signedRoot = SignedRole.withChecksum(repoId, RoleType.ROOT, rootRoleJson.asJson)
+      val signedRoot = SignedRole.withChecksum(repoId, RoleType.ROOT, rootRoleJson.asJson, version = 1)
       signedRoleRepo.persist(signedRoot)
     }
   }
 
-  private def genSnapshotRole(root: SignedRole, target: SignedRole, expireAt: Instant): SnapshotRole = {
-    val meta = List(root.asMetaRole, target.asMetaRole).toMap
-    SnapshotRole(meta, expireAt, version = 1)
+  private def nextVersion(repoId: RepoId, roleType: RoleType): Future[Int] = {
+    signedRoleRepo
+      .find(repoId, roleType)
+      .map { signedRole =>
+        signedRole
+          .content
+          .hcursor
+          .downField("signed")
+          .downField("version")
+          .as[Int]
+          .getOrElse(0) + 1
+      }
+      .recover {
+        case SignedRoleNotFound => 1
+      }
   }
 
-  private def genTimestampRole(snapshotRole: SignedRole, expireAt: Instant): TimestampRole = {
+  private def genSnapshotRole(root: SignedRole, target: SignedRole, expireAt: Instant, version: Int): SnapshotRole = {
+    val meta = List(root.asMetaRole, target.asMetaRole).toMap
+    SnapshotRole(meta, expireAt, version)
+  }
+
+  private def genTimestampRole(snapshotRole: SignedRole, expireAt: Instant, version: Int): TimestampRole = {
     val meta = Map(snapshotRole.asMetaRole)
-    TimestampRole(meta, expireAt, version = 1)
+    TimestampRole(meta, expireAt, version)
   }
 
   private def defaultExpire: Instant =
@@ -78,20 +99,20 @@ protected class TargetRoleGeneration(roleSigningClient: RoleKeyStoreClient)
                           (implicit val db: Database, val ec: ExecutionContext)
   extends TargetItemRepositorySupport {
 
-  def updateRoleWith(targetItem: TargetItem, expireAt: Instant): Future[TargetsRole] = {
+  def updateRoleWith(targetItem: TargetItem, expireAt: Instant, version: Int): Future[TargetsRole] = {
     targetItemRepo
       .persist(targetItem)
-      .flatMap(_ => generate(targetItem.repoId, expireAt))
+      .flatMap(_ => generate(targetItem.repoId, expireAt, version))
   }
 
-  private def generate(repoId: RepoId, expireAt: Instant): Future[TargetsRole] = {
+  private def generate(repoId: RepoId, expireAt: Instant, version: Int): Future[TargetsRole] = {
     targetItemRepo.findFor(repoId).map { targetItems =>
       val targets = targetItems.map { item =>
         val hashes = Map(item.checksum.method -> item.checksum.hash)
         item.filename -> ClientTargetItem(hashes, item.length)
       }.toMap
 
-      TargetsRole(expireAt, targets, version = 1)
+      TargetsRole(expireAt, targets, version)
     }
   }
 }
