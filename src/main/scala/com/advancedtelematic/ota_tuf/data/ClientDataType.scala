@@ -23,7 +23,7 @@ object ClientDataType {
       ClientSignature(keyId, value.method, value.hex)
   }
 
-  case class ClientKey(keytype: KeyType, publicKey: PublicKey)
+  case class ClientKey(keytype: KeyType, keyval: PublicKey)
 
   case class SignedPayload[T : Encoder](signatures: Seq[ClientSignature], signed: T)
 

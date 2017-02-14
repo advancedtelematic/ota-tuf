@@ -5,7 +5,7 @@ import java.security.PublicKey
 import akka.http.scaladsl.model.Uri
 import cats.data.Xor
 import com.advancedtelematic.ota_tuf.data.DataType.Signature
-import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
+import io.circe._
 import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair.keyShow
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair
@@ -31,9 +31,19 @@ object Codecs {
   implicit val uriEncoder: Encoder[Uri] = Encoder[String].contramap(_.toString)
   implicit val uriDecoder: Decoder[Uri] = Decoder[String].map(Uri.apply)
 
-  implicit val publicKeyEncoder: Encoder[PublicKey] = Encoder[String].contramap(_.show)
-  implicit val publicKeyDecoder: Decoder[PublicKey] = Decoder[String].emap { str =>
-    Xor.fromTry(RsaKeyPair.parsePublic(str)).leftMap(_.getMessage)
+  implicit val publicKeyEncoder: Encoder[PublicKey] = Encoder.instance { publicKey =>
+    Json.obj("public" -> Json.fromString(publicKey.show))
+  }
+  implicit val publicKeyDecoder: Decoder[PublicKey] = Decoder.instance { cursor =>
+    val aCursor = cursor.downField("public")
+
+    aCursor
+      .as[String]
+      .flatMap { str =>
+        Xor
+          .fromTry(RsaKeyPair.parsePublic(str))
+          .leftMap(ex => DecodingFailure(ex.getMessage, aCursor.history))
+      }
   }
 
   implicit val signatureEncoder: Encoder[Signature] = deriveEncoder

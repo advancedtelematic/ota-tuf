@@ -43,7 +43,7 @@ with KeyGenRequestSupport {
       val signed = await(rootGeneration.findSigned(repoId))
 
       val rootKeyId = signed.signed.roles(RoleType.ROOT.toString).keyids.head
-      val publicKey = signed.signed.keys(rootKeyId).publicKey
+      val publicKey = signed.signed.keys(rootKeyId).keyval
 
       val clientSignature = signed.signatures.head
 
