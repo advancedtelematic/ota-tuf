@@ -4,9 +4,8 @@ import java.security.{PrivateKey, PublicKey}
 
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientSignature, SignedPayload}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.Signature
+import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.keyserver.data.KeyServerDataType.Key
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.keyserver.db.KeyRepositorySupport

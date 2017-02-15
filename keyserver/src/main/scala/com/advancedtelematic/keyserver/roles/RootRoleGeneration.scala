@@ -1,15 +1,16 @@
 package com.advancedtelematic.keyserver.roles
 
 import cats.syntax.show.toShowOps
-import com.advancedtelematic.libtuf.data.ClientDataType._
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
+import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest}
+import com.advancedtelematic.keyserver.data.KeyServerCodecs._
 import com.advancedtelematic.keyserver.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.keyserver.db.{KeyGenRequestSupport, KeyRepository, KeyRepositorySupport}
 import com.advancedtelematic.keyserver.http.{Errors, RoleSigning}
 import com.advancedtelematic.keyserver.vault.VaultClient
 import slick.driver.MySQLDriver.api._
 import RoleType.show
+import com.advancedtelematic.keyserver.data.ClientDataType.{ClientKey, RoleKeys, RootRole}
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}

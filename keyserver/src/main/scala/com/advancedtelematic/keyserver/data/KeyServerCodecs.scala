@@ -1,16 +1,25 @@
 package com.advancedtelematic.keyserver.data
 
-import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufDataType._
-import RepoClientDataType._
+import ClientDataType._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import io.circe._
 
-object Codecs {
+object KeyServerCodecs {
   import com.advancedtelematic.libtuf.data.RefinedStringEncoding._
   import io.circe.generic.semiauto._
   import org.genivi.sota.marshalling.CirceInstances.{dateTimeDecoder, dateTimeEncoder, refinedDecoder, refinedEncoder}
 
+
+  implicit val roleKeyEncoder: Encoder[RoleKeys] = deriveEncoder
+  implicit val roleKeyDecoder: Decoder[RoleKeys] = deriveDecoder
+
+  implicit val clientKeyEncoder: Encoder[ClientKey] = deriveEncoder
+
+  implicit val rootRoleEncoder: Encoder[RootRole] = deriveEncoder
+  implicit val rootRoleDecoder: Decoder[RootRole] = deriveDecoder
+
+  implicit val clientKeyDecoder: Decoder[ClientKey] = deriveDecoder
 
   implicit val targetsRoleEncoder: Encoder[TargetsRole] = deriveEncoder
   implicit val targetsRoleDecoder: Decoder[TargetsRole] = deriveDecoder

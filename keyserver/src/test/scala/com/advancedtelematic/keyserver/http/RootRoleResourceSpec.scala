@@ -6,8 +6,7 @@ import io.circe.generic.auto._
 import org.genivi.sota.marshalling.CirceMarshallingSupport._
 import cats.syntax.show._
 import com.advancedtelematic.keyserver.daemon.KeyGenerationOp
-import com.advancedtelematic.libtuf.data.ClientDataType._
-import com.advancedtelematic.libtuf.data.TufDataType.RoleType
+import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.keyserver.data.KeyServerDataType.{Key, KeyGenId}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.keyserver.data.KeyServerDataType.KeyGenRequestStatus
@@ -16,7 +15,8 @@ import io.circe.Json
 import org.scalatest.Inspectors
 import org.scalatest.concurrent.PatienceConfiguration
 import io.circe.syntax._
-import com.advancedtelematic.keyserver.data.Codecs._
+import com.advancedtelematic.keyserver.data.KeyServerCodecs._
+import com.advancedtelematic.keyserver.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufCodecs._
 
 import scala.concurrent.{ExecutionContext, Future}

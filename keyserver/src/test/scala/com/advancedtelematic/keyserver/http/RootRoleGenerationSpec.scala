@@ -1,6 +1,6 @@
 package com.advancedtelematic.keyserver.http
 
-import com.advancedtelematic.keyserver.data.Codecs._
+import com.advancedtelematic.keyserver.data.KeyServerCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import scala.async.Async._
 import com.advancedtelematic.util.OtaTufSpec
@@ -9,7 +9,7 @@ import org.scalatest.Inspectors
 import io.circe.syntax._
 import CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
-import com.advancedtelematic.libtuf.data.TufDataType.{RoleType, Signature}
+import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.keyserver.daemon.KeyGenerationOp
 import com.advancedtelematic.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest}
 import com.advancedtelematic.keyserver.data.KeyServerDataType.KeyGenRequestStatus

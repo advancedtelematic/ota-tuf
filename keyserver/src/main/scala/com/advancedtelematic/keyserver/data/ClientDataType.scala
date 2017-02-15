@@ -1,21 +1,33 @@
 package com.advancedtelematic.keyserver.data
 
+import java.security.PublicKey
 import java.time.Instant
 
 import cats.syntax.show._
 import com.advancedtelematic.libtuf.data.RefinedUtils
 import com.advancedtelematic.libtuf.data.TufDataType.HashMethod.HashMethod
+import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.{RoleType, show}
-import com.advancedtelematic.libtuf.data.TufDataType.ValidChecksum
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, ValidChecksum}
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.Json
 
 
-object RepoClientDataType {
+object ClientDataType {
   type ClientHashes = Map[HashMethod, Refined[String, ValidChecksum]]
 
   case class ClientTargetItem(hashes: ClientHashes,
                               length: Long, custom: Json = Json.Null)
+
+
+  case class ClientKey(keytype: KeyType, keyval: PublicKey)
+
+  case class RootRole(keys: Map[KeyId, ClientKey],
+                      roles: Map[String, RoleKeys],
+                      version: Int,
+                      _type: String = "Root")
+
+  case class RoleKeys(keyids: Seq[KeyId], threshold: Int)
 
   case class ValidMetaPath()
   type MetaPath = Refined[String, ValidMetaPath]

@@ -7,13 +7,13 @@ import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.ActorMaterializer
 import cats.syntax.show.toShowOps
-import com.advancedtelematic.libtuf.data.ClientDataType.SignedPayload
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.RepoId
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, SignedPayload}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType._
 import io.circe.{Encoder, Json}
 import org.genivi.sota.http.Errors.RawError
 import org.genivi.sota.rest.ErrorCode
+
 import scala.concurrent.Future
 import scala.reflect.ClassTag
 import com.advancedtelematic.libtuf.data.TufCodecs.signedPayloadDecoder

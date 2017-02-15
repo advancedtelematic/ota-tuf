@@ -8,6 +8,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.HashMethod.HashMethod
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import com.advancedtelematic.libtuf.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import eu.timepit.refined.api.{Refined, Validate}
+import io.circe.Encoder
 import org.genivi.sota.data.{CirceEnum, SlickEnum}
 
 import scala.util.Try
@@ -69,4 +70,15 @@ object TufDataType {
 
   case class RepoId(uuid: UUID) extends UUIDKey
   object RepoId extends UUIDKeyObj[RepoId]
+
+  case class ClientSignature(keyid: KeyId, method: SignatureMethod, sig: Refined[String, ValidSignature]) {
+    def toSignature: Signature = Signature(sig, method)
+  }
+
+  implicit class SignatureToClientSignatureOps(value: Signature) {
+    def toClient(keyId: KeyId): ClientSignature =
+      ClientSignature(keyId, value.method, value.hex)
+  }
+
+  case class SignedPayload[T : Encoder](signatures: Seq[ClientSignature], signed: T)
 }

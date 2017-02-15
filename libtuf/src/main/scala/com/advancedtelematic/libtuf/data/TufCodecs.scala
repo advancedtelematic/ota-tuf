@@ -6,7 +6,6 @@ import cats.syntax.show._
 import akka.http.scaladsl.model.Uri
 import cats.data.Xor
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
-import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufDataType._
 import io.circe._
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
@@ -43,16 +42,6 @@ object TufCodecs {
 
   implicit val signatureEncoder: Encoder[Signature] = deriveEncoder
   implicit val signatureDecoder: Decoder[Signature] = deriveDecoder
-
-  implicit val roleKeyEncoder: Encoder[RoleKeys] = deriveEncoder
-  implicit val roleKeyDecoder: Decoder[RoleKeys] = deriveDecoder
-
-  implicit val clientKeyEncoder: Encoder[ClientKey] = deriveEncoder
-
-  implicit val rootRoleEncoder: Encoder[RootRole] = deriveEncoder
-  implicit val rootRoleDecoder: Decoder[RootRole] = deriveDecoder
-
-  implicit val clientKeyDecoder: Decoder[ClientKey] = deriveDecoder
 
   implicit val clientSignatureEncoder: Encoder[ClientSignature] = deriveEncoder
   implicit val clientSignatureDecoder: Decoder[ClientSignature] = deriveDecoder
