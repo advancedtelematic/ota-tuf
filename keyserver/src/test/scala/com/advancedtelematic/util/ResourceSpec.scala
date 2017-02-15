@@ -7,18 +7,18 @@ import java.util.concurrent.ConcurrentHashMap
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, ClientSignature, RoleKeys, RootRole, SignatureToClientSignatureOps, SignedPayload}
-import com.advancedtelematic.ota_tuf.http.OtaTufRoutes
+import com.advancedtelematic.keyserver.http.OtaTufRoutes
 import io.circe.{Encoder, Json}
 import org.genivi.sota.core.DatabaseSpec
 import io.circe.syntax._
-import com.advancedtelematic.ota_tuf.http.CanonicalJson._
+import com.advancedtelematic.keyserver.http.CanonicalJson._
 import cats.syntax.show._
-import com.advancedtelematic.ota_tuf.data.KeyServerDataType._
+import com.advancedtelematic.keyserver.data.KeyServerDataType._
 
 import scala.concurrent.Future
 import akka.actor.ActorSystem
 import akka.http.scaladsl.util.FastFuture
-import com.advancedtelematic.ota_tuf.data.Codecs._
+import com.advancedtelematic.keyserver.data.Codecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 
 import scala.concurrent.duration._
@@ -29,7 +29,7 @@ import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType}
 import com.advancedtelematic.libtuf.repo_store.RoleKeyStoreClient
-import com.advancedtelematic.ota_tuf.data.KeyServerDataType
+import com.advancedtelematic.keyserver.data.KeyServerDataType
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 
 object FakeRoleStore extends RoleKeyStoreClient {

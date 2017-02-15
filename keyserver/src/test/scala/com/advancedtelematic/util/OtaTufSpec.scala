@@ -5,9 +5,9 @@ import java.util.concurrent.ConcurrentHashMap
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.testkit.RouteTestTimeout
-import com.advancedtelematic.ota_tuf.Settings
-import com.advancedtelematic.ota_tuf.vault.VaultClient
-import com.advancedtelematic.ota_tuf.vault.VaultClient.VaultKey
+import com.advancedtelematic.keyserver.Settings
+import com.advancedtelematic.keyserver.vault.VaultClient
+import com.advancedtelematic.keyserver.vault.VaultClient.VaultKey
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.scalatest.concurrent.{PatienceConfiguration, ScalaFutures}
 import org.scalatest.{FunSuite, Matchers}
