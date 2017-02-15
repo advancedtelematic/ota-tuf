@@ -4,18 +4,19 @@ import akka.actor.Status.{Failure, Success}
 import akka.actor.{Actor, ActorLogging, Props, Status, SupervisorStrategy}
 import akka.routing.RoundRobinPool
 import cats.syntax.show.toShowOps
-import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair
 import com.advancedtelematic.ota_tuf.daemon.KeyGeneratorLeader.Tick
-import com.advancedtelematic.ota_tuf.data.DataType.{Key, KeyGenRequest, Role, RoleId}
-import com.advancedtelematic.ota_tuf.data.{KeyGenRequestStatus, KeyType}
+import com.advancedtelematic.ota_tuf.data.DataType._
+import com.advancedtelematic.libtuf.data.CommonDataType._
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport, RoleRepositorySupport}
 import com.advancedtelematic.ota_tuf.vault.VaultClient
 import com.advancedtelematic.ota_tuf.vault.VaultClient.VaultKey
 import slick.driver.MySQLDriver.api._
-
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 import scala.async.Async._
 import scala.concurrent.duration._
 import akka.pattern.pipe
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair
+import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -86,8 +87,6 @@ class KeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database, val e
   extends KeyGenRequestSupport
     with KeyRepositorySupport
     with RoleRepositorySupport {
-
-  import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair._
 
   private lazy val _log = LoggerFactory.getLogger(this.getClass)
 

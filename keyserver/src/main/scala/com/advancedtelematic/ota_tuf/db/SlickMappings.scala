@@ -4,9 +4,9 @@ import java.security.PublicKey
 
 import akka.http.scaladsl.model.Uri
 import cats.syntax.show.toShowOps
-import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair
-import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair._
-import com.advancedtelematic.ota_tuf.data.RepositoryDataType.Checksum
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
+import com.advancedtelematic.libtuf.data.CommonDataType.Checksum
 import io.circe.Json
 
 import scala.reflect.ClassTag
@@ -32,7 +32,7 @@ object SlickCirceMapper {
   import io.circe.parser.decode
 
   /*
-   It's easy toi misuse this if it's public, if there is an encoder in scope
+   It's easy to misuse this if it's public, if there is an encoder in scope
    for an object, it will encode it as json instead of it's default encoding
    so we define public mappers for specific types
    */

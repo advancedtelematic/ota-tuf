@@ -7,16 +7,19 @@ import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.ActorMaterializer
 import cats.syntax.show.toShowOps
-import com.advancedtelematic.ota_tuf.data.ClientDataType.SignedPayload
-import com.advancedtelematic.ota_tuf.data.Codecs._
+import com.advancedtelematic.libtuf.data.ClientDataType.SignedPayload
+import com.advancedtelematic.libtuf.data.CommonDataType.RoleType.RoleType
 import com.advancedtelematic.ota_tuf.data.DataType.RepoId
-import com.advancedtelematic.ota_tuf.data.RoleType.RoleType
+import com.advancedtelematic.libtuf.data.CommonDataType.RoleType._
 import io.circe.{Encoder, Json}
 import org.genivi.sota.http.Errors.RawError
 import org.genivi.sota.rest.ErrorCode
 import scala.concurrent.Future
 import scala.reflect.ClassTag
+import com.advancedtelematic.ota_tuf.data.Codecs.signedPayloadDecoder
 
+
+// TODO: Should move to libtuf
 trait RoleKeyStoreClient {
   val RootRoleNotFound = RawError(ErrorCode("root_role_not_found"), StatusCodes.FailedDependency, "root role was not found in upstream key store")
 

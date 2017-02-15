@@ -1,20 +1,19 @@
 package com.advancedtelematic.ota_tuf.http
 
 import akka.http.scaladsl.model.{StatusCodes, Uri}
-import com.advancedtelematic.ota_tuf.data.RepoClientDataType.RoleTypeToMetaPathOp
-import com.advancedtelematic.ota_tuf.data.DataType.RepoId
+import com.advancedtelematic.libtuf.data.RepoClientDataType.RoleTypeToMetaPathOp
 import com.advancedtelematic.util.{OtaTufSpec, ResourceSpec}
 import cats.syntax.show.toShowOps
-import com.advancedtelematic.ota_tuf.crypt.{RsaKeyPair, Sha256Digest}
 import RequestTargetItem._
-import com.advancedtelematic.ota_tuf.data.ClientDataType.{RootRole, SignedPayload}
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, SignedPayload}
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import io.circe.{Encoder, Json}
 import CanonicalJson._
+import com.advancedtelematic.libtuf.crypt.{RsaKeyPair, Sha256Digest}
+import com.advancedtelematic.libtuf.data.CommonDataType.{HashMethod, RoleType}
 import com.advancedtelematic.ota_tuf.data.Codecs._
-import com.advancedtelematic.ota_tuf.data.RepoClientDataType.{SnapshotRole, TargetsRole, TimestampRole}
-import com.advancedtelematic.ota_tuf.data.RepositoryDataType.HashMethod
-import com.advancedtelematic.ota_tuf.data.RoleType
+import com.advancedtelematic.libtuf.data.RepoClientDataType.{SnapshotRole, TargetsRole, TimestampRole}
+import com.advancedtelematic.ota_tuf.data.DataType.RepoId
 import com.advancedtelematic.ota_tuf.db.{Schema, SignedRoleRepositorySupport}
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
 import io.circe.syntax._

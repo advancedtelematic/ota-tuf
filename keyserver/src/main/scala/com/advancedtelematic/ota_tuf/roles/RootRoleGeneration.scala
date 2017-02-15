@@ -1,18 +1,18 @@
 package com.advancedtelematic.ota_tuf.roles
 
 import cats.syntax.show.toShowOps
-import com.advancedtelematic.ota_tuf.data.ClientDataType._
-import com.advancedtelematic.ota_tuf.data.Codecs._
-import com.advancedtelematic.ota_tuf.data.DataType.{RepoId, KeyGenId, KeyGenRequest}
-import com.advancedtelematic.ota_tuf.data.RoleType.show
-import com.advancedtelematic.ota_tuf.data.{KeyGenRequestStatus, RoleType}
+import com.advancedtelematic.libtuf.data.ClientDataType._
+import com.advancedtelematic.libtuf.data.CommonDataType.RoleType
+import com.advancedtelematic.ota_tuf.data.DataType.{KeyGenId, KeyGenRequest, RepoId}
+import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepository, KeyRepositorySupport}
 import com.advancedtelematic.ota_tuf.http.{Errors, RoleSigning}
 import com.advancedtelematic.ota_tuf.vault.VaultClient
 import slick.driver.MySQLDriver.api._
-
+import RoleType.show
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
+import com.advancedtelematic.ota_tuf.data.Codecs._
 
 class RootRoleGeneration(vaultClient: VaultClient)
                         (implicit val db: Database, val ec: ExecutionContext)

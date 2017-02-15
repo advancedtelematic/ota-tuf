@@ -6,7 +6,6 @@ import java.util.concurrent.ConcurrentHashMap
 import akka.actor.ActorSystem
 import akka.http.scaladsl.testkit.RouteTestTimeout
 import com.advancedtelematic.ota_tuf.Settings
-import com.advancedtelematic.ota_tuf.data.DataType.KeyId
 import com.advancedtelematic.ota_tuf.vault.VaultClient
 import com.advancedtelematic.ota_tuf.vault.VaultClient.VaultKey
 import org.bouncycastle.jce.provider.BouncyCastleProvider
@@ -15,6 +14,7 @@ import org.scalatest.{FunSuite, Matchers}
 
 import scala.concurrent.duration._
 import akka.testkit.TestDuration
+import com.advancedtelematic.libtuf.data.CommonDataType.KeyId
 import org.scalatest.time.{Millis, Seconds, Span}
 
 import scala.concurrent.Future

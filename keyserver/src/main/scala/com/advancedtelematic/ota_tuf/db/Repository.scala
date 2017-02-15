@@ -1,13 +1,14 @@
 package com.advancedtelematic.ota_tuf.db
 
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
-import com.advancedtelematic.ota_tuf.data.DataType.{Key, KeyId, RepoId, Role}
-import com.advancedtelematic.ota_tuf.data.{KeyGenRequestStatus, RoleType}
-import org.genivi.sota.http.Errors.{EntityAlreadyExists, MissingEntity, RawError}
-import slick.driver.MySQLDriver.api._
+import com.advancedtelematic.libtuf.data.CommonDataType._
+import com.advancedtelematic.libtuf.data.CommonDataType.RoleType.RoleType
+import com.advancedtelematic.ota_tuf.data.DataType._
+import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.data.RepositoryDataType.{SignedRole, TargetItem}
-import com.advancedtelematic.ota_tuf.data.RoleType.RoleType
+import org.genivi.sota.http.Errors.{EntityAlreadyExists, MissingEntity, RawError}
+import slick.driver.MySQLDriver.api._
 import org.genivi.sota.rest.ErrorCode
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -22,7 +23,7 @@ trait KeyGenRequestSupport extends DatabaseSupport {
 }
 
 protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: ExecutionContext) {
-  import com.advancedtelematic.ota_tuf.data.DataType._
+
   import org.genivi.sota.db.SlickExtensions._
   import org.genivi.sota.db.Operators._
   import org.genivi.sota.refined.SlickRefined._

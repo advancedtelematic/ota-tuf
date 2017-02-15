@@ -1,9 +1,9 @@
 package com.advancedtelematic.ota_tuf.db
 
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
+import com.advancedtelematic.libtuf.data.CommonDataType.{Checksum, HashMethod, RoleType, ValidChecksum}
 import com.advancedtelematic.ota_tuf.data.DataType.RepoId
-import com.advancedtelematic.ota_tuf.data.RepositoryDataType.{Checksum, HashMethod, SignedRole, ValidChecksum}
-import com.advancedtelematic.ota_tuf.data.RoleType
+import com.advancedtelematic.ota_tuf.data.RepositoryDataType.SignedRole
 import com.advancedtelematic.util.OtaTufSpec
 import io.circe.Json
 import org.genivi.sota.core.DatabaseSpec

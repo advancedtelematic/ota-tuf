@@ -1,24 +1,19 @@
-package com.advancedtelematic.ota_tuf.data
+package com.advancedtelematic.libtuf.data
 
 import java.util.UUID
 
 import akka.http.scaladsl.server.{PathMatcher1, PathMatchers}
 import cats.Show
 import io.circe.{Decoder, Encoder}
-import slick.ast.BaseTypedType
-import slick.jdbc.JdbcType
-
-import scala.reflect.ClassTag
+import shapeless._
 import slick.ast.BaseTypedType
 import slick.driver.MySQLDriver.api._
 import slick.jdbc.JdbcType
-import akka.http.scaladsl.server.{PathMatcher1, PathMatchers}
 
 import scala.reflect.ClassTag
 
 object UUIDKey {
   abstract class UUIDKeyObj[Self <: UUIDKey] {
-    import shapeless._
 
     type SelfGen = Generic.Aux[Self, UUID :: HNil]
 

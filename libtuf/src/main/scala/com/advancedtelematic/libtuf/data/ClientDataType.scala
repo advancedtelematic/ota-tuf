@@ -1,17 +1,17 @@
-package com.advancedtelematic.ota_tuf.data
+package com.advancedtelematic.libtuf.data
 
 import java.security.PublicKey
 import java.time.Instant
-import cats.syntax.show.toShowOps
-import com.advancedtelematic.ota_tuf.data.DataType.{KeyId, Signature, ValidSignature}
-import com.advancedtelematic.ota_tuf.data.KeyType.KeyType
-import com.advancedtelematic.ota_tuf.data.RepositoryDataType.HashMethod.HashMethod
-import com.advancedtelematic.ota_tuf.data.RepositoryDataType.{SignedRole, ValidChecksum}
-import com.advancedtelematic.ota_tuf.data.RoleType.RoleType
-import com.advancedtelematic.ota_tuf.data.SignatureMethod.SignatureMethod
+
+import com.advancedtelematic.libtuf.data.CommonDataType.HashMethod.HashMethod
+import com.advancedtelematic.libtuf.data.CommonDataType.RoleType.RoleType
+import com.advancedtelematic.libtuf.data.CommonDataType.{KeyId, Signature, ValidChecksum, ValidSignature}
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.{Encoder, Json}
-import RoleType.show
+import cats.syntax.show._
+import com.advancedtelematic.libtuf.data.CommonDataType.KeyType.KeyType
+import com.advancedtelematic.libtuf.data.CommonDataType.SignatureMethod.SignatureMethod
+import com.advancedtelematic.libtuf.data.CommonDataType.RoleType.show
 
 object ClientDataType {
   case class ClientSignature(keyid: KeyId, method: SignatureMethod, sig: Refined[String, ValidSignature]) {
@@ -56,13 +56,6 @@ object RepoClientDataType {
   }
 
   case class MetaItem(hashes: ClientHashes, length: Long)
-
-  implicit class SignedRoleMetaItemOps(signedRole: SignedRole) {
-    def asMetaRole: (MetaPath, MetaItem) = {
-      val hashes = Map(signedRole.checksum.method -> signedRole.checksum.hash)
-      signedRole.roleType.toMetaPath -> MetaItem(hashes, signedRole.length)
-    }
-  }
 
   trait VersionedRole {
     val version: Int

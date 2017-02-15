@@ -3,10 +3,11 @@ package com.advancedtelematic.ota_tuf.http
 import java.security.{PrivateKey, PublicKey}
 
 import akka.http.scaladsl.util.FastFuture
-import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair
-import com.advancedtelematic.ota_tuf.data.ClientDataType.{ClientSignature, SignedPayload}
-import com.advancedtelematic.ota_tuf.data.DataType.{RepoId, Key, Signature}
-import com.advancedtelematic.ota_tuf.data.RoleType.RoleType
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientSignature, SignedPayload}
+import com.advancedtelematic.libtuf.data.CommonDataType.RoleType.RoleType
+import com.advancedtelematic.libtuf.data.CommonDataType.Signature
+import com.advancedtelematic.ota_tuf.data.DataType.{Key, RepoId}
 import com.advancedtelematic.ota_tuf.db.KeyRepositorySupport
 import com.advancedtelematic.ota_tuf.vault.VaultClient
 import io.circe.{Encoder, Json, JsonObject}

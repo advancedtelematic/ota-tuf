@@ -2,12 +2,13 @@
 
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+
 import com.advancedtelematic.ota_tuf.data.Codecs._
+import com.advancedtelematic.libtuf.data.CommonDataType.RoleType
+import com.advancedtelematic.libtuf.data.CommonDataType.RoleType.RoleType
+import com.advancedtelematic.libtuf.data.RepoClientDataType._
 import com.advancedtelematic.ota_tuf.data.DataType.RepoId
-import com.advancedtelematic.ota_tuf.data.RepoClientDataType._
-import com.advancedtelematic.ota_tuf.data.RepositoryDataType.{SignedRole, TargetItem}
-import com.advancedtelematic.ota_tuf.data.RoleType
-import com.advancedtelematic.ota_tuf.data.RoleType.RoleType
+import com.advancedtelematic.ota_tuf.data.RepositoryDataType._
 import com.advancedtelematic.ota_tuf.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import com.advancedtelematic.ota_tuf.repo_store.RoleKeyStoreClient
 import io.circe.syntax._

@@ -1,22 +1,8 @@
 libraryDependencies ++= {
-  val akkaV = "2.4.14"
-  val akkaHttpV = "10.0.0"
-  val scalaTestV = "3.0.0"
   val slickV = "3.1.1"
-  val sotaV = "0.2.53"
 
   Seq(
-    "com.typesafe.akka" %% "akka-actor" % akkaV,
-    "com.typesafe.akka" %% "akka-stream" % akkaV,
-    "com.typesafe.akka" %% "akka-http" % akkaHttpV,
-    "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV,
-    "com.typesafe.akka" %% "akka-slf4j" % akkaV,
-    "org.scalatest"     %% "scalatest" % scalaTestV % "test",
-
     "ch.qos.logback" % "logback-classic" % "1.1.3",
-
-    "org.genivi" %% "sota-common" % sotaV,
-    "org.genivi" %% "sota-common-db-test" % sotaV % "test",
 
     "org.bouncycastle" % "bcprov-jdk15on" % "1.56",
     "org.bouncycastle" % "bcpkix-jdk15on" % "1.56",

@@ -2,16 +2,15 @@ package com.advancedtelematic.ota_tuf.http
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.stream.Materializer
-import com.advancedtelematic.ota_tuf.data.DataType._
+import com.advancedtelematic.libtuf.data.CommonDataType.RoleType
+import com.advancedtelematic.ota_tuf.data.DataType.RepoId
 import com.advancedtelematic.ota_tuf.db.KeyGenRequestSupport
 import com.advancedtelematic.ota_tuf.vault.VaultClient
 import slick.driver.MySQLDriver.api._
-import com.advancedtelematic.ota_tuf.data.Codecs._
-import com.advancedtelematic.ota_tuf.data.RoleType
 import com.advancedtelematic.ota_tuf.roles.RootRoleGeneration
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import io.circe.{Decoder, Encoder, Json}
-
+import com.advancedtelematic.ota_tuf.data.Codecs._
 import scala.concurrent.ExecutionContext
 
 

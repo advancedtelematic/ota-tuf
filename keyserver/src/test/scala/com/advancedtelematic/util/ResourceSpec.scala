@@ -4,29 +4,31 @@ import java.security.{KeyPair, PrivateKey, PublicKey}
 import java.util.NoSuchElementException
 import java.util.concurrent.ConcurrentHashMap
 
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
-import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair
-import com.advancedtelematic.ota_tuf.data.ClientDataType.{ClientKey, ClientSignature, RoleKeys, RootRole, SignatureToClientSignatureOps, SignedPayload}
-import com.advancedtelematic.ota_tuf.data.DataType.RepoId
-import com.advancedtelematic.ota_tuf.data.RoleType.RoleType
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, ClientSignature, RoleKeys, RootRole, SignatureToClientSignatureOps, SignedPayload}
 import com.advancedtelematic.ota_tuf.http.OtaTufRoutes
 import io.circe.{Encoder, Json}
 import org.genivi.sota.core.DatabaseSpec
 import io.circe.syntax._
 import com.advancedtelematic.ota_tuf.http.CanonicalJson._
 import cats.syntax.show._
-
+import com.advancedtelematic.ota_tuf.data.DataType._
 import scala.concurrent.Future
-import RsaKeyPair._
 import akka.actor.ActorSystem
 import akka.http.scaladsl.util.FastFuture
-import com.advancedtelematic.ota_tuf.data.{KeyType, RoleType}
 import com.advancedtelematic.ota_tuf.data.Codecs._
 import com.advancedtelematic.ota_tuf.repo_store.RoleKeyStoreClient
+
 import scala.concurrent.duration._
 import scala.collection.JavaConverters._
 import scala.util.Try
 import akka.testkit.TestDuration
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair
+import com.advancedtelematic.libtuf.data.CommonDataType.RoleType.RoleType
+import com.advancedtelematic.libtuf.data.CommonDataType.{KeyType, RoleType}
+import com.advancedtelematic.ota_tuf.data.DataType
+import com.advancedtelematic.ota_tuf.data.DataType.RepoId
 
 object FakeRoleStore extends RoleKeyStoreClient {
 

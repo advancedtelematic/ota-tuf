@@ -1,9 +1,9 @@
-package com.advancedtelematic.ota_tuf.crypt
+package com.advancedtelematic.libtuf.crypt
 
-import com.advancedtelematic.ota_tuf.data.RepositoryDataType.{Checksum, HashMethod, ValidChecksum}
+import com.advancedtelematic.libtuf.data.CommonDataType.{Checksum, HashMethod, ValidChecksum}
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.util.encoders.Hex
-import com.advancedtelematic.ota_tuf.data.RefinedUtils.refineTry
+import com.advancedtelematic.libtuf.data.RefinedUtils.refineTry
 
 object Sha256Digest {
   def digest(data: Array[Byte]): Checksum = {

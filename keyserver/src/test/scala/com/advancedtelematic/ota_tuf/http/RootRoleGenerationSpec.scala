@@ -1,17 +1,17 @@
 package com.advancedtelematic.ota_tuf.http
 
 import com.advancedtelematic.ota_tuf.data.Codecs._
-import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair
-
 import scala.async.Async._
 import com.advancedtelematic.util.OtaTufSpec
 import org.genivi.sota.core.DatabaseSpec
 import org.scalatest.Inspectors
 import io.circe.syntax._
 import CanonicalJson._
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair
+import com.advancedtelematic.libtuf.data.CommonDataType.{RoleType, Signature}
 import com.advancedtelematic.ota_tuf.daemon.KeyGenerationOp
-import com.advancedtelematic.ota_tuf.data.DataType.{RepoId, KeyGenId, KeyGenRequest, Signature}
-import com.advancedtelematic.ota_tuf.data.{KeyGenRequestStatus, RoleType}
+import com.advancedtelematic.ota_tuf.data.DataType.{KeyGenId, KeyGenRequest, RepoId}
+import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.db.KeyGenRequestSupport
 import com.advancedtelematic.ota_tuf.roles.RootRoleGeneration
 import org.scalatest.concurrent.PatienceConfiguration

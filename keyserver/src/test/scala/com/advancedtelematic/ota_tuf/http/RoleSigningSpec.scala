@@ -1,16 +1,15 @@
 package com.advancedtelematic.ota_tuf.http
 
-import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair
 import com.advancedtelematic.ota_tuf.data.DataType._
 import com.advancedtelematic.util.OtaTufSpec
-import RsaKeyPair._
-import com.advancedtelematic.ota_tuf.data.KeyType
 import io.circe.syntax._
 import CanonicalJson._
 import com.advancedtelematic.ota_tuf.vault.VaultClient.VaultKey
 import org.genivi.sota.core.DatabaseSpec
-import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair.keyShow
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 import cats.syntax.show.toShowOps
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair
+import com.advancedtelematic.libtuf.data.CommonDataType.{KeyType, Signature}
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}
 

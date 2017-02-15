@@ -1,18 +1,17 @@
-package com.advancedtelematic.ota_tuf.crypt
+package com.advancedtelematic.libtuf.crypt
 
 import java.io.{StringReader, StringWriter}
 import java.security.{Signature => _, _}
 
 import cats.Show
-import com.advancedtelematic.ota_tuf.data.DataType.KeyId
+import com.advancedtelematic.libtuf.data.CommonDataType.{KeyId, Signature, ValidKeyId, ValidSignature}
+import com.advancedtelematic.libtuf.data.CommonDataType.SignatureMethod
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
 import org.bouncycastle.util.encoders.Hex
 import org.bouncycastle.openssl.{PEMKeyPair, PEMParser}
-import com.advancedtelematic.ota_tuf.data.DataType._
-import com.advancedtelematic.ota_tuf.data.SignatureMethod
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
-import com.advancedtelematic.ota_tuf.data.RefinedUtils._
+import com.advancedtelematic.libtuf.data.RefinedUtils.refineTry
 
 import scala.util.Try
 

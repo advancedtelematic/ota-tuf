@@ -2,31 +2,27 @@ package com.advancedtelematic.ota_tuf.data
 
 import java.security.PublicKey
 
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
+import cats.syntax.show.toShowOps
 import akka.http.scaladsl.model.Uri
 import cats.data.Xor
-import com.advancedtelematic.ota_tuf.data.DataType.Signature
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair
+import com.advancedtelematic.libtuf.data.ClientDataType._
+import com.advancedtelematic.libtuf.data.CommonDataType.HashMethod.HashMethod
+import com.advancedtelematic.libtuf.data.CommonDataType._
+import com.advancedtelematic.libtuf.data.RepoClientDataType._
 import io.circe._
-import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair.keyShow
-import cats.syntax.show.toShowOps
-import com.advancedtelematic.ota_tuf.crypt.RsaKeyPair
-import com.advancedtelematic.ota_tuf.data.ClientDataType._
-import com.advancedtelematic.ota_tuf.data.RepoClientDataType.{ClientTargetItem, MetaItem, SnapshotRole, TargetsRole, TimestampRole}
-import com.advancedtelematic.ota_tuf.data.RepositoryDataType.HashMethod.HashMethod
-import com.advancedtelematic.ota_tuf.data.RepositoryDataType.{Checksum, HashMethod, TargetItem}
-import eu.timepit.refined
-import eu.timepit.refined.api.{Refined, Validate}
 
 import scala.util.Try
 
 object Codecs {
+  import com.advancedtelematic.libtuf.data.RefinedStringEncoding._
   import io.circe.generic.semiauto._
-  import RefinedStringEncoding._
 
   // refinedMapEncoder and refinedMapDecoder are broken in sota CirceInstances
   // they encode Map[Refined[T, P], V] as an array of tuples
   // so we need to custom import what we need here.
-  import org.genivi.sota.marshalling.CirceInstances.{refinedDecoder, refinedEncoder}
-  import org.genivi.sota.marshalling.CirceInstances.{dateTimeDecoder, dateTimeEncoder}
+  import org.genivi.sota.marshalling.CirceInstances.{dateTimeDecoder, dateTimeEncoder, refinedDecoder, refinedEncoder}
 
   implicit val uriEncoder: Encoder[Uri] = Encoder[String].contramap(_.toString)
   implicit val uriDecoder: Decoder[Uri] = Decoder[String].map(Uri.apply)
@@ -91,14 +87,4 @@ object Codecs {
   implicit val timestampRoleDecoder: Decoder[TimestampRole] = deriveDecoder
 }
 
-object RefinedStringEncoding {
-  implicit def refinedKeyEncoder[P]
-  (implicit strKeyEncoder: KeyEncoder[String]): KeyEncoder[Refined[String, P]] =
-    strKeyEncoder.contramap(_.get)
 
-  implicit def refinedKeyDecoder[P]
-  (implicit p: Validate.Plain[String, P]): KeyDecoder[Refined[String, P]] =
-    KeyDecoder.instance[Refined[String, P]] { s =>
-      refined.refineV[P](s).right.toOption
-    }
-}

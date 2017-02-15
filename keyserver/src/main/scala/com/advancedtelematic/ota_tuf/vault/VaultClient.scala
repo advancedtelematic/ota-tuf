@@ -6,11 +6,10 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.Uri.Path._
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.HttpMethods._
-import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.unmarshalling.{FromEntityUnmarshaller, Unmarshaller}
 import akka.stream.Materializer
-import com.advancedtelematic.ota_tuf.data.DataType.{KeyGenId, KeyId}
-import com.advancedtelematic.ota_tuf.data.KeyType.KeyType
+import com.advancedtelematic.libtuf.data.CommonDataType.KeyId
+import com.advancedtelematic.libtuf.data.CommonDataType.KeyType.KeyType
 import com.advancedtelematic.ota_tuf.vault.VaultClient.VaultKey
 import io.circe.{Decoder, Encoder, HCursor}
 

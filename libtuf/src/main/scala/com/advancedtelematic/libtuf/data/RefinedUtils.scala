@@ -1,4 +1,4 @@
-package com.advancedtelematic.ota_tuf.data
+package com.advancedtelematic.libtuf.data
 
 import eu.timepit.refined
 import eu.timepit.refined.api.{Refined, Validate}

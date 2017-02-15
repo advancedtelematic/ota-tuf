@@ -6,21 +6,20 @@ import java.util.UUID
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server.PathMatchers
 import cats.Show
-import com.advancedtelematic.ota_tuf.crypt.Sha256Digest
+import com.advancedtelematic.libtuf.crypt.Sha256Digest
+import com.advancedtelematic.libtuf.data.CommonDataType.KeyType.KeyType
+import com.advancedtelematic.libtuf.data.CommonDataType.RoleType.RoleType
+import com.advancedtelematic.libtuf.data.CommonDataType.{Checksum, KeyId}
+import com.advancedtelematic.libtuf.data.RepoClientDataType.{MetaItem, MetaPath}
+import com.advancedtelematic.libtuf.data.UUIDKey.{UUIDKey, UUIDKeyObj}
+import com.advancedtelematic.libtuf.data.ValidationUtils
 import com.advancedtelematic.ota_tuf.data.DataType.RepoId
-import com.advancedtelematic.ota_tuf.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus.KeyGenRequestStatus
-import com.advancedtelematic.ota_tuf.data.KeyType.KeyType
-import com.advancedtelematic.ota_tuf.data.RepositoryDataType.HashMethod.HashMethod
-import com.advancedtelematic.ota_tuf.data.RoleType.RoleType
-import com.advancedtelematic.ota_tuf.data.SignatureMethod.SignatureMethod
+import com.advancedtelematic.ota_tuf.http.CanonicalJson._
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.Json
 import org.genivi.sota.data.{CirceEnum, SlickEnum}
-import com.advancedtelematic.ota_tuf.http.CanonicalJson._
-import io.circe.syntax._
-
-import scala.util.Try
+import com.advancedtelematic.libtuf.data.RepoClientDataType._
 
 object KeyGenRequestStatus extends CirceEnum with SlickEnum {
   type KeyGenRequestStatus = Value
@@ -28,34 +27,6 @@ object KeyGenRequestStatus extends CirceEnum with SlickEnum {
   val REQUESTED, GENERATED, ERROR = Value
 }
 
-object KeyType extends CirceEnum with SlickEnum {
-  type KeyType = Value
-
-  val RSA = Value
-}
-
-object SignatureMethod extends CirceEnum {
-  type SignatureMethod = Value
-
-  val RSASSA_PSS = Value("rsassa-pss")
-}
-
-object RoleType extends CirceEnum with SlickEnum {
-  type RoleType = Value
-
-  val ROOT, SNAPSHOT, TARGETS, TIMESTAMP = Value
-
-  val ALL = List(ROOT, SNAPSHOT, TARGETS, TIMESTAMP)
-
-  implicit val show = Show.show[Value](_.toString.toLowerCase)
-
-  val Path = PathMatchers.Segment.flatMap(v => Try(withName(v.toUpperCase)).toOption)
-
-  val JsonRoleTypeMetaPath = PathMatchers.Segment.flatMap { str =>
-    val (roleTypeStr, _) = str.splitAt(str.indexOf(".json"))
-    Try(RoleType.withName(roleTypeStr.toUpperCase)).toOption
-  }
-}
 
 object DataType {
   case class KeyGenId(uuid: UUID) extends UUIDKey
@@ -67,17 +38,6 @@ object DataType {
   case class RepoId(uuid: UUID) extends UUIDKey
   object RepoId extends UUIDKeyObj[RepoId]
 
-  case class ValidKeyId()
-  type KeyId = Refined[String, ValidKeyId]
-  implicit val validKeyId: Validate.Plain[String, ValidKeyId] =
-    ValidationUtils.validHexValidation(ValidKeyId(), length = 64)
-
-  case class ValidSignature()
-  case class
-  Signature(hex: Refined[String, ValidSignature], method: SignatureMethod = SignatureMethod.RSASSA_PSS)
-  implicit val validSignature: Validate.Plain[String, ValidSignature] =
-    ValidationUtils.validHexValidation(ValidSignature(), length = 256)
-
   case class KeyGenRequest(id: KeyGenId, repoId: RepoId,
                            status: KeyGenRequestStatus, roleType: RoleType,
                            keySize: Int = 1024, threshold: Int = 1)
@@ -88,23 +48,16 @@ object DataType {
 }
 
 object RepositoryDataType {
-
-  object HashMethod extends CirceEnum {
-    type HashMethod = Value
-
-    val SHA256 = Value("sha256")
-  }
-
-  case class Checksum(method: HashMethod, hash: Refined[String, ValidChecksum])
-
-  case class ValidChecksum()
-
-  implicit val validChecksumValidate: Validate.Plain[String, ValidChecksum] =
-    ValidationUtils.validHexValidation(ValidChecksum(), length = 64)
-
   case class TargetItem(repoId: RepoId, filename: String, uri: Uri, checksum: Checksum, length: Long)
 
   case class SignedRole(repoId: RepoId, roleType: RoleType, content: Json, checksum: Checksum, length: Long, version: Int)
+
+  implicit class SignedRoleMetaItemOps(signedRole: SignedRole) {
+    def asMetaRole: (MetaPath, MetaItem) = {
+      val hashes = Map(signedRole.checksum.method -> signedRole.checksum.hash)
+      signedRole.roleType.toMetaPath -> MetaItem(hashes, signedRole.length)
+    }
+  }
 
   object SignedRole {
     def withChecksum(repoId: RepoId, roleType: RoleType, content: Json, version: Int): SignedRole = {
@@ -113,18 +66,4 @@ object RepositoryDataType {
       SignedRole(repoId, roleType, content, checksum, canonicalJson.length, version)
     }
   }
-}
-
-
-protected[data] object ValidationUtils {
-  def validHex(length: Long, str: String): Boolean = {
-    str.length == length && str.forall(h => ('0' to '9').contains(h) || ('a' to 'f').contains(h))
-  }
-
-  def validHexValidation[T](v: T, length: Int): Validate.Plain[String, T] =
-    Validate.fromPredicate(
-      hash => validHex(length, hash),
-      hash => s"$hash is not a $length hex string",
-      v
-    )
 }
