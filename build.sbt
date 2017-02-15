@@ -56,6 +56,6 @@ lazy val keyserver = (project in file("keyserver"))
   .settings(Publish.disable)
   .dependsOn(libtuf)
 
-lazy val root = (project in file("."))
+lazy val ota_tuf = (project in file("."))
   .settings(Publish.disable)
   .aggregate(libtuf, keyserver)

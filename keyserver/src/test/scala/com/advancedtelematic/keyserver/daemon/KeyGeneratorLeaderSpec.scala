@@ -53,7 +53,7 @@ class KeyGeneratorLeaderSpec extends OtaTufSpec with TestKitBase with DatabaseSp
     expectGenerated(KeyGenRequestStatus.GENERATED)
 
     val keyGenReqs = Future.sequence {
-      (1 to 20).map { _ ⇒
+      (1 to 20).map { _ =>
         val repoId = RepoId.generate()
         val otherKeyGenReq = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT)
         keyGenRepo.persist(otherKeyGenReq).map(_.id)
@@ -61,9 +61,9 @@ class KeyGeneratorLeaderSpec extends OtaTufSpec with TestKitBase with DatabaseSp
     }
 
     eventually(timeout, interval) {
-      val ids = keyGenReqs.flatMap { ids ⇒ Future.sequence(ids.map(keyGenRepo.find)) }.futureValue
+      val ids = keyGenReqs.flatMap { ids => Future.sequence(ids.map(keyGenRepo.find)) }.futureValue
 
-      forAll(ids) { id ⇒
+      forAll(ids) { id =>
         id.status shouldBe KeyGenRequestStatus.GENERATED
       }
     }

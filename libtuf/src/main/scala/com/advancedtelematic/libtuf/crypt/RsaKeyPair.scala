@@ -63,7 +63,7 @@ object RsaKeyPair {
     signer.verify(hexDecodedSignature)
   }
 
-  implicit def keyShow[T <: java.security.Key]: Show[T] = Show.show { key ⇒
+  implicit def keyShow[T <: java.security.Key]: Show[T] = Show.show { key =>
     val pemStrWriter = new StringWriter()
     val jcaPEMWriter = new JcaPEMWriter(pemStrWriter)
     jcaPEMWriter.writeObject(key)
