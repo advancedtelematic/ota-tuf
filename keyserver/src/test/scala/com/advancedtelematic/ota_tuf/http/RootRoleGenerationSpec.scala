@@ -1,6 +1,7 @@
 package com.advancedtelematic.ota_tuf.http
 
 import com.advancedtelematic.ota_tuf.data.Codecs._
+import com.advancedtelematic.libtuf.data.TufCodecs._
 import scala.async.Async._
 import com.advancedtelematic.util.OtaTufSpec
 import org.genivi.sota.core.DatabaseSpec
@@ -10,7 +11,7 @@ import CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.data.TufDataType.{RoleType, Signature}
 import com.advancedtelematic.ota_tuf.daemon.KeyGenerationOp
-import com.advancedtelematic.ota_tuf.data.KeyServerDataType.{KeyGenId, KeyGenRequest, RepoId}
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.{KeyGenId, KeyGenRequest}
 import com.advancedtelematic.ota_tuf.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.db.KeyGenRequestSupport
 import com.advancedtelematic.ota_tuf.roles.RootRoleGeneration
@@ -18,6 +19,7 @@ import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}
 
 import scala.concurrent.ExecutionContext
+import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 
 class RootRoleGenerationSpec extends OtaTufSpec with DatabaseSpec
 with Inspectors with PatienceConfiguration

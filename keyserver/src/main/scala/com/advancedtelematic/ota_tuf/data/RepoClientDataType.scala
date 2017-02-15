@@ -1,9 +1,9 @@
-package com.advancedtelematic.libtuf.data
-
+package com.advancedtelematic.ota_tuf.data
 
 import java.time.Instant
 
 import cats.syntax.show._
+import com.advancedtelematic.libtuf.data.RefinedUtils
 import com.advancedtelematic.libtuf.data.TufDataType.HashMethod.HashMethod
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.{RoleType, show}
 import com.advancedtelematic.libtuf.data.TufDataType.ValidChecksum

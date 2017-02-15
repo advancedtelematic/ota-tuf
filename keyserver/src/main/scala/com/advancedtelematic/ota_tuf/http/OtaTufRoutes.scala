@@ -2,8 +2,8 @@ package com.advancedtelematic.ota_tuf.http
 
 import akka.http.scaladsl.server.{Directives, _}
 import akka.stream.Materializer
+import com.advancedtelematic.libtuf.repo_store.RoleKeyStoreClient
 import com.advancedtelematic.ota_tuf.VersionInfo
-import com.advancedtelematic.ota_tuf.repo_store.RoleKeyStoreClient
 import com.advancedtelematic.ota_tuf.vault.VaultClient
 import org.genivi.sota.http.{ErrorHandler, HealthResource}
 import org.genivi.sota.rest.SotaRejectionHandler._

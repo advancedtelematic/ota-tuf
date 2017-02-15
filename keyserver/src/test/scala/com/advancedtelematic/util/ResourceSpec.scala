@@ -14,11 +14,12 @@ import io.circe.syntax._
 import com.advancedtelematic.ota_tuf.http.CanonicalJson._
 import cats.syntax.show._
 import com.advancedtelematic.ota_tuf.data.KeyServerDataType._
+
 import scala.concurrent.Future
 import akka.actor.ActorSystem
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.ota_tuf.data.Codecs._
-import com.advancedtelematic.ota_tuf.repo_store.RoleKeyStoreClient
+import com.advancedtelematic.libtuf.data.TufCodecs._
 
 import scala.concurrent.duration._
 import scala.collection.JavaConverters._
@@ -27,8 +28,9 @@ import akka.testkit.TestDuration
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType}
+import com.advancedtelematic.libtuf.repo_store.RoleKeyStoreClient
 import com.advancedtelematic.ota_tuf.data.KeyServerDataType
-import com.advancedtelematic.ota_tuf.data.KeyServerDataType.RepoId
+import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 
 object FakeRoleStore extends RoleKeyStoreClient {
 

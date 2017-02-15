@@ -4,13 +4,14 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 import com.advancedtelematic.ota_tuf.data.Codecs._
+import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.RepoClientDataType._
-import com.advancedtelematic.ota_tuf.data.KeyServerDataType.RepoId
+import com.advancedtelematic.ota_tuf.data.RepoClientDataType._
+import com.advancedtelematic.libtuf.repo_store.RoleKeyStoreClient
+import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.ota_tuf.data.RepositoryDataType._
 import com.advancedtelematic.ota_tuf.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
-import com.advancedtelematic.ota_tuf.repo_store.RoleKeyStoreClient
 import io.circe.syntax._
 import io.circe.{Encoder, Json}
 import slick.driver.MySQLDriver.api._

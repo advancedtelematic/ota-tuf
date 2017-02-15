@@ -1,7 +1,7 @@
 package com.advancedtelematic.ota_tuf.http
 
 import akka.http.scaladsl.model.{StatusCodes, Uri}
-import com.advancedtelematic.libtuf.data.RepoClientDataType.RoleTypeToMetaPathOp
+import com.advancedtelematic.ota_tuf.data.RepoClientDataType.RoleTypeToMetaPathOp
 import com.advancedtelematic.util.{OtaTufSpec, ResourceSpec}
 import cats.syntax.show.toShowOps
 import RequestTargetItem._
@@ -12,8 +12,9 @@ import CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.{RsaKeyPair, Sha256Digest}
 import com.advancedtelematic.libtuf.data.TufDataType.{HashMethod, RoleType}
 import com.advancedtelematic.ota_tuf.data.Codecs._
-import com.advancedtelematic.libtuf.data.RepoClientDataType.{SnapshotRole, TargetsRole, TimestampRole}
-import com.advancedtelematic.ota_tuf.data.KeyServerDataType.RepoId
+import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.ota_tuf.data.RepoClientDataType.{SnapshotRole, TargetsRole, TimestampRole}
+import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.ota_tuf.db.{Schema, SignedRoleRepositorySupport}
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
 import io.circe.syntax._

@@ -4,7 +4,7 @@ import java.security.PublicKey
 
 import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
-import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, KeyId}
+import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, KeyId, RepoId}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.ota_tuf.data.KeyServerDataType._
 import com.advancedtelematic.ota_tuf.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
@@ -14,9 +14,9 @@ import io.circe.Json
 
 object Schema {
   import org.genivi.sota.refined.SlickRefined._
-  import SlickPublicKeyMapper._
-  import SlickUriMapper._
-  import SlickCirceMapper._
+  import com.advancedtelematic.libtuf.data.SlickPublicKeyMapper._
+  import com.advancedtelematic.libtuf.data.SlickUriMapper._
+  import com.advancedtelematic.libtuf.data.SlickCirceMapper._
 
   class KeyGenRequestTable(tag: Tag) extends Table[KeyGenRequest](tag, "key_gen_requests") {
     def id = column[KeyGenId]("id", O.PrimaryKey)

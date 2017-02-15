@@ -4,7 +4,8 @@ import akka.actor.{ActorSystem, Status}
 import akka.stream.ActorMaterializer
 import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType
-import com.advancedtelematic.ota_tuf.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, RepoId}
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest}
+import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.ota_tuf.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.ota_tuf.vault.VaultClient

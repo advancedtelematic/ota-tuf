@@ -4,8 +4,8 @@ import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libtuf.crypt.Sha256Digest
 import com.advancedtelematic.libtuf.data.TufDataType.Checksum
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.RepoClientDataType.{MetaItem, MetaPath, _}
-import com.advancedtelematic.ota_tuf.data.KeyServerDataType.RepoId
+import RepoClientDataType.{MetaItem, MetaPath, _}
+import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.ota_tuf.http.CanonicalJson._
 import io.circe.Json
 

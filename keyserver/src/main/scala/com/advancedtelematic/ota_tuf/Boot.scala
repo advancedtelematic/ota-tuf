@@ -6,8 +6,8 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server.{Directives, Route}
 import akka.stream.Materializer
+import com.advancedtelematic.libtuf.repo_store.RoleKeyStoreHttpClient
 import com.advancedtelematic.ota_tuf.http.OtaTufRoutes
-import com.advancedtelematic.ota_tuf.repo_store.RoleKeyStoreHttpClient
 import com.advancedtelematic.ota_tuf.vault.VaultClient
 import com.typesafe.config.ConfigFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider

@@ -1,5 +1,6 @@
 package com.advancedtelematic.ota_tuf.daemon
 
+import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import akka.actor.{ActorSystem, Status}
 import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair._

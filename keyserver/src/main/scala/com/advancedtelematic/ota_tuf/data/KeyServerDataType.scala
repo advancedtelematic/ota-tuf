@@ -3,7 +3,7 @@ package com.advancedtelematic.ota_tuf.data
 import java.security.PublicKey
 import java.util.UUID
 
-import com.advancedtelematic.libtuf.data.TufDataType.KeyId
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId}
 import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.UUIDKey.{UUIDKey, UUIDKeyObj}
@@ -22,9 +22,6 @@ object KeyServerDataType {
 
   case class RoleId(uuid: UUID) extends UUIDKey
   object RoleId extends UUIDKeyObj[RoleId]
-
-  case class RepoId(uuid: UUID) extends UUIDKey
-  object RepoId extends UUIDKeyObj[RepoId]
 
   case class KeyGenRequest(id: KeyGenId, repoId: RepoId,
                            status: KeyGenRequestStatus, roleType: RoleType,

@@ -3,7 +3,8 @@ package com.advancedtelematic.ota_tuf.daemon
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType
-import com.advancedtelematic.ota_tuf.data.KeyServerDataType.{KeyGenId, KeyGenRequest, RepoId}
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.{KeyGenId, KeyGenRequest}
+import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.ota_tuf.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}

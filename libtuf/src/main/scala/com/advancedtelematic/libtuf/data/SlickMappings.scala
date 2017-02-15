@@ -1,4 +1,4 @@
-package com.advancedtelematic.ota_tuf.db
+package com.advancedtelematic.libtuf.data
 
 import java.security.PublicKey
 
@@ -8,9 +8,9 @@ import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 import com.advancedtelematic.libtuf.data.TufDataType.Checksum
 import io.circe.Json
+import slick.driver.MySQLDriver.api._
 
 import scala.reflect.ClassTag
-import slick.driver.MySQLDriver.api._
 
 object SlickPublicKeyMapper {
   implicit val publicKeyMapper = MappedColumnType.base[PublicKey, String](
@@ -27,9 +27,9 @@ object SlickUriMapper {
 }
 
 object SlickCirceMapper {
-  import io.circe.syntax._
-  import io.circe.{Encoder, Decoder}
   import io.circe.parser.decode
+  import io.circe.syntax._
+  import io.circe.{Decoder, Encoder}
 
   /*
    It's easy to misuse this if it's public, if there is an encoder in scope
@@ -41,7 +41,8 @@ object SlickCirceMapper {
     str => decode(str).valueOr(throw _)
   )
 
-  import com.advancedtelematic.ota_tuf.data.Codecs.{checkSumDecoder, checkSumEncoder}
+  import TufCodecs.{checkSumDecoder, checkSumEncoder}
+
   implicit val checksumMapper = circeMapper[Checksum]
 
   implicit val jsonMapper = circeMapper[Json]

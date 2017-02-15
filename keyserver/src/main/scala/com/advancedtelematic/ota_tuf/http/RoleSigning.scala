@@ -7,7 +7,8 @@ import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientSignature, SignedPayload}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.Signature
-import com.advancedtelematic.ota_tuf.data.KeyServerDataType.{Key, RepoId}
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.Key
+import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.ota_tuf.db.KeyRepositorySupport
 import com.advancedtelematic.ota_tuf.vault.VaultClient
 import io.circe.{Encoder, Json, JsonObject}

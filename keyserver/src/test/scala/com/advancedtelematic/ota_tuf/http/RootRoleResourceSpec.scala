@@ -8,7 +8,8 @@ import cats.syntax.show._
 import com.advancedtelematic.ota_tuf.daemon.KeyGenerationOp
 import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType
-import com.advancedtelematic.ota_tuf.data.KeyServerDataType.{Key, KeyGenId, RepoId}
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.{Key, KeyGenId}
+import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.ota_tuf.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import io.circe.Json
@@ -16,6 +17,7 @@ import org.scalatest.Inspectors
 import org.scalatest.concurrent.PatienceConfiguration
 import io.circe.syntax._
 import com.advancedtelematic.ota_tuf.data.Codecs._
+import com.advancedtelematic.libtuf.data.TufCodecs._
 
 import scala.concurrent.{ExecutionContext, Future}
 

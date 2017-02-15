@@ -1,15 +1,17 @@
 package com.advancedtelematic.libtuf.data
 
+import java.util.UUID
+
 import akka.http.scaladsl.server.PathMatchers
 import cats.Show
 import com.advancedtelematic.libtuf.data.TufDataType.HashMethod.HashMethod
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
+import com.advancedtelematic.libtuf.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import eu.timepit.refined.api.{Refined, Validate}
 import org.genivi.sota.data.{CirceEnum, SlickEnum}
 
 import scala.util.Try
 
-// TODO: Move out
 object TufDataType {
   object HashMethod extends CirceEnum {
     type HashMethod = Value
@@ -64,4 +66,7 @@ object TufDataType {
 
     val RSASSA_PSS = Value("rsassa-pss")
   }
+
+  case class RepoId(uuid: UUID) extends UUIDKey
+  object RepoId extends UUIDKeyObj[RepoId]
 }
