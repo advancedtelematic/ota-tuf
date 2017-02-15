@@ -9,7 +9,7 @@ import com.advancedtelematic.ota_tuf.daemon.KeyGenerationOp
 import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.CommonDataType.RoleType
 import com.advancedtelematic.ota_tuf.data.DataType.{Key, KeyGenId, RepoId}
-import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus
+import com.advancedtelematic.ota_tuf.data.DataType.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import io.circe.Json
 import org.scalatest.Inspectors

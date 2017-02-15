@@ -10,7 +10,7 @@ import org.genivi.sota.core.DatabaseSpec
 import org.genivi.sota.http.Errors.MissingEntity
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.data.CommonDataType.RoleType
-import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus
+import com.advancedtelematic.ota_tuf.data.DataType.KeyGenRequestStatus
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}
 

@@ -7,7 +7,7 @@ import com.advancedtelematic.libtuf.data.CommonDataType.KeyType.KeyType
 import com.advancedtelematic.libtuf.data.CommonDataType.{Checksum, KeyId}
 import com.advancedtelematic.libtuf.data.CommonDataType.RoleType.RoleType
 import com.advancedtelematic.ota_tuf.data.DataType._
-import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus.KeyGenRequestStatus
+import com.advancedtelematic.ota_tuf.data.DataType.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.data.RepositoryDataType.{SignedRole, TargetItem}
 import slick.driver.MySQLDriver.api._
 import io.circe.Json

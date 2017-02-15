@@ -21,29 +21,23 @@ import io.circe.Json
 import org.genivi.sota.data.{CirceEnum, SlickEnum}
 import com.advancedtelematic.libtuf.data.RepoClientDataType._
 
-object DataType {
-  object KeyGenRequestStatus extends CirceEnum with SlickEnum {
-    type KeyGenRequestStatus = Value
+object RepositoryDataType {
+  case class TargetItem(repoId: RepoId, filename: String, uri: Uri, checksum: Checksum, length: Long)
 
-    val REQUESTED, GENERATED, ERROR = Value
+  case class SignedRole(repoId: RepoId, roleType: RoleType, content: Json, checksum: Checksum, length: Long, version: Int)
+
+  implicit class SignedRoleMetaItemOps(signedRole: SignedRole) {
+    def asMetaRole: (MetaPath, MetaItem) = {
+      val hashes = Map(signedRole.checksum.method -> signedRole.checksum.hash)
+      signedRole.roleType.toMetaPath -> MetaItem(hashes, signedRole.length)
+    }
   }
 
-  case class KeyGenId(uuid: UUID) extends UUIDKey
-  object KeyGenId extends UUIDKeyObj[KeyGenId]
-
-  case class RoleId(uuid: UUID) extends UUIDKey
-  object RoleId extends UUIDKeyObj[RoleId]
-
-  case class RepoId(uuid: UUID) extends UUIDKey
-  object RepoId extends UUIDKeyObj[RepoId]
-
-  case class KeyGenRequest(id: KeyGenId, repoId: RepoId,
-                           status: KeyGenRequestStatus, roleType: RoleType,
-                           keySize: Int = 1024, threshold: Int = 1)
-
-  case class Key(id: KeyId, roleId: RoleId, keyType: KeyType, publicKey: PublicKey)
-
-  case class Role(id: RoleId, repoId: RepoId, roleType: RoleType, threshold: Int = 1)
+  object SignedRole {
+    def withChecksum(repoId: RepoId, roleType: RoleType, content: Json, version: Int): SignedRole = {
+      val canonicalJson = content.canonical
+      val checksum = Sha256Digest.digest(canonicalJson.getBytes)
+      SignedRole(repoId, roleType, content, checksum, canonicalJson.length, version)
+    }
+  }
 }
-
-

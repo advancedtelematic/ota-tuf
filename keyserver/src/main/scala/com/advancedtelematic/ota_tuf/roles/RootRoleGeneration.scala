@@ -4,7 +4,7 @@ import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.CommonDataType.RoleType
 import com.advancedtelematic.ota_tuf.data.DataType.{KeyGenId, KeyGenRequest, RepoId}
-import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus
+import com.advancedtelematic.ota_tuf.data.DataType.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepository, KeyRepositorySupport}
 import com.advancedtelematic.ota_tuf.http.{Errors, RoleSigning}
 import com.advancedtelematic.ota_tuf.vault.VaultClient

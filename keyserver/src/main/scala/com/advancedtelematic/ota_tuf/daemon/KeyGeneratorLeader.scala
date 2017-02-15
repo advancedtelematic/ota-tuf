@@ -16,7 +16,7 @@ import scala.async.Async._
 import scala.concurrent.duration._
 import akka.pattern.pipe
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
-import com.advancedtelematic.ota_tuf.data.KeyGenRequestStatus
+import com.advancedtelematic.ota_tuf.data.DataType.KeyGenRequestStatus
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.{ExecutionContext, Future}
