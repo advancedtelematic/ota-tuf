@@ -53,9 +53,9 @@ class KeyGeneratorLeader(vaultClient: VaultClient)(implicit val db: Database) ex
       receive
     } else {
       {
-        case Status.Success(_) ⇒
+        case Status.Success(_) =>
           context.become(waiting(totalTasks, remaining - 1))
-        case Status.Failure(ex) ⇒
+        case Status.Failure(ex) =>
           log.error(ex, "Could not generate key")
           context.become(waiting(totalTasks, remaining - 1))
       }
@@ -63,10 +63,10 @@ class KeyGeneratorLeader(vaultClient: VaultClient)(implicit val db: Database) ex
 
 
   override def receive: Receive = {
-    case Status.Failure(ex) ⇒
+    case Status.Failure(ex) =>
       throw ex
 
-    case taskCount: Int ⇒
+    case taskCount: Int =>
       log.info("Waiting for {} key generation tasks to complete", taskCount)
       context become waiting(taskCount, taskCount)
 
@@ -127,7 +127,7 @@ class KeyGeneratorWorker(vaultClient: VaultClient)(implicit val db: Database) ex
       keyGenRequestOp.processGenerationRequest(kgr)
         .map(Success)
         .recoverWith {
-          case ex ⇒
+          case ex =>
             log.error("Key generation failed: {}", ex.getMessage)
             keyGenRepo
               .setStatus(kgr.id, KeyGenRequestStatus.ERROR)

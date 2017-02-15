@@ -49,8 +49,8 @@ protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: Execut
                        roleRepository: RoleRepository): Future[KeyGenRequest] = {
     val dbIO = for {
       _ <- roleRepository.persistAction(role)
-      _ ← setStatusAction(keyGenRequest.id, KeyGenRequestStatus.GENERATED)
-      _ ← keyRepository.persistAction(key)
+      _ <- setStatusAction(keyGenRequest.id, KeyGenRequestStatus.GENERATED)
+      _ <- keyRepository.persistAction(key)
     } yield keyGenRequest.copy(status = KeyGenRequestStatus.GENERATED)
 
     db.run(dbIO.transactionally)
@@ -147,7 +147,7 @@ protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext
   }
 
   protected [db] def persistAction(key: Key): DBIO[Unit] = {
-    Schema.keys.insertOrUpdate(key).map(_ ⇒ ())
+    Schema.keys.insertOrUpdate(key).map(_ => ())
   }
 }
 
