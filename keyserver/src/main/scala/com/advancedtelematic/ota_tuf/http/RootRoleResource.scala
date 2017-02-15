@@ -2,8 +2,8 @@ package com.advancedtelematic.ota_tuf.http
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.stream.Materializer
-import com.advancedtelematic.libtuf.data.CommonDataType.RoleType
-import com.advancedtelematic.ota_tuf.data.DataType.RepoId
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.RepoId
 import com.advancedtelematic.ota_tuf.db.KeyGenRequestSupport
 import com.advancedtelematic.ota_tuf.vault.VaultClient
 import slick.driver.MySQLDriver.api._

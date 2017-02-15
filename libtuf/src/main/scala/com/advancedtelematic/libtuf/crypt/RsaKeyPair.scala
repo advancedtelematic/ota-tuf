@@ -4,8 +4,8 @@ import java.io.{StringReader, StringWriter}
 import java.security.{Signature => _, _}
 
 import cats.Show
-import com.advancedtelematic.libtuf.data.CommonDataType.{KeyId, Signature, ValidKeyId, ValidSignature}
-import com.advancedtelematic.libtuf.data.CommonDataType.SignatureMethod
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, Signature, ValidKeyId, ValidSignature}
+import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
 import org.bouncycastle.util.encoders.Hex

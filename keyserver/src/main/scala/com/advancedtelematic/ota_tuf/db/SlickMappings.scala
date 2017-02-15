@@ -6,7 +6,7 @@ import akka.http.scaladsl.model.Uri
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
-import com.advancedtelematic.libtuf.data.CommonDataType.Checksum
+import com.advancedtelematic.libtuf.data.TufDataType.Checksum
 import io.circe.Json
 
 import scala.reflect.ClassTag

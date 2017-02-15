@@ -14,7 +14,7 @@ import org.scalatest.{FunSuite, Matchers}
 
 import scala.concurrent.duration._
 import akka.testkit.TestDuration
-import com.advancedtelematic.libtuf.data.CommonDataType.KeyId
+import com.advancedtelematic.libtuf.data.TufDataType.KeyId
 import org.scalatest.time.{Millis, Seconds, Span}
 
 import scala.concurrent.Future

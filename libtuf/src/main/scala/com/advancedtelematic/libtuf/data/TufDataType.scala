@@ -2,15 +2,15 @@ package com.advancedtelematic.libtuf.data
 
 import akka.http.scaladsl.server.PathMatchers
 import cats.Show
-import com.advancedtelematic.libtuf.data.CommonDataType.HashMethod.HashMethod
-import com.advancedtelematic.libtuf.data.CommonDataType.SignatureMethod.SignatureMethod
+import com.advancedtelematic.libtuf.data.TufDataType.HashMethod.HashMethod
+import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import eu.timepit.refined.api.{Refined, Validate}
 import org.genivi.sota.data.{CirceEnum, SlickEnum}
 
 import scala.util.Try
 
 // TODO: Move out
-object CommonDataType {
+object TufDataType {
   object HashMethod extends CirceEnum {
     type HashMethod = Value
 

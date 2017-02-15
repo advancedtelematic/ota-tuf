@@ -13,7 +13,7 @@ import org.genivi.sota.core.DatabaseSpec
 import io.circe.syntax._
 import com.advancedtelematic.ota_tuf.http.CanonicalJson._
 import cats.syntax.show._
-import com.advancedtelematic.ota_tuf.data.DataType._
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType._
 import scala.concurrent.Future
 import akka.actor.ActorSystem
 import akka.http.scaladsl.util.FastFuture
@@ -25,10 +25,10 @@ import scala.collection.JavaConverters._
 import scala.util.Try
 import akka.testkit.TestDuration
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
-import com.advancedtelematic.libtuf.data.CommonDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.CommonDataType.{KeyType, RoleType}
-import com.advancedtelematic.ota_tuf.data.DataType
-import com.advancedtelematic.ota_tuf.data.DataType.RepoId
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType}
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.RepoId
 
 object FakeRoleStore extends RoleKeyStoreClient {
 

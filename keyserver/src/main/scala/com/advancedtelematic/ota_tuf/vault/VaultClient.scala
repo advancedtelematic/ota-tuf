@@ -8,8 +8,8 @@ import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.HttpMethods._
 import akka.http.scaladsl.unmarshalling.{FromEntityUnmarshaller, Unmarshaller}
 import akka.stream.Materializer
-import com.advancedtelematic.libtuf.data.CommonDataType.KeyId
-import com.advancedtelematic.libtuf.data.CommonDataType.KeyType.KeyType
+import com.advancedtelematic.libtuf.data.TufDataType.KeyId
+import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
 import com.advancedtelematic.ota_tuf.vault.VaultClient.VaultKey
 import io.circe.{Decoder, Encoder, HCursor}
 

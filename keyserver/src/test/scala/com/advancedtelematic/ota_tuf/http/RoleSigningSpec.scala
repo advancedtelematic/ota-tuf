@@ -1,6 +1,6 @@
 package com.advancedtelematic.ota_tuf.http
 
-import com.advancedtelematic.ota_tuf.data.DataType._
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType._
 import com.advancedtelematic.util.OtaTufSpec
 import io.circe.syntax._
 import CanonicalJson._
@@ -9,7 +9,7 @@ import org.genivi.sota.core.DatabaseSpec
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
-import com.advancedtelematic.libtuf.data.CommonDataType.{KeyType, Signature}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, Signature}
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}
 

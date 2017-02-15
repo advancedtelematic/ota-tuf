@@ -8,10 +8,10 @@ import org.scalatest.Inspectors
 import io.circe.syntax._
 import CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
-import com.advancedtelematic.libtuf.data.CommonDataType.{RoleType, Signature}
+import com.advancedtelematic.libtuf.data.TufDataType.{RoleType, Signature}
 import com.advancedtelematic.ota_tuf.daemon.KeyGenerationOp
-import com.advancedtelematic.ota_tuf.data.DataType.{KeyGenId, KeyGenRequest, RepoId}
-import com.advancedtelematic.ota_tuf.data.DataType.KeyGenRequestStatus
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.{KeyGenId, KeyGenRequest, RepoId}
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.db.KeyGenRequestSupport
 import com.advancedtelematic.ota_tuf.roles.RootRoleGeneration
 import org.scalatest.concurrent.PatienceConfiguration

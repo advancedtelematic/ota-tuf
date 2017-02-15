@@ -3,11 +3,11 @@ package com.advancedtelematic.ota_tuf.db
 import java.security.PublicKey
 
 import akka.http.scaladsl.model.Uri
-import com.advancedtelematic.libtuf.data.CommonDataType.KeyType.KeyType
-import com.advancedtelematic.libtuf.data.CommonDataType.{Checksum, KeyId}
-import com.advancedtelematic.libtuf.data.CommonDataType.RoleType.RoleType
-import com.advancedtelematic.ota_tuf.data.DataType._
-import com.advancedtelematic.ota_tuf.data.DataType.KeyGenRequestStatus.KeyGenRequestStatus
+import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
+import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, KeyId}
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType._
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.data.RepositoryDataType.{SignedRole, TargetItem}
 import slick.driver.MySQLDriver.api._
 import io.circe.Json

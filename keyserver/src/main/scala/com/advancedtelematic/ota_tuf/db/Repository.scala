@@ -1,11 +1,11 @@
 package com.advancedtelematic.ota_tuf.db
 
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
-import com.advancedtelematic.libtuf.data.CommonDataType._
-import com.advancedtelematic.libtuf.data.CommonDataType.RoleType.RoleType
-import com.advancedtelematic.ota_tuf.data.DataType._
-import com.advancedtelematic.ota_tuf.data.DataType.KeyGenRequestStatus
-import com.advancedtelematic.ota_tuf.data.DataType.KeyGenRequestStatus.KeyGenRequestStatus
+import com.advancedtelematic.libtuf.data.TufDataType._
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType._
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.KeyGenRequestStatus
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.ota_tuf.data.RepositoryDataType.{SignedRole, TargetItem}
 import org.genivi.sota.http.Errors.{EntityAlreadyExists, MissingEntity, RawError}
 import slick.driver.MySQLDriver.api._

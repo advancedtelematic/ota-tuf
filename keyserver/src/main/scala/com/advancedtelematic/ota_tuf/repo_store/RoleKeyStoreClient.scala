@@ -8,9 +8,9 @@ import akka.http.scaladsl.util.FastFuture
 import akka.stream.ActorMaterializer
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.data.ClientDataType.SignedPayload
-import com.advancedtelematic.libtuf.data.CommonDataType.RoleType.RoleType
-import com.advancedtelematic.ota_tuf.data.DataType.RepoId
-import com.advancedtelematic.libtuf.data.CommonDataType.RoleType._
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.RepoId
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType._
 import io.circe.{Encoder, Json}
 import org.genivi.sota.http.Errors.RawError
 import org.genivi.sota.rest.ErrorCode

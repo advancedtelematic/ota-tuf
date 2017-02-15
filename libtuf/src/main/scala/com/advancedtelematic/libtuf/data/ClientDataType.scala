@@ -1,17 +1,12 @@
 package com.advancedtelematic.libtuf.data
 
 import java.security.PublicKey
-import java.time.Instant
 
-import com.advancedtelematic.libtuf.data.CommonDataType.HashMethod.HashMethod
-import com.advancedtelematic.libtuf.data.CommonDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.CommonDataType.{KeyId, Signature, ValidChecksum, ValidSignature}
-import eu.timepit.refined.api.{Refined, Validate}
-import io.circe.{Encoder, Json}
-import cats.syntax.show._
-import com.advancedtelematic.libtuf.data.CommonDataType.KeyType.KeyType
-import com.advancedtelematic.libtuf.data.CommonDataType.SignatureMethod.SignatureMethod
-import com.advancedtelematic.libtuf.data.CommonDataType.RoleType.show
+import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
+import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, Signature, ValidSignature}
+import eu.timepit.refined.api.Refined
+import io.circe.Encoder
 
 object ClientDataType {
   case class ClientSignature(keyid: KeyId, method: SignatureMethod, sig: Refined[String, ValidSignature]) {
@@ -33,47 +28,4 @@ object ClientDataType {
                       _type: String = "Root")
 
   case class RoleKeys(keyids: Seq[KeyId], threshold: Int)
-}
-
-object RepoClientDataType {
-  type ClientHashes = Map[HashMethod, Refined[String, ValidChecksum]]
-
-  case class ClientTargetItem(hashes: ClientHashes,
-                              length: Long, custom: Json = Json.Null)
-
-  case class ValidMetaPath()
-  type MetaPath = Refined[String, ValidMetaPath]
-
-  implicit val validMetaPath: Validate.Plain[String, ValidMetaPath] =
-    Validate.fromPredicate(
-      _.endsWith(".json"),
-      str => s"$str is not a valid meta path, it needs to end in .json",
-      ValidMetaPath())
-
-  implicit class RoleTypeToMetaPathOp(value: RoleType) {
-    def toMetaPath: MetaPath =
-      RefinedUtils.refineTry[String, ValidMetaPath](value.show + ".json").get
-  }
-
-  case class MetaItem(hashes: ClientHashes, length: Long)
-
-  trait VersionedRole {
-    val version: Int
-  }
-
-  case class TargetsRole(expires: Instant,
-                         targets: Map[String, ClientTargetItem],
-                         version: Int,
-                         _type: String = "Targets") extends VersionedRole
-
-  case class SnapshotRole(meta: Map[MetaPath, MetaItem],
-                          expires: Instant,
-                          version: Int,
-                          _type: String = "Snapshot") extends VersionedRole
-
-  case class TimestampRole(
-                            meta: Map[MetaPath, MetaItem],
-                            expires: Instant,
-                            version: Int,
-                            _type: String = "Timestamp") extends VersionedRole
 }

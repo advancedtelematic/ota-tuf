@@ -1,6 +1,6 @@
 package com.advancedtelematic.libtuf.crypt
 
-import com.advancedtelematic.libtuf.data.CommonDataType.{Checksum, HashMethod, ValidChecksum}
+import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, HashMethod, ValidChecksum}
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.util.encoders.Hex
 import com.advancedtelematic.libtuf.data.RefinedUtils.refineTry

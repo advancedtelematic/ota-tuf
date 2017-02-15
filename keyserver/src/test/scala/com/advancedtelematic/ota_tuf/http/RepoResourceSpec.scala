@@ -10,10 +10,10 @@ import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import io.circe.{Encoder, Json}
 import CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.{RsaKeyPair, Sha256Digest}
-import com.advancedtelematic.libtuf.data.CommonDataType.{HashMethod, RoleType}
+import com.advancedtelematic.libtuf.data.TufDataType.{HashMethod, RoleType}
 import com.advancedtelematic.ota_tuf.data.Codecs._
 import com.advancedtelematic.libtuf.data.RepoClientDataType.{SnapshotRole, TargetsRole, TimestampRole}
-import com.advancedtelematic.ota_tuf.data.DataType.RepoId
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.RepoId
 import com.advancedtelematic.ota_tuf.db.{Schema, SignedRoleRepositorySupport}
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
 import io.circe.syntax._

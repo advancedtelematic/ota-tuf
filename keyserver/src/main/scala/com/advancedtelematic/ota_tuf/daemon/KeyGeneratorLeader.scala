@@ -5,8 +5,8 @@ import akka.actor.{Actor, ActorLogging, Props, Status, SupervisorStrategy}
 import akka.routing.RoundRobinPool
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.ota_tuf.daemon.KeyGeneratorLeader.Tick
-import com.advancedtelematic.ota_tuf.data.DataType._
-import com.advancedtelematic.libtuf.data.CommonDataType._
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType._
+import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport, RoleRepositorySupport}
 import com.advancedtelematic.ota_tuf.vault.VaultClient
 import com.advancedtelematic.ota_tuf.vault.VaultClient.VaultKey
@@ -16,7 +16,7 @@ import scala.async.Async._
 import scala.concurrent.duration._
 import akka.pattern.pipe
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
-import com.advancedtelematic.ota_tuf.data.DataType.KeyGenRequestStatus
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.KeyGenRequestStatus
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.{ExecutionContext, Future}

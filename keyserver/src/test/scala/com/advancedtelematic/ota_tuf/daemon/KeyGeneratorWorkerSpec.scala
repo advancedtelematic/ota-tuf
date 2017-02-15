@@ -3,14 +3,14 @@ package com.advancedtelematic.ota_tuf.daemon
 import akka.actor.{ActorSystem, Status}
 import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
-import com.advancedtelematic.ota_tuf.data.DataType._
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType._
 import com.advancedtelematic.ota_tuf.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.util.OtaTufSpec
 import org.genivi.sota.core.DatabaseSpec
 import org.genivi.sota.http.Errors.MissingEntity
 import cats.syntax.show.toShowOps
-import com.advancedtelematic.libtuf.data.CommonDataType.RoleType
-import com.advancedtelematic.ota_tuf.data.DataType.KeyGenRequestStatus
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType
+import com.advancedtelematic.ota_tuf.data.KeyServerDataType.KeyGenRequestStatus
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}
 

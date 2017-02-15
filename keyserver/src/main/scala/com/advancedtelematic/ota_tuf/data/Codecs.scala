@@ -8,8 +8,8 @@ import akka.http.scaladsl.model.Uri
 import cats.data.Xor
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.data.ClientDataType._
-import com.advancedtelematic.libtuf.data.CommonDataType.HashMethod.HashMethod
-import com.advancedtelematic.libtuf.data.CommonDataType._
+import com.advancedtelematic.libtuf.data.TufDataType.HashMethod.HashMethod
+import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.libtuf.data.RepoClientDataType._
 import io.circe._
 
