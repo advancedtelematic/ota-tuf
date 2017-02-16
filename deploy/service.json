@@ -5,7 +5,7 @@
   "cpus": $USE_CPU,
   "mem": $USE_MEM,
   "instances": 1,
-  "args": ["-main", "com.advancedtelematic.ota_tuf.Boot"],
+  "args": ["-main", "com.advancedtelematic.keyserver.Boot"],
   "container": {
       "type": "DOCKER",
       "docker": {
@@ -41,7 +41,7 @@
   "cpus": $USE_CPU,
   "mem": $USE_MEM,
   "instances": 1,
-  "args": ["-main", "com.advancedtelematic.ota_tuf.daemon.KeyGenerationDaemon"],
+  "args": ["-main", "com.advancedtelematic.keyserver.daemon.KeyGenerationDaemon"],
   "container": {
     "type": "DOCKER",
     "docker": {

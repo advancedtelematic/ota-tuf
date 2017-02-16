@@ -16,7 +16,7 @@ libraryDependencies ++= {
   )
 }
 
-mainClass in Compile := Some("com.advancedtelematic.ota_tuf.Boot")
+mainClass in Compile := Some("com.advancedtelematic.keyserver.Boot")
 
 flywayUrl := sys.env.getOrElse("DB_URL", "jdbc:mysql://localhost:3306/ota_tuf")
 
@@ -28,21 +28,21 @@ import com.typesafe.sbt.packager.docker._
 
 dockerRepository in Docker := Some("advancedtelematic")
 
-packageName in Docker := packageName.value
+packageName in Docker := "ota-tuf"
 
 dockerUpdateLatest in Docker := true
 
-defaultLinuxInstallLocation in Docker := s"/opt/${moduleName.value}"
+defaultLinuxInstallLocation in Docker := s"/opt/ota-tuf"
 
 dockerCommands := Seq(
   Cmd("FROM", "alpine:3.3"),
   Cmd("RUN", "apk upgrade --update && apk add --update openjdk8-jre bash coreutils"),
-  ExecCmd("RUN", "mkdir", "-p", s"/var/log/${moduleName.value}"),
+  ExecCmd("RUN", "mkdir", "-p", s"/var/log/ota-tuf"),
   Cmd("ADD", "opt /opt"),
-  Cmd("WORKDIR", s"/opt/${moduleName.value}"),
-  ExecCmd("ENTRYPOINT", s"/opt/${moduleName.value}/bin/${moduleName.value}"),
-  Cmd("RUN", s"chown -R daemon:daemon /opt/${moduleName.value}"),
-  Cmd("RUN", s"chown -R daemon:daemon /var/log/${moduleName.value}"),
+  Cmd("WORKDIR", s"/opt/ota-tuf"),
+  ExecCmd("ENTRYPOINT", s"/opt/ota-tuf/bin/keyserver"),
+  Cmd("RUN", s"chown -R daemon:daemon /opt/ota-tuf"),
+  Cmd("RUN", s"chown -R daemon:daemon /var/log/ota-tuf"),
   Cmd("USER", "daemon")
 )
 
