@@ -19,7 +19,6 @@ import io.circe.generic.semiauto._
 import io.circe.syntax._
 
 import scala.reflect.ClassTag
-import org.genivi.sota.marshalling.CirceInstances._
 
 trait VaultClient {
   def createKey(key: VaultKey): Future[Unit]
@@ -28,6 +27,8 @@ trait VaultClient {
 }
 
 object VaultClient {
+  import com.advancedtelematic.libats.codecs.AkkaCirce._
+
   case class VaultKey(id: KeyId, keyType: KeyType, publicKey: String, privateKey: String)
 
   object VaultKey {

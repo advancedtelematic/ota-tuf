@@ -9,22 +9,13 @@ lazy val UnitTest = config("ut").extend(Test)
 lazy val commonConfigs = Seq(ItTest, UnitTest)
 
 lazy val commonDeps = libraryDependencies ++= {
-  val sotaV = "0.2.53"
-  val akkaV = "2.4.14"
   val akkaHttpV = "10.0.0"
   val scalaTestV = "3.0.0"
 
   Seq(
-    "com.typesafe.akka" %% "akka-actor" % akkaV,
-    "com.typesafe.akka" %% "akka-stream" % akkaV,
-    "com.typesafe.akka" %% "akka-http" % akkaHttpV,
+    "com.advancedtelematic" %% "libats" % "0.0.1-SNAPSHOT",
     "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV,
-    "com.typesafe.akka" %% "akka-slf4j" % akkaV,
-
-    "org.scalatest"     %% "scalatest" % scalaTestV % "test",
-
-    "org.genivi" %% "sota-common" % sotaV,
-    "org.genivi" %% "sota-common-db-test" % sotaV % "test"
+    "org.scalatest"     %% "scalatest" % scalaTestV % "test"
   )
 }
 

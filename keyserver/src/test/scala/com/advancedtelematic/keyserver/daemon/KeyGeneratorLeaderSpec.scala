@@ -9,7 +9,7 @@ import com.advancedtelematic.keyserver.data.KeyServerDataType.KeyGenRequestStatu
 import com.advancedtelematic.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.util.{LongTest, OtaTufSpec}
-import org.genivi.sota.core.DatabaseSpec
+import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
 import org.scalatest.concurrent.PatienceConfiguration.{Interval, Timeout}
 import org.scalatest.concurrent.Eventually

@@ -4,7 +4,7 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import scala.async.Async._
 import com.advancedtelematic.util.OtaTufSpec
-import org.genivi.sota.core.DatabaseSpec
+import com.advancedtelematic.libats.test.DatabaseSpec
 import org.scalatest.Inspectors
 import io.circe.syntax._
 import CanonicalJson._

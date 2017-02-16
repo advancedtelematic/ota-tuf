@@ -7,7 +7,8 @@ object ClientCodecs {
   import TufCodecs._
   import io.circe.generic.semiauto._
   import RefinedStringEncoding._
-  import org.genivi.sota.marshalling.CirceInstances.{dateTimeDecoder, dateTimeEncoder, refinedDecoder, refinedEncoder}
+//  import org.genivi.sota.marshalling.CirceInstances.{dateTimeDecoder, dateTimeEncoder, refinedDecoder, refinedEncoder}
+  import com.advancedtelematic.libats.codecs.AkkaCirce._
 
   implicit val roleKeyEncoder: Encoder[RoleKeys] = deriveEncoder
   implicit val roleKeyDecoder: Decoder[RoleKeys] = deriveDecoder

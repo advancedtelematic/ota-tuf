@@ -5,8 +5,8 @@ import akka.stream.Materializer
 import com.advancedtelematic.libtuf.repo_store.RoleKeyStoreClient
 import com.advancedtelematic.keyserver.VersionInfo
 import com.advancedtelematic.keyserver.vault.VaultClient
-import org.genivi.sota.http.{ErrorHandler, HealthResource}
-import org.genivi.sota.rest.SotaRejectionHandler._
+import com.advancedtelematic.libats.http.{ErrorHandler, HealthResource}
+import com.advancedtelematic.libats.http.DefaultRejectionHandler._
 
 import scala.concurrent.ExecutionContext
 import slick.driver.MySQLDriver.api._

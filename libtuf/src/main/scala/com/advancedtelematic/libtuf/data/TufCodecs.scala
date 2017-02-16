@@ -20,7 +20,8 @@ object TufCodecs {
   // refinedMapEncoder and refinedMapDecoder are broken in sota CirceInstances
   // they encode Map[Refined[T, P], V] as an array of tuples
   // so we need to custom import what we need here.
-  import org.genivi.sota.marshalling.CirceInstances.{dateTimeDecoder, dateTimeEncoder, refinedDecoder, refinedEncoder}
+  // import org.genivi.sota.marshalling.CirceInstances.{dateTimeDecoder, dateTimeEncoder, refinedDecoder, refinedEncoder}
+  import com.advancedtelematic.libats.codecs.AkkaCirce._
 
   implicit val uriEncoder: Encoder[Uri] = Encoder[String].contramap(_.toString)
   implicit val uriDecoder: Decoder[Uri] = Decoder[String].map(Uri.apply)

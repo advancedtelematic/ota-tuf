@@ -13,7 +13,7 @@ import slick.driver.MySQLDriver.api._
 import io.circe.Json
 
 object Schema {
-  import org.genivi.sota.refined.SlickRefined._
+  import com.advancedtelematic.libats.codecs.SlickRefined._
   import com.advancedtelematic.libtuf.data.SlickPublicKeyMapper._
   import com.advancedtelematic.libtuf.data.SlickUriMapper._
   import com.advancedtelematic.libtuf.data.SlickCirceMapper._

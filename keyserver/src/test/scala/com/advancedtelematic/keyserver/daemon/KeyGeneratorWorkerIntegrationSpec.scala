@@ -10,7 +10,7 @@ import com.advancedtelematic.keyserver.data.KeyServerDataType.KeyGenRequestStatu
 import com.advancedtelematic.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.keyserver.vault.VaultClient
 import com.advancedtelematic.util.OtaTufSpec
-import org.genivi.sota.core.DatabaseSpec
+import com.advancedtelematic.libats.test.DatabaseSpec
 
 import scala.concurrent.ExecutionContext
 

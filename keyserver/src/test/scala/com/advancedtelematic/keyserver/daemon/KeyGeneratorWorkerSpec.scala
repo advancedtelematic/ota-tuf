@@ -7,8 +7,8 @@ import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 import com.advancedtelematic.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.util.OtaTufSpec
-import org.genivi.sota.core.DatabaseSpec
-import org.genivi.sota.http.Errors.MissingEntity
+import com.advancedtelematic.libats.test.DatabaseSpec
+import com.advancedtelematic.libats.http.Errors.MissingEntity
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType
 import com.advancedtelematic.keyserver.data.KeyServerDataType.KeyGenRequestStatus

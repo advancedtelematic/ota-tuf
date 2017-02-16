@@ -8,7 +8,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
-import org.genivi.sota.data.{CirceEnum, SlickEnum}
+import com.advancedtelematic.libats.codecs.{CirceEnum, SlickEnum}
 
 object KeyServerDataType {
   object KeyGenRequestStatus extends CirceEnum with SlickEnum {

@@ -5,7 +5,7 @@ import com.advancedtelematic.util.OtaTufSpec
 import io.circe.syntax._
 import CanonicalJson._
 import com.advancedtelematic.keyserver.vault.VaultClient.VaultKey
-import org.genivi.sota.core.DatabaseSpec
+import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair

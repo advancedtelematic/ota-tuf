@@ -3,7 +3,7 @@ package com.advancedtelematic.keyserver.http
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.util.{LongTest, OtaTufSpec, ResourceSpec}
 import io.circe.generic.auto._
-import org.genivi.sota.marshalling.CirceMarshallingSupport._
+import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import cats.syntax.show._
 import com.advancedtelematic.keyserver.daemon.KeyGenerationOp
 import com.advancedtelematic.libtuf.data.TufDataType._

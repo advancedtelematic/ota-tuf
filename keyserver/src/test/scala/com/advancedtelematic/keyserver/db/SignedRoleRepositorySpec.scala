@@ -6,8 +6,8 @@ import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.keyserver.data.RepositoryDataType.SignedRole
 import com.advancedtelematic.util.OtaTufSpec
 import io.circe.Json
-import org.genivi.sota.core.DatabaseSpec
-import org.genivi.sota.http.Errors.RawError
+import com.advancedtelematic.libats.test.DatabaseSpec
+import com.advancedtelematic.libats.http.Errors.RawError
 import eu.timepit.refined.refineV
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}

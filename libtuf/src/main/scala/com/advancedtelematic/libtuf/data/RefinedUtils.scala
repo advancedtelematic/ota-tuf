@@ -1,9 +1,8 @@
 package com.advancedtelematic.libtuf.data
 
+import com.advancedtelematic.libats.codecs.RefinementError
 import eu.timepit.refined
 import eu.timepit.refined.api.{Refined, Validate}
-import org.genivi.sota.marshalling.RefinementError
-
 import scala.util.{Failure, Success, Try}
 
 object RefinedUtils {

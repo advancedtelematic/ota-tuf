@@ -7,9 +7,9 @@ import akka.http.scaladsl.server.Route
 import com.advancedtelematic.keyserver.vault.VaultClient
 import com.advancedtelematic.keyserver.{Settings, VersionInfo}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
-import org.genivi.sota.db.{BootMigrations, DatabaseConfig}
-import org.genivi.sota.http.{BootApp, HealthResource}
-import org.genivi.sota.monitoring.{DatabaseMetrics, MetricsSupport}
+import com.advancedtelematic.libats.db.{BootMigrations, DatabaseConfig}
+import com.advancedtelematic.libats.http.{BootApp, HealthResource}
+import com.advancedtelematic.libats.monitoring.{DatabaseMetrics, MetricsSupport}
 
 object KeyGenerationDaemon extends BootApp
     with Settings
@@ -19,8 +19,8 @@ object KeyGenerationDaemon extends BootApp
     with MetricsSupport
     with DatabaseMetrics {
 
-    import org.genivi.sota.http.LogDirectives._
-    import org.genivi.sota.http.VersionDirectives._
+    import com.advancedtelematic.libats.http.LogDirectives._
+    import com.advancedtelematic.libats.http.VersionDirectives._
 
     implicit val _db = db
 

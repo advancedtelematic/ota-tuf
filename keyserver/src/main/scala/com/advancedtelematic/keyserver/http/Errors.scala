@@ -1,8 +1,9 @@
 package com.advancedtelematic.keyserver.http
 
 import akka.http.scaladsl.model.StatusCodes
-import org.genivi.sota.http.Errors.RawError
-import org.genivi.sota.rest.ErrorCode
+import com.advancedtelematic.libats.http.ErrorCode
+import com.advancedtelematic.libats.http.Errors.RawError
+
 
 object ErrorCodes {
   val KeysNotReady = ErrorCode("keys_not_ready")

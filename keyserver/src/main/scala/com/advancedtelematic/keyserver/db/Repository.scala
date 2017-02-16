@@ -7,9 +7,10 @@ import com.advancedtelematic.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.keyserver.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.keyserver.data.RepositoryDataType.{SignedRole, TargetItem}
-import org.genivi.sota.http.Errors.{EntityAlreadyExists, MissingEntity, RawError}
+import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity, RawError}
 import slick.driver.MySQLDriver.api._
-import org.genivi.sota.rest.ErrorCode
+import com.advancedtelematic.libats.http.ErrorCode
+import com.advancedtelematic.libats.codecs.SlickRefined._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -24,9 +25,7 @@ trait KeyGenRequestSupport extends DatabaseSupport {
 
 protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: ExecutionContext) {
 
-  import org.genivi.sota.db.SlickExtensions._
-  import org.genivi.sota.db.Operators._
-  import org.genivi.sota.refined.SlickRefined._
+  import com.advancedtelematic.libats.db.SlickExtensions._
   import Schema.keyGenRequests
 
   val keyGenRequestNotFound = MissingEntity(classOf[KeyGenRequest])
@@ -98,8 +97,7 @@ object KeyRepository {
 }
 
 protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext) {
-  import org.genivi.sota.db.SlickExtensions._
-  import org.genivi.sota.refined.SlickRefined._
+  import com.advancedtelematic.libats.db.SlickExtensions._
 
   import Schema.{keys, roles}
   import KeyRepository._
@@ -156,8 +154,7 @@ trait RoleRepositorySupport extends DatabaseSupport {
 }
 
 protected [db] class RoleRepository()(implicit db: Database, ec: ExecutionContext) {
-  import org.genivi.sota.db.SlickExtensions._
-  import org.genivi.sota.refined.SlickRefined._
+  import com.advancedtelematic.libats.db.SlickExtensions._
 
   def persist(role: Role): Future[Role] =
     db.run(persistAction(role))
@@ -172,8 +169,7 @@ trait TargetItemRepositorySupport extends DatabaseSupport {
 }
 
 protected [db] class TargetItemRepository()(implicit db: Database, ec: ExecutionContext) {
-  import org.genivi.sota.db.SlickExtensions._
-  import org.genivi.sota.refined.SlickRefined._
+  import com.advancedtelematic.libats.db.SlickExtensions._
 
   import Schema.targetItems
 
@@ -197,8 +193,7 @@ object SignedRoleRepository {
 }
 
 protected[db] class SignedRoleRepository()(implicit db: Database, ec: ExecutionContext) {
-  import org.genivi.sota.db.SlickExtensions._
-  import org.genivi.sota.refined.SlickRefined._
+  import com.advancedtelematic.libats.db.SlickExtensions._
   import SignedRoleRepository.InvalidVersionBumpError
 
   import Schema.signedRoles

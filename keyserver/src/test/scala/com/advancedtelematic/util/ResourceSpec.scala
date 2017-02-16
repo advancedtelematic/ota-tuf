@@ -9,7 +9,7 @@ import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.keyserver.http.OtaTufRoutes
 import io.circe.{Encoder, Json}
-import org.genivi.sota.core.DatabaseSpec
+import com.advancedtelematic.libats.test.DatabaseSpec
 import io.circe.syntax._
 import com.advancedtelematic.keyserver.http.CanonicalJson._
 import cats.syntax.show._
