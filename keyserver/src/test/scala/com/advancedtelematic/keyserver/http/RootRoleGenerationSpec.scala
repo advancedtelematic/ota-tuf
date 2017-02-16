@@ -1,6 +1,6 @@
 package com.advancedtelematic.keyserver.http
 
-import com.advancedtelematic.keyserver.data.KeyServerCodecs._
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import scala.async.Async._
 import com.advancedtelematic.util.OtaTufSpec

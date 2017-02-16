@@ -1,10 +1,9 @@
-package com.advancedtelematic.keyserver.data
+package com.advancedtelematic.libtuf.data
 
 import java.security.PublicKey
 import java.time.Instant
 
 import cats.syntax.show._
-import com.advancedtelematic.libtuf.data.RefinedUtils
 import com.advancedtelematic.libtuf.data.TufDataType.HashMethod.HashMethod
 import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.{RoleType, show}

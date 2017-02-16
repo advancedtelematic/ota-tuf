@@ -3,11 +3,11 @@
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-import com.advancedtelematic.keyserver.data.KeyServerCodecs._
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.keyserver.data.ClientDataType._
+import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.repo_store.RoleKeyStoreClient
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.keyserver.data.RepositoryDataType._

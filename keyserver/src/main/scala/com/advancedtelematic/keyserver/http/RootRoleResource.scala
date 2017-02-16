@@ -10,7 +10,7 @@ import slick.driver.MySQLDriver.api._
 import com.advancedtelematic.keyserver.roles.RootRoleGeneration
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import io.circe.{Decoder, Encoder, Json}
-import com.advancedtelematic.keyserver.data.KeyServerCodecs._
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import scala.concurrent.ExecutionContext
 

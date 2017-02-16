@@ -8,7 +8,7 @@ import com.advancedtelematic.keyserver.db.{SignedRoleRepositorySupport, TargetIt
 import io.circe.{Decoder, Encoder}
 import io.circe.generic.semiauto._
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
-import com.advancedtelematic.keyserver.data.KeyServerCodecs._
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.keyserver.data.RepositoryDataType.TargetItem

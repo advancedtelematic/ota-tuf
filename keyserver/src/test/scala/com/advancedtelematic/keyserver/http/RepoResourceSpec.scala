@@ -1,20 +1,20 @@
 package com.advancedtelematic.keyserver.http
 
 import akka.http.scaladsl.model.{StatusCodes, Uri}
-import com.advancedtelematic.keyserver.data.ClientDataType.RoleTypeToMetaPathOp
+import com.advancedtelematic.libtuf.data.ClientDataType.RoleTypeToMetaPathOp
 import com.advancedtelematic.util.{OtaTufSpec, ResourceSpec}
 import cats.syntax.show.toShowOps
 import RequestTargetItem._
 import com.advancedtelematic.libtuf.data.TufDataType._
-import com.advancedtelematic.keyserver.data.ClientDataType.RootRole
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import io.circe.{Encoder, Json}
 import CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.{RsaKeyPair, Sha256Digest}
 import com.advancedtelematic.libtuf.data.TufDataType.{HashMethod, RoleType}
-import com.advancedtelematic.keyserver.data.KeyServerCodecs._
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.keyserver.data.ClientDataType.{SnapshotRole, TargetsRole, TimestampRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{SnapshotRole, TargetsRole, TimestampRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.keyserver.db.{Schema, SignedRoleRepositorySupport}
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}

@@ -18,7 +18,7 @@ import com.advancedtelematic.keyserver.data.KeyServerDataType._
 import scala.concurrent.Future
 import akka.actor.ActorSystem
 import akka.http.scaladsl.util.FastFuture
-import com.advancedtelematic.keyserver.data.KeyServerCodecs._
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 
 import scala.concurrent.duration._
@@ -30,7 +30,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType}
 import com.advancedtelematic.libtuf.repo_store.RoleKeyStoreClient
 import com.advancedtelematic.keyserver.data.KeyServerDataType
-import com.advancedtelematic.keyserver.data.ClientDataType.{ClientKey, RoleKeys, RootRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 
 object FakeRoleStore extends RoleKeyStoreClient {

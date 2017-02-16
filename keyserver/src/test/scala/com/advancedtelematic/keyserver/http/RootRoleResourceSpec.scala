@@ -15,8 +15,8 @@ import io.circe.Json
 import org.scalatest.Inspectors
 import org.scalatest.concurrent.PatienceConfiguration
 import io.circe.syntax._
-import com.advancedtelematic.keyserver.data.KeyServerCodecs._
-import com.advancedtelematic.keyserver.data.ClientDataType.RootRole
+import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufCodecs._
 
 import scala.concurrent.{ExecutionContext, Future}

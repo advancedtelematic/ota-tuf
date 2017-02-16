@@ -1,25 +1,22 @@
-package com.advancedtelematic.keyserver.data
+package com.advancedtelematic.libtuf.data
 
-import com.advancedtelematic.libtuf.data.TufDataType._
-import ClientDataType._
-import com.advancedtelematic.libtuf.data.TufCodecs._
-import io.circe._
+import com.advancedtelematic.libtuf.data.ClientDataType._
+import io.circe.{Decoder, Encoder}
 
-object KeyServerCodecs {
-  import com.advancedtelematic.libtuf.data.RefinedStringEncoding._
+object ClientCodecs {
+  import TufCodecs._
   import io.circe.generic.semiauto._
+  import RefinedStringEncoding._
   import org.genivi.sota.marshalling.CirceInstances.{dateTimeDecoder, dateTimeEncoder, refinedDecoder, refinedEncoder}
-
 
   implicit val roleKeyEncoder: Encoder[RoleKeys] = deriveEncoder
   implicit val roleKeyDecoder: Decoder[RoleKeys] = deriveDecoder
 
   implicit val clientKeyEncoder: Encoder[ClientKey] = deriveEncoder
+  implicit val clientKeyDecoder: Decoder[ClientKey] = deriveDecoder
 
   implicit val rootRoleEncoder: Encoder[RootRole] = deriveEncoder
   implicit val rootRoleDecoder: Decoder[RootRole] = deriveDecoder
-
-  implicit val clientKeyDecoder: Decoder[ClientKey] = deriveDecoder
 
   implicit val targetsRoleEncoder: Encoder[TargetsRole] = deriveEncoder
   implicit val targetsRoleDecoder: Decoder[TargetsRole] = deriveDecoder
@@ -36,5 +33,3 @@ object KeyServerCodecs {
   implicit val timestampRoleEncoder: Encoder[TimestampRole] = deriveEncoder
   implicit val timestampRoleDecoder: Decoder[TimestampRole] = deriveDecoder
 }
-
-
