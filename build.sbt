@@ -9,7 +9,7 @@ lazy val UnitTest = config("ut").extend(Test)
 lazy val commonConfigs = Seq(ItTest, UnitTest)
 
 lazy val commonDeps = libraryDependencies ++= {
-  val akkaHttpV = "10.0.0"
+  val akkaHttpV = "10.0.3"
   val scalaTestV = "3.0.0"
 
   Seq(
