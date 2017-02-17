@@ -20,6 +20,9 @@ import com.advancedtelematic.libtuf.data.TufCodecs.signedPayloadDecoder
 
 trait RoleKeyStoreClient {
   val RootRoleNotFound = RawError(ErrorCode("root_role_not_found"), StatusCodes.FailedDependency, "root role was not found in upstream key store")
+  val RootRoleConflict = RawError(ErrorCode("root_role_conflict"), StatusCodes.Conflict, "root role already exists")
+
+  def createRoot(repoId: RepoId): Future[Json]
 
   def sign[T : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[Json]]
 
@@ -35,6 +38,16 @@ class RoleKeyStoreHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorM
   import de.heikoseeberger.akkahttpcirce.CirceSupport._
 
   private def KeyStoreError(msg: String) = RawError(ErrorCode("key_store_remote_error"), StatusCodes.BadGateway, msg)
+
+  override def createRoot(repoId: RepoId): Future[Json] = {
+    val entity = HttpEntity(ContentTypes.`application/json`, Json.obj("threshold" -> Json.fromInt(1)).noSpaces)
+    val req = HttpRequest(HttpMethods.POST, uri = uri.withPath(uri.path / "root" / repoId.show), entity = entity)
+
+    execHttp[Json](req){
+      case response if response.status == StatusCodes.Conflict =>
+        Future.failed(RootRoleConflict)
+    }
+  }
 
   override def sign[T : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[Json]] = {
     val entity = HttpEntity(ContentTypes.`application/json`, payload.asJson.noSpaces)

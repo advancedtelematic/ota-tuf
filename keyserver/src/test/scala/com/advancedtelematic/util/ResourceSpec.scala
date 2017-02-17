@@ -60,6 +60,15 @@ object FakeRoleStore extends RoleKeyStoreClient {
     keys.put(repoId, rootKey)
   }
 
+  override def createRoot(repoId: RepoId): Future[Json] = {
+    if (keys.contains(repoId)) {
+      FastFuture.failed(RootRoleConflict)
+    } else {
+      val _ = generateKey(repoId)
+      FastFuture.successful(Json.obj())
+    }
+  }
+
   override def sign[T: Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[Json]] = {
     val signature = signWithRoot(repoId, payload)
     FastFuture.successful(SignedPayload(List(signature), payload.asJson))
