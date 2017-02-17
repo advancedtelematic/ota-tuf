@@ -19,12 +19,15 @@ import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.keyserver.db.{Schema, SignedRoleRepositorySupport}
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
 import io.circe.syntax._
+import org.scalatest.concurrent.PatienceConfiguration
+import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.prop.Whenever
+import org.scalatest.time.{Seconds, Span}
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
 
 class RepoResourceSpec extends OtaTufSpec
-  with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever {
+  with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration {
 
   val repoId = RepoId.generate()
 
@@ -32,6 +35,9 @@ class RepoResourceSpec extends OtaTufSpec
     val checksum = Sha256Digest.digest("hi".getBytes)
     RequestTargetItem(Uri.Empty, checksum, "hi".getBytes.length)
   }
+
+
+  override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -146,6 +152,8 @@ class RepoResourceSpec extends OtaTufSpec
         responseAs[SignedPayload[SnapshotRole]]
       }
 
+    Future { Thread.sleep(1100) }.futureValue
+
     Post(apiUri(s"repo/${repoId.show}/targets/changesnapshot"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
@@ -167,6 +175,8 @@ class RepoResourceSpec extends OtaTufSpec
         status shouldBe StatusCodes.OK
         responseAs[SignedPayload[TimestampRole]]
       }
+
+    Future { Thread.sleep(1100) }.futureValue
 
     Post(apiUri(s"repo/${repoId.show}/targets/changets"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK

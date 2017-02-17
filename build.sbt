@@ -24,7 +24,7 @@ lazy val commonDeps = libraryDependencies ++= {
     "com.typesafe.slick" %% "slick-hikaricp" % slickV,
     "org.mariadb.jdbc" % "mariadb-java-client" % "1.4.4",
 
-    "com.advancedtelematic" %% "libats" % "0.0.1-1-gc138b11",
+    "com.advancedtelematic" %% "libats" % "0.0.1-1-gc138b11-SNAPSHOT",
 
     "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV,
     "org.scalatest"     %% "scalatest" % scalaTestV % "test"
