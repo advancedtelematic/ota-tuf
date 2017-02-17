@@ -1,6 +1,7 @@
 package com.advancedtelematic.util
 
 import java.security.{KeyPair, PrivateKey, PublicKey}
+import java.time.Instant
 import java.util.NoSuchElementException
 import java.util.concurrent.ConcurrentHashMap
 
@@ -51,7 +52,7 @@ object FakeRoleStore extends RoleKeyStoreClient {
       role.show -> RoleKeys(List(rootKey.id), threshold = 1)
     }.toMap
 
-    RootRole(clientKeys, roles, version = 1)
+    RootRole(clientKeys, roles, expires = Instant.now.plusSeconds(3600), version = 1)
   }
 
   def generateKey(repoId: RepoId): KeyPair = {

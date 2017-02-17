@@ -24,6 +24,7 @@ object ClientDataType {
   case class RootRole(keys: Map[KeyId, ClientKey],
                       roles: Map[String, RoleKeys],
                       version: Int,
+                      expires: Instant,
                       consistent_snapshot: Boolean = false,
                       _type: String = "Root")
 

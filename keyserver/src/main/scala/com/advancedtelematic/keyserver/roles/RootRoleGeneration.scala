@@ -1,5 +1,8 @@
 package com.advancedtelematic.keyserver.roles
 
+import java.time.{Duration, Instant}
+import java.time.temporal.{ChronoUnit, TemporalAmount, TemporalUnit}
+
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest}
@@ -22,6 +25,7 @@ class RootRoleGeneration(vaultClient: VaultClient)
 
   private val DEFAULT_ROLES = RoleType.ALL
   private val DEFAULT_KEY_SIZE = 1024
+  private val DEFAULT_ROLE_EXPIRE = Duration.ofDays(31)
 
   val roleSigning = new RoleSigning(vaultClient)
 
@@ -50,7 +54,7 @@ class RootRoleGeneration(vaultClient: VaultClient)
           roleType.show -> RoleKeys(roleKeys.map(_.id), role.threshold)
       }
 
-      val rootRole = RootRole(clientKeys, roles, version = 1)
+      val rootRole = RootRole(clientKeys, roles, expires = Instant.now.plus(DEFAULT_ROLE_EXPIRE), version = 1)
 
       await(roleSigning.signAll(rootRole, keys))
     }
