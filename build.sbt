@@ -9,11 +9,23 @@ lazy val UnitTest = config("ut").extend(Test)
 lazy val commonConfigs = Seq(ItTest, UnitTest)
 
 lazy val commonDeps = libraryDependencies ++= {
+  val akkaV = "2.4.17"
   val akkaHttpV = "10.0.3"
+  val slickV = "3.1.1"
   val scalaTestV = "3.0.0"
 
   Seq(
-    "com.advancedtelematic" %% "libats" % "0.0.1-SNAPSHOT",
+    "com.typesafe.akka" %% "akka-actor" % akkaV,
+    "com.typesafe.akka" %% "akka-stream" % akkaV,
+    "com.typesafe.akka" %% "akka-http" % akkaHttpV,
+    "com.typesafe.akka" %% "akka-slf4j" % akkaV,
+
+    "com.typesafe.slick" %% "slick" % slickV,
+    "com.typesafe.slick" %% "slick-hikaricp" % slickV,
+    "org.mariadb.jdbc" % "mariadb-java-client" % "1.4.4",
+
+    "com.advancedtelematic" %% "libats" % "0.0.1-1-gc138b11",
+
     "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV,
     "org.scalatest"     %% "scalatest" % scalaTestV % "test"
   )
