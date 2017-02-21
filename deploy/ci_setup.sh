@@ -5,10 +5,14 @@ set -u
 docker rm --force ota_tuf-mariadb || true
 docker rm --force ota_tuf-vault || true
 
-
 mkdir ota_tuf_entrypoint.d/ || true
 
 echo "
+create user 'tuf_repo' identified by 'tuf_repo';
+CREATE DATABASE tuf_repo;
+GRANT ALL PRIVILEGES ON \`tuf_repo%\`.* TO 'tuf_repo'@'%';
+FLUSH PRIVILEGES;
+
 CREATE DATABASE ota_tuf;
 GRANT ALL PRIVILEGES ON \`ota_tuf%\`.* TO 'ota_tuf'@'%';
 FLUSH PRIVILEGES;

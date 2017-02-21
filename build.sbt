@@ -13,6 +13,7 @@ lazy val commonDeps = libraryDependencies ++= {
   val akkaHttpV = "10.0.3"
   val slickV = "3.1.1"
   val scalaTestV = "3.0.0"
+  val bouncyCastleV = "1.56"
 
   Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaV,
@@ -24,7 +25,12 @@ lazy val commonDeps = libraryDependencies ++= {
     "com.typesafe.slick" %% "slick-hikaricp" % slickV,
     "org.mariadb.jdbc" % "mariadb-java-client" % "1.4.4",
 
-    "com.advancedtelematic" %% "libats" % "0.0.1-1-gc138b11-SNAPSHOT",
+    "org.bouncycastle" % "bcprov-jdk15on" % bouncyCastleV,
+    "org.bouncycastle" % "bcpkix-jdk15on" % bouncyCastleV,
+
+    "org.scala-lang.modules" %% "scala-async" % "0.9.6",
+
+    "com.advancedtelematic" %% "libats" % "0.0.1-5-g8dc1bf5",
 
     "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV,
     "org.scalatest"     %% "scalatest" % scalaTestV % "test"
@@ -54,12 +60,21 @@ lazy val libtuf = (project in file("libtuf"))
   .settings(Publish.settings)
 
 lazy val keyserver = (project in file("keyserver"))
-  .enablePlugins(BuildInfoPlugin, Versioning.Plugin)
+  .enablePlugins(BuildInfoPlugin, Versioning.Plugin, JavaAppPackaging)
   .configs(commonConfigs:_*)
   .settings(commonSettings)
   .settings(Publish.disable)
+  .settings(Packaging.docker("tuf-keyserver"))
+  .dependsOn(libtuf)
+
+lazy val reposerver = (project in file("reposerver"))
+  .enablePlugins(BuildInfoPlugin, Versioning.Plugin, JavaAppPackaging)
+  .configs(commonConfigs:_*)
+  .settings(commonSettings)
+  .settings(Publish.disable)
+  .settings(Packaging.docker("tuf-reposerver"))
   .dependsOn(libtuf)
 
 lazy val ota_tuf = (project in file("."))
   .settings(Publish.disable)
-  .aggregate(libtuf, keyserver)
+  .aggregate(libtuf, keyserver, reposerver)
