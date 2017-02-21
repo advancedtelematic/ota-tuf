@@ -1,4 +1,4 @@
-package com.advancedtelematic.keyserver
+package com.advancedtelematic.tuf.reposerver
 
 import java.security.Security
 
