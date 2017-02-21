@@ -7,7 +7,7 @@ if [[ "$1" == "" ]]; then
 fi
 
 export DOCKER_TAG=$1
-export JOB_NAME="${JOB_NAME-tuf-keyserver}"
+export JOB_NAME="${JOB_NAME-tuf-keyserver-$DEPLOY_ENV}"
 export VAULT_SECRET=$(echo $JOB_NAME | tr "-" "_")
 export VAULT_ENDPOINT="http://secrets.prod01.internal.advancedtelematic.com:8200/v1/secret/${VAULT_SECRET}"
 export IMAGE_NAME="tuf-keyserver"
