@@ -18,7 +18,7 @@ export USE_CPU="0.5"
 export JAVA_OPTS="-Xmx900m"
 export MARATHON="http://marathon.prod01.internal.advancedtelematic.com:8080"
 
-cat deploy/reposervice_service.json |
+cat deploy/reposerver_service.json |
     envsubst |
     python2 deploy/add-vault-vars.py $VAULT_ENDPOINT $VAULT_TOKEN |
     tee marathon_deploy.log |
