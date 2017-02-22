@@ -1,4 +1,4 @@
 
--- drop table target_items ;
+drop table target_items ;
 
--- drop table signed_roles ;
+drop table signed_roles ;
