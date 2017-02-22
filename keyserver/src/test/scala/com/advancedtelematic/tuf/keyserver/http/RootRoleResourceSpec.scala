@@ -113,9 +113,8 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       val signedPayload = responseAs[SignedPayload[RootRole]]
       val rootRole = signedPayload.signed
 
-      signedPayload.signatures should have size RoleType.ALL.size
+      signedPayload.signatures should have size 1 // Signed with root only
 
-      rootRole.keys should have size signedPayload.signatures.size
       rootRole.keys should have size RoleType.ALL.size
 
       rootRole.roles should have size RoleType.ALL.size

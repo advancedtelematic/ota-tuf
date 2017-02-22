@@ -44,6 +44,8 @@ class RootRoleGeneration(vaultClient: VaultClient)
 
       val keys = repoKeys.values.flatMap(_._2).toList.distinct
 
+      val rootKeys = repoKeys.get(RoleType.ROOT).toList.flatMap(_._2).distinct
+
       val clientKeys = keys.map { key =>
         key.id -> ClientKey(key.keyType, key.publicKey)
       }.toMap
@@ -55,7 +57,7 @@ class RootRoleGeneration(vaultClient: VaultClient)
 
       val rootRole = RootRole(clientKeys, roles, expires = Instant.now.plus(DEFAULT_ROLE_EXPIRE), version = 1)
 
-      await(roleSigning.signAll(rootRole, keys))
+      await(roleSigning.signAll(rootRole, rootKeys))
     }
   }
 
