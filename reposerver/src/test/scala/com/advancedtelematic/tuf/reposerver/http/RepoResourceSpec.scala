@@ -1,6 +1,8 @@
 package com.advancedtelematic.tuf.reposerver.http
 
+import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{StatusCodes, Uri}
+import akka.http.scaladsl.server.Route
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.{RsaKeyPair, Sha256Digest}
@@ -15,11 +17,15 @@ import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
 import util.{ResourceSpec, TufReposerverSpec}
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import com.advancedtelematic.libats.codecs.AkkaCirce._
+import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.reposerver.ReposerverHttpClient
+import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
+
+
 
 class RepoResourceSpec extends TufReposerverSpec
   with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration {
@@ -270,7 +276,7 @@ class RepoResourceSpec extends TufReposerverSpec
   test("delegates to keyServer to create root") {
     val newRepoId = RepoId.generate()
 
-    Post(apiUri(s"repo/${newRepoId.show}")) ~> routes ~> check {
+    Post(apiUri(s"repo/${newRepoId.show}")).withHeaders(RawHeader("x-ats-namespace", "myns")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       fakeRoleStore.rootRole(newRepoId) shouldBe a[RootRole]
     }

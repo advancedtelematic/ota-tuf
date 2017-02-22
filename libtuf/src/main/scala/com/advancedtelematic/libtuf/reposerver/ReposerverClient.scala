@@ -6,10 +6,12 @@ import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId}
 import io.circe.{Json, JsonObject}
 import RepoId._
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
 import cats.syntax.show._
+import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.http.ErrorCode
 import com.advancedtelematic.libats.http.Errors.RawError
 
@@ -19,9 +21,9 @@ import scala.reflect.ClassTag
 trait ReposerverClient {
   protected def KeyStoreError(msg: String) = RawError(ErrorCode("reposerver_remote_error"), StatusCodes.BadGateway, msg)
 
-  def createRoot(repoId: RepoId): Future[Unit]
+  def createRoot(namespace: Namespace, repoId: RepoId): Future[Unit]
 
-  def addTarget(repoId: RepoId, fileName: String, uri: Uri, checksum: Checksum, length: Int): Future[Unit]
+  def addTarget(namespace: Namespace, repoId: RepoId, fileName: String, uri: Uri, checksum: Checksum, length: Int): Future[Unit]
 }
 
 class ReposerverHttpClient(reposerverUri: Uri)
@@ -37,12 +39,12 @@ class ReposerverHttpClient(reposerverUri: Uri)
 
   private val _http = Http()
 
-  override def createRoot(repoId: RepoId): Future[Unit] = {
+  override def createRoot(namespace: Namespace, repoId: RepoId): Future[Unit] = {
     val req = HttpRequest(HttpMethods.POST, uri = _uri.withPath(_uri.path / "repo" / repoId.show))
-    execHttp[Unit](req)
+    execHttp[Unit](namespace, req)
   }
 
-  override def addTarget(repoId: RepoId, fileName: String, uri: Uri, checksum: Checksum, length: Int): Future[Unit] = {
+  override def addTarget(namespace: Namespace, repoId: RepoId, fileName: String, uri: Uri, checksum: Checksum, length: Int): Future[Unit] = {
     val payload = JsonObject.fromIterable(List(
       "uri" -> uri.asJson,
       "checksum" -> checksum.asJson,
@@ -55,12 +57,12 @@ class ReposerverHttpClient(reposerverUri: Uri)
       uri = _uri.withPath(_uri.path / "repo" / repoId.show / "targets" / fileName),
       entity = entity)
 
-    execHttp[Unit](req)
+    execHttp[Unit](namespace, req)
   }
 
-  private def execHttp[T : ClassTag](request: HttpRequest)
+  private def execHttp[T : ClassTag](namespace: Namespace, request: HttpRequest)
                                     (implicit um: FromEntityUnmarshaller[T]): Future[T] = {
-    _http.singleRequest(request).flatMap {
+    _http.singleRequest(request.withHeaders(RawHeader("x-ats-namespace", namespace.get))).flatMap {
       case r @ HttpResponse(status, _, _, _) if status.isSuccess() =>
         um(r.entity)
       case r =>

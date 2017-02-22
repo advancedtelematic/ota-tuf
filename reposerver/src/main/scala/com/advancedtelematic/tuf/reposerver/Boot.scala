@@ -15,7 +15,7 @@ import com.typesafe.config.ConfigFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.LogDirectives._
-import com.advancedtelematic.tuf.reposerver.VersionInfo
+import com.advancedtelematic.tuf.reposerver.http.NamespaceExtractor
 import com.advancedtelematic.tuf.reposerver.http.TufReposerverRoutes
 
 trait Settings {
@@ -46,7 +46,7 @@ object Boot extends BootApp
 
   val routes: Route =
     (versionHeaders(version) & logResponseMetrics(projectName)) {
-      new TufReposerverRoutes(keyStoreClient).routes
+      new TufReposerverRoutes(keyStoreClient, NamespaceExtractor.default).routes
     }
 
   Http().bindAndHandle(routes, host, port)

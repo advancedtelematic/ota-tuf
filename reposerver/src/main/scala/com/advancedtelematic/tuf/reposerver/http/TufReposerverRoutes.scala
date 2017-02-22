@@ -11,7 +11,8 @@ import slick.driver.MySQLDriver.api._
 import scala.concurrent.ExecutionContext
 
 
-class TufReposerverRoutes(keyserverClient: KeyserverClient)
+class TufReposerverRoutes(keyserverClient: KeyserverClient,
+                          namespaceValidation: NamespaceValidation)
                          (implicit val db: Database, val ec: ExecutionContext, mat: Materializer) extends VersionInfo {
 
   import Directives._
@@ -20,7 +21,7 @@ class TufReposerverRoutes(keyserverClient: KeyserverClient)
     handleRejections(rejectionHandler) {
       ErrorHandler.handleErrors {
         pathPrefix("api" / "v1") {
-            new RepoResource(keyserverClient).route
+            new RepoResource(keyserverClient, namespaceValidation).route
         } ~ new HealthResource(db, versionMap).route
       }
     }
