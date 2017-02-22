@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import com.advancedtelematic.libtuf.data.TufDataType._
-import io.circe.{Encoder, Json}
+import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libats.test.{DatabaseSpec}
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
@@ -67,9 +67,9 @@ object FakeRoleStore extends KeyserverClient {
     }
   }
 
-  override def sign[T: Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[Json]] = {
+  override def sign[T: Decoder : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]] = {
     val signature = signWithRoot(repoId, payload)
-    FastFuture.successful(SignedPayload(List(signature), payload.asJson))
+    FastFuture.successful(SignedPayload(List(signature), payload))
   }
 
   override def fetchRootRole(repoId: RepoId): Future[SignedPayload[Json]] = {

@@ -12,7 +12,7 @@ import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
 import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import io.circe.syntax._
-import io.circe.{Encoder, Json}
+import io.circe.{Decoder, Encoder, Json}
 import slick.driver.MySQLDriver.api._
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepository.SignedRoleNotFound
 import scala.async.Async._
@@ -50,9 +50,9 @@ class SignedRoleGeneration(roleSigningClient: KeyserverClient)
     }
   }
 
-  def signRole[T <: VersionedRole : Encoder](repoId: RepoId, roleType: RoleType, role: T): Future[SignedRole] = {
-    roleSigningClient.sign(repoId, roleType, role).map { jsonRole =>
-      SignedRole.withChecksum(repoId, roleType, jsonRole.asJson, role.version)
+  def signRole[T <: VersionedRole : Decoder : Encoder](repoId: RepoId, roleType: RoleType, role: T): Future[SignedRole] = {
+    roleSigningClient.sign(repoId, roleType, role).map { signedRole =>
+      SignedRole.withChecksum(repoId, roleType, signedRole.asJson, role.version)
     }
   }
 
