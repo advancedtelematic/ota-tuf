@@ -1,4 +1,4 @@
-package com.advancedtelematic.libtuf.repo_store
+package com.advancedtelematic.libtuf.keyserver
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
@@ -18,7 +18,7 @@ import scala.concurrent.Future
 import scala.reflect.ClassTag
 import com.advancedtelematic.libtuf.data.TufCodecs.signedPayloadDecoder
 
-trait RoleKeyStoreClient {
+trait KeyserverClient {
   val RootRoleNotFound = RawError(ErrorCode("root_role_not_found"), StatusCodes.FailedDependency, "root role was not found in upstream key store")
   val RootRoleConflict = RawError(ErrorCode("root_role_conflict"), StatusCodes.Conflict, "root role already exists")
 
@@ -29,7 +29,7 @@ trait RoleKeyStoreClient {
   def fetchRootRole(repoId: RepoId): Future[SignedPayload[Json]]
 }
 
-class RoleKeyStoreHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer) extends RoleKeyStoreClient {
+class KeyserverHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer) extends KeyserverClient {
   import io.circe.syntax._
   import system.dispatcher
 

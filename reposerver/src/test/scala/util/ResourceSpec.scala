@@ -27,12 +27,12 @@ import akka.testkit.TestDuration
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType}
-import com.advancedtelematic.libtuf.repo_store.RoleKeyStoreClient
+import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.reposerver.http.TufReposerverRoutes
 
-object FakeRoleStore extends RoleKeyStoreClient {
+object FakeRoleStore extends KeyserverClient {
 
   def publicKey(repoId: RepoId): PublicKey =
     keys.asScala(repoId).getPublic

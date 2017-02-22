@@ -3,7 +3,7 @@ package com.advancedtelematic.tuf.reposerver.http
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server.Directives
 import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId, RoleType}
-import com.advancedtelematic.libtuf.repo_store.RoleKeyStoreClient
+import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
@@ -15,7 +15,7 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 
 import scala.concurrent.ExecutionContext
 
-class RepoResource(roleKeyStore: RoleKeyStoreClient)
+class RepoResource(roleKeyStore: KeyserverClient)
                   (implicit val db: Database, val ec: ExecutionContext) extends Directives
   with TargetItemRepositorySupport with SignedRoleRepositorySupport {
 
@@ -23,6 +23,11 @@ class RepoResource(roleKeyStore: RoleKeyStoreClient)
 
   val route =
     pathPrefix("repo" / RepoId.Path) { repoId =>
+      (pathEnd & post) {
+        // TODO: Associate repoId with Namespace
+        val f = roleKeyStore.createRoot(repoId)
+        complete(f)
+      } ~
       path("targets" / Segment) { filename =>
         (post & entity(as[RequestTargetItem])) { clientItem =>
           val item = TargetItem(repoId, filename, clientItem.uri, clientItem.checksum, clientItem.length)

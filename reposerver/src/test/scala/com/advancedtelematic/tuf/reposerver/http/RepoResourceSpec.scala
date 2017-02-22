@@ -17,6 +17,7 @@ import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import com.advancedtelematic.libats.codecs.AkkaCirce._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.reposerver.ReposerverHttpClient
 
 import scala.concurrent.Future
 
@@ -29,7 +30,6 @@ class RepoResourceSpec extends TufReposerverSpec
     val checksum = Sha256Digest.digest("hi".getBytes)
     RequestTargetItem(Uri.Empty, checksum, "hi".getBytes.length)
   }
-
 
   override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
 
@@ -264,6 +264,15 @@ class RepoResourceSpec extends TufReposerverSpec
       val targetsRole = responseAs[SignedPayload[TimestampRole]]
 
       targetsRole.signed.version shouldBe 2
+    }
+  }
+
+  test("delegates to keyServer to create root") {
+    val newRepoId = RepoId.generate()
+
+    Post(apiUri(s"repo/${newRepoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      fakeRoleStore.rootRole(newRepoId) shouldBe a[RootRole]
     }
   }
 

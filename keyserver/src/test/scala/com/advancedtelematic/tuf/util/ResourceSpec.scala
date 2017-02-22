@@ -29,7 +29,7 @@ import akka.testkit.TestDuration
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType}
-import com.advancedtelematic.libtuf.repo_store.RoleKeyStoreClient
+import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId

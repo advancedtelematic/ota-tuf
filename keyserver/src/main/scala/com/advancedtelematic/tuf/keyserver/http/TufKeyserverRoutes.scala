@@ -2,7 +2,7 @@ package com.advancedtelematic.tuf.keyserver.http
 
 import akka.http.scaladsl.server.{Directives, _}
 import akka.stream.Materializer
-import com.advancedtelematic.libtuf.repo_store.RoleKeyStoreClient
+import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.keyserver.VersionInfo
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import com.advancedtelematic.libats.http.{ErrorHandler, HealthResource}

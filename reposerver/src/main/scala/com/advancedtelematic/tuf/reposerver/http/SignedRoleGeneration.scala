@@ -8,7 +8,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
-import com.advancedtelematic.libtuf.repo_store.RoleKeyStoreClient
+import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
 import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import io.circe.syntax._
@@ -18,7 +18,7 @@ import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepository.SignedRoleNo
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 
-class SignedRoleGeneration(roleSigningClient: RoleKeyStoreClient)
+class SignedRoleGeneration(roleSigningClient: KeyserverClient)
                           (implicit val db: Database, val ec: ExecutionContext) extends SignedRoleRepositorySupport {
 
   val targetRoleGeneration = new TargetRoleGeneration(roleSigningClient)
@@ -94,7 +94,7 @@ class SignedRoleGeneration(roleSigningClient: RoleKeyStoreClient)
     Instant.now().plus(31, ChronoUnit.DAYS)
 }
 
-protected class TargetRoleGeneration(roleSigningClient: RoleKeyStoreClient)
+protected class TargetRoleGeneration(roleSigningClient: KeyserverClient)
                           (implicit val db: Database, val ec: ExecutionContext)
   extends TargetItemRepositorySupport {
 

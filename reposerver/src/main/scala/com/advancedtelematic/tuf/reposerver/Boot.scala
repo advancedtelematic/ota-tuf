@@ -7,7 +7,7 @@ import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.model.Uri.Path.Empty
 import akka.http.scaladsl.server.{Directives, Route}
 import akka.stream.Materializer
-import com.advancedtelematic.libtuf.repo_store.RoleKeyStoreHttpClient
+import com.advancedtelematic.libtuf.keyserver.KeyserverHttpClient
 import com.advancedtelematic.libats.db.{BootMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.http.BootApp
 import com.advancedtelematic.libats.monitoring.{DatabaseMetrics, MetricsSupport}
@@ -42,7 +42,7 @@ object Boot extends BootApp
 
   log.info(s"Starting $version on http://$host:$port")
 
-  lazy val keyStoreClient = new RoleKeyStoreHttpClient(keyServerUri.withPath(Empty / "api/v1"))
+  lazy val keyStoreClient = new KeyserverHttpClient(keyServerUri.withPath(Empty / "api/v1"))
 
   val routes: Route =
     (versionHeaders(version) & logResponseMetrics(projectName)) {
