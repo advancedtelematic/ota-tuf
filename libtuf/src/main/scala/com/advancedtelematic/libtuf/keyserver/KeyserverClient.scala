@@ -12,7 +12,7 @@ import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, SignedPayload}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType._
-import io.circe.{Encoder, Json}
+import io.circe.{Decoder, Encoder, Json}
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
@@ -24,7 +24,7 @@ trait KeyserverClient {
 
   def createRoot(repoId: RepoId): Future[Json]
 
-  def sign[T : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[Json]]
+  def sign[T : Decoder : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]]
 
   def fetchRootRole(repoId: RepoId): Future[SignedPayload[Json]]
 }
@@ -49,11 +49,11 @@ class KeyserverHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorMate
     }
   }
 
-  override def sign[T : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[Json]] = {
+  override def sign[T : Decoder : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]] = {
     val entity = HttpEntity(ContentTypes.`application/json`, payload.asJson.noSpaces)
     val req = HttpRequest(HttpMethods.POST, uri = uri.withPath(uri.path / "root" / repoId.show / roleType.show), entity = entity)
 
-    execHttp[SignedPayload[Json]](req)()
+    execHttp[SignedPayload[T]](req)()
   }
 
   override def fetchRootRole(repoId: RepoId): Future[SignedPayload[Json]] = {
