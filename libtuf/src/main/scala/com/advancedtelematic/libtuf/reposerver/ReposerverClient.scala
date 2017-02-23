@@ -3,14 +3,12 @@ package com.advancedtelematic.libtuf.reposerver
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId}
-import io.circe.{Json, JsonObject}
-import RepoId._
+import io.circe.JsonObject
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
-import cats.syntax.show._
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.http.ErrorCode
 import com.advancedtelematic.libats.http.Errors.RawError
@@ -21,9 +19,9 @@ import scala.reflect.ClassTag
 trait ReposerverClient {
   protected def KeyStoreError(msg: String) = RawError(ErrorCode("reposerver_remote_error"), StatusCodes.BadGateway, msg)
 
-  def createRoot(namespace: Namespace, repoId: RepoId): Future[Unit]
+  def createRoot(namespace: Namespace): Future[RepoId]
 
-  def addTarget(namespace: Namespace, repoId: RepoId, fileName: String, uri: Uri, checksum: Checksum, length: Int): Future[Unit]
+  def addTarget(namespace: Namespace, fileName: String, uri: Uri, checksum: Checksum, length: Int): Future[Unit]
 }
 
 class ReposerverHttpClient(reposerverUri: Uri)
@@ -39,12 +37,12 @@ class ReposerverHttpClient(reposerverUri: Uri)
 
   private val _http = Http()
 
-  override def createRoot(namespace: Namespace, repoId: RepoId): Future[Unit] = {
-    val req = HttpRequest(HttpMethods.POST, uri = _uri.withPath(_uri.path / "repo" / repoId.show))
-    execHttp[Unit](namespace, req)
+  override def createRoot(namespace: Namespace): Future[RepoId] = {
+    val req = HttpRequest(HttpMethods.POST, uri = _uri.withPath(_uri.path / "user_repo"))
+    execHttp[RepoId](namespace, req)
   }
 
-  override def addTarget(namespace: Namespace, repoId: RepoId, fileName: String, uri: Uri, checksum: Checksum, length: Int): Future[Unit] = {
+  override def addTarget(namespace: Namespace, fileName: String, uri: Uri, checksum: Checksum, length: Int): Future[Unit] = {
     val payload = JsonObject.fromIterable(List(
       "uri" -> uri.asJson,
       "checksum" -> checksum.asJson,
@@ -54,7 +52,7 @@ class ReposerverHttpClient(reposerverUri: Uri)
     val entity = HttpEntity(ContentTypes.`application/json`, payload.asJson.noSpaces)
 
     val req = HttpRequest(HttpMethods.POST,
-      uri = _uri.withPath(_uri.path / "repo" / repoId.show / "targets" / fileName),
+      uri = _uri.withPath(_uri.path / "user_repo" / "targets" / fileName),
       entity = entity)
 
     execHttp[Unit](namespace, req)

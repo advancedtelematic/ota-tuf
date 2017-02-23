@@ -48,7 +48,7 @@ object Schema {
     def repoId = column[RepoId]("repo_id")
     def namespace = column[Namespace]("namespace")
 
-    def pk = primaryKey("repo_namespaces_pk", (repoId, namespace))
+    def pk = primaryKey("repo_namespaces_pk", namespace)
 
     override def * = (repoId, namespace)
   }

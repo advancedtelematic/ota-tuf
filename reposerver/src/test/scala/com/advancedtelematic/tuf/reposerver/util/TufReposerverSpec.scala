@@ -1,4 +1,4 @@
-package util
+package com.advancedtelematic.tuf.reposerver.util
 
 import java.security.Security
 import java.util.concurrent.ConcurrentHashMap

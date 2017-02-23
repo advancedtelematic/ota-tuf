@@ -3,7 +3,7 @@ package com.advancedtelematic.tuf.reposerver.db
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.http.ErrorCode
-import com.advancedtelematic.libats.http.Errors.{MissingEntity, RawError}
+import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity, RawError}
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
@@ -102,8 +102,18 @@ protected[db] class RepoNamespaceRepository()(implicit db: Database, ec: Executi
   import com.advancedtelematic.libats.db.SlickAnyVal._
   import Schema.repoNamespaces
 
-  def persist(repoId: RepoId, namespace: Namespace): Future[Unit] = {
-    db.run(repoNamespaces += (repoId, namespace))
+  def persist(repoId: RepoId, namespace: Namespace): Future[Unit] = db.run {
+    (repoNamespaces += (repoId, namespace))
+      .handleIntegrityErrors(EntityAlreadyExists(classOf[RepoId]))
+  }
+
+  def findFor(namespace: Namespace): Future[RepoId] = db.run {
+    repoNamespaces
+      .filter(_.namespace === namespace)
+      .map(_.repoId)
+      .result
+      .headOption
+      .failIfNone(MissingEntity(classOf[RepoId]))
   }
 
   def belongsTo(repoId: RepoId, namespace: Namespace): Future[Boolean] = db.run {

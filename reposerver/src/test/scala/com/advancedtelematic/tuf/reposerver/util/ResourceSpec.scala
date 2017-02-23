@@ -1,4 +1,4 @@
-package util
+package com.advancedtelematic.tuf.reposerver.util
 
 import java.security.{KeyPair, PublicKey}
 import java.time.Instant
