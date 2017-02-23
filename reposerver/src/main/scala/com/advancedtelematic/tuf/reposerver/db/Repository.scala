@@ -1,14 +1,16 @@
 package com.advancedtelematic.tuf.reposerver.db
 
 import akka.http.scaladsl.model.StatusCodes
+import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.http.ErrorCode
-import com.advancedtelematic.libats.http.Errors.{MissingEntity, RawError}
+import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity, RawError}
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
 import slick.driver.MySQLDriver.api._
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.language.implicitConversions
 
 trait DatabaseSupport {
   implicit val ec: ExecutionContext
@@ -85,4 +87,41 @@ protected[db] class SignedRoleRepository()(implicit db: Database, ec: ExecutionC
         DBIO.failed(InvalidVersionBumpError(sr.version, signedRole.version))
       case _ => DBIO.successful(())
     }
+}
+
+
+trait RepoNamespaceRepositorySupport extends DatabaseSupport {
+  lazy val repoNamespaceRepo = new RepoNamespaceRepository()
+}
+
+protected[db] class RepoNamespaceRepository()(implicit db: Database, ec: ExecutionContext) {
+
+  import com.advancedtelematic.libats.db.SlickPipeToUnit.pipeToUnit
+  import com.advancedtelematic.libats.db.SlickExtensions._
+  import com.advancedtelematic.libats.codecs.SlickRefined._
+  import com.advancedtelematic.libats.db.SlickAnyVal._
+  import Schema.repoNamespaces
+
+  def persist(repoId: RepoId, namespace: Namespace): Future[Unit] = db.run {
+    (repoNamespaces += (repoId, namespace))
+      .handleIntegrityErrors(EntityAlreadyExists(classOf[RepoId]))
+  }
+
+  def findFor(namespace: Namespace): Future[RepoId] = db.run {
+    repoNamespaces
+      .filter(_.namespace === namespace)
+      .map(_.repoId)
+      .result
+      .headOption
+      .failIfNone(MissingEntity(classOf[RepoId]))
+  }
+
+  def belongsTo(repoId: RepoId, namespace: Namespace): Future[Boolean] = db.run {
+    repoNamespaces
+      .filter(_.repoId === repoId)
+      .filter(_.namespace === namespace)
+      .size
+      .result
+      .map(_ > 0)
+  }
 }

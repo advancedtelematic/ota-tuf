@@ -1,6 +1,6 @@
-package util
+package com.advancedtelematic.tuf.reposerver.util
 
-import java.security.{KeyPair, PrivateKey, PublicKey}
+import java.security.{KeyPair, PublicKey}
 import java.time.Instant
 import java.util.NoSuchElementException
 import java.util.concurrent.ConcurrentHashMap
@@ -9,28 +9,29 @@ import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import com.advancedtelematic.libtuf.data.TufDataType._
 import io.circe.{Decoder, Encoder, Json}
-import com.advancedtelematic.libats.test.{DatabaseSpec}
+import com.advancedtelematic.libats.test.DatabaseSpec
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import cats.syntax.show._
 
 import scala.concurrent.Future
 import akka.actor.ActorSystem
+import akka.http.scaladsl.server.{Directive1, Directives}
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.TufCodecs._
 
 import scala.concurrent.duration._
 import scala.collection.JavaConverters._
 import scala.util.Try
 import akka.testkit.TestDuration
+import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType}
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
-import com.advancedtelematic.tuf.reposerver.http.TufReposerverRoutes
+import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
 
 object FakeRoleStore extends KeyserverClient {
 
@@ -106,5 +107,9 @@ trait ResourceSpec extends TufReposerverSpec
 
   val fakeRoleStore = FakeRoleStore
 
-  lazy val routes = new TufReposerverRoutes(fakeRoleStore).routes
+  val namespaceValidation = new NamespaceValidation {
+    override def apply(repoId: RepoId): Directive1[Namespace] = provide(Namespace("default"))
+  }
+
+  lazy val routes = new TufReposerverRoutes(fakeRoleStore, namespaceValidation).routes
 }

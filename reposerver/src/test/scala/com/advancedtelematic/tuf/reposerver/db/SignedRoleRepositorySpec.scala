@@ -1,16 +1,16 @@
 package com.advancedtelematic.tuf.reposerver.db
 
-import akka.http.scaladsl.model.{StatusCodes}
+import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, HashMethod, RoleType, ValidChecksum}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import io.circe.Json
 import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
+import com.advancedtelematic.tuf.reposerver.util.TufReposerverSpec
 import eu.timepit.refined.refineV
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}
-import util.TufReposerverSpec
 
 import scala.async.Async._
 import scala.concurrent.ExecutionContext

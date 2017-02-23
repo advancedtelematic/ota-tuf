@@ -1,9 +1,7 @@
 package com.advancedtelematic.tuf.reposerver.db
 
-import java.security.PublicKey
-
 import akka.http.scaladsl.model.Uri
-import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
+import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, KeyId, RepoId}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
@@ -15,6 +13,7 @@ object Schema {
   import com.advancedtelematic.libtuf.data.SlickCirceMapper._
   import com.advancedtelematic.libtuf.data.SlickPublicKeyMapper._
   import com.advancedtelematic.libtuf.data.SlickUriMapper._
+  import com.advancedtelematic.libats.db.SlickAnyVal._
 
   class TargetItemTable(tag: Tag) extends Table[TargetItem](tag, "target_items") {
     def repoId = column[RepoId]("repo_id")
@@ -44,4 +43,15 @@ object Schema {
   }
 
   protected [db] val signedRoles = TableQuery[SignedRoleTable]
+
+  class RepoNamespaceTable(tag: Tag) extends Table[(RepoId, Namespace)](tag, "repo_namespaces") {
+    def repoId = column[RepoId]("repo_id")
+    def namespace = column[Namespace]("namespace")
+
+    def pk = primaryKey("repo_namespaces_pk", namespace)
+
+    override def * = (repoId, namespace)
+  }
+
+  protected [db] val repoNamespaces = TableQuery[RepoNamespaceTable]
 }

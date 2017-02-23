@@ -1,6 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.http
 
-import akka.http.scaladsl.model.{StatusCodes, Uri}
+import akka.http.scaladsl.model._
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.{RsaKeyPair, Sha256Digest}
@@ -12,14 +12,14 @@ import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.prop.Whenever
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
-import util.{ResourceSpec, TufReposerverSpec}
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import com.advancedtelematic.libats.codecs.AkkaCirce._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.reposerver.ReposerverHttpClient
 
 import scala.concurrent.Future
+import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
+import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 
 class RepoResourceSpec extends TufReposerverSpec
   with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration {
@@ -270,9 +270,72 @@ class RepoResourceSpec extends TufReposerverSpec
   test("delegates to keyServer to create root") {
     val newRepoId = RepoId.generate()
 
-    Post(apiUri(s"repo/${newRepoId.show}")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      fakeRoleStore.rootRole(newRepoId) shouldBe a[RootRole]
+    withNamespace("myns") { implicit ns =>
+      Post(apiUri(s"repo/${newRepoId.show}")).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+        fakeRoleStore.rootRole(newRepoId) shouldBe a[RootRole]
+      }
+    }
+  }
+
+  test("POST on user_create creates a repository for a namespace") {
+    withNamespace("myotherns") { implicit ns =>
+      Post(apiUri(s"user_repo")).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+        val newRepoId = responseAs[RepoId]
+        fakeRoleStore.rootRole(newRepoId) shouldBe a[RootRole]
+      }
+    }
+  }
+
+  test("creating a target on user_creates adds target to user repo") {
+    withNamespace("targetsNs") { implicit ns =>
+      val newRepoId = Post(apiUri(s"user_repo")).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+        responseAs[RepoId]
+      }
+
+      Post(apiUri(s"user_repo/targets/myfile"), testFile).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+
+        val signedPayload = responseAs[SignedPayload[Json]]
+        signaturesShouldBeValid(newRepoId, signedPayload)
+      }
+    }
+  }
+
+  test("getting role after adding a target on user repo returns user role") {
+    withNamespace("targetns02") { implicit ns =>
+      val newRepoId = Post(apiUri(s"user_repo")).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+        responseAs[RepoId]
+      }
+
+      Post(apiUri(s"user_repo/targets/myfile"), testFile).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+
+        val signedPayload = responseAs[SignedPayload[Json]]
+        signaturesShouldBeValid(newRepoId, signedPayload)
+      }
+
+      Get(apiUri(s"user_repo/root.json"), testFile).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+
+        val signedPayload = responseAs[SignedPayload[RootRole]]
+        signaturesShouldBeValid(newRepoId, signedPayload)
+      }
+    }
+  }
+
+  test("fails if repo for user already exists") {
+    withNamespace("targetns03") { implicit ns =>
+      Post(apiUri(s"user_repo")).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      Post(apiUri(s"user_repo")).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.Conflict
+      }
     }
   }
 
