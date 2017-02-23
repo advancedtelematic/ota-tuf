@@ -5,7 +5,7 @@ libraryDependencies ++= {
   )
 }
 
-mainClass in Compile := Some("com.advancedtelematic.keyserver.Boot")
+mainClass in Compile := Some("com.advancedtelematic.tuf.keyserver.Boot")
 
 flywayUrl := sys.env.getOrElse("DB_URL", "jdbc:mysql://localhost:3306/ota_tuf")
 
