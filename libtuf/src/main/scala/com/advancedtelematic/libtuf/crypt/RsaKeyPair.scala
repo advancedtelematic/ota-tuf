@@ -11,7 +11,7 @@ import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
 import org.bouncycastle.util.encoders.Hex
 import org.bouncycastle.openssl.{PEMKeyPair, PEMParser}
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
-import com.advancedtelematic.libtuf.data.RefinedUtils.refineTry
+import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 
 import scala.util.Try
 
@@ -48,7 +48,7 @@ object RsaKeyPair {
     signer.update(data)
     val signature = signer.sign()
     val hexSignature = Hex.toHexString(signature)
-    val sig = refineTry[String, ValidSignature](hexSignature).get
+    val sig = hexSignature.refineTry[ValidSignature].get
     Signature(sig, SignatureMethod.RSASSA_PSS)
   }
 
@@ -78,7 +78,7 @@ object RsaKeyPair {
       val buf = Array.fill[Byte](digest.getDigestSize)(0)
       digest.update(publicKey, 0, publicKey.length)
       digest.doFinal(buf, 0)
-      refineTry[String, ValidKeyId](Hex.toHexString(buf)).get
+      Hex.toHexString(buf).refineTry[ValidKeyId].get
     }
   }
 }

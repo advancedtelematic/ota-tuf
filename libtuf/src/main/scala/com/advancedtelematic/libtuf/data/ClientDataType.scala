@@ -10,7 +10,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.RoleType.{RoleType, show}
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, ValidChecksum}
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.Json
-
+import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 
 object ClientDataType {
   type ClientHashes = Map[HashMethod, Refined[String, ValidChecksum]]
@@ -41,7 +41,7 @@ object ClientDataType {
 
   implicit class RoleTypeToMetaPathOp(value: RoleType) {
     def toMetaPath: MetaPath =
-      RefinedUtils.refineTry[String, ValidMetaPath](value.show + ".json").get
+      (value.show + ".json").refineTry[ValidMetaPath].get
   }
 
   case class MetaItem(hashes: ClientHashes, length: Long)
