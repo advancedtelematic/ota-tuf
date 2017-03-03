@@ -29,7 +29,7 @@ class ReposerverHttpClient(reposerverUri: Uri)
   extends ReposerverClient {
 
   import de.heikoseeberger.akkahttpcirce.CirceSupport._
-  import com.advancedtelematic.libats.codecs.AkkaCirce.uriEncoder
+  import com.advancedtelematic.libtuf.data.TufCodecs.uriEncoder
   import com.advancedtelematic.libtuf.data.TufCodecs.checkSumEncoder
   import io.circe.syntax._
 
