@@ -140,6 +140,17 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
+  test("GET on root.json gets json from keyserver if not available locally") {
+    val newRepoId = RepoId.generate()
+
+    fakeRoleStore.generateKey(newRepoId)
+
+    Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      signaturesShouldBeValid(newRepoId, responseAs[SignedPayload[RootRole]])
+    }
+  }
+
   test("POST a new target updates snapshot.json") {
     val snapshotRole =
       Get(apiUri(s"repo/${repoId.show}/snapshot.json")) ~> routes ~> check {
