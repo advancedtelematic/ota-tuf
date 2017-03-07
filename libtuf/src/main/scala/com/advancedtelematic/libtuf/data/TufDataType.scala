@@ -34,10 +34,9 @@ object TufDataType {
 
   case class ValidSignature()
   case class
-  Signature(hex: Refined[String, ValidSignature], method: SignatureMethod = SignatureMethod.RSASSA_PSS)
+  Signature(sig: Refined[String, ValidSignature], method: SignatureMethod = SignatureMethod.RSASSA_PSS)
   implicit val validSignature: Validate.Plain[String, ValidSignature] =
-    ValidationUtils.validHexValidation(ValidSignature(), length = 256)
-
+    ValidationUtils.validBase64Validation(ValidSignature())
 
   object KeyType extends CirceEnum with SlickEnum {
     type KeyType = Value
@@ -77,7 +76,7 @@ object TufDataType {
 
   implicit class SignatureToClientSignatureOps(value: Signature) {
     def toClient(keyId: KeyId): ClientSignature =
-      ClientSignature(keyId, value.method, value.hex)
+      ClientSignature(keyId, value.method, value.sig)
   }
 
   case class SignedPayload[T : Encoder](signatures: Seq[ClientSignature], signed: T)

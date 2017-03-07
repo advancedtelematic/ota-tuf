@@ -8,7 +8,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, Signature, ValidKey
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
-import org.bouncycastle.util.encoders.Hex
+import org.bouncycastle.util.encoders.{Base64, Hex}
 import org.bouncycastle.openssl.{PEMKeyPair, PEMParser}
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
@@ -47,8 +47,8 @@ object RsaKeyPair {
     signer.initSign(privateKey)
     signer.update(data)
     val signature = signer.sign()
-    val hexSignature = Hex.toHexString(signature)
-    val sig = hexSignature.refineTry[ValidSignature].get
+    val base64Sig = Base64.toBase64String(signature)
+    val sig = base64Sig.refineTry[ValidSignature].get
     Signature(sig, SignatureMethod.RSASSA_PSS)
   }
 
@@ -57,10 +57,10 @@ object RsaKeyPair {
       throw new IllegalArgumentException(s"Signature method not supported: ${signature.method}")
 
     val signer = java.security.Signature.getInstance("SHA256withRSAandMGF1", "BC") // RSASSA-PSS
-    val hexDecodedSignature = Hex.decode(signature.hex.get)
+    val decodedSig = Base64.decode(signature.sig.get)
     signer.initVerify(publicKey)
     signer.update(data)
-    signer.verify(hexDecodedSignature)
+    signer.verify(decodedSig)
   }
 
   implicit def keyShow[T <: java.security.Key]: Show[T] = Show.show { key =>

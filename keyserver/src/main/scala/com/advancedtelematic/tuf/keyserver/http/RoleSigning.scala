@@ -52,7 +52,7 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
   def signForClient[T : Encoder](payload: T)(key: Key): Future[ClientSignature] = {
     fetchPrivateKey(key).map { privateKey =>
       val signature = calculateSignature(payload, privateKey)
-      ClientSignature(key.id, signature.method, signature.hex)
+      ClientSignature(key.id, signature.method, signature.sig)
     }
   }
 

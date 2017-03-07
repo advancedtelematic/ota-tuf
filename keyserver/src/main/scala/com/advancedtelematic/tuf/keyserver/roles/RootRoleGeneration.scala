@@ -23,7 +23,7 @@ class RootRoleGeneration(vaultClient: VaultClient)
   extends KeyGenRequestSupport with KeyRepositorySupport {
 
   private val DEFAULT_ROLES = RoleType.ALL
-  private val DEFAULT_KEY_SIZE = 1024
+  private val DEFAULT_KEY_SIZE = 2048
   private val DEFAULT_ROLE_EXPIRE = Duration.ofDays(31)
 
   val roleSigning = new RoleSigning(vaultClient)
