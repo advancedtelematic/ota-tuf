@@ -10,6 +10,7 @@ import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, Signature}
+import org.bouncycastle.util.encoders.Base64
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}
 
@@ -42,7 +43,7 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
 
     val signature = roleSigning.signForClient(payload)(dbKey).futureValue
 
-    signature.sig.get should have size 256
+    new String(Base64.decode(signature.sig.get)) shouldBe a[String]
   }
 
   test("generates valid signatures")  {
