@@ -28,7 +28,7 @@ protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: Execut
   import com.advancedtelematic.libats.db.SlickExtensions._
   import Schema.keyGenRequests
 
-  val keyGenRequestNotFound = MissingEntity(classOf[KeyGenRequest])
+  val KeyGenRequestNotFound = MissingEntity[KeyGenRequest]()
 
   def persist(keyGenRequest: KeyGenRequest): Future[KeyGenRequest] = {
     db.run(persistAction(keyGenRequest))
@@ -62,7 +62,7 @@ protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: Execut
     db.run(keyGenRequests.filter(_.status === KeyGenRequestStatus.REQUESTED).take(limit).result)
 
   def find(genId: KeyGenId): Future[KeyGenRequest] = {
-    db.run(keyGenRequests.filter(_.id === genId).result.failIfNotSingle(keyGenRequestNotFound))
+    db.run(keyGenRequests.filter(_.id === genId).result.failIfNotSingle(KeyGenRequestNotFound))
   }
 
   def findBy(repoId: RepoId): Future[Seq[KeyGenRequest]] =
@@ -77,13 +77,13 @@ protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: Execut
       .filter(_.id === id)
       .map(_.status)
       .update(status)
-      .handleSingleUpdateError(MissingEntity(classOf[KeyGenRequest]))
+      .handleSingleUpdateError(KeyGenRequestNotFound)
       .map(_ => id)
 
 
   protected [db] def persistAction(keyGenRequest: KeyGenRequest): DBIO[KeyGenRequest] = {
     (keyGenRequests += keyGenRequest)
-      .handleIntegrityErrors(EntityAlreadyExists(classOf[KeyGenRequest]))
+      .handleIntegrityErrors(EntityAlreadyExists[KeyGenRequest]())
       .map(_ => keyGenRequest)
   }
 }
@@ -93,7 +93,7 @@ trait KeyRepositorySupport extends DatabaseSupport {
 }
 
 object KeyRepository {
-  val KeyNotFound = MissingEntity(classOf[Key])
+  val KeyNotFound = MissingEntity[Key]()
 }
 
 protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext) {

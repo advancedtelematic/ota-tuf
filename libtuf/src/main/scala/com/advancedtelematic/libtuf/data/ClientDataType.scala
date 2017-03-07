@@ -1,6 +1,6 @@
 package com.advancedtelematic.libtuf.data
 
-import java.security.PublicKey
+import java.security.{PrivateKey, PublicKey}
 import java.time.Instant
 
 import cats.syntax.show._
@@ -20,6 +20,8 @@ object ClientDataType {
 
 
   case class ClientKey(keytype: KeyType, keyval: PublicKey)
+
+  case class ClientPrivateKey(keytype: KeyType, keyval: PrivateKey)
 
   case class RootRole(keys: Map[KeyId, ClientKey],
                       roles: Map[String, RoleKeys],

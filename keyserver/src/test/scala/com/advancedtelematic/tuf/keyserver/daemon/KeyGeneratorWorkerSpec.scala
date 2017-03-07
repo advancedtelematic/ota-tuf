@@ -66,7 +66,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
     val repoId = RepoId.generate()
     actorRef ! KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT)
     val exception = expectMsgType[Status.Failure](3.seconds)
-    exception.cause shouldBe a[MissingEntity]
+    exception.cause shouldBe a[MissingEntity[_]]
   }
 
   test("keys with an error are marked as error") {

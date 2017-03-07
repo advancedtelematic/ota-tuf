@@ -2,8 +2,7 @@ package com.advancedtelematic.tuf.keyserver.http
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.stream.Materializer
-import com.advancedtelematic.libtuf.data.TufDataType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.RepoId
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, RoleType, ValidKeyId}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import slick.driver.MySQLDriver.api._
 import com.advancedtelematic.tuf.keyserver.roles.RootRoleGeneration
@@ -14,7 +13,9 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 
 import scala.concurrent.ExecutionContext
-
+import com.advancedtelematic.libats.data.RefinedUtils._
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, ClientPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType._
 
 class RootRoleResource(vaultClient: VaultClient)
                       (implicit val db: Database, val ec: ExecutionContext, mat: Materializer)
@@ -24,6 +25,8 @@ class RootRoleResource(vaultClient: VaultClient)
 
   val rootRoleGeneration = new RootRoleGeneration(vaultClient)
   val roleSigning = new RoleSigning(vaultClient)
+
+  val KeyIdPath = Segment.flatMap(_.refineTry[ValidKeyId].toOption)
 
   val route =
     pathPrefix("root" / RepoId.Path) { repoId =>
@@ -41,6 +44,14 @@ class RootRoleResource(vaultClient: VaultClient)
             val f = rootRoleGeneration.findSigned(repoId)
             complete(f)
           }
+      } ~
+      pathPrefix("private_key") {
+        path(KeyIdPath) { keyId =>
+          get {
+            val f = rootRoleGeneration.fetchPrivateKey(repoId, keyId)
+            complete(f)
+          }
+        }
       } ~
       path(RoleType.Path) { roleType =>
         (post & entity(as[Json])) { payload =>

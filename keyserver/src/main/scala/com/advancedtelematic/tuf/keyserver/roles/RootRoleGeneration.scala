@@ -4,18 +4,18 @@ import java.time.{Duration, Instant}
 
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.data.TufDataType._
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest}
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.tuf.keyserver.http.{Errors, RoleSigning}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import slick.driver.MySQLDriver.api._
 import RoleType.show
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, RoleKeys, RootRole}
+import com.advancedtelematic.tuf.keyserver.db.KeyRepository.KeyNotFound
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, ClientPrivateKey, RoleKeys, RootRole}
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
-import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepository, KeyRepositorySupport}
 
 class RootRoleGeneration(vaultClient: VaultClient)
@@ -59,6 +59,18 @@ class RootRoleGeneration(vaultClient: VaultClient)
 
       await(roleSigning.signAll(rootRole, rootKeys))
     }
+  }
+
+  def fetchPrivateKey(repoId: RepoId, keyId: KeyId): Future[ClientPrivateKey] = async {
+    val rootPublicKey = await(keyRepo.repoKeys(repoId, RoleType.ROOT)).find(_.id == keyId)
+
+    val publicKeyId = rootPublicKey.map(_.id).getOrElse(throw KeyNotFound)
+
+    val vaultKey = await(vaultClient.findKey(publicKeyId))
+
+    val pk = RsaKeyPair.parseKeyPair(vaultKey.privateKey).get.getPrivate
+
+    ClientPrivateKey(KeyType.RSA, pk)
   }
 
   private def ensureKeysGenerated(repoId: RepoId): Future[Unit] =
