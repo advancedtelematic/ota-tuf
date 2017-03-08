@@ -8,6 +8,7 @@ fi
 
 export DOCKER_TAG=$1
 export JOB_NAME="${JOB_NAME-tuf-reposerver-$DEPLOY_ENV}"
+export JOB_NAME="${JOB_NAME/%-/}" # Remove trailing `-`
 export VAULT_SECRET=$(echo $JOB_NAME | tr "-" "_")
 export VAULT_ENDPOINT="http://secrets.prod01.internal.advancedtelematic.com:8200/v1/secret/${VAULT_SECRET}"
 export IMAGE_NAME="tuf-reposerver"
