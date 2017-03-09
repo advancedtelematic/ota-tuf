@@ -4,7 +4,7 @@ import java.security.PublicKey
 
 import cats.syntax.show._
 import akka.http.scaladsl.model.Uri
-import cats.data.Xor
+import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.data.TufDataType._
 import io.circe._
@@ -35,7 +35,7 @@ object TufCodecs {
     aCursor
       .as[String]
       .flatMap { str =>
-        Xor
+        Either
           .fromTry(RsaKeyPair.parsePublic(str))
           .leftMap(ex => DecodingFailure(ex.getMessage, aCursor.history))
       }

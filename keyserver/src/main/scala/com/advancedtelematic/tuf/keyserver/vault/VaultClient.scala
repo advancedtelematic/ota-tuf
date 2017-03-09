@@ -6,6 +6,7 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.Uri.Path._
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.HttpMethods._
+import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.unmarshalling.{FromEntityUnmarshaller, Unmarshaller}
 import akka.stream.Materializer
 import com.advancedtelematic.libtuf.data.TufDataType.KeyId
@@ -17,6 +18,7 @@ import scala.concurrent.Future
 import scala.util.control.NoStackTrace
 import io.circe.generic.semiauto._
 import io.circe.syntax._
+import cats.syntax.either._
 
 import scala.reflect.ClassTag
 
@@ -36,17 +38,17 @@ object VaultClient {
     implicit val decoder: Decoder[VaultKey] = deriveDecoder[VaultKey]
   }
 
-  def apply(host: Uri, token: String, mount: String)(implicit system: ActorSystem, mat: Materializer): VaultClient =
+  def apply(host: Uri, token: String, mount: Path)(implicit system: ActorSystem, mat: Materializer): VaultClient =
     new VaultHttpClient(host, token, mount)
 }
 
-class VaultHttpClient(vaultHost: Uri, token: String, mount: String)(implicit system: ActorSystem, mat: Materializer) extends VaultClient {
+class VaultHttpClient(vaultHost: Uri, token: String, mount: Path)(implicit system: ActorSystem, mat: Materializer) extends VaultClient {
   import VaultKey._
   import system.dispatcher
 
   private val _http = Http()
 
-  private val mountPath = Empty / "v1" / mount
+  private val mountPath = Empty / "v1" ++ Slash(mount)
 
   case class VaultError(msg: String) extends Throwable(msg) with NoStackTrace
 
@@ -83,7 +85,7 @@ class VaultHttpClient(vaultHost: Uri, token: String, mount: String)(implicit sys
         .map { data =>
           io.circe.parser
             .parse(data)
-            .map(j => HCursor.fromCursor(j.cursor).downField("data"))
+            .map(j => HCursor.fromJson(j).downField("data"))
             .flatMap(_.as[T])
             .valueOr(throw _)
         }

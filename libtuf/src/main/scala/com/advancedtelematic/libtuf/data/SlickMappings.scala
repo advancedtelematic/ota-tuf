@@ -9,6 +9,7 @@ import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 import com.advancedtelematic.libtuf.data.TufDataType.Checksum
 import io.circe.Json
 import slick.driver.MySQLDriver.api._
+import cats.syntax.either._
 
 import scala.reflect.ClassTag
 

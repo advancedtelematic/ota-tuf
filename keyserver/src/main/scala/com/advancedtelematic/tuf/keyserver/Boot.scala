@@ -4,8 +4,8 @@ import java.security.Security
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.Uri
+import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.server.{Directives, Route}
-import akka.stream.Materializer
 import com.advancedtelematic.tuf.keyserver.http.TufKeyserverRoutes
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import com.advancedtelematic.libats.db.{BootMigrations, DatabaseConfig}
@@ -24,7 +24,7 @@ trait Settings {
 
   lazy val vaultAddr = Uri(config.getString("vault.address"))
   lazy val vaultToken = config.getString("vault.token")
-  lazy val vaultMount = config.getString("vault.mount")
+  lazy val vaultMount = Path(config.getString("vault.mount"))
 }
 
 object Boot extends BootApp
