@@ -5,6 +5,8 @@ import akka.http.scaladsl.model._
 import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId}
 import io.circe.JsonObject
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.Uri.Path
+import akka.http.scaladsl.model.Uri.Path.Slash
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import akka.http.scaladsl.util.FastFuture
@@ -33,12 +35,13 @@ class ReposerverHttpClient(reposerverUri: Uri)
   import com.advancedtelematic.libtuf.data.TufCodecs.checkSumEncoder
   import io.circe.syntax._
 
-  private val _uri = reposerverUri
+  private def apiUri(path: Path) =
+    reposerverUri.withPath(Path("api") / "v1" ++ Slash(path))
 
   private val _http = Http()
 
   override def createRoot(namespace: Namespace): Future[RepoId] = {
-    val req = HttpRequest(HttpMethods.POST, uri = _uri.withPath(_uri.path / "user_repo"))
+    val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("user_repo")))
     execHttp[RepoId](namespace, req)
   }
 
@@ -52,7 +55,7 @@ class ReposerverHttpClient(reposerverUri: Uri)
     val entity = HttpEntity(ContentTypes.`application/json`, payload.asJson.noSpaces)
 
     val req = HttpRequest(HttpMethods.POST,
-      uri = _uri.withPath(_uri.path / "user_repo" / "targets" / fileName),
+      uri = apiUri(Path("user_repo") / "targets" / fileName),
       entity = entity)
 
     execHttp[Unit](namespace, req)
