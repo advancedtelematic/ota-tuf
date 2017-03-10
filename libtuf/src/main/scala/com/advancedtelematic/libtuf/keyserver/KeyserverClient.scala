@@ -2,6 +2,8 @@ package com.advancedtelematic.libtuf.keyserver
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.Uri.Path
+import akka.http.scaladsl.model.Uri.Path.{Empty, Slash}
 import akka.http.scaladsl.model.{StatusCodes, _}
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import akka.http.scaladsl.util.FastFuture
@@ -37,11 +39,14 @@ class KeyserverHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorMate
 
   import de.heikoseeberger.akkahttpcirce.CirceSupport._
 
+  private def apiUri(path: Path) =
+    uri.withPath(Empty / "api" / "v1" ++ Slash(path))
+
   private def KeyStoreError(msg: String) = RawError(ErrorCode("key_store_remote_error"), StatusCodes.BadGateway, msg)
 
   override def createRoot(repoId: RepoId): Future[Json] = {
     val entity = HttpEntity(ContentTypes.`application/json`, Json.obj("threshold" -> Json.fromInt(1)).noSpaces)
-    val req = HttpRequest(HttpMethods.POST, uri = uri.withPath(uri.path / "root" / repoId.show), entity = entity)
+    val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show), entity = entity)
 
     execHttp[Json](req){
       case response if response.status == StatusCodes.Conflict =>
@@ -51,13 +56,13 @@ class KeyserverHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorMate
 
   override def sign[T : Decoder : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]] = {
     val entity = HttpEntity(ContentTypes.`application/json`, payload.asJson.noSpaces)
-    val req = HttpRequest(HttpMethods.POST, uri = uri.withPath(uri.path / "root" / repoId.show / roleType.show), entity = entity)
+    val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show / roleType.show), entity = entity)
 
     execHttp[SignedPayload[T]](req)()
   }
 
   override def fetchRootRole(repoId: RepoId): Future[SignedPayload[Json]] = {
-    val req = HttpRequest(HttpMethods.GET, uri = uri.withPath(uri.path / "root" / repoId.show))
+    val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("root") / repoId.show))
 
     execHttp[SignedPayload[Json]](req) {
       case response if response.status == StatusCodes.NotFound =>

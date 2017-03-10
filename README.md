@@ -11,6 +11,8 @@ You'll need vault installed (v0.5.2):
 
     vault token-create -format json -policy ota-tuf -id="74e0216d-cc15-5ab9-454d-908a04d14787"
     
+There is a script to run these commands and start a vault instance in `deploy/dev-vault.sh`
+
 ## Running tests
 
 You'll need a mariadb instance running with the users configured in

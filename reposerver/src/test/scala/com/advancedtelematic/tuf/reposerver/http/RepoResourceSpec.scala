@@ -16,6 +16,7 @@ import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import com.advancedtelematic.libats.codecs.AkkaCirce._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import cats.syntax.either._
 
 import scala.concurrent.Future
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._

@@ -42,7 +42,7 @@ object Boot extends BootApp
 
   log.info(s"Starting $version on http://$host:$port")
 
-  lazy val keyStoreClient = new KeyserverHttpClient(keyServerUri.withPath(Empty / "api" / "v1"))
+  lazy val keyStoreClient = new KeyserverHttpClient(keyServerUri)
 
   val routes: Route =
     (versionHeaders(version) & logResponseMetrics(projectName)) {

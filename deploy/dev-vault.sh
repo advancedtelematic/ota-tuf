@@ -12,7 +12,7 @@ function docker_vault() {
            --link ota_tuf-vault \
            -e VAULT_TOKEN=f8c637c5-b762-e6a7-7974-bf45d3061106 \
            -e VAULT_ADDR=http://ota_tuf-vault:8200 \
-           --volume $(pwd)/src/main/resources:/tmp/resources \
+           --volume $(pwd)/keyserver/src/main/resources:/tmp/resources \
            vault $*
 }
 
