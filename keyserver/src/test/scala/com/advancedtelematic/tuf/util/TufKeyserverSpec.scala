@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 import com.advancedtelematic.tuf.keyserver.Settings
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKey
+import com.advancedtelematic.tuf.keyserver.vault.VaultClient.{VaultKey, VaultKeyNotFound}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{FunSuite, Matchers}
@@ -27,6 +27,12 @@ abstract class TufKeyserverSpec extends FunSuite with Matchers with ScalaFutures
     }
 
     override def findKey(keyId: KeyId): Future[VaultKey] =
-      Future.successful(keys.get(keyId))
+      Option(keys.get(keyId)) match {
+        case Some(k) => Future.successful(k)
+        case None => Future.failed(VaultKeyNotFound)
+      }
+
+    override def deleteKey(keyId: KeyId): Future[Unit] =
+      Future.successful(keys.remove(keyId))
   }
 }

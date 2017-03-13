@@ -25,7 +25,7 @@ object KeyServerDataType {
 
   case class KeyGenRequest(id: KeyGenId, repoId: RepoId,
                            status: KeyGenRequestStatus, roleType: RoleType,
-                           keySize: Int = 1024, threshold: Int = 1)
+                           keySize: Int, threshold: Int = 1)
 
   case class Key(id: KeyId, roleId: RoleId, keyType: KeyType, publicKey: PublicKey)
 

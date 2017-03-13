@@ -55,7 +55,7 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
     val keyGenReqs = Future.sequence {
       (1 to 20).map { _ =>
         val repoId = RepoId.generate()
-        val otherKeyGenReq = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT)
+        val otherKeyGenReq = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 1024)
         keyGenRepo.persist(otherKeyGenReq).map(_.id)
       }
     }

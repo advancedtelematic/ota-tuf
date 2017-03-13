@@ -37,7 +37,7 @@ object SlickCirceMapper {
    for an object, it will encode it as json instead of it's default encoding
    so we define public mappers for specific types
    */
-  private def circeMapper[T : Encoder : Decoder : ClassTag] = MappedColumnType.base[T, String](
+  def circeMapper[T : Encoder : Decoder : ClassTag] = MappedColumnType.base[T, String](
     _.asJson.noSpaces,
     str => decode(str).valueOr(throw _)
   )

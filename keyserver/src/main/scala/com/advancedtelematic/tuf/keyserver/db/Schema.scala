@@ -1,21 +1,24 @@
 package com.advancedtelematic.tuf.keyserver.db
 
 import java.security.PublicKey
+import java.time.Instant
 
-import akka.http.scaladsl.model.Uri
+import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
-import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, KeyId, RepoId}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, SignedPayload}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import slick.driver.MySQLDriver.api._
-import io.circe.Json
+import com.advancedtelematic.libtuf.data.TufCodecs._
 
 object Schema {
   import com.advancedtelematic.libats.codecs.SlickRefined._
   import com.advancedtelematic.libtuf.data.SlickPublicKeyMapper._
   import com.advancedtelematic.libtuf.data.SlickUriMapper._
   import com.advancedtelematic.libtuf.data.SlickCirceMapper._
+  import com.advancedtelematic.libats.db.SlickExtensions.javaInstantMapping
 
   class KeyGenRequestTable(tag: Tag) extends Table[KeyGenRequest](tag, "key_gen_requests") {
     def id = column[KeyGenId]("id", O.PrimaryKey)
@@ -57,4 +60,18 @@ object Schema {
   }
 
   protected [db] val roles = TableQuery[RoleTable]
+
+  implicit val signedPayloadRootRoleMapper = circeMapper[SignedPayload[RootRole]]
+
+  class RootRoleCacheTable(tag: Tag) extends Table[(RepoId, Instant, SignedPayload[RootRole])](tag, "root_role_cache") {
+    def repoId = column[RepoId]("repo_id")
+    def expiresAt = column[Instant]("expires_at")
+    def signedPayload = column[SignedPayload[RootRole]]("signed_payload")
+
+    def pk = primaryKey("pk_root_role_cache", repoId)
+
+    override def * = (repoId, expiresAt, signedPayload)
+  }
+
+  protected [db] val rootRoleCaches = TableQuery[RootRoleCacheTable]
 }

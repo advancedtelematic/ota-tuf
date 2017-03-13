@@ -33,7 +33,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
   def keyGenRequest: Future[KeyGenRequest] = {
     val keyGenId = KeyGenId.generate()
     val repoId = RepoId.generate()
-    keyGenRepo.persist(KeyGenRequest(keyGenId, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT))
+    keyGenRepo.persist(KeyGenRequest(keyGenId, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 1024))
   }
 
   test("generates a key for a key gen request") {
@@ -64,7 +64,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
 
   test("sends back Failure if something bad happens") {
     val repoId = RepoId.generate()
-    actorRef ! KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT)
+    actorRef ! KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 1024)
     val exception = expectMsgType[Status.Failure](3.seconds)
     exception.cause shouldBe a[MissingEntity[_]]
   }
