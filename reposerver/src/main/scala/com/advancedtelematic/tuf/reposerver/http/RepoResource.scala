@@ -6,8 +6,8 @@ import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId, RoleType}
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
-import com.advancedtelematic.tuf.reposerver.db.{RepoNamespaceRepositorySupport, SignedRoleRepositorySupport, TargetItemRepositorySupport}
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
+import com.advancedtelematic.tuf.reposerver.db.{RepoNamespaceRepositorySupport, SignedRoleRepository, SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import io.circe.generic.semiauto._
 import io.circe.{Decoder, Encoder}
@@ -15,6 +15,7 @@ import slick.driver.MySQLDriver.api._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
+import io.circe.syntax._
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}
@@ -51,7 +52,17 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
 
   private def findRole(repoId: RepoId, roleType: RoleType): Route = {
     complete {
-      signedRoleRepo.find(repoId, roleType).map(_.content)
+      val signedRoleFut = roleType match {
+        case RoleType.ROOT =>
+          signedRoleRepo.find(repoId, roleType).recoverWith {
+            case SignedRoleRepository.SignedRoleNotFound =>
+              signedRoleGeneration.fetchRootRole(repoId)
+          }
+        case _ =>
+          signedRoleRepo.find(repoId, roleType)
+      }
+
+      signedRoleFut.map(_.content)
     }
   }
 
