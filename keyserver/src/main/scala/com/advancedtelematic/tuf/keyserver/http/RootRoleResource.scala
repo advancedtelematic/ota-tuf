@@ -50,6 +50,9 @@ class RootRoleResource(vaultClient: VaultClient)
           get {
             val f = rootRoleGeneration.fetchPrivateKey(repoId, keyId)
             complete(f)
+          } ~
+          delete {
+            complete(rootRoleGeneration.deletePrivateKey(repoId, keyId))
           }
         }
       } ~

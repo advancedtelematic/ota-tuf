@@ -1,5 +1,7 @@
 package com.advancedtelematic.tuf.keyserver.http
 
+import java.security.PrivateKey
+
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.tuf.util.{ResourceSpec, TufKeyserverSpec}
 import io.circe.generic.auto._
@@ -188,7 +190,25 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
-  test("XXX DELETE on private_key wipes private key") (pending)
+  test("XXX DELETE on private_key wipes private key") {
+    val repoId = RepoId.generate()
+
+    generateRootRole(repoId).futureValue
+
+    val rootKeyId = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed.roles("root").keyids.head
+    }
+
+    Delete(apiUri(s"root/${repoId.show}/private_key/${rootKeyId.get}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[ClientPrivateKey].keyval shouldBe a[PrivateKey]
+    }
+
+    Get(apiUri(s"root/${repoId.show}/private_key/${rootKeyId.get}")) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
+    }
+  }
 
   test("XXX uploading a new private key, signs a new root.json") (pending)
   // TODO: How to invalidate json in repo server?

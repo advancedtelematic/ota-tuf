@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.roles
 
+import java.security.PrivateKey
 import java.time.{Duration, Instant}
 
 import cats.syntax.show.toShowOps
@@ -17,6 +18,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, ClientPrivat
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepository, KeyRepositorySupport}
+import com.advancedtelematic.tuf.keyserver.vault.VaultClient.{VaultKey, VaultKeyNotFound}
 
 class RootRoleGeneration(vaultClient: VaultClient)
                         (implicit val db: Database, val ec: ExecutionContext)
@@ -62,15 +64,33 @@ class RootRoleGeneration(vaultClient: VaultClient)
   }
 
   def fetchPrivateKey(repoId: RepoId, keyId: KeyId): Future[ClientPrivateKey] = async {
+    val rootPublicKey = await(ensureIsRootKey(repoId, keyId))
+
+    val privateKey = await(findParsedPrivateKey(rootPublicKey))
+
+    ClientPrivateKey(KeyType.RSA, privateKey)
+  }
+
+  def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[ClientPrivateKey] = async {
+    val rootPublicKey = await(ensureIsRootKey(repoId, keyId))
+
+    val privateKey = await(findParsedPrivateKey(rootPublicKey))
+
+    await(vaultClient.deleteKey(rootPublicKey))
+
+    ClientPrivateKey(KeyType.RSA, privateKey)
+  }
+
+  private def findParsedPrivateKey(keyId: KeyId): Future[PrivateKey] =
+    vaultClient.findKey(keyId).flatMap { vaultKey =>
+      Future.fromTry(RsaKeyPair.parseKeyPair(vaultKey.privateKey).map(_.getPrivate))
+    }.recoverWith {
+      case VaultKeyNotFound => Future.failed(KeyNotFound)
+    }
+
+  private def ensureIsRootKey(repoId: RepoId, keyId: KeyId): Future[KeyId] = async {
     val rootPublicKey = await(keyRepo.repoKeys(repoId, RoleType.ROOT)).find(_.id == keyId)
-
-    val publicKeyId = rootPublicKey.map(_.id).getOrElse(throw KeyNotFound)
-
-    val vaultKey = await(vaultClient.findKey(publicKeyId))
-
-    val pk = RsaKeyPair.parseKeyPair(vaultKey.privateKey).get.getPrivate
-
-    ClientPrivateKey(KeyType.RSA, pk)
+    rootPublicKey.map(_.id).getOrElse(throw KeyNotFound)
   }
 
   private def ensureKeysGenerated(repoId: RepoId): Future[Unit] =
