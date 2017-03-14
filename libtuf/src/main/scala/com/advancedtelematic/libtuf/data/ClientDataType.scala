@@ -6,7 +6,7 @@ import java.time.Instant
 import cats.syntax.show._
 import com.advancedtelematic.libtuf.data.TufDataType.HashMethod.HashMethod
 import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
-import com.advancedtelematic.libtuf.data.TufDataType.RoleType.{RoleType, show}
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, ValidChecksum}
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.Json
@@ -24,7 +24,7 @@ object ClientDataType {
   case class ClientPrivateKey(keytype: KeyType, keyval: PrivateKey)
 
   case class RootRole(keys: Map[KeyId, ClientKey],
-                      roles: Map[String, RoleKeys],
+                      roles: Map[RoleType, RoleKeys],
                       version: Int,
                       expires: Instant,
                       consistent_snapshot: Boolean = false,

@@ -46,7 +46,7 @@ with RootRoleCacheSupport {
 
       val signed = await(rootGeneration.findAndCache(repoId))
 
-      val rootKeyId = signed.signed.roles(RoleType.ROOT.toString).keyids.head
+      val rootKeyId = signed.signed.roles(RoleType.ROOT).keyids.head
       val publicKey = signed.signed.keys(rootKeyId).keyval
 
       val clientSignature = signed.signatures.head
