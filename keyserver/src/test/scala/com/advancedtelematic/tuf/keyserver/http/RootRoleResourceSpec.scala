@@ -123,7 +123,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       rootRole.keys should have size RoleType.ALL.size
 
       rootRole.roles should have size RoleType.ALL.size
-      rootRole.roles.keys should contain allElementsOf RoleType.ALL.map(_.show)
+      rootRole.roles.keys should contain allElementsOf RoleType.ALL
     }
   }
 
@@ -171,7 +171,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     val rootKeyId = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[SignedPayload[RootRole]].signed.roles("root").keyids.head
+      responseAs[SignedPayload[RootRole]].signed.roles(RoleType.ROOT).keyids.head
     }
 
     val privateKey = fakeVault.findKey(rootKeyId).futureValue.privateKey
@@ -198,7 +198,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     val rootKeyId = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[SignedPayload[RootRole]].signed.roles("root").keyids.head
+      responseAs[SignedPayload[RootRole]].signed.roles(RoleType.ROOT).keyids.head
     }
 
     Delete(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.get}")) ~> routes ~> check {
@@ -217,7 +217,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     val rootKeyId = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[SignedPayload[RootRole]].signed.roles("root").keyids.head
+      responseAs[SignedPayload[RootRole]].signed.roles(RoleType.ROOT).keyids.head
     }
 
     Delete(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.get}")) ~> routes ~> check {
@@ -249,7 +249,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
       val rootRole = responseAs[SignedPayload[RootRole]].signed
 
-      rootRole.roles.get("root").toList.flatMap(_.keyids) should contain(rsaKey.id)
+      rootRole.roles.get(RoleType.ROOT).toList.flatMap(_.keyids) should contain(rsaKey.id)
     }
   }
 

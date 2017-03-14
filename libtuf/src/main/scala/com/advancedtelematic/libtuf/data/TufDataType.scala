@@ -9,7 +9,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.HashMethod.HashMethod
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import com.advancedtelematic.libtuf.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import eu.timepit.refined.api.{Refined, Validate}
-import io.circe.Encoder
+import io.circe.{Decoder, Encoder}
 
 import scala.util.Try
 
@@ -44,14 +44,13 @@ object TufDataType {
     val RSA = Value
   }
 
-  object RoleType extends CirceEnum with SlickEnum {
+  object RoleType extends Enumeration with SlickEnum {
     type RoleType = Value
 
     val ROOT, SNAPSHOT, TARGETS, TIMESTAMP = Value
 
     val ALL = List(ROOT, SNAPSHOT, TARGETS, TIMESTAMP)
 
-    // TODO: This should be removed
     implicit val show = Show.show[Value](_.toString.toLowerCase)
 
     val Path = PathMatchers.Segment.flatMap(v => Try(withName(v.toUpperCase)).toOption)

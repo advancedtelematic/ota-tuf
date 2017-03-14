@@ -61,8 +61,7 @@ class RootRoleGeneration(vaultClient: VaultClient)
 
       val roles = repoKeys
         .map { case (roleType, (role, roleKeys)) =>
-          // TODO: Should not use a string for RoleType
-          roleType.show -> RoleKeys(roleKeys.map(_.id), role.threshold)
+          roleType -> RoleKeys(roleKeys.map(_.id), role.threshold)
       }
 
       val rootRole = RootRole(clientKeys, roles, expires = Instant.now.plus(DEFAULT_ROLE_EXPIRE), version = 1)
