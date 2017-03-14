@@ -48,7 +48,7 @@ object FakeRoleStore extends KeyserverClient {
     val clientKeys = Map(rootKey.id -> ClientKey(KeyType.RSA, rootKey.getPublic))
 
     val roles = RoleType.ALL.map { role =>
-      role.show -> RoleKeys(List(rootKey.id), threshold = 1)
+      role -> RoleKeys(List(rootKey.id), threshold = 1)
     }.toMap
 
     RootRole(clientKeys, roles, expires = Instant.now.plusSeconds(3600), version = 1)
