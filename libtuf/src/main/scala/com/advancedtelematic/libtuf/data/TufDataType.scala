@@ -51,6 +51,7 @@ object TufDataType {
 
     val ALL = List(ROOT, SNAPSHOT, TARGETS, TIMESTAMP)
 
+    // TODO: This should be removed
     implicit val show = Show.show[Value](_.toString.toLowerCase)
 
     val Path = PathMatchers.Segment.flatMap(v => Try(withName(v.toUpperCase)).toOption)

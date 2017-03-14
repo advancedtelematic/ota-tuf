@@ -1,32 +1,32 @@
 package com.advancedtelematic.tuf.keyserver.roles
 
-import java.security.PrivateKey
 import java.time.{Duration, Instant}
 
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.data.TufDataType._
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.tuf.keyserver.http.{Errors, RoleSigning}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import slick.driver.MySQLDriver.api._
 import RoleType.show
-import com.advancedtelematic.tuf.keyserver.db.KeyRepository.KeyNotFound
-import com.advancedtelematic.libtuf.crypt.RsaKeyPair
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, ClientPrivateKey, RoleKeys, RootRole}
+import akka.http.scaladsl.util.FastFuture
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, RoleKeys, RootRole}
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
-import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepository, KeyRepositorySupport}
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient.{VaultKey, VaultKeyNotFound}
+import com.advancedtelematic.tuf.keyserver.db._
+
 
 class RootRoleGeneration(vaultClient: VaultClient)
                         (implicit val db: Database, val ec: ExecutionContext)
-  extends KeyGenRequestSupport with KeyRepositorySupport {
+  extends KeyGenRequestSupport
+    with KeyRepositorySupport
+    with RootRoleCacheSupport {
 
   private val DEFAULT_ROLES = RoleType.ALL
   private val DEFAULT_KEY_SIZE = 2048
-  private val DEFAULT_ROLE_EXPIRE = Duration.ofDays(31)
+  private val DEFAULT_ROLE_EXPIRE = Duration.ofDays(365)
 
   val roleSigning = new RoleSigning(vaultClient)
 
@@ -38,7 +38,14 @@ class RootRoleGeneration(vaultClient: VaultClient)
     keyGenRepo.persistAll(reqs).map(_.map(_.id))
   }
 
-  def findSigned(repoId: RepoId): Future[SignedPayload[RootRole]] = {
+  def findAndCache(repoId: RepoId): Future[SignedPayload[RootRole]] = {
+    rootRoleCacheRepo.findCached(repoId).flatMap {
+      case Some(signedPayload) => FastFuture.successful(signedPayload)
+      case None => signRoot(repoId).flatMap(addToCache(repoId))
+    }
+  }
+
+  private def signRoot(repoId: RepoId): Future[SignedPayload[RootRole]] = {
     async {
       await(ensureKeysGenerated(repoId))
 
@@ -54,6 +61,7 @@ class RootRoleGeneration(vaultClient: VaultClient)
 
       val roles = repoKeys
         .map { case (roleType, (role, roleKeys)) =>
+          // TODO: Should not use a string for RoleType
           roleType.show -> RoleKeys(roleKeys.map(_.id), role.threshold)
       }
 
@@ -63,34 +71,8 @@ class RootRoleGeneration(vaultClient: VaultClient)
     }
   }
 
-  def fetchPrivateKey(repoId: RepoId, keyId: KeyId): Future[ClientPrivateKey] = async {
-    val rootPublicKey = await(ensureIsRootKey(repoId, keyId))
-
-    val privateKey = await(findParsedPrivateKey(rootPublicKey))
-
-    ClientPrivateKey(KeyType.RSA, privateKey)
-  }
-
-  def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[ClientPrivateKey] = async {
-    val rootPublicKey = await(ensureIsRootKey(repoId, keyId))
-
-    val privateKey = await(findParsedPrivateKey(rootPublicKey))
-
-    await(vaultClient.deleteKey(rootPublicKey))
-
-    ClientPrivateKey(KeyType.RSA, privateKey)
-  }
-
-  private def findParsedPrivateKey(keyId: KeyId): Future[PrivateKey] =
-    vaultClient.findKey(keyId).flatMap { vaultKey =>
-      Future.fromTry(RsaKeyPair.parseKeyPair(vaultKey.privateKey).map(_.getPrivate))
-    }.recoverWith {
-      case VaultKeyNotFound => Future.failed(KeyNotFound)
-    }
-
-  private def ensureIsRootKey(repoId: RepoId, keyId: KeyId): Future[KeyId] = async {
-    val rootPublicKey = await(keyRepo.repoKeys(repoId, RoleType.ROOT)).find(_.id == keyId)
-    rootPublicKey.map(_.id).getOrElse(throw KeyNotFound)
+  private def addToCache(repoId: RepoId)(signedRoot: SignedPayload[RootRole]): Future[SignedPayload[RootRole]] = {
+    rootRoleCacheRepo.addCached(repoId, signedRoot).map(_ => signedRoot)
   }
 
   private def ensureKeysGenerated(repoId: RepoId): Future[Unit] =

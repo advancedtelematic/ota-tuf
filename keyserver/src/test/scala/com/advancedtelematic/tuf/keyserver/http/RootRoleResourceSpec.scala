@@ -8,6 +8,7 @@ import io.circe.generic.auto._
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import cats.syntax.show._
 import com.advancedtelematic.libats.test.LongTest
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId}
@@ -163,7 +164,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
-  test("XXX GET on private_key returns private key") {
+  test("GET on private_key returns private key") {
     val repoId = RepoId.generate()
 
     generateRootRole(repoId).futureValue
@@ -175,22 +176,22 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     val privateKey = fakeVault.findKey(rootKeyId).futureValue.privateKey
 
-    Get(apiUri(s"root/${repoId.show}/private_key/${rootKeyId.get}")) ~> routes ~> check {
+    Get(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.get}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseAs[ClientPrivateKey].keyval.show shouldBe privateKey
     }
   }
 
-  test("XXX GET on private key returns 404 when key does not exist") {
+  test("GET on private key returns 404 when key does not exist") {
     val repoId = RepoId.generate()
     val keyId: KeyId = Refined.unsafeApply("8a17927d32c40ca87d71e74123b85a4f465d76c2edb0c8e364559bd5fc3d035a")
 
-    Get(apiUri(s"root/${repoId.show}/private_key/${keyId.get}")) ~> routes ~> check {
+    Get(apiUri(s"root/${repoId.show}/private_keys/${keyId.get}")) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
     }
   }
 
-  test("XXX DELETE on private_key wipes private key") {
+  test("DELETE on private_key wipes private key") {
     val repoId = RepoId.generate()
 
     generateRootRole(repoId).futureValue
@@ -200,18 +201,57 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       responseAs[SignedPayload[RootRole]].signed.roles("root").keyids.head
     }
 
-    Delete(apiUri(s"root/${repoId.show}/private_key/${rootKeyId.get}")) ~> routes ~> check {
+    Delete(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.get}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseAs[ClientPrivateKey].keyval shouldBe a[PrivateKey]
     }
 
-    Get(apiUri(s"root/${repoId.show}/private_key/${rootKeyId.get}")) ~> routes ~> check {
+    Get(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.get}")) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
     }
   }
 
-  test("XXX uploading a new private key, signs a new root.json") (pending)
-  // TODO: How to invalidate json in repo server?
+  test("wiping private key still allows download of root.json") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId).futureValue
+
+    val rootKeyId = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed.roles("root").keyids.head
+    }
+
+    Delete(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.get}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[ClientPrivateKey].keyval shouldBe a[PrivateKey]
+    }
+
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed shouldBe a[RootRole]
+    }
+  }
+
+  test("uploading a new private key list updates root.json keys") {
+    import RsaKeyPair.RsaKeyIdConversion
+
+    val repoId = RepoId.generate()
+    val rsaKey = RsaKeyPair.generate(1024)
+    val newKey = ClientPrivateKey(KeyType.RSA, rsaKey.getPrivate)
+
+    generateRootRole(repoId).futureValue
+
+    Put(apiUri(s"root/${repoId.show}/private_keys"),  Seq(newKey)) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+
+      val rootRole = responseAs[SignedPayload[RootRole]].signed
+
+      rootRole.roles.get("root").toList.flatMap(_.keyids) should contain(rsaKey.id)
+    }
+  }
 
   def generateRootRole(repoId: RepoId): Future[Seq[Key]] = {
     Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest()) ~> routes ~> check {

@@ -2,10 +2,11 @@ package com.advancedtelematic.tuf.keyserver.http
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.stream.Materializer
+import cats.data.NonEmptyList
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, RoleType, ValidKeyId}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import slick.driver.MySQLDriver.api._
-import com.advancedtelematic.tuf.keyserver.roles.RootRoleGeneration
+import com.advancedtelematic.tuf.keyserver.roles.{RootRoleGeneration, RootRoleKeyEdit}
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -24,6 +25,7 @@ class RootRoleResource(vaultClient: VaultClient)
   import ClientRootGenRequest._
 
   val rootRoleGeneration = new RootRoleGeneration(vaultClient)
+  val rootRoleKeyEdit = new RootRoleKeyEdit(vaultClient)
   val roleSigning = new RoleSigning(vaultClient)
 
   val KeyIdPath = Segment.flatMap(_.refineTry[ValidKeyId].toOption)
@@ -32,7 +34,7 @@ class RootRoleResource(vaultClient: VaultClient)
     pathPrefix("root" / RepoId.Path) { repoId =>
       pathEnd {
         (post & entity(as[ClientRootGenRequest])) { (genRequest: ClientRootGenRequest) =>
-          require(genRequest.threshold == 1, "threshold > 1 not supported")
+          require(genRequest.threshold == 1, "threshold != 1 not supported")
 
           val f = rootRoleGeneration
             .createDefaultGenRequest(repoId, genRequest.threshold)
@@ -41,18 +43,27 @@ class RootRoleResource(vaultClient: VaultClient)
           complete(f)
         } ~
           get {
-            val f = rootRoleGeneration.findSigned(repoId)
+            val f = rootRoleGeneration.findAndCache(repoId)
             complete(f)
           }
       } ~
-      pathPrefix("private_key") {
+      pathPrefix("private_keys") {
         path(KeyIdPath) { keyId =>
           get {
-            val f = rootRoleGeneration.fetchPrivateKey(repoId, keyId)
-            complete(f)
+            complete(rootRoleKeyEdit.fetchPrivateKey(repoId, keyId))
           } ~
           delete {
-            complete(rootRoleGeneration.deletePrivateKey(repoId, keyId))
+            val f = rootRoleGeneration
+              .findAndCache(repoId)
+              .flatMap(_ => rootRoleKeyEdit.deletePrivateKey(repoId, keyId))
+
+            complete(f)
+          }
+        } ~
+        pathEnd {
+          (put & entity(as[NonEmptyList[ClientPrivateKey]])) { privateKeys =>
+            val f = rootRoleKeyEdit.updateRootKeys(repoId, privateKeys)
+            complete(f)
           }
         }
       } ~
