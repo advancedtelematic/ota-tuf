@@ -7,6 +7,7 @@ import com.advancedtelematic.tuf.keyserver.db.SignedRootRolesSupport
 import slick.driver.MySQLDriver.api._
 import scala.concurrent.{ExecutionContext, Future}
 
+// TODO: Except this is not really a cache, we might not be able to generate keys again if they get deleted or the user just uploads a signature
 class RootRoleCache(roleSignFn: RepoId => Future[SignedPayload[RootRole]])
                    (implicit val db: Database, val ec: ExecutionContext) extends SignedRootRolesSupport {
 

@@ -1,6 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.data
 
-import java.security.PublicKey
+import java.security.{PrivateKey, PublicKey}
 import java.util.UUID
 
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId}
@@ -29,7 +29,7 @@ object KeyServerDataType {
 
   case class Key(id: KeyId, roleId: RoleId, keyType: KeyType, publicKey: PublicKey)
 
+  case class TufPrivateKey(id: KeyId, keyType: KeyType, value: PrivateKey)
+
   case class Role(id: RoleId, repoId: RepoId, roleType: RoleType, threshold: Int = 1)
 }
-
-
