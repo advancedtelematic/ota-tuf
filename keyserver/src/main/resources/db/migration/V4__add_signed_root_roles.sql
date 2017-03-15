@@ -1,4 +1,4 @@
-create table `root_role_cache` (
+create table `signed_root_roles` (
   `repo_id` CHAR(36) NOT NULL PRIMARY KEY,
   expires_at DATETIME(3) NOT NULL,
   signed_payload TEXT NOT NULL,

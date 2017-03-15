@@ -2,15 +2,12 @@ package com.advancedtelematic.tuf.keyserver.roles
 
 import java.time.{Duration, Instant}
 
-import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.tuf.keyserver.http.{Errors, RoleSigning}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import slick.driver.MySQLDriver.api._
-import RoleType.show
-import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, RoleKeys, RootRole}
 
 import scala.async.Async._
@@ -22,7 +19,7 @@ class RootRoleGeneration(vaultClient: VaultClient)
                         (implicit val db: Database, val ec: ExecutionContext)
   extends KeyGenRequestSupport
     with KeyRepositorySupport
-    with RootRoleCacheSupport {
+    with SignedRootRolesSupport {
 
   private val DEFAULT_ROLES = RoleType.ALL
   private val DEFAULT_KEY_SIZE = 2048
@@ -38,14 +35,7 @@ class RootRoleGeneration(vaultClient: VaultClient)
     keyGenRepo.persistAll(reqs).map(_.map(_.id))
   }
 
-  def findAndCache(repoId: RepoId): Future[SignedPayload[RootRole]] = {
-    rootRoleCacheRepo.findCached(repoId).flatMap {
-      case Some(signedPayload) => FastFuture.successful(signedPayload)
-      case None => signRoot(repoId).flatMap(addToCache(repoId))
-    }
-  }
-
-  private def signRoot(repoId: RepoId): Future[SignedPayload[RootRole]] = {
+  def signRoot(repoId: RepoId): Future[SignedPayload[RootRole]] = {
     async {
       await(ensureKeysGenerated(repoId))
 
@@ -68,10 +58,6 @@ class RootRoleGeneration(vaultClient: VaultClient)
 
       await(roleSigning.signAll(rootRole, rootKeys))
     }
-  }
-
-  private def addToCache(repoId: RepoId)(signedRoot: SignedPayload[RootRole]): Future[SignedPayload[RootRole]] = {
-    rootRoleCacheRepo.addCached(repoId, signedRoot).map(_ => signedRoot)
   }
 
   private def ensureKeysGenerated(repoId: RepoId): Future[Unit] =

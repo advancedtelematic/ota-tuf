@@ -20,12 +20,12 @@ import org.scalatest.time.{Seconds, Span}
 
 import scala.concurrent.ExecutionContext
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
-import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, RootRoleCacheSupport}
+import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, SignedRootRolesSupport}
 
 class RootRoleGenerationSpec extends TufKeyserverSpec with DatabaseSpec
 with Inspectors with PatienceConfiguration
 with KeyGenRequestSupport
-with RootRoleCacheSupport {
+with SignedRootRolesSupport {
 
   implicit val ec = ExecutionContext.global
 
@@ -44,7 +44,7 @@ with RootRoleCacheSupport {
 
       await(keyGenerationOp.processGenerationRequest(rootKeyGenRequest))
 
-      val signed = await(rootGeneration.findAndCache(repoId))
+      val signed = await(rootGeneration.signRoot(repoId))
 
       val rootKeyId = signed.signed.roles(RoleType.ROOT).keyids.head
       val publicKey = signed.signed.keys(rootKeyId).keyval
@@ -55,22 +55,6 @@ with RootRoleCacheSupport {
 
       RsaKeyPair.isValid(publicKey, sig,
         signed.signed.asJson.canonical.getBytes) shouldBe true
-    }
-  }
-
-  test("caches signed payload when finding") {
-    val repoId = RepoId.generate()
-    val rootKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
-      repoId, KeyGenRequestStatus.GENERATED, RoleType.ROOT, keySize = 1024)
-
-    async {
-      await(keyGenRepo.persist(rootKeyGenRequest))
-
-      await(keyGenerationOp.processGenerationRequest(rootKeyGenRequest))
-
-      val signed = await(rootGeneration.findAndCache(repoId))
-
-      await(rootRoleCacheRepo.findCached(repoId)) shouldBe signed
     }
   }
 }

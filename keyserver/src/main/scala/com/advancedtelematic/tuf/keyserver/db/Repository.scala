@@ -191,30 +191,28 @@ protected [db] class RoleRepository()(implicit db: Database, ec: ExecutionContex
       (Schema.roles += role).map(_ => role)
 }
 
-trait RootRoleCacheSupport extends DatabaseSupport {
-  lazy val rootRoleCacheRepo = new RootRoleCacheRepository()
+trait SignedRootRolesSupport extends DatabaseSupport {
+  lazy val signedRootRolesRepo = new SignedRootRolesRepository()
 }
 
-protected[db] class RootRoleCacheRepository()(implicit db: Database, ec: ExecutionContext) {
+protected[db] class SignedRootRolesRepository()(implicit db: Database, ec: ExecutionContext) {
 
   import com.advancedtelematic.libats.db.SlickExtensions._
-  import com.advancedtelematic.libtuf.data.TufCodecs._
-  import com.advancedtelematic.libtuf.data.ClientCodecs._
   import Schema.signedPayloadRootRoleMapper
-  import Schema.rootRoleCaches
+  import Schema.signedRootRoles
 
-  def addCached(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = {
+  def addSigned(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = {
     val expires = signedPayload.signed.expires
 
-    val io = rootRoleCaches
+    val io = signedRootRoles
       .insertOrUpdate((repoId, expires, signedPayload))
 
     db.run(io).map(_ => ())
   }
 
-  def findCached(repoId: RepoId): Future[Option[SignedPayload[RootRole]]] =
+  def find(repoId: RepoId): Future[Option[SignedPayload[RootRole]]] =
     db.run {
-      rootRoleCaches
+      signedRootRoles
         .filter(_.repoId === repoId)
         .filter(_.expiresAt > Instant.now())
         .map(_.signedPayload)

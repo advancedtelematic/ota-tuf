@@ -1,7 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.http
 
 import java.security.PrivateKey
-
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.tuf.util.{ResourceSpec, TufKeyserverSpec}
 import io.circe.generic.auto._
@@ -23,6 +22,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.{ClientPrivateKey, RootR
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair.keyShow
+import RsaKeyPair.RsaKeyIdConversion
 import eu.timepit.refined.api.Refined
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -231,9 +231,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
-  test("uploading a new private key list updates root.json keys") {
-    import RsaKeyPair.RsaKeyIdConversion
-
+  test("replacing private keys list updates root.json keys") {
     val repoId = RepoId.generate()
     val rsaKey = RsaKeyPair.generate(1024)
     val newKey = ClientPrivateKey(KeyType.RSA, rsaKey.getPrivate)
@@ -252,6 +250,39 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       rootRole.roles.get(RoleType.ROOT).toList.flatMap(_.keyids) should contain(rsaKey.id)
     }
   }
+
+  test("replacing private keys extends expire time of existing root.json") {
+    val repoId = RepoId.generate()
+    val rsaKey = RsaKeyPair.generate(1024)
+    val newKey = ClientPrivateKey(KeyType.RSA, rsaKey.getPrivate)
+
+    generateRootRole(repoId).futureValue
+
+    val oldRootRole = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed
+    }
+
+    // Ensure expire time will be after old expire time
+    Future { Thread.sleep(1000l) }.futureValue
+
+    Put(apiUri(s"root/${repoId.show}/private_keys"),  Seq(newKey)) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+
+      val rootRole = responseAs[SignedPayload[RootRole]].signed
+      rootRole.expires.isAfter(oldRootRole.expires) shouldBe true
+    }
+  }
+
+  test("fails with 4xx if there are no keys to generate root.json and root.json is not cached") (pending)
+
+  test("adding a new private_key to the set of private keys, extends expire time of existing root.json") (pending)
+
+  test("adding a new private_key signs current root.json with the given key") (pending)
 
   def generateRootRole(repoId: RepoId): Future[Seq[Key]] = {
     Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest()) ~> routes ~> check {
