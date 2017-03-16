@@ -6,12 +6,15 @@ import java.time.Instant
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, SignedPayload}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, KeyId, RepoId, Signature, SignedPayload, ValidSignature}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import slick.driver.MySQLDriver.api._
 import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
+import eu.timepit.refined.api.Refined
+import slick.lifted.ProvenShape
 
 object Schema {
   import com.advancedtelematic.libats.codecs.SlickRefined._
@@ -61,17 +64,38 @@ object Schema {
 
   protected [db] val roles = TableQuery[RoleTable]
 
-  implicit val signedPayloadRootRoleMapper = circeMapper[SignedPayload[RootRole]]
+  implicit val generatedPayloadRootRoleMapper = circeMapper[RootRole]
 
-  class SignedRootRolesTable(tag: Tag) extends Table[(RepoId, Instant, SignedPayload[RootRole])](tag, "signed_root_roles") {
+  class GeneratedRootRoles(tag: Tag) extends Table[(RepoId, Instant, RootRole)](tag, "generated_root_roles") {
     def repoId = column[RepoId]("repo_id")
     def expiresAt = column[Instant]("expires_at")
-    def signedPayload = column[SignedPayload[RootRole]]("signed_payload")
+    def content = column[RootRole]("content")
 
-    def pk = primaryKey("pk_root_role_cache", repoId)
+    def pk = primaryKey("pk_generated_root_roles", repoId)
 
-    override def * = (repoId, expiresAt, signedPayload)
+    override def * = (repoId, expiresAt, content)
   }
 
-  protected [db] val signedRootRoles = TableQuery[SignedRootRolesTable]
+  protected [db] val generatedRootRoles = TableQuery[GeneratedRootRoles]
+
+  // TODO: Reuse Other?
+  case class RootSignature(repoId: RepoId, keyId: KeyId, signature: Signature) {
+    def toClient = ClientSignature(keyId, signature.method, signature.sig)
+  }
+
+  class RootSignaturesTable(tag: Tag) extends Table[RootSignature](tag, "root_signatures") {
+    def repoId = column[RepoId]("repo_id")
+    def keyId = column[KeyId]("key_id")
+    def method = column[SignatureMethod]("method")
+    def signature = column[Refined[String, ValidSignature]]("signature")
+
+    def pk = primaryKey("pk_", (repoId, keyId))
+
+    override def * : ProvenShape[RootSignature] = (repoId, keyId, method, signature) <> (
+      (f: (RepoId, KeyId, SignatureMethod, Refined[String, ValidSignature])) => RootSignature(f._1, f._2, Signature(f._4, f._3)),
+      (o: RootSignature) => Some((o.repoId, o.keyId, o.signature.method, o.signature.sig))
+    )
+  }
+
+  protected [db] val rootSignatures = TableQuery[RootSignaturesTable]
 }

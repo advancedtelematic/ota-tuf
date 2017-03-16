@@ -12,8 +12,8 @@ import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEnt
 import slick.driver.MySQLDriver.api._
 import com.advancedtelematic.libats.codecs.SlickRefined._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
+import com.advancedtelematic.tuf.keyserver.db.Schema.RootSignature
 import io.circe.syntax._
-
 import scala.concurrent.ExecutionContext
 
 
@@ -191,32 +191,50 @@ protected [db] class RoleRepository()(implicit db: Database, ec: ExecutionContex
       (Schema.roles += role).map(_ => role)
 }
 
-trait SignedRootRolesSupport extends DatabaseSupport {
-  lazy val signedRootRolesRepo = new SignedRootRolesRepository()
+trait GeneratedRootRolesSupport extends DatabaseSupport {
+  lazy val generatedRootRoles = new GeneratedRootRolesRepository()
 }
 
-protected[db] class SignedRootRolesRepository()(implicit db: Database, ec: ExecutionContext) {
+protected[db] class GeneratedRootRolesRepository()(implicit db: Database, ec: ExecutionContext) {
 
   import com.advancedtelematic.libats.db.SlickExtensions._
-  import Schema.signedPayloadRootRoleMapper
-  import Schema.signedRootRoles
+  import Schema.generatedPayloadRootRoleMapper
+  import Schema.generatedRootRoles
 
-  def addSigned(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = {
-    val expires = signedPayload.signed.expires
+  def persist(repoId: RepoId, content: RootRole): Future[Unit] = {
+    val expires = content.expires
 
-    val io = signedRootRoles
-      .insertOrUpdate((repoId, expires, signedPayload))
+    val io = generatedRootRoles.insertOrUpdate((repoId, expires, content))
 
     db.run(io).map(_ => ())
   }
 
-  def find(repoId: RepoId): Future[Option[SignedPayload[RootRole]]] =
+  def find(repoId: RepoId): Future[Option[RootRole]] =
     db.run {
-      signedRootRoles
+      generatedRootRoles
         .filter(_.repoId === repoId)
-        .filter(_.expiresAt > Instant.now())
-        .map(_.signedPayload)
+//        .filter(_.expiresAt > Instant.now()) TODO: WHat about this?
+        .map(_.content)
         .result
         .headOption
     }
+}
+
+trait RootSignaturesSupport extends DatabaseSupport {
+  lazy val rootSignaturesRepo = new RootSignaturesRepository()
+}
+
+protected[db] class RootSignaturesRepository()(implicit val db: Database, val ec: ExecutionContext) {
+
+  import com.advancedtelematic.libats.db.SlickExtensions._
+
+  import Schema.rootSignatures
+
+  def persist(signatures: Seq[RootSignature]): Future[Seq[RootSignature]] = {
+    db.run((rootSignatures ++= signatures).map(_ => signatures))
+  }
+
+  def find(repoId: RepoId): Future[Seq[RootSignature]] = {
+    db.run(rootSignatures.filter(_.repoId === repoId).result)
+  }
 }

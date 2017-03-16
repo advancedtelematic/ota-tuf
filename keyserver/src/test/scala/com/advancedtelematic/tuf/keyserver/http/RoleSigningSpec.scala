@@ -29,19 +29,20 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
   val keyPair = RsaKeyPair.generate(1024)
 
   val dbKey = Key(keyPair.id, RoleId.generate(), KeyType.RSA, keyPair.getPublic)
+  val tufPrivateKey = TufPrivateKey(keyPair.id, KeyType.RSA, keyPair.getPrivate)
 
   implicit val encoder = io.circe.generic.semiauto.deriveEncoder[TestPayload]
   implicit val decoder = io.circe.generic.semiauto.deriveDecoder[TestPayload]
 
   lazy val roleSigning = {
     fakeVault.createKey(VaultKey(dbKey.id, dbKey.keyType, dbKey.publicKey.show, keyPair.getPrivate.show)).futureValue
-    new RoleSigning(fakeVault)
+    new RoleSigning()
   }
 
   test("signs a payload with a key") {
     val payload = TestPayload()
 
-    val signature = roleSigning.signForClient(payload)(dbKey).futureValue
+    val signature = roleSigning.signForClient(payload)(tufPrivateKey)
 
     new String(Base64.decode(signature.sig.get)) shouldBe a[String]
   }
@@ -49,7 +50,7 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
   test("generates valid signatures")  {
     val payload = TestPayload()
 
-    val clientSignature = roleSigning.signForClient(payload)(dbKey).futureValue
+    val clientSignature = roleSigning.signForClient(payload)(tufPrivateKey)
     val signature = Signature(clientSignature.sig, clientSignature.method)
 
     RsaKeyPair.isValid(keyPair.getPublic, signature, payload.asJson.canonical.getBytes) shouldBe true
@@ -58,7 +59,7 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
   test("generates valid signatures when verifying with canonical representation") {
     val payload = TestPayload()
 
-    val clientSignature = roleSigning.signForClient(payload)(dbKey).futureValue
+    val clientSignature = roleSigning.signForClient(payload)(tufPrivateKey)
     val signature = Signature(clientSignature.sig, clientSignature.method)
 
     val canonicalJson = """{"arrayMapProp":[{"aaa":0,"bbb":1}],"mapProp":{"aa":0,"bb":1},"propertyA":"some A","propertyB":"some B"}""".getBytes

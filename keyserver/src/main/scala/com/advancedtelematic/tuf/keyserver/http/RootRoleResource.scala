@@ -2,11 +2,10 @@ package com.advancedtelematic.tuf.keyserver.http
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.stream.Materializer
-import cats.data.NonEmptyList
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, ValidKeyId}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import slick.driver.MySQLDriver.api._
-import com.advancedtelematic.tuf.keyserver.roles.{RootRoleCache, RootRoleGeneration, RootRoleKeyEdit}
+import com.advancedtelematic.tuf.keyserver.roles.{RootRoleStufSwchwarma, RootRoleGeneration, RootRoleKeyEdit}
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -25,11 +24,12 @@ class RootRoleResource(vaultClient: VaultClient)
   import akka.http.scaladsl.server.Directives._
   import ClientRootGenRequest._
 
-  val rootRoleGeneration = new RootRoleGeneration(vaultClient)
+  val rootRoleGeneration = new RootRoleGeneration()
   val rootRoleKeyEdit = new RootRoleKeyEdit(vaultClient)
-  val rootRoleCache = new RootRoleCache(rootRoleGeneration.signRoot)
+  val rootRoleCache = new RootRoleStufSwchwarma(vaultClient)
   val privateKeysFetch = new PrivateKeysFetch(vaultClient)
-  val roleSigning = new RoleSigning
+  val roleSigning = new RoleSigning() // TODO: Use object
+
   val KeyIdPath = Segment.flatMap(_.refineTry[ValidKeyId].toOption)
 
   val route =
@@ -45,23 +45,14 @@ class RootRoleResource(vaultClient: VaultClient)
           complete(f)
         } ~
           get {
-            val f = rootRoleCache.findCached(repoId)
+            val f = rootRoleCache.findSignedRoot(repoId)
             complete(f)
           }
       } ~
       path("signatures") {
-        (put & entity(as[NonEmptyList[ClientPrivateKey]])) { extraPrivateKeysqq =>
-          val f = rootRoleCache.execAndUpdate {
-            privateKeysFetch.clientKeys(repoId, RoleType.ROOT).map { privateKeys =>
-              rootRoleGeneration.signWithKeys(repoId, privateKeys ++ extraPrivateKeysqq)
-            }
-
-            rootRoleGeneration.addKey(privateKey)
-
-            ???
-          }
-
-          complete("hi")
+        (put & entity(as[ClientPrivateKey])) { privateKey =>
+          val f = rootRoleKeyEdit.addSignature(repoId, privateKey).map(_.map(_.toClient))
+          complete(f)
         }
       } ~
       pathPrefix("private_keys") {
@@ -71,18 +62,9 @@ class RootRoleResource(vaultClient: VaultClient)
           } ~
           delete {
             val f =
-              rootRoleCache.ensureCached(repoId) {
-                rootRoleKeyEdit.deletePrivateKey(repoId, keyId)
-              }
-
-            complete(f)
-          }
-        } ~
-        pathEnd {
-          (put & entity(as[NonEmptyList[ClientPrivateKey]])) { privateKeys =>
-            val f = rootRoleCache.execAndUpdate(repoId) {
-              rootRoleKeyEdit.updateRootKeys(repoId, privateKeys)
-            }
+              rootRoleCache
+                .findSignedRoot(repoId)
+                .flatMap(_ => rootRoleKeyEdit.deletePrivateKey(repoId, keyId))
             complete(f)
           }
         }
