@@ -1,11 +1,9 @@
 package com.advancedtelematic.tuf.reposerver
 
-import java.io.File
 import java.security.Security
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.Uri
-import akka.http.scaladsl.model.Uri.Path.Empty
 import akka.http.scaladsl.server.{Directives, Route}
 import akka.stream.Materializer
 import com.advancedtelematic.libtuf.keyserver.KeyserverHttpClient
@@ -19,10 +17,10 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
-import com.advancedtelematic.libats.messaging.{MessageBus, MessageBusPublisher}
+import com.advancedtelematic.libats.messaging.MessageBus
 import com.advancedtelematic.tuf.reposerver.http.NamespaceExtractor
 import com.advancedtelematic.tuf.reposerver.http.TufReposerverRoutes
-import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStore, S3Credentials, TargetUpload}
+import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStore, S3Credentials}
 import com.amazonaws.regions.Regions
 
 trait Settings {

@@ -26,7 +26,7 @@ import scala.collection.JavaConverters._
 import scala.util.Try
 import akka.testkit.TestDuration
 import com.advancedtelematic.libats.data.Namespace
-import com.advancedtelematic.libats.messaging.{MessageBus, MessageBusPublisher}
+import com.advancedtelematic.libats.messaging.{LocalMessageBus, MemoryMessageBus, MessageBus, MessageBusPublisher}
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType}
@@ -116,7 +116,8 @@ trait ResourceSpec extends TufReposerverSpec
 
   val localStorage = new LocalTargetStore(Files.createTempDirectory("target-storage").toFile)
 
-  val messageBus = MessageBusPublisher.ignore
+  val memoryMessageBus = new MemoryMessageBus
+  val messageBusPublisher = memoryMessageBus.publisher()
 
-  lazy val routes = new TufReposerverRoutes(fakeRoleStore, namespaceValidation, localStorage, messageBus).routes
+  lazy val routes = new TufReposerverRoutes(fakeRoleStore, namespaceValidation, localStorage, messageBusPublisher).routes
 }

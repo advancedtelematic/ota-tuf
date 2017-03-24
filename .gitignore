@@ -14,3 +14,5 @@ project/target
 .scala_dependencies
 .worksheet
 .idea/
+
+aws.env

@@ -2,6 +2,7 @@ package com.advancedtelematic.tuf.reposerver.http
 
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model._
+import akka.stream.scaladsl.Sink
 import akka.util.ByteString
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
@@ -20,6 +21,8 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import cats.syntax.either._
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
+import com.advancedtelematic.libats.messaging.{LocalMessageBus, MessageBus}
+import com.advancedtelematic.tuf.reposerver.data.Messages.PackageStorageUsage
 
 import scala.concurrent.Future
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
@@ -414,6 +417,38 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
+  test("XXX publishes usage messages to bus") {
+    val repoId = RepoId.generate()
+
+    val source = memoryMessageBus.subscribe[PackageStorageUsage]()
+
+    withNamespace(s"default-${repoId.show}") { implicit ns =>
+      val entity = HttpEntity(ByteString(
+        """
+          |Like all the men of the Library, in my younger days I traveled;
+          |I have journeyed in quest of a book, perhaps the catalog of catalogs.
+        """.stripMargin))
+
+      val fileBodyPart = BodyPart("file", entity, Map("filename" -> "babel.txt"))
+
+      val form = Multipart.FormData(fileBodyPart)
+
+      Post(apiUri(s"repo/${repoId.show}")).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      Put(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing?name=pkgname&version=pkgversion&desc=wat"), form).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      Get(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing")).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      source.runWith(Sink.head).futureValue shouldBe a[PackageStorageUsage]
+    }
+  }
+
   test("authenticates user for put/get") (pending)
 
   def signaturesShouldBeValid[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Assertion = {
@@ -426,7 +461,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
   def createRepo(): RepoId = {
     val newRepoId = RepoId.generate()
-    fakeRoleStore.generateKey(newRepoId)
+    fakeRoleStore.createRoot(newRepoId)
 
     Post(apiUri(s"repo/${newRepoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK

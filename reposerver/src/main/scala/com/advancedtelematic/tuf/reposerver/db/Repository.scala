@@ -26,7 +26,6 @@ trait TargetItemRepositorySupport extends DatabaseSupport {
 }
 
 protected [db] class TargetItemRepository()(implicit db: Database, ec: ExecutionContext) {
-
   import Schema.targetItems
 
   def persist(targetItem: TargetItem): Future[TargetItem] =
@@ -37,7 +36,7 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
       targetItems.filter(_.repoId === repoId).result
     }
 
-  def usage(repoId: RepoId): Future[Long] =
+  def usage(repoId: RepoId): Future[(Namespace, Long)] =
     db.run {
       targetItems
         .filter(_.repoId === repoId)
@@ -45,6 +44,12 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
         .sum
         .getOrElse(0l)
         .result
+        .flatMap { usage =>
+          Schema.repoNamespaces
+            .filter(_.repoId === repoId)
+            .map(_.namespace).result.head
+            .map(ns => (ns, usage))
+        }
     }
 }
 

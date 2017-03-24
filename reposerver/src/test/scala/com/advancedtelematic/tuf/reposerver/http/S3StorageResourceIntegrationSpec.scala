@@ -21,7 +21,7 @@ class S3StorageResourceIntegrationSpec extends TufReposerverSpec
   val s3Storage = new S3TargetStore(credentials)
 
   override lazy val routes = new RepoResource(fakeRoleStore, namespaceValidation,
-    s3Storage, messageBus).route
+    s3Storage, messageBusPublisher).route
 
   test("uploading a target changes targets json") {
     val repoId = RepoId.generate()
