@@ -36,6 +36,16 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
     db.run {
       targetItems.filter(_.repoId === repoId).result
     }
+
+  def usage(repoId: RepoId): Future[Long] =
+    db.run {
+      targetItems
+        .filter(_.repoId === repoId)
+        .map(_.length)
+        .sum
+        .getOrElse(0l)
+        .result
+    }
 }
 
 trait SignedRoleRepositorySupport extends DatabaseSupport {

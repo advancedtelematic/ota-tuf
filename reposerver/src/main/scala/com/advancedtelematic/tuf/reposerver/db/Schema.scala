@@ -2,7 +2,7 @@ package com.advancedtelematic.tuf.reposerver.db
 
 import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libats.data.Namespace
-
+import com.advancedtelematic.libtuf.data.ClientDataType.{TargetCustom, TargetFilename}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, KeyId, RepoId}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
@@ -11,22 +11,23 @@ import slick.driver.MySQLDriver.api._
 
 object Schema {
   import com.advancedtelematic.libats.slick.codecs.SlickRefined._
-  import com.advancedtelematic.libtuf.data.SlickCirceMapper._
-  import com.advancedtelematic.libtuf.data.SlickPublicKeyMapper._
-  import com.advancedtelematic.libtuf.data.SlickUriMapper._
-  import com.advancedtelematic.libats.slick.db.SlickAnyVal._
   import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
+  import com.advancedtelematic.libats.slick.db.SlickUriMapper._
+  import com.advancedtelematic.libats.slick.db.SlickAnyVal._
+  import com.advancedtelematic.libats.slick.db.SlickCirceMapper._
+  import com.advancedtelematic.libtuf.data.TufSlickMappings._
 
   class TargetItemTable(tag: Tag) extends Table[TargetItem](tag, "target_items") {
     def repoId = column[RepoId]("repo_id")
-    def filename = column[String]("filename")
+    def filename = column[TargetFilename]("filename")
     def uri = column[Uri]("uri")
+    def custom = column[Option[TargetCustom]]("custom")
     def checksum = column[Checksum]("checksum")
     def length = column[Long]("length")
 
     def pk = primaryKey("target_items_pk", (repoId, filename))
 
-    override def * = (repoId, filename, uri, checksum, length) <> ((TargetItem.apply _).tupled, TargetItem.unapply)
+    override def * = (repoId, filename, uri, checksum, length, custom) <> ((TargetItem.apply _).tupled, TargetItem.unapply)
   }
 
   protected [db] val targetItems = TableQuery[TargetItemTable]

@@ -9,7 +9,7 @@ import io.circe.Json
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 
 object RepositoryDataType {
-  case class TargetItem(repoId: RepoId, filename: String, uri: Uri, checksum: Checksum, length: Long)
+  case class TargetItem(repoId: RepoId, filename: TargetFilename, uri: Uri, checksum: Checksum, length: Long, custom: Option[TargetCustom] = None)
 
   case class SignedRole(repoId: RepoId, roleType: RoleType, content: Json, checksum: Checksum, length: Long, version: Int)
 

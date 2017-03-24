@@ -15,8 +15,10 @@ import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 object ClientDataType {
   type ClientHashes = Map[HashMethod, Refined[String, ValidChecksum]]
 
+  case class TargetCustom(name: String, version: String, description: Option[String])
+
   case class ClientTargetItem(hashes: ClientHashes,
-                              length: Long, custom: Json = Json.Null)
+                              length: Long, custom: Option[TargetCustom])
 
 
   case class ClientKey(keytype: KeyType, keyval: PublicKey)
@@ -48,12 +50,18 @@ object ClientDataType {
 
   case class MetaItem(hashes: ClientHashes, length: Long)
 
+  case class ValidTargetFilename()
+  type TargetFilename = Refined[String, ValidTargetFilename]
+
+  implicit val validTargetFilename: Validate.Plain[String, ValidTargetFilename] =
+    Validate.fromPredicate(_.nonEmpty, _ => "TargetFilename cannot be empty", ValidTargetFilename())
+
   trait VersionedRole {
     val version: Int
   }
 
   case class TargetsRole(expires: Instant,
-                         targets: Map[String, ClientTargetItem],
+                         targets: Map[TargetFilename, ClientTargetItem],
                          version: Int,
                          _type: String = "Targets") extends VersionedRole
 

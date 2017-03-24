@@ -5,15 +5,19 @@ import akka.stream.Materializer
 import com.advancedtelematic.libats.http.DefaultRejectionHandler._
 import com.advancedtelematic.libats.http.{ErrorHandler, HealthResource}
 import com.advancedtelematic.libats.slick.monitoring.DbHealthResource
+import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.VersionInfo
+import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import slick.driver.MySQLDriver.api._
 
 import scala.concurrent.ExecutionContext
 
 
 class TufReposerverRoutes(keyserverClient: KeyserverClient,
-                          namespaceValidation: NamespaceValidation)
+                          namespaceValidation: NamespaceValidation,
+                          targetStore: TargetStore,
+                          messageBusPublisher: MessageBusPublisher)
                          (implicit val db: Database, val ec: ExecutionContext, mat: Materializer) extends VersionInfo {
 
   import Directives._
@@ -22,7 +26,7 @@ class TufReposerverRoutes(keyserverClient: KeyserverClient,
     handleRejections(rejectionHandler) {
       ErrorHandler.handleErrors {
         pathPrefix("api" / "v1") {
-            new RepoResource(keyserverClient, namespaceValidation).route
+            new RepoResource(keyserverClient, namespaceValidation, targetStore, messageBusPublisher).route
         } ~ DbHealthResource(versionMap).route
       }
     }

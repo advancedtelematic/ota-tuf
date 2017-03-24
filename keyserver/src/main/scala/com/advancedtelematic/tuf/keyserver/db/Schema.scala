@@ -16,10 +16,10 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 object Schema {
   import com.advancedtelematic.libats.slick.codecs.SlickRefined._
   import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
-  import com.advancedtelematic.libtuf.data.SlickPublicKeyMapper._
-  import com.advancedtelematic.libtuf.data.SlickUriMapper._
-  import com.advancedtelematic.libtuf.data.SlickCirceMapper._
+  import com.advancedtelematic.libats.slick.db.SlickCirceMapper._
+  import com.advancedtelematic.libats.slick.db.SlickUriMapper._
   import com.advancedtelematic.libats.slick.db.SlickExtensions._
+  import com.advancedtelematic.libtuf.data.TufSlickMappings._
 
   class KeyGenRequestTable(tag: Tag) extends Table[KeyGenRequest](tag, "key_gen_requests") {
     def id = column[KeyGenId]("id", O.PrimaryKey)

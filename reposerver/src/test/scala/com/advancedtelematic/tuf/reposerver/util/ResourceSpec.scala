@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.util
 
+import java.nio.file.Files
 import java.security.{KeyPair, PublicKey}
 import java.time.Instant
 import java.util.NoSuchElementException
@@ -25,6 +26,7 @@ import scala.collection.JavaConverters._
 import scala.util.Try
 import akka.testkit.TestDuration
 import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.messaging.{MessageBus, MessageBusPublisher}
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType}
@@ -32,6 +34,7 @@ import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
+import com.advancedtelematic.tuf.reposerver.target_store.LocalTargetStore
 
 object FakeRoleStore extends KeyserverClient {
 
@@ -111,5 +114,9 @@ trait ResourceSpec extends TufReposerverSpec
     override def apply(repoId: RepoId): Directive1[Namespace] = provide(Namespace("default"))
   }
 
-  lazy val routes = new TufReposerverRoutes(fakeRoleStore, namespaceValidation).routes
+  val localStorage = new LocalTargetStore(Files.createTempDirectory("target-storage").toFile)
+
+  val messageBus = MessageBusPublisher.ignore
+
+  lazy val routes = new TufReposerverRoutes(fakeRoleStore, namespaceValidation, localStorage, messageBus).routes
 }
