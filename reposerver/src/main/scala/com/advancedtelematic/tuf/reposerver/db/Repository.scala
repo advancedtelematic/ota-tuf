@@ -38,18 +38,20 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
 
   def usage(repoId: RepoId): Future[(Namespace, Long)] =
     db.run {
-      targetItems
+      val usage = targetItems
         .filter(_.repoId === repoId)
         .map(_.length)
         .sum
         .getOrElse(0l)
         .result
-        .flatMap { usage =>
-          Schema.repoNamespaces
-            .filter(_.repoId === repoId)
-            .map(_.namespace).result.head
-            .map(ns => (ns, usage))
-        }
+
+      val ns =
+        Schema.repoNamespaces
+          .filter(_.repoId === repoId)
+          .map(_.namespace)
+          .result.head
+
+      ns.zip(usage)
     }
 }
 

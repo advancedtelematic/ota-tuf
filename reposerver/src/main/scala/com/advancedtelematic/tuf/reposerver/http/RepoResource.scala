@@ -1,9 +1,5 @@
 package com.advancedtelematic.tuf.reposerver.http
 
-
-
-
-
 import java.nio.file.Files
 
 import com.advancedtelematic.libats.data.RefinedUtils._
@@ -29,7 +25,6 @@ import io.circe.syntax._
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}
-
 
 class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: NamespaceValidation,
                    targetStore: TargetStore, messageBusPublisher: MessageBusPublisher)

@@ -47,7 +47,7 @@ class TargetUpload(roleKeyStore: KeyserverClient,
     for {
       storeResult <- targetStore.store(repoId, targetFile, fileData)
       item = TargetItem(repoId, targetFile, storeResult.uri, storeResult.checksum, storeResult.size, Some(custom))
-            _ <- signedRoleGeneration.addToTarget(item)
+      _ <- signedRoleGeneration.addToTarget(item)
       _ <- publishUploadMessages(repoId)
     } yield ()
   }

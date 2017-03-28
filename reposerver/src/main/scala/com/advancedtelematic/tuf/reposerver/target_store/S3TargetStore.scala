@@ -22,9 +22,6 @@ import scala.concurrent._
 import scala.concurrent.Future
 import scala.util.Try
 
-object S3TargetStore {
-}
-
 class S3TargetStore(credentials: S3Credentials)(implicit val system: ActorSystem, val mat: ActorMaterializer) extends TargetStore {
 
   import system.dispatcher
@@ -47,8 +44,10 @@ class S3TargetStore(credentials: S3Credentials)(implicit val system: ActorSystem
       _.flatMap { result =>
         if(result.wasSuccessful) {
           upload(repoId, tempFile, filename).andThen { case _ => Try(tempFile.delete()) }
-        } else
+        } else {
+          Try(tempFile.delete())
           Future.failed(result.getError)
+        }
       }
     }
 

@@ -27,9 +27,11 @@ object Sha256Digest {
       d.update(b.toArray)
       d
     }.mapMaterializedValue {
-      _.map { dd =>
+      _.flatMap { dd =>
         val hex = Hex.toHexString(dd.digest())
-        Checksum(HashMethod.SHA256, hex.refineTry[ValidChecksum].get)
+        Future.fromTry {
+          hex.refineTry[ValidChecksum].map(Checksum(HashMethod.SHA256, _))
+        }
       }
     }
   }

@@ -9,7 +9,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, ValidChecksum}
 import eu.timepit.refined.api.{Refined, Validate}
-import io.circe.Json
+import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 
 object ClientDataType {
@@ -17,8 +17,8 @@ object ClientDataType {
 
   case class TargetCustom(name: String, version: String, description: Option[String])
 
-  case class ClientTargetItem(hashes: ClientHashes,
-                              length: Long, custom: Option[TargetCustom])
+  case class ClientTargetItem[Custom : Encoder : Decoder](hashes: ClientHashes,
+                                                          length: Long, custom: Option[Custom])
 
 
   case class ClientKey(keytype: KeyType, keyval: PublicKey)
@@ -61,7 +61,7 @@ object ClientDataType {
   }
 
   case class TargetsRole(expires: Instant,
-                         targets: Map[TargetFilename, ClientTargetItem],
+                         targets: Map[TargetFilename, ClientTargetItem[TargetCustom]],
                          version: Int,
                          _type: String = "Targets") extends VersionedRole
 

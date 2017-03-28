@@ -16,14 +16,16 @@ import com.advancedtelematic.tuf.reposerver.Settings
 class S3StorageResourceIntegrationSpec extends TufReposerverSpec
     with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration {
 
-  val credentials = new Settings {}.s3Credentials
+  lazy val credentials = new Settings {}.s3Credentials
 
-  val s3Storage = new S3TargetStore(credentials)
+  lazy val s3Storage = new S3TargetStore(credentials)
 
   override lazy val routes = new RepoResource(fakeRoleStore, namespaceValidation,
     s3Storage, messageBusPublisher).route
 
   test("uploading a target changes targets json") {
+    pending // Needs valid s3 credentials to run
+
     val repoId = RepoId.generate()
     fakeRoleStore.generateKey(repoId)
 

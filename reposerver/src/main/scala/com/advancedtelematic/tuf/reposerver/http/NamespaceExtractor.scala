@@ -27,7 +27,6 @@ object NamespaceExtractor {
               provide(Namespace(namespace))
             case false =>
               _log.info(s"User not allowed for ($repoId, $namespace)")
-              // TODO: Add reason for rejection (??)
               reject(AuthorizationFailedRejection)
           }
         case None =>

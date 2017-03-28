@@ -358,7 +358,7 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
-  test("XXX uploading a target changes targets json") {
+  test("uploading a target changes targets json") {
     val repoId = createRepo()
 
     val entity = HttpEntity(ByteString("""
@@ -380,7 +380,7 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
-  test("XXX returns 404 if target does not exist") {
+  test("returns 404 if target does not exist") {
     val repoId = createRepo()
 
     Get(apiUri(s"repo/${repoId.show}/targets/some/thing")) ~> routes ~> check {
@@ -388,7 +388,7 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
-  test("XXX accept description, name/version etc") {
+  test("accept description, name/version etc") {
     val repoId = createRepo()
 
     val entity = HttpEntity(ByteString("""
@@ -417,7 +417,7 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
-  test("XXX publishes usage messages to bus") {
+  test("publishes usage messages to bus") {
     val repoId = RepoId.generate()
 
     val source = memoryMessageBus.subscribe[PackageStorageUsage]()
