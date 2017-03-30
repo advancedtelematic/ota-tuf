@@ -7,7 +7,7 @@ import akka.util.ByteString
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.{RsaKeyPair, Sha256Digest}
-import com.advancedtelematic.libtuf.data.ClientDataType.{RoleTypeToMetaPathOp, RootRole, SnapshotRole, TargetFilename, TargetsRole, TimestampRole, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.ClientDataType.{RoleTypeToMetaPathOp, RootRole, SnapshotRole, TargetCustom, TargetFilename, TargetsRole, TimestampRole, ValidTargetFilename}
 import com.advancedtelematic.libtuf.data.TufDataType.{HashMethod, RepoId, RoleType, _}
 import io.circe.syntax._
 import io.circe.{Encoder, Json}
@@ -409,7 +409,7 @@ class RepoResourceSpec extends TufReposerverSpec
     Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
-      val custom = responseAs[SignedPayload[TargetsRole]].signed.targets(targetfileName).custom
+      val custom = responseAs[SignedPayload[TargetsRole]].signed.targets(targetfileName).customParsed[TargetCustom]
 
       custom.map(_.name) should contain("pkgname")
       custom.map(_.version) should contain("pkgversion")

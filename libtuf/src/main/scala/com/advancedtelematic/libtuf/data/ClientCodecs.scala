@@ -32,8 +32,8 @@ object ClientCodecs {
   implicit val targetsRoleEncoder: Encoder[TargetsRole] = deriveEncoder
   implicit val targetsRoleDecoder: Decoder[TargetsRole] = deriveDecoder
 
-  implicit val clientTargetItemEncoder: Encoder[ClientTargetItem[TargetCustom]] = deriveEncoder
-  implicit val clientTargetItemDecoder: Decoder[ClientTargetItem[TargetCustom]] = deriveDecoder
+  implicit val clientTargetItemEncoder: Encoder[ClientTargetItem] = deriveEncoder
+  implicit val clientTargetItemDecoder: Decoder[ClientTargetItem] = deriveDecoder
 
   implicit val metaItemEncoder: Encoder[MetaItem] = deriveEncoder
   implicit val metaItemDecoder: Decoder[MetaItem] = deriveDecoder
