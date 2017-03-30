@@ -53,7 +53,7 @@ class TargetUpload(roleKeyStore: KeyserverClient,
   }
 
   def retrieve(repoId: RepoId, targetFilename: TargetFilename): Future[HttpResponse] = {
-    // TODO: Publish usage/inflight
+    // TODO: Publish usage/inflight https://advancedtelematic.atlassian.net/browse/PRO-2803
     targetStore.retrieve(repoId, targetFilename).map {
       case TargetBytes(bytes, size) =>
         val entity = HttpEntity(MediaTypes.`application/octet-stream`, size, bytes)

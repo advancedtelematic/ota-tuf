@@ -58,7 +58,8 @@ object ClientDataType {
   type TargetFilename = Refined[String, ValidTargetFilename]
 
   implicit val validTargetFilename: Validate.Plain[String, ValidTargetFilename] =
-    Validate.fromPredicate(_.nonEmpty, _ => "TargetFilename cannot be empty", ValidTargetFilename())
+    Validate.fromPredicate(f => f.nonEmpty && f.length < 254,
+      _ => "TargetFilename cannot be empty or bigger than 254 chars", ValidTargetFilename())
 
   trait VersionedRole {
     val version: Int
