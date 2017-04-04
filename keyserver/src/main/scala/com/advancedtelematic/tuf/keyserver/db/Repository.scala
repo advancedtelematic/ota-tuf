@@ -10,12 +10,12 @@ import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestS
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity}
 import slick.driver.MySQLDriver.api._
-import com.advancedtelematic.libats.codecs.SlickRefined._
+import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import io.circe.syntax._
-
+import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import scala.concurrent.ExecutionContext
-
+import com.advancedtelematic.libats.slick.db.SlickExtensions._
 
 trait DatabaseSupport {
   implicit val ec: ExecutionContext
@@ -29,8 +29,6 @@ trait KeyGenRequestSupport extends DatabaseSupport {
 }
 
 protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: ExecutionContext) {
-
-  import com.advancedtelematic.libats.db.SlickExtensions._
   import Schema.keyGenRequests
 
   val KeyGenRequestNotFound = MissingEntity[KeyGenRequest]()
@@ -102,12 +100,9 @@ object KeyRepository {
 }
 
 protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext) {
-  import com.advancedtelematic.libats.db.SlickExtensions._
-  import com.advancedtelematic.libats.db.SlickPipeToUnit.pipeToUnit
-
   import Schema.{keys, roles}
   import KeyRepository._
-
+  import com.advancedtelematic.libats.slick.db.SlickPipeToUnit.pipeToUnit
 
   protected[db] def persist(key: Key): Future[Unit] = db.run(persistAction(key))
 
@@ -173,17 +168,6 @@ trait RoleRepositorySupport extends DatabaseSupport {
 }
 
 protected [db] class RoleRepository()(implicit db: Database, ec: ExecutionContext) {
-
-  import com.advancedtelematic.libats.db.SlickExtensions._
-
-  def findByType(repoId: RepoId, roleType: RoleType): Future[Role] = db.run {
-    Schema.roles
-      .filter(_.repoId === repoId)
-      .filter(_.roleType === roleType)
-      .result
-      .failIfNotSingle(MissingEntity[Role])
-  }
-
   def persist(role: Role): Future[Role] =
     db.run(persistAction(role))
 
@@ -196,8 +180,6 @@ trait RootRoleCacheSupport extends DatabaseSupport {
 }
 
 protected[db] class RootRoleCacheRepository()(implicit db: Database, ec: ExecutionContext) {
-
-  import com.advancedtelematic.libats.db.SlickExtensions._
   import com.advancedtelematic.libtuf.data.TufCodecs._
   import com.advancedtelematic.libtuf.data.ClientCodecs._
   import Schema.signedPayloadRootRoleMapper

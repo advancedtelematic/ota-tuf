@@ -8,6 +8,10 @@ import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
 import slick.driver.MySQLDriver.api._
+import com.advancedtelematic.libats.slick.db.SlickExtensions._
+import com.advancedtelematic.libats.slick.codecs.SlickRefined._
+import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
+import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions
@@ -22,7 +26,6 @@ trait TargetItemRepositorySupport extends DatabaseSupport {
 }
 
 protected [db] class TargetItemRepository()(implicit db: Database, ec: ExecutionContext) {
-  import com.advancedtelematic.libats.db.SlickExtensions._
 
   import Schema.targetItems
 
@@ -46,9 +49,7 @@ object SignedRoleRepository {
 }
 
 protected[db] class SignedRoleRepository()(implicit db: Database, ec: ExecutionContext) {
-  import com.advancedtelematic.libats.db.SlickExtensions._
   import SignedRoleRepository.InvalidVersionBumpError
-
   import Schema.signedRoles
   import SignedRoleRepository.SignedRoleNotFound
 
@@ -95,11 +96,7 @@ trait RepoNamespaceRepositorySupport extends DatabaseSupport {
 }
 
 protected[db] class RepoNamespaceRepository()(implicit db: Database, ec: ExecutionContext) {
-
-  import com.advancedtelematic.libats.db.SlickPipeToUnit.pipeToUnit
-  import com.advancedtelematic.libats.db.SlickExtensions._
-  import com.advancedtelematic.libats.codecs.SlickRefined._
-  import com.advancedtelematic.libats.db.SlickAnyVal._
+  import com.advancedtelematic.libats.slick.db.SlickPipeToUnit.pipeToUnit
   import Schema.repoNamespaces
 
   def persist(repoId: RepoId, namespace: Namespace): Future[Unit] = db.run {

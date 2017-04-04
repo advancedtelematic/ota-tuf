@@ -6,9 +6,10 @@ import java.util.UUID
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId}
 import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
-import com.advancedtelematic.libats.codecs.{CirceEnum, SlickEnum}
+import com.advancedtelematic.libats.codecs.CirceEnum
+import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
+import com.advancedtelematic.libats.slick.codecs.SlickEnum
 
 object KeyServerDataType {
   object KeyGenRequestStatus extends CirceEnum with SlickEnum {

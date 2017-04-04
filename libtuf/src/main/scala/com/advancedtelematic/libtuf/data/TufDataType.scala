@@ -4,10 +4,11 @@ import java.util.UUID
 
 import akka.http.scaladsl.server.PathMatchers
 import cats.Show
-import com.advancedtelematic.libats.codecs.{CirceEnum, SlickEnum}
+import com.advancedtelematic.libats.codecs.CirceEnum
+import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
+import com.advancedtelematic.libats.slick.codecs.SlickEnum
 import com.advancedtelematic.libtuf.data.TufDataType.HashMethod.HashMethod
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
-import com.advancedtelematic.libtuf.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.{Decoder, Encoder}
 

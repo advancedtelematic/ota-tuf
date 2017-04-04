@@ -4,6 +4,7 @@ import akka.http.scaladsl.server.{Directives, _}
 import akka.stream.Materializer
 import com.advancedtelematic.libats.http.DefaultRejectionHandler._
 import com.advancedtelematic.libats.http.{ErrorHandler, HealthResource}
+import com.advancedtelematic.libats.slick.monitoring.DbHealthResource
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.VersionInfo
 import slick.driver.MySQLDriver.api._
@@ -22,7 +23,7 @@ class TufReposerverRoutes(keyserverClient: KeyserverClient,
       ErrorHandler.handleErrors {
         pathPrefix("api" / "v1") {
             new RepoResource(keyserverClient, namespaceValidation).route
-        } ~ new HealthResource(db, versionMap).route
+        } ~ DbHealthResource(versionMap).route
       }
     }
 }

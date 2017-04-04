@@ -4,8 +4,8 @@ import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, HashMethod, RoleType, ValidChecksum}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import io.circe.Json
-import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libats.http.Errors.RawError
+import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
 import com.advancedtelematic.tuf.reposerver.util.TufReposerverSpec
 import eu.timepit.refined.refineV

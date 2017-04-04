@@ -8,13 +8,14 @@ import akka.http.scaladsl.model.Uri.Path.Empty
 import akka.http.scaladsl.server.{Directives, Route}
 import akka.stream.Materializer
 import com.advancedtelematic.libtuf.keyserver.KeyserverHttpClient
-import com.advancedtelematic.libats.db.{BootMigrations, DatabaseConfig}
+import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.http.BootApp
-import com.advancedtelematic.libats.monitoring.{DatabaseMetrics, MetricsSupport}
+import com.advancedtelematic.libats.monitoring.MetricsSupport
 import com.typesafe.config.ConfigFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.LogDirectives._
+import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.tuf.reposerver.http.NamespaceExtractor
 import com.advancedtelematic.tuf.reposerver.http.TufReposerverRoutes
 
