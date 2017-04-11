@@ -7,6 +7,7 @@ import com.advancedtelematic.tuf.keyserver.VersionInfo
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import com.advancedtelematic.libats.http.{ErrorHandler, HealthResource}
 import com.advancedtelematic.libats.http.DefaultRejectionHandler._
+import com.advancedtelematic.libats.slick.monitoring.DbHealthResource
 
 import scala.concurrent.ExecutionContext
 import slick.driver.MySQLDriver.api._
@@ -22,7 +23,7 @@ class TufKeyserverRoutes(vaultClient: VaultClient)
       ErrorHandler.handleErrors {
         pathPrefix("api" / "v1") {
             new RootRoleResource(vaultClient).route
-        } ~ new HealthResource(db, versionMap).route
+        } ~ DbHealthResource(versionMap).route
       }
     }
 }

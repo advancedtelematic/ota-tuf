@@ -6,9 +6,9 @@ import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.tuf.util.TufKeyserverSpec
-import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libats.http.Errors.MissingEntity
 import cats.syntax.show.toShowOps
+import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}

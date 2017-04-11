@@ -5,9 +5,9 @@ import com.advancedtelematic.tuf.util.TufKeyserverSpec
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKey
-import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 import cats.syntax.show.toShowOps
+import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, Signature}
 import org.bouncycastle.util.encoders.Base64

@@ -7,9 +7,10 @@ import akka.http.scaladsl.server.Route
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import com.advancedtelematic.tuf.keyserver.{Settings, VersionInfo}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
-import com.advancedtelematic.libats.db.{BootMigrations, DatabaseConfig}
+import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.http.{BootApp, HealthResource}
-import com.advancedtelematic.libats.monitoring.{DatabaseMetrics, MetricsSupport}
+import com.advancedtelematic.libats.monitoring.MetricsSupport
+import com.advancedtelematic.libats.slick.monitoring.{DatabaseMetrics, DbHealthResource}
 
 object KeyGenerationDaemon extends BootApp
     with Settings
@@ -33,7 +34,7 @@ object KeyGenerationDaemon extends BootApp
     val deviceSeenListener = system.actorOf(KeyGeneratorLeader.props(vaultClient), "keygen-leader")
 
     val routes: Route = (versionHeaders(version) & logResponseMetrics(projectName)) {
-      new HealthResource(db, versionMap).route
+        DbHealthResource(versionMap).route
     }
 
     Http().bindAndHandle(routes, host, port)

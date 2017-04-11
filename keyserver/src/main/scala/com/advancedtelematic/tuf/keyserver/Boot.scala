@@ -8,13 +8,14 @@ import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.server.{Directives, Route}
 import com.advancedtelematic.tuf.keyserver.http.TufKeyserverRoutes
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
-import com.advancedtelematic.libats.db.{BootMigrations, DatabaseConfig}
+import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.http.BootApp
-import com.advancedtelematic.libats.monitoring.{DatabaseMetrics, MetricsSupport}
+import com.advancedtelematic.libats.monitoring.MetricsSupport
 import com.typesafe.config.ConfigFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.LogDirectives._
+import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 
 trait Settings {
   lazy val config = ConfigFactory.load()

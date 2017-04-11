@@ -2,6 +2,7 @@ package com.advancedtelematic.tuf.reposerver.db
 
 import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libats.data.Namespace
+
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, KeyId, RepoId}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
@@ -9,11 +10,12 @@ import io.circe.Json
 import slick.driver.MySQLDriver.api._
 
 object Schema {
-  import com.advancedtelematic.libats.codecs.SlickRefined._
+  import com.advancedtelematic.libats.slick.codecs.SlickRefined._
   import com.advancedtelematic.libtuf.data.SlickCirceMapper._
   import com.advancedtelematic.libtuf.data.SlickPublicKeyMapper._
   import com.advancedtelematic.libtuf.data.SlickUriMapper._
-  import com.advancedtelematic.libats.db.SlickAnyVal._
+  import com.advancedtelematic.libats.slick.db.SlickAnyVal._
+  import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 
   class TargetItemTable(tag: Tag) extends Table[TargetItem](tag, "target_items") {
     def repoId = column[RepoId]("repo_id")
