@@ -1,11 +1,14 @@
 package com.advancedtelematic.tuf.keyserver.http
 
+import java.security.PrivateKey
+
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.tuf.util.{ResourceSpec, TufKeyserverSpec}
 import io.circe.generic.auto._
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
 import cats.syntax.show._
 import com.advancedtelematic.libats.test.LongTest
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId}
@@ -16,9 +19,11 @@ import org.scalatest.Inspectors
 import org.scalatest.concurrent.PatienceConfiguration
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientPrivateKey, RootRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair.keyShow
+import eu.timepit.refined.api.Refined
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -118,24 +123,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       rootRole.keys should have size RoleType.ALL.size
 
       rootRole.roles should have size RoleType.ALL.size
-      rootRole.roles.keys should contain allElementsOf RoleType.ALL.map(_.show)
-    }
-  }
-
-
-  def generateRootRole(repoId: RepoId): Future[Seq[Key]] = {
-    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest()) ~> routes ~> check {
-      status shouldBe StatusCodes.Accepted
-
-      val ids = responseAs[Seq[KeyGenId]]
-
-      Future.sequence {
-        ids.map { id =>
-          keyGenRepo
-            .find(id)
-            .flatMap(keyGenerationOp.processGenerationRequest)
-        }
-      }
+      rootRole.roles.keys should contain allElementsOf RoleType.ALL
     }
   }
 
@@ -173,6 +161,89 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     Post(apiUri(s"root/${repoId.show}/targets"), Json.Null) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
+    }
+  }
+
+  test("GET on private_key returns private key") {
+    val repoId = RepoId.generate()
+
+    generateRootRole(repoId).futureValue
+
+    val rootKeyId = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed.roles(RoleType.ROOT).keyids.head
+    }
+
+    val privateKey = fakeVault.findKey(rootKeyId).futureValue.privateKey
+
+    Get(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.get}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[ClientPrivateKey].keyval.show shouldBe privateKey
+    }
+  }
+
+  test("GET on private key returns 404 when key does not exist") {
+    val repoId = RepoId.generate()
+    val keyId: KeyId = Refined.unsafeApply("8a17927d32c40ca87d71e74123b85a4f465d76c2edb0c8e364559bd5fc3d035a")
+
+    Get(apiUri(s"root/${repoId.show}/private_keys/${keyId.get}")) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
+    }
+  }
+
+  test("DELETE on private_key wipes private key") {
+    val repoId = RepoId.generate()
+
+    generateRootRole(repoId).futureValue
+
+    val rootKeyId = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed.roles(RoleType.ROOT).keyids.head
+    }
+
+    Delete(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.get}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[ClientPrivateKey].keyval shouldBe a[PrivateKey]
+    }
+
+    Get(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.get}")) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
+    }
+  }
+
+  test("wiping private key still allows download of root.json") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId).futureValue
+
+    val rootKeyId = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed.roles(RoleType.ROOT).keyids.head
+    }
+
+    Delete(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.get}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[ClientPrivateKey].keyval shouldBe a[PrivateKey]
+    }
+
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed shouldBe a[RootRole]
+    }
+  }
+
+  def generateRootRole(repoId: RepoId): Future[Seq[Key]] = {
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest()) ~> routes ~> check {
+      status shouldBe StatusCodes.Accepted
+
+      val ids = responseAs[Seq[KeyGenId]]
+
+      Future.sequence {
+        ids.map { id =>
+          keyGenRepo
+            .find(id)
+            .flatMap(keyGenerationOp.processGenerationRequest)
+        }
+      }
     }
   }
 }

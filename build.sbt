@@ -30,7 +30,7 @@ lazy val commonDeps = libraryDependencies ++= {
 
     "org.scala-lang.modules" %% "scala-async" % "0.9.6",
 
-    "com.advancedtelematic" %% "libats" % "0.0.1-19-gdad3295",
+    "com.advancedtelematic" %% "libats" % "0.0.1-19-gdad3295-SNAPSHOT",
 
     "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV,
     "org.scalatest"     %% "scalatest" % scalaTestV % "test"

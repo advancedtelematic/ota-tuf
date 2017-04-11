@@ -1,20 +1,27 @@
 package com.advancedtelematic.libtuf.data
 
 import com.advancedtelematic.libtuf.data.ClientDataType._
-import io.circe.{Decoder, Encoder}
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
+import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
 
 object ClientCodecs {
   import TufCodecs._
   import io.circe.generic.semiauto._
   import RefinedStringEncoding._
-//  import org.genivi.sota.marshalling.CirceInstances.{dateTimeDecoder, dateTimeEncoder, refinedDecoder, refinedEncoder}
   import com.advancedtelematic.libats.codecs.AkkaCirce._
+
+  implicit val roleTypeKeyEncoder: KeyEncoder[RoleType] = KeyEncoder.encodeKeyString.contramap[RoleType](_.toString.toLowerCase)
+  implicit val roleTypeKeyDecoder: KeyDecoder[RoleType] = KeyDecoder.decodeKeyString.map[RoleType](s => RoleType.withName(s.toUpperCase))
 
   implicit val roleKeyEncoder: Encoder[RoleKeys] = deriveEncoder
   implicit val roleKeyDecoder: Decoder[RoleKeys] = deriveDecoder
 
   implicit val clientKeyEncoder: Encoder[ClientKey] = deriveEncoder
   implicit val clientKeyDecoder: Decoder[ClientKey] = deriveDecoder
+
+  implicit val clientPrivateKeyEncoder: Encoder[ClientPrivateKey] = deriveEncoder
+  implicit val clientPrivateKeyDecoder: Decoder[ClientPrivateKey] = deriveDecoder
 
   implicit val rootRoleEncoder: Encoder[RootRole] = deriveEncoder
   implicit val rootRoleDecoder: Decoder[RootRole] = deriveDecoder

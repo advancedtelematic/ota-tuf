@@ -1,5 +1,8 @@
 package com.advancedtelematic.tuf.keyserver.db
 
+import java.time.Instant
+
+import cats.data.NonEmptyList
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
@@ -8,6 +11,8 @@ import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestS
 import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity}
 import slick.driver.MySQLDriver.api._
 import com.advancedtelematic.libats.codecs.SlickRefined._
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
+import io.circe.syntax._
 
 import scala.concurrent.ExecutionContext
 
@@ -28,7 +33,7 @@ protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: Execut
   import com.advancedtelematic.libats.db.SlickExtensions._
   import Schema.keyGenRequests
 
-  val keyGenRequestNotFound = MissingEntity(classOf[KeyGenRequest])
+  val KeyGenRequestNotFound = MissingEntity[KeyGenRequest]()
 
   def persist(keyGenRequest: KeyGenRequest): Future[KeyGenRequest] = {
     db.run(persistAction(keyGenRequest))
@@ -62,7 +67,7 @@ protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: Execut
     db.run(keyGenRequests.filter(_.status === KeyGenRequestStatus.REQUESTED).take(limit).result)
 
   def find(genId: KeyGenId): Future[KeyGenRequest] = {
-    db.run(keyGenRequests.filter(_.id === genId).result.failIfNotSingle(keyGenRequestNotFound))
+    db.run(keyGenRequests.filter(_.id === genId).result.failIfNotSingle(KeyGenRequestNotFound))
   }
 
   def findBy(repoId: RepoId): Future[Seq[KeyGenRequest]] =
@@ -77,13 +82,13 @@ protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: Execut
       .filter(_.id === id)
       .map(_.status)
       .update(status)
-      .handleSingleUpdateError(MissingEntity(classOf[KeyGenRequest]))
+      .handleSingleUpdateError(KeyGenRequestNotFound)
       .map(_ => id)
 
 
   protected [db] def persistAction(keyGenRequest: KeyGenRequest): DBIO[KeyGenRequest] = {
     (keyGenRequests += keyGenRequest)
-      .handleIntegrityErrors(EntityAlreadyExists(classOf[KeyGenRequest]))
+      .handleIntegrityErrors(EntityAlreadyExists[KeyGenRequest]())
       .map(_ => keyGenRequest)
   }
 }
@@ -93,11 +98,12 @@ trait KeyRepositorySupport extends DatabaseSupport {
 }
 
 object KeyRepository {
-  val KeyNotFound = MissingEntity(classOf[Key])
+  val KeyNotFound = MissingEntity[Key]()
 }
 
 protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext) {
   import com.advancedtelematic.libats.db.SlickExtensions._
+  import com.advancedtelematic.libats.db.SlickPipeToUnit.pipeToUnit
 
   import Schema.{keys, roles}
   import KeyRepository._
@@ -144,6 +150,19 @@ protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext
     }
   }
 
+  def replaceRootKeys(repoId: RepoId, keys: NonEmptyList[Key]): Future[Unit] = db.run {
+    val rolesQ =
+      Schema.roles
+        .filter(_.repoId === repoId)
+        .filter(_.roleType === RoleType.ROOT)
+        .map(_.id)
+
+    val deleteIO =
+      Schema.keys.filter(_.roleId.in(rolesQ)).delete
+
+    deleteIO.andThen(Schema.keys ++= keys.toList).transactionally
+  }
+
   protected [db] def persistAction(key: Key): DBIO[Unit] = {
     Schema.keys.insertOrUpdate(key).map(_ => ())
   }
@@ -154,11 +173,52 @@ trait RoleRepositorySupport extends DatabaseSupport {
 }
 
 protected [db] class RoleRepository()(implicit db: Database, ec: ExecutionContext) {
+
   import com.advancedtelematic.libats.db.SlickExtensions._
+
+  def findByType(repoId: RepoId, roleType: RoleType): Future[Role] = db.run {
+    Schema.roles
+      .filter(_.repoId === repoId)
+      .filter(_.roleType === roleType)
+      .result
+      .failIfNotSingle(MissingEntity[Role])
+  }
 
   def persist(role: Role): Future[Role] =
     db.run(persistAction(role))
 
   protected [db] def persistAction(role: Role): DBIO[Role] =
       (Schema.roles += role).map(_ => role)
+}
+
+trait RootRoleCacheSupport extends DatabaseSupport {
+  lazy val rootRoleCacheRepo = new RootRoleCacheRepository()
+}
+
+protected[db] class RootRoleCacheRepository()(implicit db: Database, ec: ExecutionContext) {
+
+  import com.advancedtelematic.libats.db.SlickExtensions._
+  import com.advancedtelematic.libtuf.data.TufCodecs._
+  import com.advancedtelematic.libtuf.data.ClientCodecs._
+  import Schema.signedPayloadRootRoleMapper
+  import Schema.rootRoleCaches
+
+  def addCached(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = {
+    val expires = signedPayload.signed.expires
+
+    val io = rootRoleCaches
+      .insertOrUpdate((repoId, expires, signedPayload))
+
+    db.run(io).map(_ => ())
+  }
+
+  def findCached(repoId: RepoId): Future[Option[SignedPayload[RootRole]]] =
+    db.run {
+      rootRoleCaches
+        .filter(_.expiresAt > Instant.now())
+        .filter(_.repoId === repoId)
+        .map(_.signedPayload)
+        .result
+        .headOption
+    }
 }

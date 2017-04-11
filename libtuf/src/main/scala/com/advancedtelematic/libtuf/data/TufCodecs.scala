@@ -1,6 +1,6 @@
 package com.advancedtelematic.libtuf.data
 
-import java.security.PublicKey
+import java.security.{PrivateKey, PublicKey}
 
 import cats.syntax.show._
 import akka.http.scaladsl.model.Uri
@@ -26,9 +26,27 @@ object TufCodecs {
   implicit val uriEncoder: Encoder[Uri] = Encoder[String].contramap(_.toString)
   implicit val uriDecoder: Decoder[Uri] = Decoder[String].map(Uri.apply)
 
+  implicit val privateKeyEncoder: Encoder[PrivateKey] = Encoder.instance { privateKey =>
+    Json.obj("private" -> Json.fromString(privateKey.show))
+  }
+
+  implicit val privateKeyDecoder: Decoder[PrivateKey] = Decoder.instance { cursor =>
+    val aCursor = cursor.downField("private")
+
+    aCursor
+      .as[String]
+      .flatMap { str =>
+        Either
+          .fromTry(RsaKeyPair.parseKeyPair(str))
+          .map(_.getPrivate)
+          .leftMap(ex => DecodingFailure(ex.getMessage, aCursor.history))
+      }
+  }
+
   implicit val publicKeyEncoder: Encoder[PublicKey] = Encoder.instance { publicKey =>
     Json.obj("public" -> Json.fromString(publicKey.show))
   }
+
   implicit val publicKeyDecoder: Decoder[PublicKey] = Decoder.instance { cursor =>
     val aCursor = cursor.downField("public")
 

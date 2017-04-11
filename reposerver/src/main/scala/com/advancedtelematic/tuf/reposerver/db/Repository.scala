@@ -40,7 +40,7 @@ trait SignedRoleRepositorySupport extends DatabaseSupport {
 }
 
 object SignedRoleRepository {
-  val SignedRoleNotFound = MissingEntity(classOf[SignedRole])
+  val SignedRoleNotFound = MissingEntity[SignedRole]()
   def InvalidVersionBumpError(oldVersion: Int, newVersion: Int) =
     RawError(ErrorCode("invalid_version_bump"), StatusCodes.Conflict, s"Cannot bump version from $oldVersion to $newVersion")
 }
@@ -104,7 +104,7 @@ protected[db] class RepoNamespaceRepository()(implicit db: Database, ec: Executi
 
   def persist(repoId: RepoId, namespace: Namespace): Future[Unit] = db.run {
     (repoNamespaces += (repoId, namespace))
-      .handleIntegrityErrors(EntityAlreadyExists(classOf[RepoId]))
+      .handleIntegrityErrors(EntityAlreadyExists[RepoId]())
   }
 
   def findFor(namespace: Namespace): Future[RepoId] = db.run {
@@ -113,7 +113,7 @@ protected[db] class RepoNamespaceRepository()(implicit db: Database, ec: Executi
       .map(_.repoId)
       .result
       .headOption
-      .failIfNone(MissingEntity(classOf[RepoId]))
+      .failIfNone(MissingEntity[RepoId]())
   }
 
   def belongsTo(repoId: RepoId, namespace: Namespace): Future[Boolean] = db.run {

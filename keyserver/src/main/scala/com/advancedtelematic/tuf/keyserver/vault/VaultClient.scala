@@ -11,7 +11,7 @@ import akka.http.scaladsl.unmarshalling.{FromEntityUnmarshaller, Unmarshaller}
 import akka.stream.Materializer
 import com.advancedtelematic.libtuf.data.TufDataType.KeyId
 import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKey
+import com.advancedtelematic.tuf.keyserver.vault.VaultClient.{VaultKey, VaultKeyNotFound}
 import io.circe.{Decoder, Encoder, HCursor}
 
 import scala.concurrent.Future
@@ -26,12 +26,17 @@ trait VaultClient {
   def createKey(key: VaultKey): Future[Unit]
 
   def findKey(keyId: KeyId): Future[VaultKey]
+
+  def deleteKey(keyId: KeyId): Future[Unit]
 }
 
 object VaultClient {
   import com.advancedtelematic.libats.codecs.AkkaCirce._
 
+  // TODO: Should be publicKey: PublicKey, privateKey: PrivateKey, but we'd need to migrate existing keys
   case class VaultKey(id: KeyId, keyType: KeyType, publicKey: String, privateKey: String)
+
+  case object VaultKeyNotFound extends Throwable("vault key not found") with NoStackTrace
 
   object VaultKey {
     implicit val encoder: Encoder[VaultKey] = deriveEncoder[VaultKey]
@@ -63,6 +68,11 @@ class VaultHttpClient(vaultHost: Uri, token: String, mount: Path)(implicit syste
     execute[VaultKey](req)
   }
 
+  override def deleteKey(keyId: KeyId): Future[Unit] = {
+    val req = HttpRequest(DELETE, vaultHost.withPath(mountPath / keyId.get))
+    execute[Unit](req)
+  }
+
   private def execute[T](request: HttpRequest)
                         (implicit ct: ClassTag[T], um: FromEntityUnmarshaller[T]): Future[T] = {
     val authRequest = request.addHeader(RawHeader("X-Vault-Token", token))
@@ -70,6 +80,8 @@ class VaultHttpClient(vaultHost: Uri, token: String, mount: Path)(implicit syste
     _http.singleRequest(authRequest).flatMap {
       case r @ HttpResponse(status, _, _, _) if status.isSuccess() =>
         um(r.entity)
+      case HttpResponse(StatusCodes.NotFound, _, _, _) =>
+        Future.failed(VaultKeyNotFound)
       case r =>
         Future.failed(VaultError(s"Unexpected response from vault: $r"))
     }
