@@ -9,14 +9,20 @@ import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, ValidChecksum}
 import eu.timepit.refined.api.{Refined, Validate}
-import io.circe.Json
+import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
+import cats.syntax.either._
 
 object ClientDataType {
   type ClientHashes = Map[HashMethod, Refined[String, ValidChecksum]]
 
+  case class TargetCustom(name: String, version: String, description: Option[String])
+
   case class ClientTargetItem(hashes: ClientHashes,
-                              length: Long, custom: Json = Json.Null)
+                              length: Long, custom: Option[Json]) {
+    def customParsed[T](implicit decoder: Decoder[T]): Option[T] =
+      custom.flatMap(c => decoder.decodeJson(c).toOption)
+  }
 
 
   case class ClientKey(keytype: KeyType, keyval: PublicKey)
@@ -48,12 +54,19 @@ object ClientDataType {
 
   case class MetaItem(hashes: ClientHashes, length: Long)
 
+  case class ValidTargetFilename()
+  type TargetFilename = Refined[String, ValidTargetFilename]
+
+  implicit val validTargetFilename: Validate.Plain[String, ValidTargetFilename] =
+    Validate.fromPredicate(f => f.nonEmpty && f.length < 254,
+      _ => "TargetFilename cannot be empty or bigger than 254 chars", ValidTargetFilename())
+
   trait VersionedRole {
     val version: Int
   }
 
   case class TargetsRole(expires: Instant,
-                         targets: Map[String, ClientTargetItem],
+                         targets: Map[TargetFilename, ClientTargetItem],
                          version: Int,
                          _type: String = "Targets") extends VersionedRole
 

@@ -1,10 +1,13 @@
 package com.advancedtelematic.tuf.reposerver.http
 
+import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model._
+import akka.stream.scaladsl.Sink
+import akka.util.ByteString
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.{RsaKeyPair, Sha256Digest}
-import com.advancedtelematic.libtuf.data.ClientDataType.{RoleTypeToMetaPathOp, RootRole, SnapshotRole, TargetsRole, TimestampRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{RoleTypeToMetaPathOp, RootRole, SnapshotRole, TargetCustom, TargetFilename, TargetsRole, TimestampRole, ValidTargetFilename}
 import com.advancedtelematic.libtuf.data.TufDataType.{HashMethod, RepoId, RoleType, _}
 import io.circe.syntax._
 import io.circe.{Encoder, Json}
@@ -17,10 +20,14 @@ import com.advancedtelematic.libats.codecs.AkkaCirce._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import cats.syntax.either._
+import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
+import com.advancedtelematic.libats.messaging.{LocalMessageBus, MessageBus}
+import com.advancedtelematic.tuf.reposerver.data.Messages.PackageStorageUsage
 
 import scala.concurrent.Future
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
+import eu.timepit.refined.api.Refined
 
 class RepoResourceSpec extends TufReposerverSpec
   with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration {
@@ -48,7 +55,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
       val signed = signedPayload.signed
       val targetsRole = signed.as[TargetsRole].valueOr(throw _)
-      targetsRole.targets("myfile").length shouldBe 2
+      targetsRole.targets("myfile".refineTry[ValidTargetFilename].get).length shouldBe 2
     }
   }
 
@@ -63,8 +70,8 @@ class RepoResourceSpec extends TufReposerverSpec
       val signed = responseAs[SignedPayload[Json]].signed
 
       val targetsRole = signed.as[TargetsRole].valueOr(throw _)
-      targetsRole.targets("myfile01").length shouldBe 2
-      targetsRole.targets("myfile02").length shouldBe 2
+      targetsRole.targets("myfile01".refineTry[ValidTargetFilename].get).length shouldBe 2
+      targetsRole.targets("myfile02".refineTry[ValidTargetFilename].get).length shouldBe 2
     }
   }
 
@@ -75,7 +82,7 @@ class RepoResourceSpec extends TufReposerverSpec
       val signed = responseAs[SignedPayload[Json]].signed
 
       val targetsRole = signed.as[TargetsRole].valueOr(throw _)
-      targetsRole.targets("myfile").hashes(HashMethod.SHA256) shouldBe testFile.checksum.hash
+      targetsRole.targets("myfile".refineTry[ValidTargetFilename].get).hashes(HashMethod.SHA256) shouldBe testFile.checksum.hash
     }
   }
 
@@ -351,6 +358,99 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
+  test("uploading a target changes targets json") {
+    val repoId = createRepo()
+
+    val entity = HttpEntity(ByteString("""
+                                         |Like all the men of the Library, in my younger days I traveled;
+                                         |I have journeyed in quest of a book, perhaps the catalog of catalogs.
+                                       """.stripMargin))
+
+    val fileBodyPart = BodyPart("file", entity, Map("filename" -> "babel.txt"))
+
+    val form = Multipart.FormData(fileBodyPart)
+
+    Put(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing?name=pkgname&version=pkgversion&desc=wat"), form) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseEntity.dataBytes.runReduce(_ ++ _).futureValue shouldBe entity.getData()
+    }
+  }
+
+  test("returns 404 if target does not exist") {
+    val repoId = createRepo()
+
+    Get(apiUri(s"repo/${repoId.show}/targets/some/thing")) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
+    }
+  }
+
+  test("accept description, name/version etc") {
+    val repoId = createRepo()
+
+    val entity = HttpEntity(ByteString("""
+                                         |Like all the men of the Library, in my younger days I traveled;
+                                         |I have journeyed in quest of a book, perhaps the catalog of catalogs.
+                                       """.stripMargin))
+
+    val fileBodyPart = BodyPart("file", entity, Map("filename" -> "babel.txt"))
+
+    val form = Multipart.FormData(fileBodyPart)
+
+    val targetfileName: TargetFilename = Refined.unsafeApply("target/with/desc")
+
+    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.get}?name=pkgname&version=pkgversion&desc=wat"), form) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+
+      val custom = responseAs[SignedPayload[TargetsRole]].signed.targets(targetfileName).customParsed[TargetCustom]
+
+      custom.map(_.name) should contain("pkgname")
+      custom.map(_.version) should contain("pkgversion")
+      custom.flatMap(_.description) should contain("wat")
+    }
+  }
+
+  test("publishes usage messages to bus") {
+    val repoId = RepoId.generate()
+
+    val source = memoryMessageBus.subscribe[PackageStorageUsage]()
+
+    withNamespace(s"default-${repoId.show}") { implicit ns =>
+      val entity = HttpEntity(ByteString(
+        """
+          |Like all the men of the Library, in my younger days I traveled;
+          |I have journeyed in quest of a book, perhaps the catalog of catalogs.
+        """.stripMargin))
+
+      val fileBodyPart = BodyPart("file", entity, Map("filename" -> "babel.txt"))
+
+      val form = Multipart.FormData(fileBodyPart)
+
+      Post(apiUri(s"repo/${repoId.show}")).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      Put(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing?name=pkgname&version=pkgversion&desc=wat"), form).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      Get(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing")).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      source.runWith(Sink.head).futureValue shouldBe a[PackageStorageUsage]
+    }
+  }
+
+  test("authenticates user for put/get") (pending)
+
   def signaturesShouldBeValid[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Assertion = {
     val signature = signedPayload.signatures.head.toSignature
     val signed = signedPayload.signed
@@ -361,7 +461,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
   def createRepo(): RepoId = {
     val newRepoId = RepoId.generate()
-    fakeRoleStore.generateKey(newRepoId)
+    fakeRoleStore.createRoot(newRepoId)
 
     Post(apiUri(s"repo/${newRepoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK

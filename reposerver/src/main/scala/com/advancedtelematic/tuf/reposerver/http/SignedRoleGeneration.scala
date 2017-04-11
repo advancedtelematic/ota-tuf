@@ -109,7 +109,7 @@ protected class TargetRoleGeneration(roleSigningClient: KeyserverClient)
     targetItemRepo.findFor(repoId).map { targetItems =>
       val targets = targetItems.map { item =>
         val hashes = Map(item.checksum.method -> item.checksum.hash)
-        item.filename -> ClientTargetItem(hashes, item.length)
+        item.filename -> ClientTargetItem(hashes, item.length, item.custom.map(_.asJson))
       }.toMap
 
       TargetsRole(expireAt, targets, version)
