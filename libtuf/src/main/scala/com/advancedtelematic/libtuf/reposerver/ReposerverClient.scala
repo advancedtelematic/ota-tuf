@@ -36,7 +36,7 @@ class ReposerverHttpClient(reposerverUri: Uri)
   import io.circe.syntax._
 
   private def apiUri(path: Path) =
-    reposerverUri.withPath(Path("api") / "v1" ++ Slash(path))
+    reposerverUri.withPath(Path("/api") / "v1" ++ Slash(path))
 
   private val _http = Http()
 
@@ -49,8 +49,7 @@ class ReposerverHttpClient(reposerverUri: Uri)
     val payload = JsonObject.fromIterable(List(
       "uri" -> uri.asJson,
       "checksum" -> checksum.asJson,
-      "length" -> length.asJson)
-    )
+      "length" -> length.asJson))
 
     val entity = HttpEntity(ContentTypes.`application/json`, payload.asJson.noSpaces)
 
