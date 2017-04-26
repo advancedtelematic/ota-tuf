@@ -57,7 +57,7 @@ object RsaKeyPair {
       throw new IllegalArgumentException(s"Signature method not supported: ${signature.method}")
 
     val signer = java.security.Signature.getInstance("SHA256withRSAandMGF1", "BC") // RSASSA-PSS
-    val decodedSig = Base64.decode(signature.sig.get)
+    val decodedSig = Base64.decode(signature.sig.value)
     signer.initVerify(publicKey)
     signer.update(data)
     signer.verify(decodedSig)

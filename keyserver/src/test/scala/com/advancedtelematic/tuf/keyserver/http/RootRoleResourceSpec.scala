@@ -5,7 +5,7 @@ import java.security.PrivateKey
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.tuf.util.{ResourceSpec, TufKeyserverSpec}
 import io.circe.generic.auto._
-import de.heikoseeberger.akkahttpcirce.CirceSupport._
+import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import cats.syntax.show._
 import com.advancedtelematic.libats.test.LongTest
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
@@ -176,7 +176,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     val privateKey = fakeVault.findKey(rootKeyId).futureValue.privateKey
 
-    Get(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.get}")) ~> routes ~> check {
+    Get(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.value}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseAs[ClientPrivateKey].keyval.show shouldBe privateKey
     }
@@ -186,7 +186,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     val repoId = RepoId.generate()
     val keyId: KeyId = Refined.unsafeApply("8a17927d32c40ca87d71e74123b85a4f465d76c2edb0c8e364559bd5fc3d035a")
 
-    Get(apiUri(s"root/${repoId.show}/private_keys/${keyId.get}")) ~> routes ~> check {
+    Get(apiUri(s"root/${repoId.show}/private_keys/${keyId.value}")) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
     }
   }
@@ -201,12 +201,12 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       responseAs[SignedPayload[RootRole]].signed.roles(RoleType.ROOT).keyids.head
     }
 
-    Delete(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.get}")) ~> routes ~> check {
+    Delete(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.value}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseAs[ClientPrivateKey].keyval shouldBe a[PrivateKey]
     }
 
-    Get(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.get}")) ~> routes ~> check {
+    Get(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.value}")) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
     }
   }
@@ -220,7 +220,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       responseAs[SignedPayload[RootRole]].signed.roles(RoleType.ROOT).keyids.head
     }
 
-    Delete(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.get}")) ~> routes ~> check {
+    Delete(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.value}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseAs[ClientPrivateKey].keyval shouldBe a[PrivateKey]
     }

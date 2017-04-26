@@ -7,7 +7,7 @@ import io.circe.{KeyDecoder, KeyEncoder}
 object RefinedStringEncoding {
   implicit def refinedKeyEncoder[P]
   (implicit strKeyEncoder: KeyEncoder[String]): KeyEncoder[Refined[String, P]] =
-    strKeyEncoder.contramap(_.get)
+    strKeyEncoder.contramap(_.value)
 
   implicit def refinedKeyDecoder[P]
   (implicit p: Validate.Plain[String, P]): KeyDecoder[Refined[String, P]] =

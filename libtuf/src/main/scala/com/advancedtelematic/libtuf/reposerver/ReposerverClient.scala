@@ -30,7 +30,7 @@ class ReposerverHttpClient(reposerverUri: Uri)
                           (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer)
   extends ReposerverClient {
 
-  import de.heikoseeberger.akkahttpcirce.CirceSupport._
+  import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
   import com.advancedtelematic.libtuf.data.TufCodecs.uriEncoder
   import com.advancedtelematic.libtuf.data.TufCodecs.checkSumEncoder
   import io.circe.syntax._

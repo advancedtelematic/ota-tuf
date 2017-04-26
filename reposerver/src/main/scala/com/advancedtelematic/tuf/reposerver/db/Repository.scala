@@ -7,7 +7,7 @@ import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEnt
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
-import slick.driver.MySQLDriver.api._
+import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._

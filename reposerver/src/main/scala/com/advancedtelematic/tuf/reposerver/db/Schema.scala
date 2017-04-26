@@ -7,7 +7,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, KeyId, RepoId}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
 import io.circe.Json
-import slick.driver.MySQLDriver.api._
+import slick.jdbc.MySQLProfile.api._
 
 object Schema {
   import com.advancedtelematic.libats.slick.codecs.SlickRefined._

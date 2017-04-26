@@ -12,10 +12,10 @@ import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId, RoleType
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
 import com.advancedtelematic.tuf.reposerver.db.{RepoNamespaceRepositorySupport, SignedRoleRepository, SignedRoleRepositorySupport, TargetItemRepositorySupport}
-import de.heikoseeberger.akkahttpcirce.CirceSupport._
+import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.generic.semiauto._
 import io.circe.{Decoder, Encoder}
-import slick.driver.MySQLDriver.api._
+import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{TargetCustom, TargetFilename, ValidTargetFilename}

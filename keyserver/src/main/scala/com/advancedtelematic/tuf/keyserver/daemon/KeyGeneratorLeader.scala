@@ -102,7 +102,7 @@ class KeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database, val e
       await(vaultClient.createKey(vaultKey))
       await(keyGenRepo.persistGenerated(kgr, key, role, keyRepo, roleRepo))
 
-      _log.info("Generated Key {}", key.id.get)
+      _log.info("Generated Key {}", key.id.value)
       key
     }
 }

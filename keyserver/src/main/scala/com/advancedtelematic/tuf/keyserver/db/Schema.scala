@@ -10,7 +10,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, SignedPaylo
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
-import slick.driver.MySQLDriver.api._
+import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 
 object Schema {

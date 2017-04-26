@@ -58,18 +58,18 @@ class VaultHttpClient(vaultHost: Uri, token: String, mount: Path)(implicit syste
   case class VaultError(msg: String) extends Throwable(msg) with NoStackTrace
 
   override def createKey(key: VaultKey): Future[Unit] = {
-    val req = HttpRequest(POST, vaultHost.withPath(mountPath / key.id.get))
+    val req = HttpRequest(POST, vaultHost.withPath(mountPath / key.id.value))
       .withEntity(key.asJson.noSpaces)
     execute[Unit](req)
   }
 
   override def findKey(keyId: KeyId): Future[VaultKey] = {
-    val req = HttpRequest(GET, vaultHost.withPath(mountPath / keyId.get))
+    val req = HttpRequest(GET, vaultHost.withPath(mountPath / keyId.value))
     execute[VaultKey](req)
   }
 
   override def deleteKey(keyId: KeyId): Future[Unit] = {
-    val req = HttpRequest(DELETE, vaultHost.withPath(mountPath / keyId.get))
+    val req = HttpRequest(DELETE, vaultHost.withPath(mountPath / keyId.value))
     execute[Unit](req)
   }
 
