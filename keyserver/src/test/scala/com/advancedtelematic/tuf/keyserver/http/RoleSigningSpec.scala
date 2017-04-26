@@ -43,7 +43,7 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
 
     val signature = roleSigning.signForClient(payload)(dbKey).futureValue
 
-    new String(Base64.decode(signature.sig.get)) shouldBe a[String]
+    new String(Base64.decode(signature.sig.value)) shouldBe a[String]
   }
 
   test("generates valid signatures")  {

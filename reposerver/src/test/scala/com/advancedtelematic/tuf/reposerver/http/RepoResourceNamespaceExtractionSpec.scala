@@ -9,7 +9,7 @@ import org.scalatest.prop.Whenever
 import org.scalatest.{BeforeAndAfterAll, Inspectors}
 import cats.syntax.show._
 import RequestTargetItem._
-import de.heikoseeberger.akkahttpcirce.CirceSupport._
+import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
 import scala.concurrent.ExecutionContext
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._

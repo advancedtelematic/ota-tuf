@@ -61,9 +61,9 @@ trait TargetStore {
   }
 
   protected def storageFilename(repoId: RepoId, targetFilename: TargetFilename): Path = {
-    val prefixHash = Sha256Digest.digest(repoId.uuid.toString.getBytes).hash.get
+    val prefixHash = Sha256Digest.digest(repoId.uuid.toString.getBytes).hash.value
 
-    val fileNameHash = Sha256Digest.digest(targetFilename.get.getBytes).hash.get
+    val fileNameHash = Sha256Digest.digest(targetFilename.value.getBytes).hash.value
 
     val (prefix, dir) = fileNameHash.splitAt(2)
 

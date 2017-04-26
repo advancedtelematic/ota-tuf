@@ -2,7 +2,7 @@ package com.advancedtelematic.libtuf.data
 
 import java.security.PublicKey
 
-import slick.driver.MySQLDriver.api._
+import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import cats.syntax.show.toShowOps
 import RsaKeyPair.keyShow

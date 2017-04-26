@@ -11,28 +11,21 @@ import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.tuf.keyserver.db.KeyRepository.KeyNotFound
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
-import slick.driver.MySQLDriver.api._
+import slick.jdbc.MySQLProfile.api._
 
 class RootRoleKeyEdit(vaultClient: VaultClient)
                       (implicit val db: Database, val ec: ExecutionContext)
   extends KeyRepositorySupport with RoleRepositorySupport {
-  def fetchPrivateKey(repoId: RepoId, keyId: KeyId): Future[ClientPrivateKey] = async {
-    val rootPublicKey = await(ensureIsRepoRootKey(repoId, keyId))
+  def fetchPrivateKey(repoId: RepoId, keyId: KeyId): Future[ClientPrivateKey] = for {
+    rootPublicKey <- ensureIsRepoRootKey(repoId, keyId)
+    privateKey <- findParsedPrivateKey(rootPublicKey)
+  } yield ClientPrivateKey(KeyType.RSA, privateKey)
 
-    val privateKey = await(findParsedPrivateKey(rootPublicKey))
-
-    ClientPrivateKey(KeyType.RSA, privateKey)
-  }
-
-  def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[ClientPrivateKey] = async {
-    val rootPublicKey = await(ensureIsRepoRootKey(repoId, keyId))
-
-    val privateKey = await(findParsedPrivateKey(rootPublicKey))
-
-    await(vaultClient.deleteKey(rootPublicKey))
-
-    ClientPrivateKey(KeyType.RSA, privateKey)
-  }
+  def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[ClientPrivateKey] = for {
+    rootPublicKey <- ensureIsRepoRootKey(repoId, keyId)
+    privateKey <- findParsedPrivateKey(rootPublicKey)
+    _ <- vaultClient.deleteKey(rootPublicKey)
+  } yield ClientPrivateKey(KeyType.RSA, privateKey)
 
   private def findParsedPrivateKey(keyId: KeyId): Future[PrivateKey] =
     vaultClient.findKey(keyId).flatMap { vaultKey =>

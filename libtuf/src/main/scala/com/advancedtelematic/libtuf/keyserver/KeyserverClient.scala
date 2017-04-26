@@ -37,7 +37,7 @@ class KeyserverHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorMate
 
   private val _http = Http()
 
-  import de.heikoseeberger.akkahttpcirce.CirceSupport._
+  import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
   private def apiUri(path: Path) =
     uri.withPath(Empty / "api" / "v1" ++ Slash(path))

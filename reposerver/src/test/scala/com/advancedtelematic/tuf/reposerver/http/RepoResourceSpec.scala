@@ -15,7 +15,7 @@ import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.prop.Whenever
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
-import de.heikoseeberger.akkahttpcirce.CirceSupport._
+import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import com.advancedtelematic.libats.codecs.AkkaCirce._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -402,7 +402,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val targetfileName: TargetFilename = Refined.unsafeApply("target/with/desc")
 
-    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.get}?name=pkgname&version=pkgversion&desc=wat"), form) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.value}?name=pkgname&version=pkgversion&desc=wat"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
