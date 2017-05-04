@@ -164,24 +164,6 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
-  test("GET on private_key returns private key") {
-    val repoId = RepoId.generate()
-
-    generateRootRole(repoId).futureValue
-
-    val rootKeyId = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      responseAs[SignedPayload[RootRole]].signed.roles(RoleType.ROOT).keyids.head
-    }
-
-    val privateKey = fakeVault.findKey(rootKeyId).futureValue.privateKey
-
-    Get(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.value}")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      responseAs[ClientPrivateKey].keyval.show shouldBe privateKey
-    }
-  }
-
   test("GET on private key returns 404 when key does not exist") {
     val repoId = RepoId.generate()
     val keyId: KeyId = Refined.unsafeApply("8a17927d32c40ca87d71e74123b85a4f465d76c2edb0c8e364559bd5fc3d035a")

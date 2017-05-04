@@ -47,9 +47,6 @@ class RootRoleResource(vaultClient: VaultClient)
       } ~
       pathPrefix("private_keys") {
         path(KeyIdPath) { keyId =>
-          get {
-            complete(rootRoleKeyEdit.fetchPrivateKey(repoId, keyId))
-          } ~
           delete {
             val f = rootRoleGeneration
               .findAndCache(repoId)
