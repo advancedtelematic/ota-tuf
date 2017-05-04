@@ -43,6 +43,14 @@ class RootRoleGeneration(vaultClient: VaultClient)
     }
   }
 
+  def forceRetry(repoId: RepoId): Future[Seq[KeyGenId]] = {
+    keyGenRepo.findBy(repoId).map { genRequests =>
+      genRequests.filter(_.status == KeyGenRequestStatus.ERROR).map(_.id)
+    }.flatMap { genIds =>
+      keyGenRepo.setStatusAll(genIds, KeyGenRequestStatus.REQUESTED)
+    }
+  }
+
   private def signRoot(repoId: RepoId): Future[SignedPayload[RootRole]] = {
     async {
       await(ensureKeysGenerated(repoId))

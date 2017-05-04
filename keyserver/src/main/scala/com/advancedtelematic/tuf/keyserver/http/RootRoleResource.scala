@@ -31,6 +31,10 @@ class RootRoleResource(vaultClient: VaultClient)
   val route =
     pathPrefix("root" / RepoId.Path) { repoId =>
       pathEnd {
+        put {
+          val f = rootRoleGeneration.forceRetry(repoId).map(_ => StatusCodes.OK)
+          complete(f)
+        } ~
         (post & entity(as[ClientRootGenRequest])) { (genRequest: ClientRootGenRequest) =>
           require(genRequest.threshold == 1, "threshold != 1 not supported")
 

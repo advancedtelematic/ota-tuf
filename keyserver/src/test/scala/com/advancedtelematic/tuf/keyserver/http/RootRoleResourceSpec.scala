@@ -73,6 +73,25 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     requests.map(_.roleType) should contain allElementsOf RoleType.ALL
   }
 
+  test("PUT forces a retry on ERROR requests") {
+    val repoId = RepoId.generate()
+
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest()) ~> routes ~> check {
+      status shouldBe StatusCodes.Accepted
+    }
+
+    val requests = keyGenRepo.findBy(repoId).futureValue
+    keyGenRepo.setStatusAll(requests.map(_.id), KeyGenRequestStatus.ERROR).futureValue
+    keyGenRepo.findBy(repoId).futureValue.map(_.status) should contain only KeyGenRequestStatus.ERROR
+
+    Put(apiUri(s"root/${repoId.show}"), ClientRootGenRequest()) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    val updatedRequests = keyGenRepo.findBy(repoId).futureValue
+    updatedRequests.map(_.status) should contain only KeyGenRequestStatus.REQUESTED
+  }
+
   test("POST fails if key for role already exists") {
     val repoId = RepoId.generate()
 
