@@ -61,6 +61,9 @@ protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: Execut
   def setStatus(genId: KeyGenId, status: KeyGenRequestStatus): Future[KeyGenId] =
     db.run(setStatusAction(genId, status))
 
+  def setStatusAll(genIds: Seq[KeyGenId], status: KeyGenRequestStatus): Future[Seq[KeyGenId]] =
+    db.run(DBIO.sequence(genIds.map(genId => setStatusAction(genId, status))).transactionally)
+
   def findPending(limit: Int = 1024): Future[Seq[KeyGenRequest]] =
     db.run(keyGenRequests.filter(_.status === KeyGenRequestStatus.REQUESTED).take(limit).result)
 
