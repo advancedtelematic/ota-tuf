@@ -17,6 +17,8 @@ import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 
+import scala.concurrent.duration.Duration
+
 trait Settings {
   lazy val config = ConfigFactory.load()
 
@@ -26,6 +28,7 @@ trait Settings {
   lazy val vaultAddr = Uri(config.getString("vault.address"))
   lazy val vaultToken = config.getString("vault.token")
   lazy val vaultMount = Path(config.getString("vault.mount"))
+  lazy val vaultRenewInterval = Duration.fromNanos(config.getDuration("vault.renewInterval").toNanos)
 }
 
 object Boot extends BootApp

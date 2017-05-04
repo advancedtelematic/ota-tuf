@@ -11,6 +11,7 @@ import akka.stream.ActorMaterializer
 import cats.syntax.show.toShowOps
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}
+import scala.concurrent.duration._
 
 class VaultClientIntegrationSpec extends TufKeyserverSpec
   with PatienceConfiguration {
@@ -44,5 +45,9 @@ class VaultClientIntegrationSpec extends TufKeyserverSpec
     vault.deleteKey(rsaKey.id).futureValue
 
     vault.findKey(rsaKey.id).failed.futureValue shouldBe VaultKeyNotFound
+  }
+
+  test("renews the token") {
+    vault.renewToken().futureValue shouldBe(())
   }
 }

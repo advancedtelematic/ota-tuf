@@ -12,7 +12,7 @@ import akka.stream.Materializer
 import com.advancedtelematic.libtuf.data.TufDataType.KeyId
 import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.{VaultKey, VaultKeyNotFound}
-import io.circe.{Decoder, Encoder, HCursor}
+import io.circe.{Decoder, Encoder, HCursor, Json}
 
 import scala.concurrent.Future
 import scala.util.control.NoStackTrace
@@ -20,6 +20,7 @@ import io.circe.generic.semiauto._
 import io.circe.syntax._
 import cats.syntax.either._
 
+import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
 
 trait VaultClient {
@@ -28,6 +29,8 @@ trait VaultClient {
   def findKey(keyId: KeyId): Future[VaultKey]
 
   def deleteKey(keyId: KeyId): Future[Unit]
+
+  def renewToken(): Future[Unit]
 }
 
 object VaultClient {
@@ -70,6 +73,11 @@ class VaultHttpClient(vaultHost: Uri, token: String, mount: Path)(implicit syste
 
   override def deleteKey(keyId: KeyId): Future[Unit] = {
     val req = HttpRequest(DELETE, vaultHost.withPath(mountPath / keyId.value))
+    execute[Unit](req)
+  }
+
+  override def renewToken(): Future[Unit] = {
+    val req = HttpRequest(POST, vaultHost.withPath(Path("/v1") / "auth" / "token" / "renew-self"))
     execute[Unit](req)
   }
 

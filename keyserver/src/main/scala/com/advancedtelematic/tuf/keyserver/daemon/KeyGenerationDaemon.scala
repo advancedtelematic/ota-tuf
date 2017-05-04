@@ -4,7 +4,7 @@ import java.security.Security
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Route
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient
+import com.advancedtelematic.tuf.keyserver.vault.{VaultClient, VaultTokenRenewer}
 import com.advancedtelematic.tuf.keyserver.{Settings, VersionInfo}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
@@ -31,7 +31,9 @@ object KeyGenerationDaemon extends BootApp
 
     val vaultClient = VaultClient(vaultAddr, vaultToken, vaultMount)
 
-    val deviceSeenListener = system.actorOf(KeyGeneratorLeader.props(vaultClient), "keygen-leader")
+    system.actorOf(KeyGeneratorLeader.props(vaultClient), "keygen-leader")
+
+    system.actorOf(VaultTokenRenewer.withBackoff(vaultClient, vaultRenewInterval))
 
     val routes: Route = (versionHeaders(version) & logResponseMetrics(projectName)) {
         DbHealthResource(versionMap).route
