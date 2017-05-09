@@ -14,7 +14,7 @@ import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole,
 import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Json}
-import slick.driver.MySQLDriver.api._
+import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepository.SignedRoleNotFound
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}

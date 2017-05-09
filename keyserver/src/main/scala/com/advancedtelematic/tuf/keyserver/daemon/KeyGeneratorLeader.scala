@@ -11,7 +11,7 @@ import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKey
-import slick.driver.MySQLDriver.api._
+import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 
 import scala.async.Async._

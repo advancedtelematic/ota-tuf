@@ -10,7 +10,7 @@ import com.advancedtelematic.libats.http.DefaultRejectionHandler._
 import com.advancedtelematic.libats.slick.monitoring.DbHealthResource
 
 import scala.concurrent.ExecutionContext
-import slick.driver.MySQLDriver.api._
+import slick.jdbc.MySQLProfile.api._
 
 
 class TufKeyserverRoutes(vaultClient: VaultClient)
