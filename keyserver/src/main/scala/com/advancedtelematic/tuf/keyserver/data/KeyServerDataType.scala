@@ -30,7 +30,5 @@ object KeyServerDataType {
 
   case class Key(id: KeyId, roleId: RoleId, keyType: KeyType, publicKey: PublicKey)
 
-  case class Role(id: RoleId, repoId: RepoId, roleType: RoleType, threshold: Int = 1)
+  case class Role(id: RoleId, repoId: RepoId, roleType: RoleType, threshold: Int)
 }
-
-

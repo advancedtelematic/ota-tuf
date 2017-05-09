@@ -36,7 +36,7 @@ class RootRoleResource(vaultClient: VaultClient)
           complete(f)
         } ~
         (post & entity(as[ClientRootGenRequest])) { (genRequest: ClientRootGenRequest) =>
-          require(genRequest.threshold == 1, "threshold != 1 not supported")
+          require(genRequest.threshold > 0, "threshold must be greater than 0")
 
           val f = rootRoleGeneration
             .createDefaultGenRequest(repoId, genRequest.threshold)

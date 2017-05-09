@@ -39,7 +39,7 @@ class KeyGeneratorWorkerIntegrationSpec extends TufKeyserverSpec
     actorRef ! request
 
     val key = expectMsgPF() {
-      case Status.Success(t: Key) => t
+      case Status.Success(t: Seq[Key] @unchecked) => t.head
     }
 
     vault.findKey(key.id).futureValue.publicKey should include("BEGIN PUBLIC KEY")
