@@ -7,7 +7,7 @@ import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, Key
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.tuf.keyserver.http.{Errors, RoleSigning}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
-import slick.driver.MySQLDriver.api._
+import slick.jdbc.MySQLProfile.api._
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, RoleKeys, RootRole}
 

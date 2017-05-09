@@ -16,7 +16,7 @@ import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport
 import com.advancedtelematic.tuf.reposerver.http.SignedRoleGeneration
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore.{TargetBytes, TargetRedirect}
 import org.slf4j.LoggerFactory
-import slick.driver.MySQLDriver.api.Database
+import slick.jdbc.MySQLProfile.api.Database
 
 import scala.concurrent.{ExecutionContext, Future}
 

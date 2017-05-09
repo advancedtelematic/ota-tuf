@@ -13,7 +13,7 @@ import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import io.circe.{Encoder, Json, JsonObject}
 
 import scala.concurrent.{ExecutionContext, Future}
-import slick.driver.MySQLDriver.api._
+import slick.jdbc.MySQLProfile.api._
 import io.circe.syntax._
 
 object RoleSigning {

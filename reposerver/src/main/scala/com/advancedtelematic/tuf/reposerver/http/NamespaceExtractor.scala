@@ -7,7 +7,7 @@ import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContext
-import slick.driver.MySQLDriver.api._
+import slick.jdbc.MySQLProfile.api._
 
 abstract class NamespaceValidation(implicit val ec: ExecutionContext, val db: Database)
   extends RepoNamespaceRepositorySupport with Directives {
