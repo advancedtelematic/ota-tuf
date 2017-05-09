@@ -8,7 +8,6 @@ import io.circe.generic.auto._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import cats.syntax.show._
 import com.advancedtelematic.libats.test.LongTest
-import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId}
@@ -22,8 +21,8 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientPrivateKey, RootRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
-import com.advancedtelematic.libtuf.crypt.RsaKeyPair.keyShow
 import eu.timepit.refined.api.Refined
+import org.scalatest.time.{Millis, Seconds, Span}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -32,12 +31,13 @@ class RootRoleResourceSpec extends TufKeyserverSpec
   with KeyGenRequestSupport
   with KeyRepositorySupport
   with PatienceConfiguration
-  with Inspectors
-  with LongTest {
+  with Inspectors {
 
   implicit val ec = ExecutionContext.global
 
   val keyGenerationOp = new KeyGenerationOp(fakeVault)
+
+  override implicit def patienceConfig = PatienceConfig(timeout = Span(10, Seconds), interval = Span(100, Millis))
 
   test("POST returns Accepted") {
     Post(apiUri(s"root/${RepoId.generate().show}"), ClientRootGenRequest()) ~> routes ~> check {
@@ -146,6 +146,28 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
+  test("GET returns 200 with all keys if threshold > 1 ") {
+    val repoId = RepoId.generate()
+
+    generateRootRole(repoId, threshold = 4).futureValue
+
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+
+      val signedPayload = responseAs[SignedPayload[RootRole]]
+      val rootRole = signedPayload.signed
+
+      signedPayload.signatures should have size 4 // Signed with root only
+
+      rootRole.keys should have size RoleType.ALL.size * 4
+
+      forAll(RoleType.ALL) { t =>
+        rootRole.roles(t).threshold shouldBe 4
+        rootRole.roles(t).keyids should have size 4
+      }
+    }
+  }
+
   test("POST to repoId/roletype signs any payload with existing keys ") {
     val repoId = RepoId.generate()
 
@@ -232,8 +254,8 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
-  def generateRootRole(repoId: RepoId): Future[Seq[Key]] = {
-    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest()) ~> routes ~> check {
+  def generateRootRole(repoId: RepoId, threshold: Int = 1): Future[Seq[Key]] = {
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(threshold = threshold)) ~> routes ~> check {
       status shouldBe StatusCodes.Accepted
 
       val ids = responseAs[Seq[KeyGenId]]
@@ -244,7 +266,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
             .find(id)
             .flatMap(keyGenerationOp.processGenerationRequest)
         }
-      }
+      }.map(_.flatten)
     }
   }
 }

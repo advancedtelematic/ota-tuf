@@ -1,5 +1,7 @@
 package com.advancedtelematic.tuf.keyserver.daemon
 
+import java.security.{KeyPair, PrivateKey}
+
 import akka.actor.Status.{Failure, Success}
 import akka.actor.{Actor, ActorLogging, Props, Status, SupervisorStrategy}
 import akka.routing.RoundRobinPool
@@ -91,19 +93,34 @@ class KeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database, val e
 
   private lazy val _log = LoggerFactory.getLogger(this.getClass)
 
-  def processGenerationRequest(kgr: KeyGenRequest): Future[Key] =
+  protected def generateKeys(roleId: RoleId, keySize: Int, threshold: Int): Seq[(Key, PrivateKey)] = {
+    require(threshold > 0, "threshold must be greater than 0")
+
+    (0 until threshold).map { _ =>
+      val keyPair = RsaKeyPair.generate(keySize)
+      (Key(keyPair.id, roleId, KeyType.RSA, keyPair.getPublic), keyPair.getPrivate)
+    }
+  }
+
+  protected def saveToVault(keys: Seq[(Key, PrivateKey)]): Future[Unit] = {
+    Future.traverse(keys) { case (key, privateKey) =>
+      val vaultKey = VaultKey(key.id, key.keyType, key.publicKey.show, privateKey.show)
+      vaultClient.createKey(vaultKey)
+    }.map(_ => ())
+  }
+
+  def processGenerationRequest(kgr: KeyGenRequest): Future[Seq[Key]] =
     async {
       val role = Role(RoleId.generate(), kgr.repoId, kgr.roleType, kgr.threshold)
 
-      val keyPair = RsaKeyPair.generate(kgr.keySize)
-      val key = Key(keyPair.id, role.id, KeyType.RSA, keyPair.getPublic)
+      val keyPairs = generateKeys(role.id, kgr.keySize, kgr.threshold)
+      val keys = keyPairs.map(_._1)
 
-      val vaultKey = VaultKey(key.id, key.keyType, key.publicKey.show, keyPair.getPrivate.show)
-      await(vaultClient.createKey(vaultKey))
-      await(keyGenRepo.persistGenerated(kgr, key, role, keyRepo, roleRepo))
+      await(saveToVault(keyPairs))
+      await(keyGenRepo.persistGenerated(kgr, keys, role, keyRepo, roleRepo))
 
-      _log.info("Generated Key {}", key.id.value)
-      key
+      _log.info("Generated keys {}", keys.map(_.id.value))
+      keys
     }
 }
 

@@ -48,7 +48,7 @@ class KeyserverHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorMate
     val entity = HttpEntity(ContentTypes.`application/json`, Json.obj("threshold" -> Json.fromInt(1)).noSpaces)
     val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show), entity = entity)
 
-    execHttp[Json](req){
+    execHttp[Json](req) {
       case response if response.status == StatusCodes.Conflict =>
         Future.failed(RootRoleConflict)
     }

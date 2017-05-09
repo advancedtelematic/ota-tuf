@@ -30,18 +30,18 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
 
   override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
 
-  def keyGenRequest: Future[KeyGenRequest] = {
+  def keyGenRequest(threshold: Int = 1): Future[KeyGenRequest] = {
     val keyGenId = KeyGenId.generate()
     val repoId = RepoId.generate()
-    keyGenRepo.persist(KeyGenRequest(keyGenId, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 1024))
+    keyGenRepo.persist(KeyGenRequest(keyGenId, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 1024, threshold = threshold))
   }
 
   test("generates a key for a key gen request") {
-    val keyGenReq = keyGenRequest.futureValue
+    val keyGenReq = keyGenRequest().futureValue
     actorRef ! keyGenReq
 
     val key = expectMsgPF() {
-      case Status.Success(t: Key) => t
+      case Status.Success(t: Seq[Key] @unchecked) => t.head
     }
 
     keyGenRepo.find(keyGenReq.id).futureValue.status shouldBe KeyGenRequestStatus.GENERATED
@@ -50,11 +50,11 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
   }
 
   test("associates new key with role") {
-    val keyGenReq = keyGenRequest.futureValue
+    val keyGenReq = keyGenRequest().futureValue
     actorRef ! keyGenReq
 
     val key = expectMsgPF() {
-      case Status.Success(t: Key) => t
+      case Status.Success(t: Seq[Key] @unchecked) => t.head
     }
 
     val keys = keyRepo.keysFor(keyGenReq.repoId).futureValue
@@ -82,10 +82,10 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
   }
 
   test("adds key to vault") {
-    actorRef ! keyGenRequest.futureValue
+    actorRef ! keyGenRequest().futureValue
 
     val key = expectMsgPF() {
-      case Status.Success(t: Key) => t
+      case Status.Success(t: Seq[Key] @unchecked) => t.head
       case Status.Failure(ex) => fail(ex)
     }
 
@@ -93,5 +93,14 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
     fakeVault.findKey(key.id).futureValue.privateKey should include("BEGIN RSA PRIVATE KEY")
   }
 
-  test("threshold keys per role") (pending)
+  test("threshold keys per role") {
+    actorRef ! keyGenRequest(5).futureValue
+
+    val keys = expectMsgPF() {
+      case Status.Success(t: Seq[Key] @unchecked) => t
+      case Status.Failure(ex) => fail(ex)
+    }
+
+    keys.map(_.id).distinct.size shouldBe 5
+  }
 }

@@ -13,7 +13,7 @@ import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyReposito
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
 import org.scalatest.concurrent.PatienceConfiguration.{Interval, Timeout}
 import org.scalatest.concurrent.Eventually
-import org.scalatest.time.{Milliseconds, Seconds, Span}
+import org.scalatest.time.{Millis, Milliseconds, Seconds, Span}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -22,14 +22,15 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
   with KeyGenRequestSupport
   with Eventually
   with BeforeAndAfterAll
-  with Inspectors
-  with LongTest {
+  with Inspectors {
 
   override implicit lazy val system: ActorSystem = ActorSystem(this.getClass.getSimpleName)
 
   implicit val ec = ExecutionContext.global
 
   lazy val actorRef = system.actorOf(KeyGeneratorLeader.props(fakeVault))
+
+  override implicit def patienceConfig = PatienceConfig(timeout = Span(10, Seconds), interval = Span(100, Millis))
 
   override def beforeAll(): Unit = {
     super.beforeAll()
