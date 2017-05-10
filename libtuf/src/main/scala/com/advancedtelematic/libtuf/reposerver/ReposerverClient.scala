@@ -26,6 +26,15 @@ trait ReposerverClient {
   def addTarget(namespace: Namespace, fileName: String, uri: Uri, checksum: Checksum, length: Int): Future[Unit]
 }
 
+final case class NoContent()
+
+object NoContent {
+  import akka.http.scaladsl.unmarshalling.Unmarshaller
+  implicit def noContentUnmarshaller: FromEntityUnmarshaller[NoContent] = Unmarshaller {
+    implicit ec => response => FastFuture.successful(NoContent())
+  }
+}
+
 class ReposerverHttpClient(reposerverUri: Uri)
                           (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer)
   extends ReposerverClient {
@@ -57,7 +66,7 @@ class ReposerverHttpClient(reposerverUri: Uri)
       uri = apiUri(Path("user_repo") / "targets" / fileName),
       entity = entity)
 
-    execHttp[Unit](namespace, req)
+    execHttp[NoContent](namespace, req).map(_ => ())
   }
 
   private def execHttp[T : ClassTag](namespace: Namespace, request: HttpRequest)
