@@ -1,7 +1,10 @@
 package com.advancedtelematic.tuf.keyserver.http
 
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.marshalling.ToResponseMarshallable
+import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
+import io.circe.syntax._
 import akka.stream.Materializer
+import cats.data.Validated.{Invalid, Valid}
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, ValidKeyId}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import slick.jdbc.MySQLProfile.api._
@@ -12,8 +15,9 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libats.data.RefinedUtils._
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType._
 
 class RootRoleResource(vaultClient: VaultClient)
@@ -63,6 +67,25 @@ class RootRoleResource(vaultClient: VaultClient)
       path(RoleType.Path) { roleType =>
         (post & entity(as[Json])) { payload =>
           val f = roleSigning.signFor(repoId, roleType, payload)
+          complete(f)
+        }
+      } ~
+      path("stuff") {
+        get {
+          // Return unsigned newly generated root.json
+          // TODO: VERSION NR
+          val f = rootRoleGeneration.createUnsigned(repoId)
+          complete(f)
+        } ~
+        (post & entity(as[SignedPayload[RootRole]])) { signedPayload =>
+          val f: Future[ToResponseMarshallable] =
+            rootRoleGeneration.storeUserSigned(repoId, signedPayload).map {
+              case Valid(_) =>
+                StatusCodes.NoContent
+              case Invalid(errors) =>
+                val obj = Json.obj("errors" -> errors.asJson)
+                StatusCodes.BadRequest -> obj
+            }
           complete(f)
         }
       }

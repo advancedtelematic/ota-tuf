@@ -34,8 +34,7 @@ object TufDataType {
     ValidationUtils.validHexValidation(ValidKeyId(), length = 64)
 
   case class ValidSignature()
-  case class
-  Signature(sig: Refined[String, ValidSignature], method: SignatureMethod = SignatureMethod.RSASSA_PSS)
+  case class Signature(sig: Refined[String, ValidSignature], method: SignatureMethod = SignatureMethod.RSASSA_PSS)
   implicit val validSignature: Validate.Plain[String, ValidSignature] =
     ValidationUtils.validBase64Validation(ValidSignature())
 

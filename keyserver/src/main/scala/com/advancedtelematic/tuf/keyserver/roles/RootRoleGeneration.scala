@@ -3,17 +3,20 @@ package com.advancedtelematic.tuf.keyserver.roles
 import java.time.{Duration, Instant}
 
 import com.advancedtelematic.libtuf.data.TufDataType._
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest, KeyGenRequestStatus}
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.tuf.keyserver.http.{Errors, RoleSigning}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import slick.jdbc.MySQLProfile.api._
 import akka.http.scaladsl.util.FastFuture
+import cats.data.Validated.{Invalid, Valid}
+import cats.data.ValidatedNel
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, RoleKeys, RootRole}
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.tuf.keyserver.db._
+
 
 
 class RootRoleGeneration(vaultClient: VaultClient)
@@ -39,7 +42,7 @@ class RootRoleGeneration(vaultClient: VaultClient)
   def findAndCache(repoId: RepoId): Future[SignedPayload[RootRole]] = {
     rootRoleCacheRepo.findCached(repoId).flatMap {
       case Some(signedPayload) => FastFuture.successful(signedPayload)
-      case None => signRoot(repoId).flatMap(addToCache(repoId))
+      case None => signRoot(repoId).flatMap(updateCache(repoId))
     }
   }
 
@@ -51,32 +54,42 @@ class RootRoleGeneration(vaultClient: VaultClient)
     }
   }
 
-  private def signRoot(repoId: RepoId): Future[SignedPayload[RootRole]] = {
-    async {
-      await(ensureKeysGenerated(repoId))
+  def createUnsigned(repoId: RepoId): Future[RootRole] = async {
+    await(ensureKeysGenerated(repoId))
 
-      val repoKeys = await(keyRepo.repoKeysByRole(repoId))
+    val repoKeys = await(keyRepo.repoKeysByRole(repoId))
 
-      val keys = repoKeys.values.flatMap(_._2).toList.distinct
+    val keys = repoKeys.values.flatMap(_._2).toList.distinct
 
-      val rootKeys = repoKeys.get(RoleType.ROOT).toList.flatMap(_._2).distinct
+    val clientKeys = keys.map { key =>
+      key.id -> ClientKey(key.keyType, key.publicKey)
+    }.toMap
 
-      val clientKeys = keys.map { key =>
-        key.id -> ClientKey(key.keyType, key.publicKey)
-      }.toMap
-
-      val roles = repoKeys
-        .map { case (roleType, (role, roleKeys)) =>
-          roleType -> RoleKeys(roleKeys.map(_.id), role.threshold)
+    val roles = repoKeys
+      .map { case (roleType, (role, roleKeys)) =>
+        roleType -> RoleKeys(roleKeys.map(_.id), role.threshold)
       }
 
-      val rootRole = RootRole(clientKeys, roles, expires = Instant.now.plus(DEFAULT_ROLE_EXPIRE), version = 1)
+    // TODO: VERSION !!!
+    RootRole(clientKeys, roles, expires = Instant.now.plus(DEFAULT_ROLE_EXPIRE), version = 1)
+  }
 
-      await(roleSigning.signAll(rootRole, rootKeys))
+  def storeUserSigned(repoId: RepoId, signed: SignedPayload[RootRole]): Future[ValidatedNel[String, SignedPayload[RootRole]]] = {
+    roleSigning.signatureIsValid(signed).flatMap {
+      case Valid(_) =>
+        updateCache(repoId)(signed).map(Valid(_))
+      case r@Invalid(_) =>
+        FastFuture.successful(r)
     }
   }
 
-  private def addToCache(repoId: RepoId)(signedRoot: SignedPayload[RootRole]): Future[SignedPayload[RootRole]] = {
+  private def signRoot(repoId: RepoId): Future[SignedPayload[RootRole]] = for {
+    rootRole <- createUnsigned(repoId)
+    rootKeys <- keyRepo.repoKeys(repoId, RoleType.ROOT)
+    signedPayload <- roleSigning.signAll(rootRole, rootKeys.distinct)
+  } yield signedPayload
+
+  private def updateCache(repoId: RepoId)(signedRoot: SignedPayload[RootRole]): Future[SignedPayload[RootRole]] = {
     rootRoleCacheRepo.addCached(repoId, signedRoot).map(_ => signedRoot)
   }
 

@@ -112,6 +112,9 @@ protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext
   def find(keyId: KeyId): Future[Key] =
     db.run(keys.filter(_.id === keyId).result.failIfNotSingle(KeyNotFound))
 
+  def findAll(keyIds: Seq[KeyId]): Future[Seq[Key]] =
+    db.run(keys.filter(_.id.inSet(keyIds)).result)
+
   def repoKeys(repoId: RepoId, roleType: RoleType): Future[Seq[Key]] =
     db.run {
       roles.join(keys).on(_.id === _.roleId)
@@ -146,19 +149,6 @@ protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext
           }
       }
     }
-  }
-
-  def replaceRootKeys(repoId: RepoId, keys: NonEmptyList[Key]): Future[Unit] = db.run {
-    val rolesQ =
-      Schema.roles
-        .filter(_.repoId === repoId)
-        .filter(_.roleType === RoleType.ROOT)
-        .map(_.id)
-
-    val deleteIO =
-      Schema.keys.filter(_.roleId.in(rolesQ)).delete
-
-    deleteIO.andThen(Schema.keys ++= keys.toList).transactionally
   }
 
   protected [db] def persistAllAction(keys: Seq[Key]): DBIO[Unit] =

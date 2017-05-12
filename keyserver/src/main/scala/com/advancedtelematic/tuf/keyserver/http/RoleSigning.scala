@@ -3,6 +3,8 @@ package com.advancedtelematic.tuf.keyserver.http
 import java.security.{PrivateKey, PublicKey}
 
 import akka.http.scaladsl.util.FastFuture
+import cats.data.Validated.{Invalid, Valid}
+import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType._
@@ -15,6 +17,7 @@ import io.circe.{Encoder, Json, JsonObject}
 import scala.concurrent.{ExecutionContext, Future}
 import slick.jdbc.MySQLProfile.api._
 import io.circe.syntax._
+import cats.implicits._
 
 object RoleSigning {
   import com.advancedtelematic.libtuf.crypt.CanonicalJson._
@@ -53,6 +56,28 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
     fetchPrivateKey(key).map { privateKey =>
       val signature = calculateSignature(payload, privateKey)
       ClientSignature(key.id, signature.method, signature.sig)
+    }
+  }
+
+  def signatureIsValid[T : Encoder](signedPayload: SignedPayload[T]): Future[ValidatedNel[String, List[ClientSignature]]] = {
+    val publicKeysF =
+      keyRepo
+        .findAll(signedPayload.signatures.map(_.keyid).distinct)
+        .map(_.map(k => k.id -> k.publicKey))
+        .map(_.toMap)
+
+    publicKeysF.map { publicKeys =>
+      signedPayload.signatures.par.map { sig =>
+        publicKeys.get(sig.keyid) match {
+          case Some(pk) =>
+            if(RoleSigning.isValid(signedPayload.signed, sig, pk))
+              Valid(sig)
+            else
+              Invalid(NonEmptyList.of(s"Invalid signature for key ${sig.keyid}"))
+          case None =>
+            Invalid(NonEmptyList.of(s"no public key with id ${sig.keyid} found"))
+        }
+      }.toList.sequenceU
     }
   }
 
