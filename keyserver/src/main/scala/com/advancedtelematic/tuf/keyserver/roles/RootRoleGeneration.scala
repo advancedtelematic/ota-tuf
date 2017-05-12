@@ -23,7 +23,7 @@ class RootRoleGeneration(vaultClient: VaultClient)
                         (implicit val db: Database, val ec: ExecutionContext)
   extends KeyGenRequestSupport
     with KeyRepositorySupport
-    with RootRoleCacheSupport {
+    with SignedRootRoleSupport {
 
   private val DEFAULT_ROLES = RoleType.ALL
   private val DEFAULT_KEY_SIZE = 2048
@@ -39,10 +39,10 @@ class RootRoleGeneration(vaultClient: VaultClient)
     keyGenRepo.persistAll(reqs).map(_.map(_.id))
   }
 
-  def findAndCache(repoId: RepoId): Future[SignedPayload[RootRole]] = {
-    rootRoleCacheRepo.findCached(repoId).flatMap {
+  def findOrGenerate(repoId: RepoId): Future[SignedPayload[RootRole]] = {
+    signedRootRoleRepo.find(repoId).flatMap {
       case Some(signedPayload) => FastFuture.successful(signedPayload)
-      case None => signRoot(repoId).flatMap(updateCache(repoId))
+      case None => signRoot(repoId).flatMap(persistSigned(repoId))
     }
   }
 
@@ -70,14 +70,15 @@ class RootRoleGeneration(vaultClient: VaultClient)
         roleType -> RoleKeys(roleKeys.map(_.id), role.threshold)
       }
 
-    // TODO: VERSION !!!
-    RootRole(clientKeys, roles, expires = Instant.now.plus(DEFAULT_ROLE_EXPIRE), version = 1)
+    val nextVersion = await(signedRootRoleRepo.nextVersion(repoId))
+
+    RootRole(clientKeys, roles, expires = Instant.now.plus(DEFAULT_ROLE_EXPIRE), version = nextVersion)
   }
 
   def storeUserSigned(repoId: RepoId, signed: SignedPayload[RootRole]): Future[ValidatedNel[String, SignedPayload[RootRole]]] = {
-    roleSigning.signatureIsValid(signed).flatMap {
+    roleSigning.signatureIsValid(repoId, signed).flatMap {
       case Valid(_) =>
-        updateCache(repoId)(signed).map(Valid(_))
+        persistSigned(repoId)(signed).map(Valid(_))
       case r@Invalid(_) =>
         FastFuture.successful(r)
     }
@@ -89,8 +90,8 @@ class RootRoleGeneration(vaultClient: VaultClient)
     signedPayload <- roleSigning.signAll(rootRole, rootKeys.distinct)
   } yield signedPayload
 
-  private def updateCache(repoId: RepoId)(signedRoot: SignedPayload[RootRole]): Future[SignedPayload[RootRole]] = {
-    rootRoleCacheRepo.addCached(repoId, signedRoot).map(_ => signedRoot)
+  private def persistSigned(repoId: RepoId)(signedRoot: SignedPayload[RootRole]): Future[SignedPayload[RootRole]] = {
+    signedRootRoleRepo.persist(repoId, signedRoot).map(_ => signedRoot)
   }
 
   private def ensureKeysGenerated(repoId: RepoId): Future[Unit] =

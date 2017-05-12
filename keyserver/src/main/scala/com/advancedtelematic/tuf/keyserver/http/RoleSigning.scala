@@ -59,23 +59,20 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
     }
   }
 
-  def signatureIsValid[T : Encoder](signedPayload: SignedPayload[T]): Future[ValidatedNel[String, List[ClientSignature]]] = {
-    val publicKeysF =
-      keyRepo
-        .findAll(signedPayload.signatures.map(_.keyid).distinct)
-        .map(_.map(k => k.id -> k.publicKey))
-        .map(_.toMap)
+  def signatureIsValid[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Future[ValidatedNel[String, List[ClientSignature]]] = {
+    val publicKeysF = keyRepo.repoKeys(repoId, RoleType.ROOT)
+    val sigsByKeyId = signedPayload.signatures.map(s => s.keyid -> s).toMap
 
     publicKeysF.map { publicKeys =>
-      signedPayload.signatures.par.map { sig =>
-        publicKeys.get(sig.keyid) match {
-          case Some(pk) =>
-            if(RoleSigning.isValid(signedPayload.signed, sig, pk))
+      publicKeys.par.map { key =>
+        sigsByKeyId.get(key.id) match {
+          case Some(sig) =>
+            if (RoleSigning.isValid(signedPayload.signed, sig, key.publicKey))
               Valid(sig)
             else
               Invalid(NonEmptyList.of(s"Invalid signature for key ${sig.keyid}"))
           case None =>
-            Invalid(NonEmptyList.of(s"no public key with id ${sig.keyid} found"))
+            Invalid(NonEmptyList.of(s"payload not signed with key ${key.id}"))
         }
       }.toList.sequenceU
     }

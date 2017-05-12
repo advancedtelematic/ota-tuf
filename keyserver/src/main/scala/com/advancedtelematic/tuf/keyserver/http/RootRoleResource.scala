@@ -1,7 +1,7 @@
 package com.advancedtelematic.tuf.keyserver.http
 
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
-import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
+import akka.http.scaladsl.model.StatusCodes
 import io.circe.syntax._
 import akka.stream.Materializer
 import cats.data.Validated.{Invalid, Valid}
@@ -17,7 +17,7 @@ import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libats.data.RefinedUtils._
-import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, RootRole}
 import com.advancedtelematic.libtuf.data.TufDataType._
 
 class RootRoleResource(vaultClient: VaultClient)
@@ -49,7 +49,7 @@ class RootRoleResource(vaultClient: VaultClient)
           complete(f)
         } ~
           get {
-            val f = rootRoleGeneration.findAndCache(repoId)
+            val f = rootRoleGeneration.findOrGenerate(repoId)
             complete(f)
           }
       } ~
@@ -57,7 +57,7 @@ class RootRoleResource(vaultClient: VaultClient)
         path(KeyIdPath) { keyId =>
           delete {
             val f = rootRoleGeneration
-              .findAndCache(repoId)
+              .findOrGenerate(repoId)
               .flatMap(_ => rootRoleKeyEdit.deletePrivateKey(repoId, keyId))
 
             complete(f)
@@ -70,10 +70,8 @@ class RootRoleResource(vaultClient: VaultClient)
           complete(f)
         }
       } ~
-      path("stuff") {
+      path("unsigned") {
         get {
-          // Return unsigned newly generated root.json
-          // TODO: VERSION NR
           val f = rootRoleGeneration.createUnsigned(repoId)
           complete(f)
         } ~
@@ -88,8 +86,8 @@ class RootRoleResource(vaultClient: VaultClient)
             }
           complete(f)
         }
-      }
     }
+  }
 }
 
 object ClientRootGenRequest {

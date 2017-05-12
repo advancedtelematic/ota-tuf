@@ -12,7 +12,6 @@ import org.bouncycastle.util.encoders.{Base64, Hex}
 import org.bouncycastle.openssl.{PEMKeyPair, PEMParser}
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
-
 import scala.util.Try
 
 object RsaKeyPair {
@@ -71,14 +70,18 @@ object RsaKeyPair {
     pemStrWriter.toString
   }
 
-  implicit class RsaKeyIdConversion(keyPair: KeyPair) {
+  implicit class RsaPublicKeyOps(key: PublicKey) {
     def id: KeyId = {
-      val publicKey = keyPair.getPublic.getEncoded
+      val publicKey = key.getEncoded
       val digest = new SHA256Digest()
       val buf = Array.fill[Byte](digest.getDigestSize)(0)
       digest.update(publicKey, 0, publicKey.length)
       digest.doFinal(buf, 0)
       Hex.toHexString(buf).refineTry[ValidKeyId].get
     }
+  }
+
+  implicit class RsaKeyIdConversion(keyPair: KeyPair) {
+    def id: KeyId = keyPair.getPublic.id
   }
 }
