@@ -58,7 +58,7 @@ class VaultHttpClient(vaultHost: Uri, token: String, mount: Path)(implicit syste
 
   private val mountPath = Empty / "v1" ++ Slash(mount)
 
-  case class VaultError(msg: String) extends Throwable(msg) with NoStackTrace
+  case class VaultError(msg: String) extends Exception(msg) with NoStackTrace
 
   override def createKey(key: VaultKey): Future[Unit] = {
     val req = HttpRequest(POST, vaultHost.withPath(mountPath / key.id.value))
