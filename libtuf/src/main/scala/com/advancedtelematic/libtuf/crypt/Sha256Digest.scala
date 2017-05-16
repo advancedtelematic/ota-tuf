@@ -4,7 +4,8 @@ import java.security.MessageDigest
 
 import akka.stream.scaladsl.Sink
 import akka.util.ByteString
-import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, HashMethod, ValidChecksum}
+import com.advancedtelematic.libtuf.data.TufDataType.Checksum
+import com.advancedtelematic.libats.messaging_datatype.DataType.{HashMethod, ValidChecksum}
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.util.encoders.Hex
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry

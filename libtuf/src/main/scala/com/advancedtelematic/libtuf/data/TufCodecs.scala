@@ -2,14 +2,14 @@ package com.advancedtelematic.libtuf.data
 
 import java.security.{PrivateKey, PublicKey}
 
-import cats.syntax.show._
 import akka.http.scaladsl.model.Uri
 import cats.syntax.either._
+import cats.syntax.show._
+import com.advancedtelematic.libats.messaging_datatype.DataType.HashMethod.HashMethod
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 import com.advancedtelematic.libtuf.data.TufDataType._
 import io.circe._
-import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
-import com.advancedtelematic.libtuf.data.TufDataType.HashMethod.HashMethod
 
 import scala.util.Try
 
@@ -70,10 +70,4 @@ object TufCodecs {
 
   implicit val checkSumEncoder: Encoder[Checksum] = deriveEncoder
   implicit val checkSumDecoder: Decoder[Checksum] = deriveDecoder
-
-
-  implicit val hashMethodKeyEncoder: KeyEncoder[HashMethod] = KeyEncoder[String].contramap(_.toString)
-  implicit val hashMethodKeyDecoder: KeyDecoder[HashMethod] = KeyDecoder.instance { value =>
-    Try(HashMethod.withName(value)).toOption
-  }
 }

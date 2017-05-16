@@ -1,7 +1,8 @@
 package com.advancedtelematic.tuf.reposerver.db
 
 import akka.http.scaladsl.model.StatusCodes
-import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, HashMethod, RoleType, ValidChecksum}
+import com.advancedtelematic.libats.messaging_datatype.DataType.{HashMethod, ValidChecksum}
+import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RoleType}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import io.circe.Json
 import com.advancedtelematic.libats.http.Errors.RawError

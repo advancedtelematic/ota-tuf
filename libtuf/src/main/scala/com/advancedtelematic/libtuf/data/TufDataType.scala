@@ -7,7 +7,8 @@ import cats.Show
 import com.advancedtelematic.libats.codecs.CirceEnum
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.libats.slick.codecs.SlickEnum
-import com.advancedtelematic.libtuf.data.TufDataType.HashMethod.HashMethod
+import com.advancedtelematic.libats.messaging_datatype.DataType.HashMethod.HashMethod
+import com.advancedtelematic.libats.messaging_datatype.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.{Decoder, Encoder}
@@ -15,18 +16,7 @@ import io.circe.{Decoder, Encoder}
 import scala.util.Try
 
 object TufDataType {
-  object HashMethod extends CirceEnum {
-    type HashMethod = Value
-
-    val SHA256 = Value("sha256")
-  }
-
   case class Checksum(method: HashMethod, hash: Refined[String, ValidChecksum])
-
-  case class ValidChecksum()
-
-  implicit val validChecksumValidate: Validate.Plain[String, ValidChecksum] =
-    ValidationUtils.validHexValidation(ValidChecksum(), length = 64)
 
   case class ValidKeyId()
   type KeyId = Refined[String, ValidKeyId]

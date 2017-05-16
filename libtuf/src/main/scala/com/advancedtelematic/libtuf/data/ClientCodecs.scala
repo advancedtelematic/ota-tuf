@@ -1,5 +1,6 @@
 package com.advancedtelematic.libtuf.data
 
+import com.advancedtelematic.libats.messaging_datatype.MessageCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
