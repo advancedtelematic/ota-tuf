@@ -58,7 +58,7 @@ object FakeRoleStore extends KeyserverClient {
   }
 
   def generateKey(repoId: RepoId): KeyPair = {
-    val rootKey = RsaKeyPair.generate(1024)
+    val rootKey = RsaKeyPair.generate()
     keys.put(repoId, rootKey)
   }
 

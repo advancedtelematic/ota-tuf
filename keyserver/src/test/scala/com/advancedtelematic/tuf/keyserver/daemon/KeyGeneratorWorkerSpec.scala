@@ -28,12 +28,12 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
 
   val actorRef = system.actorOf(KeyGeneratorWorker.props(fakeVault))
 
-  override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
+  override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(10, Seconds))
 
   def keyGenRequest(threshold: Int = 1): Future[KeyGenRequest] = {
     val keyGenId = KeyGenId.generate()
     val repoId = RepoId.generate()
-    keyGenRepo.persist(KeyGenRequest(keyGenId, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 1024, threshold = threshold))
+    keyGenRepo.persist(KeyGenRequest(keyGenId, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 2048, threshold = threshold))
   }
 
   test("generates a key for a key gen request") {
@@ -64,7 +64,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
 
   test("sends back Failure if something bad happens") {
     val repoId = RepoId.generate()
-    actorRef ! KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 1024)
+    actorRef ! KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 2048)
     val exception = expectMsgType[Status.Failure](3.seconds)
     exception.cause shouldBe a[MissingEntity[_]]
   }

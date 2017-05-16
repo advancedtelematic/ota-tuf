@@ -34,7 +34,7 @@ class KeyGeneratorWorkerIntegrationSpec extends TufKeyserverSpec
   test("adds key to vault") {
     val keyid = KeyGenId.generate()
     val repoId = RepoId.generate()
-    val request = KeyGenRequest(keyid, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 1024)
+    val request = KeyGenRequest(keyid, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 2048)
     keyGenRepo.persist(request)
     actorRef ! request
 

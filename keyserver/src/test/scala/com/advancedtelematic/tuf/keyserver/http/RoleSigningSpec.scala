@@ -26,7 +26,7 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
 
   override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(3, Seconds))
 
-  val keyPair = RsaKeyPair.generate(1024)
+  val keyPair = RsaKeyPair.generate()
 
   val dbKey = Key(keyPair.id, RoleId.generate(), KeyType.RSA, keyPair.getPublic)
 

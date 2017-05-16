@@ -15,7 +15,10 @@ import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import scala.util.Try
 
 object RsaKeyPair {
-  def generate(size: Int = 512): KeyPair = {
+  def generate(size: Int = 2048): KeyPair = {
+    if(size < 2048) {
+      throw new IllegalArgumentException("Key size too small, must be >= 2048")
+    }
     val keyGen = KeyPairGenerator.getInstance("RSA", "BC")
     keyGen.initialize(size, new SecureRandom())
     keyGen.generateKeyPair()

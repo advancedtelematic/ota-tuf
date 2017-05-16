@@ -42,7 +42,7 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
     system.terminate()
   }
 
-  private val timeout = Timeout(Span(5, Seconds))
+  private val timeout = Timeout(Span(10, Seconds))
 
   private val interval = Interval(Span(200, Milliseconds))
 
@@ -56,7 +56,7 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
     val keyGenReqs = Future.sequence {
       (1 to 20).map { _ =>
         val repoId = RepoId.generate()
-        val otherKeyGenReq = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 1024)
+        val otherKeyGenReq = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 2048)
         keyGenRepo.persist(otherKeyGenReq).map(_.id)
       }
     }
@@ -78,7 +78,7 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
     expectGenerated(KeyGenRequestStatus.GENERATED)
   }
 
-  def expectGenerated(newStatus: KeyGenRequestStatus, size: Int = 512): Assertion = {
+  def expectGenerated(newStatus: KeyGenRequestStatus, size: Int = 2048): Assertion = {
     val repoId = RepoId.generate()
     val keyGenRequest = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = size)
     keyGenRepo.persist(keyGenRequest).futureValue
