@@ -9,7 +9,7 @@ import akka.http.scaladsl.model.Uri
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{FileIO, Source}
 import akka.util.ByteString
-import com.advancedtelematic.libtuf.data.ClientDataType.TargetFilename
+import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore.{TargetRedirect, TargetRetrieveResult, TargetStoreResult}
 import com.amazonaws.auth.{AWSCredentials, AWSCredentialsProvider}

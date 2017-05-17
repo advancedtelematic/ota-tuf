@@ -8,8 +8,8 @@ import akka.http.scaladsl.model.Uri
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.util.ByteString
+import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
 import com.advancedtelematic.libtuf.crypt.Sha256Digest
-import com.advancedtelematic.libtuf.data.ClientDataType.TargetFilename
 import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId}
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore.{TargetRetrieveResult, TargetStoreResult}
 import org.slf4j.LoggerFactory

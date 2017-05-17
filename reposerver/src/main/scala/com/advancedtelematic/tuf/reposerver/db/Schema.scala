@@ -2,7 +2,8 @@ package com.advancedtelematic.tuf.reposerver.db
 
 import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libats.data.Namespace
-import com.advancedtelematic.libtuf.data.ClientDataType.{TargetCustom, TargetFilename}
+import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
+import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, KeyId, RepoId}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}

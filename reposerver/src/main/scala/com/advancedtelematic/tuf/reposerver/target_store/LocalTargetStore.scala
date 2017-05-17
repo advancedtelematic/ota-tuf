@@ -10,7 +10,7 @@ import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
 import akka.stream.scaladsl.{FileIO, Sink, Source}
 import akka.util.ByteString
-import com.advancedtelematic.libtuf.data.ClientDataType.TargetFilename
+import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.reposerver.http.Errors
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore.{TargetBytes, TargetRetrieveResult, TargetStoreResult}

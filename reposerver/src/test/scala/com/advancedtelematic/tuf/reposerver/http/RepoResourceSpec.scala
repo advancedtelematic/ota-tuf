@@ -5,10 +5,11 @@ import akka.http.scaladsl.model._
 import akka.stream.scaladsl.Sink
 import akka.util.ByteString
 import cats.syntax.show.toShowOps
+import com.advancedtelematic.libats.messaging_datatype.DataType.{HashMethod, TargetFilename, ValidTargetFilename}
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.{RsaKeyPair, Sha256Digest}
-import com.advancedtelematic.libtuf.data.ClientDataType.{RoleTypeToMetaPathOp, RootRole, SnapshotRole, TargetCustom, TargetFilename, TargetsRole, TimestampRole, ValidTargetFilename}
-import com.advancedtelematic.libtuf.data.TufDataType.{HashMethod, RepoId, RoleType, _}
+import com.advancedtelematic.libtuf.data.ClientDataType.{RoleTypeToMetaPathOp, RootRole, SnapshotRole, TargetCustom, TargetsRole, TimestampRole}
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, _}
 import io.circe.syntax._
 import io.circe.{Encoder, Json}
 import org.scalatest.concurrent.PatienceConfiguration

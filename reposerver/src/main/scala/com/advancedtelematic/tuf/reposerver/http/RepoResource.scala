@@ -16,9 +16,10 @@ import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.generic.semiauto._
 import io.circe.{Decoder, Encoder}
 import slick.jdbc.MySQLProfile.api._
+import com.advancedtelematic.libats.messaging_datatype.DataType.{TargetFilename, ValidTargetFilename}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.{TargetCustom, TargetFilename, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.target_store.{TargetStore, TargetUpload}
 import io.circe.syntax._

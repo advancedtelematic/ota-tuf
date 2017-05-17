@@ -7,7 +7,8 @@ import akka.http.scaladsl.model._
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
-import com.advancedtelematic.libtuf.data.ClientDataType.{TargetCustom, TargetFilename}
+import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
+import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.data.Messages.PackageStorageUsage

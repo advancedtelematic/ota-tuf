@@ -1,6 +1,7 @@
 package com.advancedtelematic.tuf.reposerver.data
 
 import akka.http.scaladsl.model.Uri
+import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
 import com.advancedtelematic.libtuf.crypt.Sha256Digest
 import com.advancedtelematic.libtuf.data.ClientDataType.{MetaItem, MetaPath, _}
 import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId}

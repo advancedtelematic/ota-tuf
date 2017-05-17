@@ -4,10 +4,11 @@ import java.security.{PrivateKey, PublicKey}
 import java.time.Instant
 
 import cats.syntax.show._
-import com.advancedtelematic.libtuf.data.TufDataType.HashMethod.HashMethod
+import com.advancedtelematic.libats.messaging_datatype.DataType.HashMethod.HashMethod
+import com.advancedtelematic.libats.messaging_datatype.DataType.{TargetFilename, ValidChecksum}
 import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, ValidChecksum}
+import com.advancedtelematic.libtuf.data.TufDataType.KeyId
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
@@ -53,13 +54,6 @@ object ClientDataType {
   }
 
   case class MetaItem(hashes: ClientHashes, length: Long)
-
-  case class ValidTargetFilename()
-  type TargetFilename = Refined[String, ValidTargetFilename]
-
-  implicit val validTargetFilename: Validate.Plain[String, ValidTargetFilename] =
-    Validate.fromPredicate(f => f.nonEmpty && f.length < 254,
-      _ => "TargetFilename cannot be empty or bigger than 254 chars", ValidTargetFilename())
 
   trait VersionedRole {
     val version: Int
