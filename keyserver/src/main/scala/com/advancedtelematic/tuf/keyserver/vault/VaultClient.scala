@@ -39,7 +39,7 @@ object VaultClient {
   // TODO: Should be publicKey: PublicKey, privateKey: PrivateKey, but we'd need to migrate existing keys
   case class VaultKey(id: KeyId, keyType: KeyType, publicKey: String, privateKey: String)
 
-  case object VaultKeyNotFound extends Throwable("vault key not found") with NoStackTrace
+  case object VaultKeyNotFound extends Exception("vault key not found") with NoStackTrace
 
   object VaultKey {
     implicit val encoder: Encoder[VaultKey] = deriveEncoder[VaultKey]

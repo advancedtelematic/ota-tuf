@@ -57,7 +57,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
       case Status.Success(t: Seq[Key] @unchecked) => t.head
     }
 
-    val keys = keyRepo.keysFor(keyGenReq.repoId).futureValue
+    val keys = keyRepo.repoKeys(keyGenReq.repoId).futureValue
 
     keys.map(_.id) should contain(key.id)
   }

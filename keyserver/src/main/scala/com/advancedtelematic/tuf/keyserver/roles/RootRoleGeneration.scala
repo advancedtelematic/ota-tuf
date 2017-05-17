@@ -86,7 +86,7 @@ class RootRoleGeneration(vaultClient: VaultClient)
 
   private def signRoot(repoId: RepoId): Future[SignedPayload[RootRole]] = for {
     rootRole <- createUnsigned(repoId)
-    rootKeys <- keyRepo.repoKeys(repoId, RoleType.ROOT)
+    rootKeys <- keyRepo.repoKeysForRole(repoId, RoleType.ROOT)
     signedPayload <- roleSigning.signAll(rootRole, rootKeys.distinct)
   } yield signedPayload
 

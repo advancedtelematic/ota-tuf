@@ -115,7 +115,7 @@ protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext
   def findAll(keyIds: Seq[KeyId]): Future[Seq[Key]] =
     db.run(keys.filter(_.id.inSet(keyIds)).result)
 
-  def repoKeys(repoId: RepoId, roleType: RoleType): Future[Seq[Key]] =
+  def repoKeysForRole(repoId: RepoId, roleType: RoleType): Future[Seq[Key]] =
     db.run {
       roles.join(keys).on(_.id === _.roleId)
         .filter(_._1.repoId === repoId)
@@ -124,8 +124,7 @@ protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext
         .result
     }
 
-
-  def keysFor(repoId: RepoId): Future[Seq[Key]] =
+  def repoKeys(repoId: RepoId): Future[Seq[Key]] =
     db.run {
       roles.join(keys).on(_.id === _.roleId)
         .filter(_._1.repoId === repoId)

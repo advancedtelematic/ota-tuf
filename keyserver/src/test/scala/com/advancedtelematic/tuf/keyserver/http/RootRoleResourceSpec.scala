@@ -2,6 +2,7 @@ package com.advancedtelematic.tuf.keyserver.http
 
 import java.security.PrivateKey
 
+import com.advancedtelematic.tuf.keyserver.db.KeyRepository.KeyNotFound
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
@@ -9,7 +10,7 @@ import com.advancedtelematic.tuf.util.{ResourceSpec, TufKeyserverSpec}
 import io.circe.generic.auto._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import cats.syntax.show._
-import com.advancedtelematic.libtuf.crypt.RsaKeyPair.RsaKeyIdConversion
+import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp
 import com.advancedtelematic.libtuf.data.TufDataType._
@@ -24,9 +25,11 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, ClientPrivateKey, RootRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
+import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKeyNotFound
 import eu.timepit.refined.api.Refined
 import org.scalatest.time.{Millis, Seconds, Span}
 import io.circe.generic.semiauto._
+
 import scala.concurrent.{ExecutionContext, Future}
 
 class RootRoleResourceSpec extends TufKeyserverSpec
@@ -187,7 +190,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
       signedPayload.signatures shouldNot be(empty)
 
-      val targetKey = keyRepo.repoKeys(repoId, RoleType.TARGETS).futureValue.head
+      val targetKey = keyRepo.repoKeysForRole(repoId, RoleType.TARGETS).futureValue.head
 
       signedPayload.signed shouldBe toSignPayload
 
@@ -217,7 +220,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
-  test("DELETE on private_key wipes private key") {
+  test("DELETE on private_key wipes root private key") {
     val repoId = RepoId.generate()
 
     generateRootRole(repoId).futureValue
@@ -232,9 +235,25 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       responseAs[ClientPrivateKey].keyval shouldBe a[PrivateKey]
     }
 
-    Get(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.value}")) ~> routes ~> check {
-      status shouldBe StatusCodes.NotFound
+    fakeVault.findKey(rootKeyId).failed.futureValue shouldBe VaultKeyNotFound
+  }
+
+  test("DELETE on private_key wipes non root private key") {
+    val repoId = RepoId.generate()
+
+    generateRootRole(repoId).futureValue
+
+    val keyId = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed.roles(RoleType.TARGETS).keyids.head
     }
+
+    Delete(apiUri(s"root/${repoId.show}/private_keys/${keyId.value}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[ClientPrivateKey].keyval shouldBe a[PrivateKey]
+    }
+
+    fakeVault.findKey(keyId).failed.futureValue shouldBe VaultKeyNotFound
   }
 
   test("wiping private key still allows download of root.json") {

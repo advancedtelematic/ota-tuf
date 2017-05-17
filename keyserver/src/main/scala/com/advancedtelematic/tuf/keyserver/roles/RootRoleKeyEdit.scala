@@ -12,6 +12,7 @@ import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.tuf.keyserver.db.KeyRepository.KeyNotFound
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import slick.jdbc.MySQLProfile.api._
 
 class RootRoleKeyEdit(vaultClient: VaultClient)
@@ -19,14 +20,14 @@ class RootRoleKeyEdit(vaultClient: VaultClient)
   extends KeyRepositorySupport with RoleRepositorySupport {
 
   def fetchPrivateKey(repoId: RepoId, keyId: KeyId): Future[ClientPrivateKey] = for {
-    rootPublicKey <- ensureIsRepoRootKey(repoId, keyId)
+    rootPublicKey <- ensureIsRepoKey(repoId, keyId, Some(RoleType.ROOT))
     privateKey <- findParsedPrivateKey(rootPublicKey)
   } yield ClientPrivateKey(KeyType.RSA, privateKey)
 
   def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[ClientPrivateKey] = for {
-    rootPublicKey <- ensureIsRepoRootKey(repoId, keyId)
-    privateKey <- findParsedPrivateKey(rootPublicKey)
-    _ <- vaultClient.deleteKey(rootPublicKey)
+    _ <- ensureIsRepoKey(repoId, keyId, roleType = None)
+    privateKey <- findParsedPrivateKey(keyId)
+    _ <- vaultClient.deleteKey(keyId)
   } yield ClientPrivateKey(KeyType.RSA, privateKey)
 
   private def findParsedPrivateKey(keyId: KeyId): Future[PrivateKey] =
@@ -36,8 +37,13 @@ class RootRoleKeyEdit(vaultClient: VaultClient)
       case VaultKeyNotFound => Future.failed(KeyNotFound)
     }
 
-  private def ensureIsRepoRootKey(repoId: RepoId, keyId: KeyId): Future[KeyId] = async {
-    val rootPublicKey = await(keyRepo.repoKeys(repoId, RoleType.ROOT)).find(_.id == keyId)
-    rootPublicKey.map(_.id).getOrElse(throw KeyNotFound)
+  private def ensureIsRepoKey(repoId: RepoId, keyId: KeyId, roleType: Option[RoleType]): Future[KeyId] = async {
+    val repoKeysF = roleType match {
+      case Some(rt) => keyRepo.repoKeysForRole(repoId, rt)
+      case None => keyRepo.repoKeys(repoId)
+    }
+
+    val publicKey = await(repoKeysF).find(k => k.id == keyId)
+    publicKey.map(_.id).getOrElse(throw KeyNotFound)
   }
 }
