@@ -43,7 +43,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
   val keyGenerationOp = new KeyGenerationOp(fakeVault)
 
-  override implicit def patienceConfig = PatienceConfig(timeout = Span(10, Seconds), interval = Span(100, Millis))
+  override implicit def patienceConfig = PatienceConfig(timeout = Span(20, Seconds), interval = Span(500, Millis))
 
   test("POST returns Accepted") {
     Post(apiUri(s"root/${RepoId.generate().show}"), ClientRootGenRequest()) ~> routes ~> check {

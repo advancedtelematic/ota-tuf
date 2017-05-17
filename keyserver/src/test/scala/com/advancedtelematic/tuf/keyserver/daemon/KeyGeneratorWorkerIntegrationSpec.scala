@@ -11,6 +11,7 @@ import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import com.advancedtelematic.tuf.util.TufKeyserverSpec
 import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
+import org.scalatest.time.{Millis, Seconds, Span}
 
 import scala.concurrent.ExecutionContext
 
@@ -24,6 +25,8 @@ class KeyGeneratorWorkerIntegrationSpec extends TufKeyserverSpec
   override implicit lazy val system: ActorSystem = ActorSystem("KeyGeneratorWorkerIntegrationSpec")
 
   implicit val ec = ExecutionContext.global
+
+  override implicit def patienceConfig = PatienceConfig(timeout = Span(20, Seconds), interval = Span(300, Millis))
 
   implicit val mat = ActorMaterializer()
 

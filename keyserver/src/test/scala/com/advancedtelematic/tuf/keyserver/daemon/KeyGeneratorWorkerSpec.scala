@@ -13,7 +13,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.RoleType
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import org.scalatest.concurrent.PatienceConfiguration
-import org.scalatest.time.{Seconds, Span}
+import org.scalatest.time.{Milliseconds, Seconds, Span}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
@@ -28,19 +28,24 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
 
   val actorRef = system.actorOf(KeyGeneratorWorker.props(fakeVault))
 
-  override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(10, Seconds))
+  private val timeout = Span(20, Seconds)
+
+  override implicit def patienceConfig =
+    PatienceConfig().copy(timeout = timeout, interval = Span(300, Milliseconds))
 
   def keyGenRequest(threshold: Int = 1): Future[KeyGenRequest] = {
     val keyGenId = KeyGenId.generate()
     val repoId = RepoId.generate()
-    keyGenRepo.persist(KeyGenRequest(keyGenId, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 2048, threshold = threshold))
+    val request = KeyGenRequest(keyGenId, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT,
+                                keySize = 2048, threshold = threshold)
+    keyGenRepo.persist(request)
   }
 
   test("generates a key for a key gen request") {
     val keyGenReq = keyGenRequest().futureValue
     actorRef ! keyGenReq
 
-    val key = expectMsgPF() {
+    val key = expectMsgPF(timeout) {
       case Status.Success(t: Seq[Key] @unchecked) => t.head
     }
 
@@ -53,7 +58,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
     val keyGenReq = keyGenRequest().futureValue
     actorRef ! keyGenReq
 
-    val key = expectMsgPF() {
+    val key = expectMsgPF(timeout) {
       case Status.Success(t: Seq[Key] @unchecked) => t.head
     }
 
@@ -84,7 +89,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
   test("adds key to vault") {
     actorRef ! keyGenRequest().futureValue
 
-    val key = expectMsgPF() {
+    val key = expectMsgPF(timeout) {
       case Status.Success(t: Seq[Key] @unchecked) => t.head
       case Status.Failure(ex) => fail(ex)
     }
@@ -96,7 +101,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
   test("threshold keys per role") {
     actorRef ! keyGenRequest(5).futureValue
 
-    val keys = expectMsgPF() {
+    val keys = expectMsgPF(timeout) {
       case Status.Success(t: Seq[Key] @unchecked) => t
       case Status.Failure(ex) => fail(ex)
     }
