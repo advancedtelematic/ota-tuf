@@ -64,15 +64,16 @@ object Schema {
 
   implicit val signedPayloadRootRoleMapper = circeMapper[SignedPayload[RootRole]]
 
-  class RootRoleCacheTable(tag: Tag) extends Table[(RepoId, Instant, SignedPayload[RootRole])](tag, "root_role_cache") {
+  class SignedRootRoleTable(tag: Tag) extends Table[(RepoId, Instant, Int, SignedPayload[RootRole])](tag, "signed_root_roles") {
     def repoId = column[RepoId]("repo_id")
     def expiresAt = column[Instant]("expires_at")
+    def version = column[Int]("version")
     def signedPayload = column[SignedPayload[RootRole]]("signed_payload")
 
-    def pk = primaryKey("pk_root_role_cache", repoId)
+    def pk = primaryKey("pk_signed_root_roles", repoId)
 
-    override def * = (repoId, expiresAt, signedPayload)
+    override def * = (repoId, expiresAt, version, signedPayload)
   }
 
-  protected [db] val rootRoleCaches = TableQuery[RootRoleCacheTable]
+  protected [db] val signedRootRoles = TableQuery[SignedRootRoleTable]
 }

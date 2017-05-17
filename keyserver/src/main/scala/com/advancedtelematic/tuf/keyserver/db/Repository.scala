@@ -112,6 +112,9 @@ protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext
   def find(keyId: KeyId): Future[Key] =
     db.run(keys.filter(_.id === keyId).result.failIfNotSingle(KeyNotFound))
 
+  def findAll(keyIds: Seq[KeyId]): Future[Seq[Key]] =
+    db.run(keys.filter(_.id.inSet(keyIds)).result)
+
   def repoKeys(repoId: RepoId, roleType: RoleType): Future[Seq[Key]] =
     db.run {
       roles.join(keys).on(_.id === _.roleId)
@@ -148,19 +151,6 @@ protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext
     }
   }
 
-  def replaceRootKeys(repoId: RepoId, keys: NonEmptyList[Key]): Future[Unit] = db.run {
-    val rolesQ =
-      Schema.roles
-        .filter(_.repoId === repoId)
-        .filter(_.roleType === RoleType.ROOT)
-        .map(_.id)
-
-    val deleteIO =
-      Schema.keys.filter(_.roleId.in(rolesQ)).delete
-
-    deleteIO.andThen(Schema.keys ++= keys.toList).transactionally
-  }
-
   protected [db] def persistAllAction(keys: Seq[Key]): DBIO[Unit] =
     DBIO.sequence(keys.map(Schema.keys.insertOrUpdate))
 
@@ -181,28 +171,35 @@ protected [db] class RoleRepository()(implicit db: Database, ec: ExecutionContex
       (Schema.roles += role).map(_ => role)
 }
 
-trait RootRoleCacheSupport extends DatabaseSupport {
-  lazy val rootRoleCacheRepo = new RootRoleCacheRepository()
+trait SignedRootRoleSupport extends DatabaseSupport {
+  lazy val signedRootRoleRepo = new SignedRootRoleRepository()
 }
 
-protected[db] class RootRoleCacheRepository()(implicit db: Database, ec: ExecutionContext) {
-  import com.advancedtelematic.libtuf.data.TufCodecs._
-  import com.advancedtelematic.libtuf.data.ClientCodecs._
+protected[db] class SignedRootRoleRepository()(implicit db: Database, ec: ExecutionContext) {
   import Schema.signedPayloadRootRoleMapper
-  import Schema.rootRoleCaches
+  import Schema.signedRootRoles
 
-  def addCached(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = {
+  def persist(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = {
     val expires = signedPayload.signed.expires
 
-    val io = rootRoleCaches
-      .insertOrUpdate((repoId, expires, signedPayload))
+    val io = signedRootRoles
+      .insertOrUpdate((repoId, expires, signedPayload.signed.version, signedPayload))
 
     db.run(io).map(_ => ())
   }
 
-  def findCached(repoId: RepoId): Future[Option[SignedPayload[RootRole]]] =
+  def nextVersion(repoId: RepoId): Future[Int] = db.run {
+    signedRootRoles
+      .filter(_.repoId === repoId)
+      .map(_.version)
+      .result
+      .headOption
+      .map(_.getOrElse(0) + 1)
+  }
+
+  def find(repoId: RepoId): Future[Option[SignedPayload[RootRole]]] =
     db.run {
-      rootRoleCaches
+      signedRootRoles
         .filter(_.expiresAt > Instant.now())
         .filter(_.repoId === repoId)
         .map(_.signedPayload)

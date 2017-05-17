@@ -2,28 +2,31 @@ package com.advancedtelematic.tuf.keyserver.http
 
 import java.security.PrivateKey
 
+import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import akka.http.scaladsl.model.StatusCodes
+import cats.data.NonEmptyList
 import com.advancedtelematic.tuf.util.{ResourceSpec, TufKeyserverSpec}
 import io.circe.generic.auto._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import cats.syntax.show._
-import com.advancedtelematic.libats.test.LongTest
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair.RsaKeyIdConversion
+import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
-import io.circe.Json
+import io.circe.{Decoder, Encoder, Json}
 import org.scalatest.Inspectors
 import org.scalatest.concurrent.PatienceConfiguration
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientPrivateKey, RootRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, ClientPrivateKey, RootRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import eu.timepit.refined.api.Refined
 import org.scalatest.time.{Millis, Seconds, Span}
-
+import io.circe.generic.semiauto._
 import scala.concurrent.{ExecutionContext, Future}
 
 class RootRoleResourceSpec extends TufKeyserverSpec
@@ -254,6 +257,92 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
+  test("GET on an unsigned root returns unsigned root") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId).futureValue
+
+    Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[RootRole] shouldBe a[RootRole]
+    }
+  }
+
+  test("GET on unsigned root role returns root role with increased version") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId).futureValue
+
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed.version shouldBe 1
+    }
+
+    Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[RootRole].version shouldBe 2
+    }
+  }
+
+  test("POST returns 4xx when signature is not valid") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId).futureValue
+
+    val rootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[RootRole]
+    }
+
+    val rootKeyId = rootRole.roles(RoleType.ROOT).keyids.head
+    val signedPayload = clientSignPayload(rootKeyId, rootRole, "sign something else")
+
+    Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+      responseAs[JsonErrors].head should include(s"Invalid signature for key $rootKeyId")
+    }
+  }
+
+  test("POST returns error payload is not signed with all keys") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId).futureValue
+
+    val rootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[RootRole]
+    }
+
+    val rootKeyId = rootRole.roles(RoleType.ROOT).keyids.head
+    val signedPayload = SignedPayload(Seq.empty, rootRole)
+
+    Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+      responseAs[JsonErrors].head should  include(s"payload not signed with key $rootKeyId")
+    }
+  }
+
+  test("POST returns 204 when signature is valid") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId).futureValue
+
+    val rootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[RootRole]
+    }
+
+    val rootKeyId = rootRole.roles(RoleType.ROOT).keyids.head
+    val signedPayload = clientSignPayload(rootKeyId, rootRole, rootRole)
+
+    Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+  }
+
+  def clientSignPayload[T : Encoder](rootKeyId: KeyId, role: RootRole, payloadToSign: T): SignedPayload[RootRole] = {
+    val privateKey = fakeVault.findKey(rootKeyId).futureValue.privateKey
+    val rsaKeyPair = RsaKeyPair.parseKeyPair(privateKey).get
+    val signature = RsaKeyPair.sign(rsaKeyPair.getPrivate, payloadToSign.asJson.canonical.getBytes)
+    val clientSignature = ClientSignature(rootKeyId, signature.method, signature.sig)
+    SignedPayload(Seq(clientSignature), role)
+  }
+
   def generateRootRole(repoId: RepoId, threshold: Int = 1): Future[Seq[Key]] = {
     Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(threshold = threshold)) ~> routes ~> check {
       status shouldBe StatusCodes.Accepted
@@ -269,4 +358,13 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       }.map(_.flatten)
     }
   }
+}
+
+object JsonErrors {
+  implicit val jsonErrorsEncoder: Encoder[JsonErrors] = deriveEncoder
+  implicit val jsonErrorsDecoder: Decoder[JsonErrors] = deriveDecoder
+}
+
+case class JsonErrors(errors: NonEmptyList[String]) {
+  def head: String = errors.head
 }
