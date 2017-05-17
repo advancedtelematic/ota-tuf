@@ -34,7 +34,7 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
   import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 
   def signFor[T : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]] = {
-    val roleKeys = keyRepo.repoKeys(repoId, roleType)
+    val roleKeys = keyRepo.repoKeysForRole(repoId, roleType)
 
     roleKeys.flatMap {
       case Nil =>
@@ -60,7 +60,7 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
   }
 
   def signatureIsValid[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Future[ValidatedNel[String, List[ClientSignature]]] = {
-    val publicKeysF = keyRepo.repoKeys(repoId, RoleType.ROOT)
+    val publicKeysF = keyRepo.repoKeysForRole(repoId, RoleType.ROOT)
     val sigsByKeyId = signedPayload.signatures.map(s => s.keyid -> s).toMap
 
     publicKeysF.map { publicKeys =>
