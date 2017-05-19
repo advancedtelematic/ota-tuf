@@ -7,7 +7,7 @@ import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
 
 class RsaKeyPairSpec extends TufKeyserverSpec {
   test("generates a small key")  {
-    val generated = RsaKeyPair.generate(size = 512)
+    val generated = RsaKeyPair.generate()
 
     generated.getPrivate.show should include("BEGIN RSA PRIVATE KEY")
   }

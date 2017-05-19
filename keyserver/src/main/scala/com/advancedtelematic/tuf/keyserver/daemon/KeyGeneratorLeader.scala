@@ -95,6 +95,7 @@ class KeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database, val e
 
   protected def generateKeys(roleId: RoleId, keySize: Int, threshold: Int): Seq[(Key, PrivateKey)] = {
     require(threshold > 0, "threshold must be greater than 0")
+    require(keySize >= 2048 || keySize == -1, "keysize must be greater than or equal to 2048")
 
     (0 until threshold).map { _ =>
       val keyPair = RsaKeyPair.generate(keySize)

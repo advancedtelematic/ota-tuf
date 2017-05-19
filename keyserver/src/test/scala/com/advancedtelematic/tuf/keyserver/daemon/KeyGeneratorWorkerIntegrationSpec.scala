@@ -11,6 +11,7 @@ import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import com.advancedtelematic.tuf.util.TufKeyserverSpec
 import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
+import org.scalatest.time.{Millis, Seconds, Span}
 
 import scala.concurrent.ExecutionContext
 
@@ -25,6 +26,8 @@ class KeyGeneratorWorkerIntegrationSpec extends TufKeyserverSpec
 
   implicit val ec = ExecutionContext.global
 
+  override implicit def patienceConfig = PatienceConfig(timeout = Span(20, Seconds), interval = Span(300, Millis))
+
   implicit val mat = ActorMaterializer()
 
   lazy val vault = VaultClient(vaultAddr, vaultToken, vaultMount)
@@ -34,7 +37,7 @@ class KeyGeneratorWorkerIntegrationSpec extends TufKeyserverSpec
   test("adds key to vault") {
     val keyid = KeyGenId.generate()
     val repoId = RepoId.generate()
-    val request = KeyGenRequest(keyid, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 1024)
+    val request = KeyGenRequest(keyid, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 2048)
     keyGenRepo.persist(request)
     actorRef ! request
 

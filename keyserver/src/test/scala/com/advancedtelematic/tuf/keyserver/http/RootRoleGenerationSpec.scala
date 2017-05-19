@@ -37,7 +37,7 @@ with SignedRootRoleSupport {
   test("root role payload must be signed with root key") {
     val repoId = RepoId.generate()
     val rootKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
-      repoId, KeyGenRequestStatus.GENERATED, RoleType.ROOT, keySize = 1024)
+      repoId, KeyGenRequestStatus.GENERATED, RoleType.ROOT, keySize = 2048)
 
     async {
       await(keyGenRepo.persist(rootKeyGenRequest))
@@ -61,7 +61,7 @@ with SignedRootRoleSupport {
   test("persists signed payload when finding") {
     val repoId = RepoId.generate()
     val rootKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
-      repoId, KeyGenRequestStatus.GENERATED, RoleType.ROOT, keySize = 1024)
+      repoId, KeyGenRequestStatus.GENERATED, RoleType.ROOT, keySize = 2048)
 
     async {
       await(keyGenRepo.persist(rootKeyGenRequest))
