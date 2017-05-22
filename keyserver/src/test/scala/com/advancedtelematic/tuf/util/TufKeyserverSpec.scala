@@ -22,7 +22,7 @@ class FakeVault extends VaultClient {
 
   override def createKey(key: VaultKey): Future[Unit] = {
     keys.put(key.id, key)
-    Future.successful(())
+    Future.unit
   }
 
   override def findKey(keyId: KeyId): Future[VaultKey] =

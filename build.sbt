@@ -40,7 +40,7 @@ lazy val commonDeps = libraryDependencies ++= {
 
 lazy val commonSettings = Seq(
   organization := "com.advancedtelematic",
-  scalaVersion := "2.11.8",
+  scalaVersion := "2.12.2",
   scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8"),
   resolvers += "ATS Releases" at "http://nexus.prod01.internal.advancedtelematic.com:8081/content/repositories/releases",
   resolvers += "ATS Snapshots" at "http://nexus.prod01.internal.advancedtelematic.com:8081/content/repositories/snapshots",
