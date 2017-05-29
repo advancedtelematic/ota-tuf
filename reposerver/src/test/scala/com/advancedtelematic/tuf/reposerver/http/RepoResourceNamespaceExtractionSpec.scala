@@ -24,7 +24,7 @@ class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
 
   val testFile = {
     val checksum = Sha256Digest.digest("hi".getBytes)
-    RequestTargetItem(Uri.Empty, checksum, "hi".getBytes.length)
+    RequestTargetItem(Uri.Empty, checksum, name = None, version = None, hardwareIds = Seq.empty, length = "hi".getBytes.length)
   }
 
   test("reject when repo does not belong to namespace") {

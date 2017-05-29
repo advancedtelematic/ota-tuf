@@ -8,16 +8,15 @@ import com.advancedtelematic.libats.messaging_datatype.DataType.HashMethod.HashM
 import com.advancedtelematic.libats.messaging_datatype.DataType.{TargetFilename, ValidChecksum}
 import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.KeyId
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, TargetName, TargetVersion}
 import eu.timepit.refined.api.{Refined, Validate}
-import io.circe.{Decoder, Encoder, Json}
+import io.circe.{Decoder, Json}
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
-import cats.syntax.either._
 
 object ClientDataType {
   type ClientHashes = Map[HashMethod, Refined[String, ValidChecksum]]
 
-  case class TargetCustom(name: String, version: String, description: Option[String])
+  case class TargetCustom(name: TargetName, version: TargetVersion, hardwareIds: Seq[HardwareIdentifier])
 
   case class ClientTargetItem(hashes: ClientHashes,
                               length: Long, custom: Option[Json]) {

@@ -37,7 +37,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
   val testFile = {
     val checksum = Sha256Digest.digest("hi".getBytes)
-    RequestTargetItem(Uri.Empty, checksum, "hi".getBytes.length)
+    RequestTargetItem(Uri.Empty, checksum, name = None, version = None, hardwareIds = Seq.empty, length = "hi".getBytes.length)
   }
 
   override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
@@ -403,7 +403,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val targetfileName: TargetFilename = Refined.unsafeApply("target/with/desc")
 
-    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.value}?name=pkgname&version=pkgversion&desc=wat"), form) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.value}?name=pkgname&version=pkgversion"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
@@ -414,7 +414,6 @@ class RepoResourceSpec extends TufReposerverSpec
 
       custom.map(_.name) should contain("pkgname")
       custom.map(_.version) should contain("pkgversion")
-      custom.flatMap(_.description) should contain("wat")
     }
   }
 
