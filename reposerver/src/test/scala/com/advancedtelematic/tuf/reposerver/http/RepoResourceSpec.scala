@@ -37,7 +37,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
   val testFile = {
     val checksum = Sha256Digest.digest("hi".getBytes)
-    RequestTargetItem(Uri.Empty, checksum, "hi".getBytes.length)
+    RequestTargetItem(Uri.Empty, checksum, name = None, version = None, hardwareIds = Seq.empty, length = "hi".getBytes.length)
   }
 
   override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
@@ -371,7 +371,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val form = Multipart.FormData(fileBodyPart)
 
-    Put(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing?name=pkgname&version=pkgversion&desc=wat"), form) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing?name=name&version=version"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
@@ -389,7 +389,7 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
-  test("accept description, name/version etc") {
+  test("accept name/version, hardwareIds") {
     val repoId = createRepo()
 
     val entity = HttpEntity(ByteString("""
@@ -403,7 +403,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val targetfileName: TargetFilename = Refined.unsafeApply("target/with/desc")
 
-    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.value}?name=pkgname&version=pkgversion&desc=wat"), form) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.value}?name=somename&version=someversion&hardwareIds=1,2,3"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
@@ -412,9 +412,9 @@ class RepoResourceSpec extends TufReposerverSpec
 
       val custom = responseAs[SignedPayload[TargetsRole]].signed.targets(targetfileName).customParsed[TargetCustom]
 
-      custom.map(_.name) should contain("pkgname")
-      custom.map(_.version) should contain("pkgversion")
-      custom.flatMap(_.description) should contain("wat")
+      custom.map(_.name) should contain(TargetName("somename"))
+      custom.map(_.version) should contain(TargetVersion("someversion"))
+      custom.map(_.hardwareIds.map(_.value)) should contain(Seq("1", "2", "3"))
     }
   }
 
