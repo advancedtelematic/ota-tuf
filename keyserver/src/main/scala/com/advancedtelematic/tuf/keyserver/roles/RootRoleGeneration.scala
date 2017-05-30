@@ -101,6 +101,6 @@ class RootRoleGeneration(vaultClient: VaultClient)
       else if(keyGenReqs.exists(_.status != KeyGenRequestStatus.GENERATED))
         Future.failed(Errors.KeysNotReady)
       else
-        Future.unit
+        Future.successful(())
     }
 }
