@@ -40,7 +40,8 @@ lazy val commonDeps = libraryDependencies ++= {
 
 lazy val commonSettings = Seq(
   organization := "com.advancedtelematic",
-  scalaVersion := "2.11.8",
+  scalaVersion := "2.11.11",
+  crossScalaVersions := Seq("2.11.11", "2.12.2"),
   scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8"),
   resolvers += "ATS Releases" at "http://nexus.prod01.internal.advancedtelematic.com:8081/content/repositories/releases",
   resolvers += "ATS Snapshots" at "http://nexus.prod01.internal.advancedtelematic.com:8081/content/repositories/snapshots",
@@ -78,4 +79,6 @@ lazy val reposerver = (project in file("reposerver"))
 
 lazy val ota_tuf = (project in file("."))
   .settings(Publish.disable)
+  .settings(scalaVersion := "2.11.11")
+  .settings(crossScalaVersions := Seq("2.11.11", "2.12.2"))
   .aggregate(libtuf, keyserver, reposerver)
