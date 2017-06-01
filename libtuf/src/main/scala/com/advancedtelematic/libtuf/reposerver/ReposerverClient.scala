@@ -69,7 +69,7 @@ class ReposerverHttpClient(reposerverUri: Uri)
       "length" -> length.asJson,
       "name" -> name.asJson,
       "version" -> version.asJson,
-      "hardwareids" -> hardwareIds.asJson))
+      "hardwareIds" -> hardwareIds.asJson))
 
     val entity = HttpEntity(ContentTypes.`application/json`, payload.asJson.noSpaces)
 
