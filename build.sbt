@@ -13,7 +13,7 @@ lazy val commonDeps = libraryDependencies ++= {
   val akkaHttpV = "10.0.3"
   val scalaTestV = "3.0.0"
   val bouncyCastleV = "1.56"
-  val libatsV = "0.0.1-63-g8dcff8c"
+  val libatsV = "0.0.1-64-g369e076"
 
   Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaV,
@@ -40,7 +40,8 @@ lazy val commonDeps = libraryDependencies ++= {
 
 lazy val commonSettings = Seq(
   organization := "com.advancedtelematic",
-  scalaVersion := "2.12.2",
+  scalaVersion := "2.11.11",
+  crossScalaVersions := Seq("2.11.11", "2.12.2"),
   scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8"),
   resolvers += "ATS Releases" at "http://nexus.prod01.internal.advancedtelematic.com:8081/content/repositories/releases",
   resolvers += "ATS Snapshots" at "http://nexus.prod01.internal.advancedtelematic.com:8081/content/repositories/snapshots",
@@ -78,4 +79,6 @@ lazy val reposerver = (project in file("reposerver"))
 
 lazy val ota_tuf = (project in file("."))
   .settings(Publish.disable)
+  .settings(scalaVersion := "2.11.11")
+  .settings(crossScalaVersions := Seq("2.11.11", "2.12.2"))
   .aggregate(libtuf, keyserver, reposerver)

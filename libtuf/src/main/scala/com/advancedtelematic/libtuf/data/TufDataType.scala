@@ -16,6 +16,14 @@ import io.circe.{Decoder, Encoder}
 import scala.util.Try
 
 object TufDataType {
+  // TODO: Move to libats/libtuf?
+  final case class ValidHardwareIdentifier()
+  type HardwareIdentifier = Refined[String, ValidHardwareIdentifier]
+  implicit val validHardwareIdentifier: Validate.Plain[String, ValidHardwareIdentifier] = ValidationUtils.validInBetween(min = 0, max = 200, ValidHardwareIdentifier())
+
+  case class TargetName(value: String) extends AnyVal
+  case class TargetVersion(value: String) extends AnyVal
+
   case class Checksum(method: HashMethod, hash: Refined[String, ValidChecksum])
 
   case class ValidKeyId()

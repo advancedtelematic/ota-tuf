@@ -2,7 +2,7 @@ package com.advancedtelematic.libtuf.reposerver
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
-import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId}
+import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, HardwareIdentifier, RepoId, TargetName, TargetVersion}
 import io.circe.JsonObject
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri.Path
@@ -14,6 +14,8 @@ import akka.stream.Materializer
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.http.ErrorCode
 import com.advancedtelematic.libats.http.Errors.RawError
+import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libats.codecs.CirceRefined._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
@@ -23,7 +25,9 @@ trait ReposerverClient {
 
   def createRoot(namespace: Namespace): Future[RepoId]
 
-  def addTarget(namespace: Namespace, fileName: String, uri: Uri, checksum: Checksum, length: Int): Future[Unit]
+  def addTarget(namespace: Namespace, fileName: String, uri: Uri, checksum: Checksum, length: Int,
+                name: Option[TargetName] = None, version: Option[TargetVersion] = None,
+                hardwareIds: Seq[HardwareIdentifier] = Seq.empty): Future[Unit]
 }
 
 final case class NoContent()
@@ -54,11 +58,18 @@ class ReposerverHttpClient(reposerverUri: Uri)
     execHttp[RepoId](namespace, req)
   }
 
-  override def addTarget(namespace: Namespace, fileName: String, uri: Uri, checksum: Checksum, length: Int): Future[Unit] = {
+  override def addTarget(namespace: Namespace, fileName: String,
+                         uri: Uri, checksum: Checksum, length: Int,
+                         name: Option[TargetName] = None, version: Option[TargetVersion] = None,
+                         hardwareIds: Seq[HardwareIdentifier] = Seq.empty
+                        ): Future[Unit] = {
     val payload = JsonObject.fromIterable(List(
       "uri" -> uri.asJson,
       "checksum" -> checksum.asJson,
-      "length" -> length.asJson))
+      "length" -> length.asJson,
+      "name" -> name.asJson,
+      "version" -> version.asJson,
+      "hardwareids" -> hardwareIds.asJson))
 
     val entity = HttpEntity(ContentTypes.`application/json`, payload.asJson.noSpaces)
 

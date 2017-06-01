@@ -2,7 +2,7 @@ package com.advancedtelematic.libtuf.data
 
 import com.advancedtelematic.libats.messaging_datatype.MessageCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType._
-import com.advancedtelematic.libtuf.data.TufDataType.RoleType
+import com.advancedtelematic.libtuf.data.TufDataType.{RoleType, TargetName, TargetVersion}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
 
@@ -32,6 +32,12 @@ object ClientCodecs {
 
   implicit val targetsRoleEncoder: Encoder[TargetsRole] = deriveEncoder
   implicit val targetsRoleDecoder: Decoder[TargetsRole] = deriveDecoder
+
+  implicit val targetNameEncoder: Encoder[TargetName] = deriveEncoder
+  implicit val targetNameDecoder: Decoder[TargetName] = deriveDecoder
+
+  implicit val targetVersionEncoder: Encoder[TargetVersion] = deriveEncoder
+  implicit val targetVersionDecoder: Decoder[TargetVersion] = deriveDecoder
 
   implicit val clientTargetItemEncoder: Encoder[ClientTargetItem] = deriveEncoder
   implicit val clientTargetItemDecoder: Decoder[ClientTargetItem] = deriveDecoder
