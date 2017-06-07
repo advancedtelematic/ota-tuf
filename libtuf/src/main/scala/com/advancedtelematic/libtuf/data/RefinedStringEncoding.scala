@@ -4,6 +4,7 @@ import eu.timepit.refined
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.{KeyDecoder, KeyEncoder}
 
+// TODO Should go to lib ats
 object RefinedStringEncoding {
   implicit def refinedKeyEncoder[P]
   (implicit strKeyEncoder: KeyEncoder[String]): KeyEncoder[Refined[String, P]] =

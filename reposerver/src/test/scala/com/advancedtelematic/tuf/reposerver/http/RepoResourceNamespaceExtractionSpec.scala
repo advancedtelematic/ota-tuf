@@ -8,12 +8,14 @@ import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.prop.Whenever
 import org.scalatest.{BeforeAndAfterAll, Inspectors}
 import cats.syntax.show._
-import RequestTargetItem._
+import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
 import scala.concurrent.ExecutionContext
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
+import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
+import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem
 
 class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
   with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration {
@@ -24,7 +26,7 @@ class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
 
   val testFile = {
     val checksum = Sha256Digest.digest("hi".getBytes)
-    RequestTargetItem(Uri.Empty, checksum, name = None, version = None, hardwareIds = Seq.empty, length = "hi".getBytes.length)
+    RequestTargetItem(Uri.Empty, checksum, targetFormat = None, name = None, version = None, hardwareIds = Seq.empty, length = "hi".getBytes.length)
   }
 
   test("reject when repo does not belong to namespace") {

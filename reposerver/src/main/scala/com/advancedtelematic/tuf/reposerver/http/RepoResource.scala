@@ -26,10 +26,18 @@ import io.circe.syntax._
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport
 import com.advancedtelematic.libtuf.data.TufDataType._
 import RefinedMarshallingSupport._
+import io.circe.parser.decode
+import cats.syntax.either._
+
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}
 import com.advancedtelematic.libats.http.AnyvalMarshallingSupport._
 import com.advancedtelematic.libats.codecs.AkkaCirce._
+import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
+import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem
+import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
+
+import scala.collection.immutable
 
 class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: NamespaceValidation,
                    targetStore: TargetStore, messageBusPublisher: MessageBusPublisher)
@@ -39,6 +47,14 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
   private val signedRoleGeneration = new SignedRoleGeneration(roleKeyStore)
   private val targetUpload = new TargetUpload(roleKeyStore, targetStore, messageBusPublisher)
   private val NamespaceHeader = headerValueByName("x-ats-namespace").map(Namespace)
+
+  private val targetCustomParameters: Directive1[TargetCustom] =
+    parameters(
+      'name.as[TargetName],
+      'version.as[TargetVersion],
+      'hardwareIds.as(CsvSeq[HardwareIdentifier]).?(immutable.Seq.empty[HardwareIdentifier]),
+      'targetFormat.as[TargetFormat].?
+    ).as(TargetCustom)
 
   private val TargetFilenamePath = Segments.flatMap {
     _.mkString("/").refineTry[ValidTargetFilename].toOption
@@ -65,16 +81,15 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
       val custom = for {
         name <- clientItem.name
         version <- clientItem.version
-      } yield TargetCustom(name, version, clientItem.hardwareIds)
+      } yield TargetCustom(name, version, clientItem.hardwareIds, clientItem.targetFormat)
 
       val item = TargetItem(repoId, filename, clientItem.uri, clientItem.checksum, clientItem.length, custom)
       signedRoleGeneration.addToTarget(item)
     }
 
   private def addTargetFromContent(filename: TargetFilename, repoId: RepoId): Route = {
-    parameters('name.as[TargetName], 'version.as[TargetVersion], 'hardwareIds.as(CsvSeq[HardwareIdentifier]).?) { (name, version, hardwareIdentifiers) =>
+    targetCustomParameters { custom =>
       fileUpload("file") { case (_, file) =>
-        val custom = TargetCustom(name, version, hardwareIdentifiers.getOrElse(Seq.empty))
         val action = targetUpload.store(repoId, filename, file, custom)
         complete(action)
       }
@@ -132,13 +147,3 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
         modifyRepoRoutes(repoId)
     }
 }
-
-object RequestTargetItem {
-  implicit val encoder: Encoder[RequestTargetItem] = deriveEncoder
-  implicit val decoder: Decoder[RequestTargetItem] = deriveDecoder
-}
-
-case class RequestTargetItem(uri: Uri, checksum: Checksum,
-                             name: Option[TargetName],
-                             version: Option[TargetVersion],
-                             hardwareIds: Seq[HardwareIdentifier], length: Long)

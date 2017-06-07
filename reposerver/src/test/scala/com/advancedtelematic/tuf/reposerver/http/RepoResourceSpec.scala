@@ -22,9 +22,9 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import cats.syntax.either._
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
-import com.advancedtelematic.libats.messaging.{LocalMessageBus, MessageBus}
 import com.advancedtelematic.tuf.reposerver.data.Messages.PackageStorageUsage
-
+import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
+import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem
 import scala.concurrent.Future
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
@@ -37,7 +37,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
   val testFile = {
     val checksum = Sha256Digest.digest("hi".getBytes)
-    RequestTargetItem(Uri.Empty, checksum, name = None, version = None, hardwareIds = Seq.empty, length = "hi".getBytes.length)
+    RequestTargetItem(Uri.Empty, checksum, targetFormat = None, name = None, version = None, hardwareIds = Seq.empty, length = "hi".getBytes.length)
   }
 
   override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
@@ -389,7 +389,7 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
-  test("accept name/version, hardwareIds") {
+  test("accept name/version, hardwareIds, targetFormat") {
     val repoId = createRepo()
 
     val entity = HttpEntity(ByteString("""
@@ -403,7 +403,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val targetfileName: TargetFilename = Refined.unsafeApply("target/with/desc")
 
-    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.value}?name=somename&version=someversion&hardwareIds=1,2,3"), form) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.value}?name=somename&version=someversion&hardwareIds=1,2,3&targetFormat=bsdiff"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
@@ -415,6 +415,7 @@ class RepoResourceSpec extends TufReposerverSpec
       custom.map(_.name) should contain(TargetName("somename"))
       custom.map(_.version) should contain(TargetVersion("someversion"))
       custom.map(_.hardwareIds.map(_.value)) should contain(Seq("1", "2", "3"))
+      custom.flatMap(_.targetFormat) should contain(TargetFormat.BSDIFF)
     }
   }
 
