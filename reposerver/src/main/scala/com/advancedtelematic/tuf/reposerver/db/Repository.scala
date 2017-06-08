@@ -14,7 +14,6 @@ import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.language.implicitConversions
 
 trait DatabaseSupport {
   implicit val ec: ExecutionContext

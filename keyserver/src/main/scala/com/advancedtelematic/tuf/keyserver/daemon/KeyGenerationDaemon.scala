@@ -8,7 +8,7 @@ import com.advancedtelematic.tuf.keyserver.vault.{VaultClient, VaultTokenRenewer
 import com.advancedtelematic.tuf.keyserver.{Settings, VersionInfo}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
-import com.advancedtelematic.libats.http.{BootApp, HealthResource}
+import com.advancedtelematic.libats.http.BootApp
 import com.advancedtelematic.libats.monitoring.MetricsSupport
 import com.advancedtelematic.libats.slick.monitoring.{DatabaseMetrics, DbHealthResource}
 

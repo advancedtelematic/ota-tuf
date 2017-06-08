@@ -2,10 +2,9 @@ package com.advancedtelematic.tuf.keyserver.http
 
 import akka.http.scaladsl.server.{Directives, _}
 import akka.stream.Materializer
-import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.keyserver.VersionInfo
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
-import com.advancedtelematic.libats.http.{ErrorHandler, HealthResource}
+import com.advancedtelematic.libats.http.ErrorHandler
 import com.advancedtelematic.libats.http.DefaultRejectionHandler._
 import com.advancedtelematic.libats.slick.monitoring.DbHealthResource
 

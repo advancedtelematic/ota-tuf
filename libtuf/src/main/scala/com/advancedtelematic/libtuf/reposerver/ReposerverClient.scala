@@ -64,8 +64,6 @@ class ReposerverHttpClient(reposerverUri: Uri)
   extends ReposerverClient {
 
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-  import com.advancedtelematic.libtuf.data.TufCodecs.uriEncoder
-  import com.advancedtelematic.libtuf.data.TufCodecs.checkSumEncoder
   import io.circe.syntax._
 
   private def apiUri(path: Path) =

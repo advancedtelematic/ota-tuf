@@ -12,7 +12,7 @@ import com.advancedtelematic.libats.messaging_datatype.DataType.HashMethod.HashM
 import com.advancedtelematic.libats.messaging_datatype.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import eu.timepit.refined.api.{Refined, Validate}
-import io.circe.{Decoder, Encoder, parser}
+import io.circe.Encoder
 
 import scala.util.Try
 
@@ -24,7 +24,7 @@ object TufDataType {
   object TargetFormat extends CirceEnum with SlickEnum {
     type TargetFormat = Value
 
-    val OSTREE, BSDIFF = Value
+    val OSTREEE, BINARY = Value
 
     implicit val targetFormatFromStringUnmarshaller = Unmarshaller.strict[String, TargetFormat](s => this.withName(s.toUpperCase))
   }

@@ -3,7 +3,7 @@ package com.advancedtelematic.tuf.keyserver.roles
 import java.time.{Duration, Instant}
 
 import com.advancedtelematic.libtuf.data.TufDataType._
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.tuf.keyserver.http.{Errors, RoleSigning}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient

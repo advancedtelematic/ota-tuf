@@ -8,7 +8,6 @@ import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.prop.Whenever
 import org.scalatest.{BeforeAndAfterAll, Inspectors}
 import cats.syntax.show._
-import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
 import scala.concurrent.ExecutionContext

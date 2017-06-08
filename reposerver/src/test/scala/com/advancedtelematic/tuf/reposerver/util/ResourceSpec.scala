@@ -13,11 +13,10 @@ import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libats.test.DatabaseSpec
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
-import cats.syntax.show._
 
 import scala.concurrent.Future
 import akka.actor.ActorSystem
-import akka.http.scaladsl.server.{Directive1, Directives}
+import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 
@@ -26,7 +25,7 @@ import scala.collection.JavaConverters._
 import scala.util.Try
 import akka.testkit.TestDuration
 import com.advancedtelematic.libats.data.Namespace
-import com.advancedtelematic.libats.messaging.{LocalMessageBus, MemoryMessageBus, MessageBus, MessageBusPublisher}
+import com.advancedtelematic.libats.messaging.MemoryMessageBus
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType}

@@ -2,7 +2,6 @@ package com.advancedtelematic.tuf.keyserver.db
 
 import java.time.Instant
 
-import cats.data.NonEmptyList
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
@@ -12,7 +11,6 @@ import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEnt
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import io.circe.syntax._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import scala.concurrent.ExecutionContext
 import com.advancedtelematic.libats.slick.db.SlickExtensions._

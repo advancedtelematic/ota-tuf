@@ -3,7 +3,7 @@ package com.advancedtelematic.tuf.reposerver.http
 import akka.http.scaladsl.server.{Directives, _}
 import akka.stream.Materializer
 import com.advancedtelematic.libats.http.DefaultRejectionHandler._
-import com.advancedtelematic.libats.http.{ErrorHandler, HealthResource}
+import com.advancedtelematic.libats.http.ErrorHandler
 import com.advancedtelematic.libats.slick.monitoring.DbHealthResource
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient

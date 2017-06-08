@@ -403,7 +403,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val targetfileName: TargetFilename = Refined.unsafeApply("target/with/desc")
 
-    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.value}?name=somename&version=someversion&hardwareIds=1,2,3&targetFormat=bsdiff"), form) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.value}?name=somename&version=someversion&hardwareIds=1,2,3&targetFormat=binary"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
@@ -415,7 +415,7 @@ class RepoResourceSpec extends TufReposerverSpec
       custom.map(_.name) should contain(TargetName("somename"))
       custom.map(_.version) should contain(TargetVersion("someversion"))
       custom.map(_.hardwareIds.map(_.value)) should contain(Seq("1", "2", "3"))
-      custom.flatMap(_.targetFormat) should contain(TargetFormat.BSDIFF)
+      custom.flatMap(_.targetFormat) should contain(TargetFormat.BINARY)
     }
   }
 

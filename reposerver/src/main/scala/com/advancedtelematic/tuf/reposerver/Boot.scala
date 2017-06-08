@@ -5,7 +5,6 @@ import java.security.Security
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server.{Directives, Route}
-import akka.stream.Materializer
 import com.advancedtelematic.libtuf.keyserver.KeyserverHttpClient
 
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
