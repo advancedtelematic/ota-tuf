@@ -11,7 +11,6 @@ import akka.stream.ActorMaterializer
 import cats.syntax.show.toShowOps
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}
-import scala.concurrent.duration._
 
 class VaultClientIntegrationSpec extends TufKeyserverSpec
   with PatienceConfiguration {

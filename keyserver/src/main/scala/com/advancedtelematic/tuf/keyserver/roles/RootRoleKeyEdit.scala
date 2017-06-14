@@ -1,6 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.roles
 
-import java.security.{PrivateKey, PublicKey}
+import java.security.PrivateKey
 
 import com.advancedtelematic.libtuf.data.ClientDataType.ClientPrivateKey
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, RoleType}

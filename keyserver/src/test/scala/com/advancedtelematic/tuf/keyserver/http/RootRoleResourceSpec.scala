@@ -2,7 +2,6 @@ package com.advancedtelematic.tuf.keyserver.http
 
 import java.security.PrivateKey
 
-import com.advancedtelematic.tuf.keyserver.db.KeyRepository.KeyNotFound
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
@@ -10,7 +9,6 @@ import com.advancedtelematic.tuf.util.{ResourceSpec, TufKeyserverSpec}
 import io.circe.generic.auto._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import cats.syntax.show._
-import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp
 import com.advancedtelematic.libtuf.data.TufDataType._
@@ -22,7 +20,7 @@ import org.scalatest.Inspectors
 import org.scalatest.concurrent.PatienceConfiguration
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, ClientPrivateKey, RootRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientPrivateKey, RootRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKeyNotFound

@@ -5,7 +5,7 @@ import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, KeyId, RepoId}
+import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
 import io.circe.Json
 import slick.jdbc.MySQLProfile.api._

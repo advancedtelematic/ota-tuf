@@ -17,7 +17,7 @@ import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libats.data.RefinedUtils._
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, RootRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType._
 
 class RootRoleResource(vaultClient: VaultClient)

@@ -11,7 +11,6 @@ import com.advancedtelematic.libtuf.data.TufDataType._
 import io.circe._
 
 object TufCodecs {
-  import com.advancedtelematic.libtuf.data.RefinedStringEncoding._
   import io.circe.generic.semiauto._
   import com.advancedtelematic.libats.codecs.AkkaCirce._
 

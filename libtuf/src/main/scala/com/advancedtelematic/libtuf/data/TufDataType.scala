@@ -3,6 +3,7 @@ package com.advancedtelematic.libtuf.data
 import java.util.UUID
 
 import akka.http.scaladsl.server.PathMatchers
+import akka.http.scaladsl.unmarshalling.Unmarshaller
 import cats.Show
 import com.advancedtelematic.libats.codecs.CirceEnum
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
@@ -11,15 +12,22 @@ import com.advancedtelematic.libats.messaging_datatype.DataType.HashMethod.HashM
 import com.advancedtelematic.libats.messaging_datatype.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import eu.timepit.refined.api.{Refined, Validate}
-import io.circe.{Decoder, Encoder}
+import io.circe.Encoder
 
 import scala.util.Try
 
 object TufDataType {
-  // TODO: Move to libats/libtuf?
   final case class ValidHardwareIdentifier()
   type HardwareIdentifier = Refined[String, ValidHardwareIdentifier]
   implicit val validHardwareIdentifier: Validate.Plain[String, ValidHardwareIdentifier] = ValidationUtils.validInBetween(min = 0, max = 200, ValidHardwareIdentifier())
+
+  object TargetFormat extends CirceEnum with SlickEnum {
+    type TargetFormat = Value
+
+    val OSTREEE, BINARY = Value
+
+    implicit val targetFormatFromStringUnmarshaller = Unmarshaller.strict[String, TargetFormat](s => this.withName(s.toUpperCase))
+  }
 
   case class TargetName(value: String) extends AnyVal
   case class TargetVersion(value: String) extends AnyVal

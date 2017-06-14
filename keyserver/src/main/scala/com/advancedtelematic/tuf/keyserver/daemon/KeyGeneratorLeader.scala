@@ -1,6 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.daemon
 
-import java.security.{KeyPair, PrivateKey}
+import java.security.PrivateKey
 
 import akka.actor.Status.{Failure, Success}
 import akka.actor.{Actor, ActorLogging, Props, Status, SupervisorStrategy}
