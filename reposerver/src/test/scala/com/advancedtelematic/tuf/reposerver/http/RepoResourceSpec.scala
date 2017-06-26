@@ -2,6 +2,7 @@ package com.advancedtelematic.tuf.reposerver.http
 
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.headers.RawHeader
 import akka.stream.scaladsl.Sink
 import akka.util.ByteString
 import cats.syntax.show.toShowOps
@@ -25,6 +26,7 @@ import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.tuf.reposerver.data.Messages.PackageStorageUsage
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem
+
 import scala.concurrent.Future
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
@@ -113,7 +115,7 @@ class RepoResourceSpec extends TufReposerverSpec
   }
 
   test("GET on timestamp.json returns a valid Timestamp role") {
-    val newRepoId = createRepo()
+    val newRepoId = addTargetToRepo()
 
     Get(apiUri(s"repo/${newRepoId.show}/timestamp.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -122,7 +124,7 @@ class RepoResourceSpec extends TufReposerverSpec
   }
 
   test("GET on snapshot.json returns a valid Snapshot role") {
-    val newRepoId = createRepo()
+    val newRepoId = addTargetToRepo()
 
     Get(apiUri(s"repo/${newRepoId.show}/snapshot.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -131,7 +133,7 @@ class RepoResourceSpec extends TufReposerverSpec
   }
 
   test("GET on targets.json returns a valid Targets role") {
-    val newRepoId = createRepo()
+    val newRepoId = addTargetToRepo()
 
     Get(apiUri(s"repo/${newRepoId.show}/targets.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -140,7 +142,7 @@ class RepoResourceSpec extends TufReposerverSpec
   }
 
   test("GET on root.json returns a valid Root role") {
-    val newRepoId = createRepo()
+    val newRepoId = addTargetToRepo()
 
     Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -207,8 +209,27 @@ class RepoResourceSpec extends TufReposerverSpec
     timestampRole.signatures.head shouldNot be(newTimestampRole.signatures.head)
   }
 
+  test("creating a repo creates empty json for all roles") {
+    val repoId = RepoId.generate()
+
+    Post(apiUri(s"repo/${repoId.show}")).withHeaders(RawHeader("x-ats-namespace", repoId.show)) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[TargetsRole]].signed.targets should be(empty)
+    }
+
+    forAll(RoleType.ALL) { roleType =>
+      Get(apiUri(s"repo/${repoId.show}/$roleType.json")) ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+      }
+    }
+  }
+
   test("SnapshotRole includes signed jsons lengths") {
-    val newRepoId = createRepo()
+    val newRepoId = addTargetToRepo()
 
     val targetsRole =
       Get(apiUri(s"repo/${newRepoId.show}/targets.json")) ~> routes ~> check {
@@ -235,7 +256,7 @@ class RepoResourceSpec extends TufReposerverSpec
   }
 
   test("GET snapshots.json returns json with valid hashes") {
-    val newRepoId = createRepo()
+    val newRepoId = addTargetToRepo()
 
     Post(apiUri(s"repo/${newRepoId.show}/targets/myfile"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -259,7 +280,7 @@ class RepoResourceSpec extends TufReposerverSpec
   }
 
   test("Bumps version number when adding a new target") {
-    val newRepoId = createRepo()
+    val newRepoId = addTargetToRepo()
 
     Post(apiUri(s"repo/${newRepoId.show}/targets/myfile"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -360,7 +381,7 @@ class RepoResourceSpec extends TufReposerverSpec
   }
 
   test("uploading a target changes targets json") {
-    val repoId = createRepo()
+    val repoId = addTargetToRepo()
 
     val entity = HttpEntity(ByteString("""
                                          |Like all the men of the Library, in my younger days I traveled;
@@ -382,7 +403,7 @@ class RepoResourceSpec extends TufReposerverSpec
   }
 
   test("returns 404 if target does not exist") {
-    val repoId = createRepo()
+    val repoId = addTargetToRepo()
 
     Get(apiUri(s"repo/${repoId.show}/targets/some/thing")) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
@@ -390,7 +411,7 @@ class RepoResourceSpec extends TufReposerverSpec
   }
 
   test("accept name/version, hardwareIds, targetFormat") {
-    val repoId = createRepo()
+    val repoId = addTargetToRepo()
 
     val entity = HttpEntity(ByteString("""
                                          |Like all the men of the Library, in my younger days I traveled;
@@ -461,14 +482,13 @@ class RepoResourceSpec extends TufReposerverSpec
     isValid shouldBe true
   }
 
-  def createRepo(): RepoId = {
-    val newRepoId = RepoId.generate()
-    fakeRoleStore.createRoot(newRepoId)
+  def addTargetToRepo(repoId: RepoId = RepoId.generate()): RepoId = {
+    fakeRoleStore.createRoot(repoId)
 
-    Post(apiUri(s"repo/${newRepoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
-    newRepoId
+    repoId
   }
 }

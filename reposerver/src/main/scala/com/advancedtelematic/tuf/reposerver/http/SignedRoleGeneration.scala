@@ -24,16 +24,14 @@ class SignedRoleGeneration(roleSigningClient: KeyserverClient)
 
   val targetRoleGeneration = new TargetRoleGeneration(roleSigningClient)
 
-  def addToTarget(targetItem: TargetItem): Future[Json] = {
-    val repoId = targetItem.repoId
-
+  def regenerateSignedRoles(repoId: RepoId): Future[Json] = {
     async {
       val expireAt = defaultExpire
 
       val signedRoot = await(fetchRootRole(repoId))
 
       val targetVersion = await(nextVersion(repoId, RoleType.TARGETS))
-      val targetRole = await(targetRoleGeneration.updateRoleWith(targetItem, expireAt, targetVersion))
+      val targetRole = await(targetRoleGeneration.generate(repoId, expireAt, targetVersion))
       val signedTarget = await(signRole(repoId, RoleType.TARGETS, targetRole))
 
       val snapshotVersion = await(nextVersion(repoId, RoleType.SNAPSHOT))
@@ -44,12 +42,14 @@ class SignedRoleGeneration(roleSigningClient: KeyserverClient)
       val timestampRole = genTimestampRole(signedSnapshot, expireAt, timestampVersion)
       val signedTimestamp = await(signRole(repoId, RoleType.TIMESTAMP, timestampRole))
 
-      val persistF = signedRoleRepo.persistAll(signedTarget, signedSnapshot, signedTimestamp)
-      await(persistF)
+      await(signedRoleRepo.persistAll(signedTarget, signedSnapshot, signedTimestamp))
 
       signedTarget.content
     }
   }
+
+  def addToTarget(targetItem: TargetItem): Future[Json] =
+    targetRoleGeneration.addTargetItem(targetItem).flatMap(_ ⇒ regenerateSignedRoles(targetItem.repoId))
 
   def signRole[T <: VersionedRole : Decoder : Encoder](repoId: RepoId, roleType: RoleType, role: T): Future[SignedRole] = {
     roleSigningClient.sign(repoId, roleType, role).map { signedRole =>
@@ -99,13 +99,10 @@ protected class TargetRoleGeneration(roleSigningClient: KeyserverClient)
                           (implicit val db: Database, val ec: ExecutionContext)
   extends TargetItemRepositorySupport {
 
-  def updateRoleWith(targetItem: TargetItem, expireAt: Instant, version: Int): Future[TargetsRole] = {
-    targetItemRepo
-      .persist(targetItem)
-      .flatMap(_ => generate(targetItem.repoId, expireAt, version))
-  }
+  def addTargetItem(targetItem: TargetItem): Future[TargetItem] =
+    targetItemRepo.persist(targetItem)
 
-  private def generate(repoId: RepoId, expireAt: Instant, version: Int): Future[TargetsRole] = {
+  def generate(repoId: RepoId, expireAt: Instant, version: Int): Future[TargetsRole] = {
     targetItemRepo.findFor(repoId).map { targetItems =>
       val targets = targetItems.map { item =>
         val hashes = Map(item.checksum.method -> item.checksum.hash)
