@@ -62,7 +62,6 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
    complete {
      roleKeyStore
        .createRoot(repoId)
-       .flatMap(_ ⇒ signedRoleGeneration.regenerateSignedRoles(repoId))
        .flatMap(_ => repoNamespaceRepo.persist(repoId, namespace))
        .map(_ => repoId)
    }
