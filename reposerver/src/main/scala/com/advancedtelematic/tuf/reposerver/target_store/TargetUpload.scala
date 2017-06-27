@@ -11,7 +11,7 @@ import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
-import com.advancedtelematic.tuf.reposerver.data.Messages.PackageStorageUsage
+import com.advancedtelematic.tuf.reposerver.data.Messages.{PackageStorageUsage, TufTargetAdded}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport
 import com.advancedtelematic.tuf.reposerver.http.SignedRoleGeneration
@@ -31,10 +31,12 @@ class TargetUpload(roleKeyStore: KeyserverClient,
 
   private val _log = LoggerFactory.getLogger(this.getClass)
 
-  def publishUploadMessages(repoId: RepoId): Future[Unit] = {
+  def publishUploadMessages(repoId: RepoId, target: TargetItem): Future[Unit] = {
     val f = for {
       (namespace, usage) <- targetItemRepo.usage(repoId)
       _ <- messageBusPublisher.publish(PackageStorageUsage(namespace.get, Instant.now, usage))
+      _ <- messageBusPublisher.publish(
+        TufTargetAdded(namespace.get, target.filename, target.checksum, target.length, target.custom))
     } yield ()
 
     f.recover {
@@ -49,7 +51,7 @@ class TargetUpload(roleKeyStore: KeyserverClient,
       storeResult <- targetStore.store(repoId, targetFile, fileData)
       item = TargetItem(repoId, targetFile, storeResult.uri, storeResult.checksum, storeResult.size, Some(custom))
       _ <- signedRoleGeneration.addToTarget(item)
-      _ <- publishUploadMessages(repoId)
+      _ <- publishUploadMessages(repoId, item)
     } yield ()
   }
 
