@@ -24,7 +24,7 @@ object TufDataType {
   object TargetFormat extends CirceEnum with SlickEnum {
     type TargetFormat = Value
 
-    val OSTREEE, BINARY = Value
+    val OSTREE, BINARY = Value
 
     implicit val targetFormatFromStringUnmarshaller = Unmarshaller.strict[String, TargetFormat](s => this.withName(s.toUpperCase))
   }
