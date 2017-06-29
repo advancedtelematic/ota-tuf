@@ -6,7 +6,7 @@ import java.time.Instant
 import java.util.NoSuchElementException
 import java.util.concurrent.ConcurrentHashMap
 
-import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
+import com.advancedtelematic.libtuf.crypt.TufCrypto._
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import com.advancedtelematic.libtuf.data.TufDataType._
 import io.circe.{Decoder, Encoder, Json}
@@ -26,16 +26,18 @@ import scala.util.Try
 import akka.testkit.TestDuration
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.messaging.MemoryMessageBus
-import com.advancedtelematic.libtuf.crypt.RsaKeyPair
+import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType}
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, RoleKeys, RootRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
 import com.advancedtelematic.tuf.reposerver.target_store.LocalTargetStore
 
 object FakeRoleStore extends KeyserverClient {
+
+  private val keys = new ConcurrentHashMap[RepoId, KeyPair]()
 
   def publicKey(repoId: RepoId): PublicKey =
     keys.asScala(repoId).getPublic
@@ -43,29 +45,27 @@ object FakeRoleStore extends KeyserverClient {
   private def keyPair(repoId: RepoId): KeyPair =
     keys.asScala(repoId)
 
-  private val keys = new ConcurrentHashMap[RepoId, KeyPair]()
-
   def rootRole(repoId: RepoId) = {
     val rootKey = keys.asScala(repoId)
-    val clientKeys = Map(rootKey.id -> ClientKey(KeyType.RSA, rootKey.getPublic))
+    val clientKeys = Map(rootKey.getPublic.id -> RSATufKey(rootKey.getPublic))
 
     val roles = RoleType.ALL.map { role =>
-      role -> RoleKeys(List(rootKey.id), threshold = 1)
+      role -> RoleKeys(List(rootKey.getPublic.id), threshold = 1)
     }.toMap
 
     RootRole(clientKeys, roles, expires = Instant.now.plusSeconds(3600), version = 1)
   }
 
   def generateKey(repoId: RepoId): KeyPair = {
-    val rootKey = RsaKeyPair.generate()
-    keys.put(repoId, rootKey)
+    val (publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
+    keys.put(repoId, new KeyPair(publicKey.keyval, privateKey.keyval))
   }
 
-  override def createRoot(repoId: RepoId): Future[Json] = {
+  override def createRoot(repoId: RepoId, keyType: KeyType): Future[Json] = {
     if (keys.contains(repoId)) {
       FastFuture.failed(RootRoleConflict)
     } else {
-      val _ = generateKey(repoId)
+      generateKey(repoId)
       FastFuture.successful(Json.obj())
     }
   }
@@ -90,15 +90,14 @@ object FakeRoleStore extends KeyserverClient {
 
   private def signWithRoot[T : Encoder](repoId: RepoId, payload: T): ClientSignature = {
     val key = keyPair(repoId)
-    RsaKeyPair
-      .sign(key.getPrivate, payload.asJson.canonical.getBytes)
-      .toClient(key.id)
+    TufCrypto
+      .sign(RsaKeyType, key.getPrivate, payload.asJson.canonical.getBytes)
+      .toClient(key.getPublic.id)
   }
 }
 
 trait LongHttpRequest {
-  implicit def default(implicit system: ActorSystem) =
-    RouteTestTimeout(10.seconds.dilated(system))
+  implicit def default(implicit system: ActorSystem) = RouteTestTimeout(10.seconds.dilated(system))
 }
 
 trait ResourceSpec extends TufReposerverSpec

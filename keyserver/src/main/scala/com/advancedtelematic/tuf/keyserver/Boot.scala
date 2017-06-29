@@ -16,6 +16,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
+import net.i2p.crypto.eddsa.EdDSASecurityProvider
 
 import scala.concurrent.duration.Duration
 
@@ -42,7 +43,8 @@ object Boot extends BootApp
 
   implicit val _db = db
 
-  Security.addProvider(new BouncyCastleProvider())
+  Security.addProvider(new BouncyCastleProvider)
+  Security.addProvider(new EdDSASecurityProvider)
 
   log.info(s"Starting $version on http://$host:$port")
 

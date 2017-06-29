@@ -1,5 +1,6 @@
 package com.advancedtelematic.libtuf.data
 
+import java.security.{PrivateKey, PublicKey}
 import java.util.UUID
 
 import akka.http.scaladsl.server.PathMatchers
@@ -10,9 +11,11 @@ import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.libats.slick.codecs.SlickEnum
 import com.advancedtelematic.libats.messaging_datatype.DataType.HashMethod.HashMethod
 import com.advancedtelematic.libats.messaging_datatype.DataType.ValidChecksum
+import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.Encoder
+import TufCrypto.PublicKeyOps
 
 import scala.util.Try
 
@@ -44,12 +47,6 @@ object TufDataType {
   implicit val validSignature: Validate.Plain[String, ValidSignature] =
     ValidationUtils.validBase64Validation(ValidSignature())
 
-  object KeyType extends CirceEnum with SlickEnum {
-    type KeyType = Value
-
-    val RSA = Value
-  }
-
   object RoleType extends Enumeration with SlickEnum {
     type RoleType = Value
 
@@ -71,6 +68,8 @@ object TufDataType {
     type SignatureMethod = Value
 
     val RSASSA_PSS = Value("rsassa-pss")
+
+    val ED25519 = Value("ed25519")
   }
 
   case class RepoId(uuid: UUID) extends UUIDKey
@@ -86,4 +85,36 @@ object TufDataType {
   }
 
   case class SignedPayload[T : Encoder](signatures: Seq[ClientSignature], signed: T)
+
+  sealed trait KeyType {
+    type Pub <: TufKey
+    type Priv <: TufPrivateKey
+
+    val crypto: TufCrypto[this.type]
+  }
+  case object RsaKeyType extends KeyType {
+    type Pub = RSATufKey
+    type Priv = RSATufPrivateKey
+
+    val crypto = TufCrypto.rsaCrypto
+  }
+  case object EdKeyType extends KeyType {
+    type Pub = EdTufKey
+    type Priv = EdTufPrivateKey
+
+    val crypto = TufCrypto.edCrypto
+  }
+
+  sealed trait TufKey {
+    val keyval: PublicKey
+    lazy val id = keyval.id
+  }
+  case class RSATufKey(override val keyval: PublicKey) extends TufKey
+  case class EdTufKey(override val keyval: PublicKey) extends TufKey
+
+  sealed trait TufPrivateKey {
+    val keyval: PrivateKey
+  }
+  case class RSATufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey
+  case class EdTufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey
 }

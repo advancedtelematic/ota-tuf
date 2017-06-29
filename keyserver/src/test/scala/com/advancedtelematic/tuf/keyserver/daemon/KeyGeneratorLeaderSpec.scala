@@ -2,9 +2,8 @@ package com.advancedtelematic.tuf.keyserver.daemon
 
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKitBase}
-import com.advancedtelematic.libtuf.data.TufDataType.RoleType
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, RsaKeyType}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest}
-import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.tuf.util.TufKeyserverSpec
@@ -56,7 +55,7 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
     val keyGenReqs = Future.sequence {
       (1 to 20).map { _ =>
         val repoId = RepoId.generate()
-        val otherKeyGenReq = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = 2048)
+        val otherKeyGenReq = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType = RsaKeyType, keySize = 2048)
         keyGenRepo.persist(otherKeyGenReq).map(_.id)
       }
     }
@@ -80,7 +79,7 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
 
   def expectGenerated(newStatus: KeyGenRequestStatus, size: Int = 2048): Assertion = {
     val repoId = RepoId.generate()
-    val keyGenRequest = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keySize = size)
+    val keyGenRequest = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType = RsaKeyType, keySize = size)
     keyGenRepo.persist(keyGenRequest).futureValue
     eventually(timeout, interval) {
       keyGenRepo.find(keyGenRequest.id).futureValue.status shouldBe newStatus

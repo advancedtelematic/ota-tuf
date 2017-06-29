@@ -9,6 +9,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.KeyId
 import com.advancedtelematic.tuf.keyserver.Settings
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.{VaultKey, VaultKeyNotFound}
+import net.i2p.crypto.eddsa.EdDSASecurityProvider
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{FunSuite, Matchers}
@@ -45,7 +46,8 @@ class FakeVault extends VaultClient {
 }
 
 abstract class TufKeyserverSpec extends FunSuite with Matchers with ScalaFutures with Settings {
-  Security.addProvider(new BouncyCastleProvider())
+  Security.addProvider(new BouncyCastleProvider)
+  Security.addProvider(new EdDSASecurityProvider)
 
   val fakeVault = new FakeVault
 }

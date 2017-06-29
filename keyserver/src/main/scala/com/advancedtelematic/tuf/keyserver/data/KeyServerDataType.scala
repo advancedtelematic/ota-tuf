@@ -3,13 +3,12 @@ package com.advancedtelematic.tuf.keyserver.data
 import java.security.PublicKey
 import java.util.UUID
 
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId}
-import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
-import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.libats.codecs.CirceEnum
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.libats.slick.codecs.SlickEnum
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, TufKey}
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 
 object KeyServerDataType {
   object KeyGenRequestStatus extends CirceEnum with SlickEnum {
@@ -26,9 +25,13 @@ object KeyServerDataType {
 
   case class KeyGenRequest(id: KeyGenId, repoId: RepoId,
                            status: KeyGenRequestStatus, roleType: RoleType,
-                           keySize: Int, threshold: Int = 1)
+                           keySize: Int,
+                           keyType: KeyType,
+                           threshold: Int = 1)
 
-  case class Key(id: KeyId, roleId: RoleId, keyType: KeyType, publicKey: PublicKey)
+  case class Key(id: KeyId, roleId: RoleId, keyType: KeyType, publicKey: PublicKey) {
+    def toTufKey: TufKey = keyType.crypto.convert(publicKey)
+  }
 
   case class Role(id: RoleId, repoId: RepoId, roleType: RoleType, threshold: Int)
 }

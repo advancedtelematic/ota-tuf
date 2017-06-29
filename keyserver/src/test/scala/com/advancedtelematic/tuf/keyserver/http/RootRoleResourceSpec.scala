@@ -9,7 +9,7 @@ import com.advancedtelematic.tuf.util.{ResourceSpec, TufKeyserverSpec}
 import io.circe.generic.auto._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import cats.syntax.show._
-import com.advancedtelematic.libtuf.crypt.RsaKeyPair
+import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId}
@@ -20,7 +20,8 @@ import org.scalatest.Inspectors
 import org.scalatest.concurrent.PatienceConfiguration
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientPrivateKey, RootRole}
+import com.advancedtelematic.libtuf.data.TufDataType.{TufPrivateKey, RSATufPrivateKey}
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKeyNotFound
@@ -63,7 +64,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     requests.map(_.status) should contain only KeyGenRequestStatus.REQUESTED
   }
 
-  test("POST creates all roles") {
+  test("POST creates keys for all roles") {
     val repoId = RepoId.generate()
 
     Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest()) ~> routes ~> check {
@@ -75,6 +76,31 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     requests.size shouldBe RoleType.ALL.size
 
     requests.map(_.roleType) should contain allElementsOf RoleType.ALL
+  }
+
+  test("POST creates roles with ED25519 keys if requested") {
+    val repoId = RepoId.generate()
+
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(keyType = EdKeyType)) ~> routes ~> check {
+      status shouldBe StatusCodes.Accepted
+    }
+
+    processKeyGenerationRequest(repoId).futureValue
+
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+
+      val signedPayload = responseAs[SignedPayload[RootRole]]
+      val rootRole = signedPayload.signed
+
+      signedPayload.signatures should have size 1 // Signed with root only
+
+      rootRole.keys should have size RoleType.ALL.size
+
+      forAll(rootRole.keys.values) { key ⇒
+        key shouldBe a[EdTufKey]
+      }
+    }
   }
 
   test("PUT forces a retry on ERROR requests") {
@@ -230,7 +256,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     Delete(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.value}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[ClientPrivateKey].keyval shouldBe a[PrivateKey]
+      responseAs[TufPrivateKey].keyval shouldBe a[PrivateKey]
     }
 
     fakeVault.findKey(rootKeyId).failed.futureValue shouldBe VaultKeyNotFound
@@ -248,7 +274,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     Delete(apiUri(s"root/${repoId.show}/private_keys/${keyId.value}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[ClientPrivateKey].keyval shouldBe a[PrivateKey]
+      responseAs[TufPrivateKey] shouldBe a[RSATufPrivateKey]
     }
 
     fakeVault.findKey(keyId).failed.futureValue shouldBe VaultKeyNotFound
@@ -265,7 +291,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     Delete(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.value}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[ClientPrivateKey].keyval shouldBe a[PrivateKey]
+      responseAs[TufPrivateKey] shouldBe a[RSATufPrivateKey]
     }
 
     Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
@@ -352,27 +378,50 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
+  test("POST returns 204 when signature is a valid ed25519 signature") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId, keyType = EdKeyType).futureValue
+
+    val rootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[RootRole]
+    }
+
+    val rootKeyId = rootRole.roles(RoleType.ROOT).keyids.head
+    val signedPayload = clientSignPayload(rootKeyId, rootRole, rootRole)
+
+    Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+  }
+
+
   def clientSignPayload[T : Encoder](rootKeyId: KeyId, role: RootRole, payloadToSign: T): SignedPayload[RootRole] = {
-    val privateKey = fakeVault.findKey(rootKeyId).futureValue.privateKey
-    val rsaKeyPair = RsaKeyPair.parseKeyPair(privateKey).get
-    val signature = RsaKeyPair.sign(rsaKeyPair.getPrivate, payloadToSign.asJson.canonical.getBytes)
+    val vaultKey = fakeVault.findKey(rootKeyId).futureValue
+    val signature = TufCrypto.sign(vaultKey.keyType, vaultKey.privateKey.keyval, payloadToSign.asJson.canonical.getBytes)
     val clientSignature = ClientSignature(rootKeyId, signature.method, signature.sig)
     SignedPayload(Seq(clientSignature), role)
   }
 
-  def generateRootRole(repoId: RepoId, threshold: Int = 1): Future[Seq[Key]] = {
-    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(threshold = threshold)) ~> routes ~> check {
-      status shouldBe StatusCodes.Accepted
-
-      val ids = responseAs[Seq[KeyGenId]]
-
+  def processKeyGenerationRequest(repoId: RepoId): Future[Seq[Key]] = {
+    keyGenRepo.findBy(repoId).flatMap { ids ⇒
       Future.sequence {
-        ids.map { id =>
+        ids.map(_.id).map { id =>
           keyGenRepo
             .find(id)
             .flatMap(keyGenerationOp.processGenerationRequest)
         }
       }.map(_.flatten)
+    }
+  }
+
+  def generateRootRole(repoId: RepoId, threshold: Int = 1, keyType: KeyType = RsaKeyType): Future[Seq[Key]] = {
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(threshold, keyType)) ~> routes ~> check {
+      status shouldBe StatusCodes.Accepted
+
+      responseAs[Seq[KeyGenId]] shouldNot be(empty)
+
+      processKeyGenerationRequest(repoId)
     }
   }
 }

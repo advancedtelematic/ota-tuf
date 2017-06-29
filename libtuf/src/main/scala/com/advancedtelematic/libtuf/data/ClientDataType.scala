@@ -1,14 +1,12 @@
 package com.advancedtelematic.libtuf.data
 
-import java.security.{PrivateKey, PublicKey}
 import java.time.Instant
 
 import cats.syntax.show._
 import com.advancedtelematic.libats.messaging_datatype.DataType.HashMethod.HashMethod
 import com.advancedtelematic.libats.messaging_datatype.DataType.{TargetFilename, ValidChecksum}
-import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{TufKey, HardwareIdentifier, KeyId, TargetName, TargetVersion}
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.{Decoder, Json}
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
@@ -30,12 +28,7 @@ object ClientDataType {
       custom.flatMap(c => decoder.decodeJson(c).toOption)
   }
 
-
-  case class ClientKey(keytype: KeyType, keyval: PublicKey)
-
-  case class ClientPrivateKey(keytype: KeyType, keyval: PrivateKey)
-
-  case class RootRole(keys: Map[KeyId, ClientKey],
+  case class RootRole(keys: Map[KeyId, TufKey],
                       roles: Map[RoleType, RoleKeys],
                       version: Int,
                       expires: Instant,
@@ -74,9 +67,8 @@ object ClientDataType {
                           version: Int,
                           _type: String = "Snapshot") extends VersionedRole
 
-  case class TimestampRole(
-                            meta: Map[MetaPath, MetaItem],
-                            expires: Instant,
-                            version: Int,
-                            _type: String = "Timestamp") extends VersionedRole
+  case class TimestampRole(meta: Map[MetaPath, MetaItem],
+                           expires: Instant,
+                           version: Int,
+                           _type: String = "Timestamp") extends VersionedRole
 }

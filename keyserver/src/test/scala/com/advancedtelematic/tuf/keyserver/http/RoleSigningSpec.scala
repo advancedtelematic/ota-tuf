@@ -5,11 +5,10 @@ import com.advancedtelematic.tuf.util.TufKeyserverSpec
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKey
-import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
-import cats.syntax.show.toShowOps
+import com.advancedtelematic.libtuf.crypt.TufCrypto._
 import com.advancedtelematic.libats.test.DatabaseSpec
-import com.advancedtelematic.libtuf.crypt.RsaKeyPair
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, Signature}
+import com.advancedtelematic.libtuf.crypt.TufCrypto
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, RsaKeyType, Signature}
 import org.bouncycastle.util.encoders.Base64
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}
@@ -26,15 +25,15 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
 
   override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(3, Seconds))
 
-  val keyPair = RsaKeyPair.generate()
+  val (publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
 
-  val dbKey = Key(keyPair.id, RoleId.generate(), KeyType.RSA, keyPair.getPublic)
+  val dbKey = Key(publicKey.id, RoleId.generate(), RsaKeyType, publicKey.keyval)
 
   implicit val encoder = io.circe.generic.semiauto.deriveEncoder[TestPayload]
   implicit val decoder = io.circe.generic.semiauto.deriveDecoder[TestPayload]
 
   lazy val roleSigning = {
-    fakeVault.createKey(VaultKey(dbKey.id, dbKey.keyType, dbKey.publicKey.show, keyPair.getPrivate.show)).futureValue
+    fakeVault.createKey(VaultKey(dbKey.id, dbKey.keyType, dbKey.publicKey.toPem, privateKey)).futureValue
     new RoleSigning(fakeVault)
   }
 
@@ -52,8 +51,22 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
     val clientSignature = roleSigning.signForClient(payload)(dbKey).futureValue
     val signature = Signature(clientSignature.sig, clientSignature.method)
 
-    RsaKeyPair.isValid(keyPair.getPublic, signature, payload.asJson.canonical.getBytes) shouldBe true
+    TufCrypto.isValid(publicKey.keyval, signature, payload.asJson.canonical.getBytes) shouldBe true
   }
+
+  test("generates valid ed25519 signatures")  {
+    val payload = TestPayload()
+
+    val (publicKey, privateKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val dbKey = Key(publicKey.id, RoleId.generate(), EdKeyType, publicKey.keyval)
+    fakeVault.createKey(VaultKey(dbKey.id, dbKey.keyType, dbKey.publicKey.toPem, privateKey)).futureValue
+
+    val clientSignature = roleSigning.signForClient(payload)(dbKey).futureValue
+    val signature = Signature(clientSignature.sig, clientSignature.method)
+
+    TufCrypto.isValid(publicKey.keyval, signature, payload.asJson.canonical.getBytes) shouldBe true
+  }
+
 
   test("generates valid signatures when verifying with canonical representation") {
     val payload = TestPayload()
@@ -63,6 +76,6 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
 
     val canonicalJson = """{"arrayMapProp":[{"aaa":0,"bbb":1}],"mapProp":{"aa":0,"bb":1},"propertyA":"some A","propertyB":"some B"}""".getBytes
 
-    RsaKeyPair.isValid(keyPair.getPublic, signature, canonicalJson) shouldBe true
+    TufCrypto.isValid(publicKey.keyval, signature, canonicalJson) shouldBe true
   }
 }

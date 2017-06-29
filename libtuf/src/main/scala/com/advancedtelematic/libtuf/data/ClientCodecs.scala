@@ -9,6 +9,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
 import cats.syntax.either._
+import io.circe._
 
 object ClientCodecs {
   import TufCodecs._
@@ -21,12 +22,6 @@ object ClientCodecs {
 
   implicit val roleKeyEncoder: Encoder[RoleKeys] = deriveEncoder
   implicit val roleKeyDecoder: Decoder[RoleKeys] = deriveDecoder
-
-  implicit val clientKeyEncoder: Encoder[ClientKey] = deriveEncoder
-  implicit val clientKeyDecoder: Decoder[ClientKey] = deriveDecoder
-
-  implicit val clientPrivateKeyEncoder: Encoder[ClientPrivateKey] = deriveEncoder
-  implicit val clientPrivateKeyDecoder: Decoder[ClientPrivateKey] = deriveDecoder
 
   implicit val rootRoleEncoder: Encoder[RootRole] = deriveEncoder
   implicit val rootRoleDecoder: Decoder[RootRole] = deriveDecoder

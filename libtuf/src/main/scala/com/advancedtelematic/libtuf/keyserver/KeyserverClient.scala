@@ -12,19 +12,19 @@ import cats.syntax.show.toShowOps
 import com.advancedtelematic.libats.http.ErrorCode
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, SignedPayload}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RepoId, RsaKeyType, SignedPayload}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType._
 import io.circe.{Decoder, Encoder, Json}
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
-import com.advancedtelematic.libtuf.data.TufCodecs.signedPayloadDecoder
+import com.advancedtelematic.libtuf.data.TufCodecs.{signedPayloadDecoder, keyTypeEncoder}
 
 trait KeyserverClient {
   val RootRoleNotFound = RawError(ErrorCode("root_role_not_found"), StatusCodes.FailedDependency, "root role was not found in upstream key store")
   val RootRoleConflict = RawError(ErrorCode("root_role_conflict"), StatusCodes.Conflict, "root role already exists")
 
-  def createRoot(repoId: RepoId): Future[Json]
+  def createRoot(repoId: RepoId, keyType: KeyType = RsaKeyType): Future[Json]
 
   def sign[T : Decoder : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]]
 
@@ -44,8 +44,8 @@ class KeyserverHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorMate
 
   private def KeyserverError(msg: String) = RawError(ErrorCode("keyserver_remote_error"), StatusCodes.BadGateway, msg)
 
-  override def createRoot(repoId: RepoId): Future[Json] = {
-    val entity = HttpEntity(ContentTypes.`application/json`, Json.obj("threshold" -> Json.fromInt(1)).noSpaces)
+  override def createRoot(repoId: RepoId, keyType: KeyType): Future[Json] = {
+    val entity = HttpEntity(ContentTypes.`application/json`, Json.obj("threshold" -> 1.asJson, "keyType" -> keyType.asJson).noSpaces)
     val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show), entity = entity)
 
     execHttp[Json](req) {

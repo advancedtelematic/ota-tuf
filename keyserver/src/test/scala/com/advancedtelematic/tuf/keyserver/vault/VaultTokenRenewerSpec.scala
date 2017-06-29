@@ -1,11 +1,10 @@
-package com.advancedtelematic.tuf.keyserver
+package com.advancedtelematic.tuf.keyserver.vault
 
 import java.time.Instant
 
 import akka.actor.ActorSystem
 import akka.testkit.{TestKitBase, TestProbe}
 import com.advancedtelematic.libats.test.LongTest
-import com.advancedtelematic.tuf.keyserver.vault.VaultTokenRenewer
 import com.advancedtelematic.tuf.keyserver.vault.VaultTokenRenewer.Renewed
 import com.advancedtelematic.tuf.util.TufKeyserverSpec
 import org.scalatest.BeforeAndAfterAll

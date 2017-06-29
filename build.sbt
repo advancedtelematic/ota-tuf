@@ -12,7 +12,6 @@ lazy val commonDeps = libraryDependencies ++= {
   val akkaV = "2.4.17"
   val akkaHttpV = "10.0.3"
   val scalaTestV = "3.0.0"
-  val bouncyCastleV = "1.56"
   val libatsV = "0.0.1-67-g052b15d"
 
   Seq(
@@ -22,9 +21,6 @@ lazy val commonDeps = libraryDependencies ++= {
     "com.typesafe.akka" %% "akka-slf4j" % akkaV,
 
     "org.mariadb.jdbc" % "mariadb-java-client" % "1.4.4",
-
-    "org.bouncycastle" % "bcprov-jdk15on" % bouncyCastleV,
-    "org.bouncycastle" % "bcpkix-jdk15on" % bouncyCastleV,
 
     "org.scala-lang.modules" %% "scala-async" % "0.9.6",
 

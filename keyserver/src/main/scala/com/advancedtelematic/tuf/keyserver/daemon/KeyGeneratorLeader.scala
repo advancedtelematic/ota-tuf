@@ -1,7 +1,5 @@
 package com.advancedtelematic.tuf.keyserver.daemon
 
-import java.security.PrivateKey
-
 import akka.actor.Status.{Failure, Success}
 import akka.actor.{Actor, ActorLogging, Props, Status, SupervisorStrategy}
 import akka.routing.RoundRobinPool
@@ -12,12 +10,11 @@ import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKey
 import slick.jdbc.MySQLProfile.api._
-import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
-
+import com.advancedtelematic.libtuf.crypt.TufCrypto
+import com.advancedtelematic.libtuf.crypt.TufCrypto._
 import scala.async.Async._
 import scala.concurrent.duration._
 import akka.pattern.pipe
-import com.advancedtelematic.libtuf.crypt.RsaKeyPair
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport, RoleRepositorySupport}
 import org.slf4j.LoggerFactory
@@ -94,19 +91,18 @@ class KeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database, val e
 
   private lazy val _log = LoggerFactory.getLogger(this.getClass)
 
-  protected def generateKeys(roleId: RoleId, keySize: Int, threshold: Int): Seq[(Key, PrivateKey)] = {
+  protected def generateKeys(roleId: RoleId, keyType: KeyType, keySize: Int, threshold: Int): Seq[(Key, TufPrivateKey)] = {
     require(threshold > 0, "threshold must be greater than 0")
-    require(keySize >= 2048 || keySize == -1, "keysize must be greater than or equal to 2048")
 
     (0 until threshold).map { _ =>
-      val keyPair = RsaKeyPair.generate(keySize)
-      (Key(keyPair.id, roleId, KeyType.RSA, keyPair.getPublic), keyPair.getPrivate)
+      val (publicKey, privateKey) = TufCrypto.generateKeyPair(keyType, keySize)
+      (Key(publicKey.id, roleId, keyType, publicKey.keyval), privateKey)
     }
   }
 
-  protected def saveToVault(keys: Seq[(Key, PrivateKey)]): Future[Unit] = {
+  protected def saveToVault(keys: Seq[(Key, TufPrivateKey)]): Future[Unit] = {
     Future.traverse(keys) { case (key, privateKey) =>
-      val vaultKey = VaultKey(key.id, key.keyType, key.publicKey.show, privateKey.show)
+      val vaultKey = VaultKey(key.id, key.keyType, key.publicKey.toPem, privateKey)
       vaultClient.createKey(vaultKey)
     }.map(_ => ())
   }
@@ -115,7 +111,7 @@ class KeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database, val e
     async {
       val role = Role(RoleId.generate(), kgr.repoId, kgr.roleType, kgr.threshold)
 
-      val keyPairs = generateKeys(role.id, kgr.keySize, kgr.threshold)
+      val keyPairs = generateKeys(role.id, kgr.keyType, kgr.keySize, kgr.threshold)
       val keys = keyPairs.map(_._1)
 
       await(saveToVault(keyPairs))
@@ -138,13 +134,13 @@ class KeyGeneratorWorker(vaultClient: VaultClient)(implicit val db: Database) ex
 
   implicit val ec = context.dispatcher
 
-  val keyGenRequestOp = new KeyGenerationOp(vaultClient)
+  val keyGenerationOp = new KeyGenerationOp(vaultClient)
 
   override def receive: Receive = {
     case kgr: KeyGenRequest =>
       log.info(s"Received key gen request for {}", kgr.id.show)
 
-      keyGenRequestOp.processGenerationRequest(kgr)
+      keyGenerationOp.processGenerationRequest(kgr)
         .map(Success)
         .recoverWith {
           case ex =>

@@ -5,8 +5,7 @@ import java.time.Instant
 
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.KeyType.KeyType
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, SignedPayload}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, SignedPayload}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
@@ -26,12 +25,13 @@ object Schema {
     def repoId = column[RepoId]("repo_id")
     def status = column[KeyGenRequestStatus]("status")
     def roleType = column[RoleType]("role_type")
+    def keyType = column[KeyType]("key_type")
     def keySize = column[Int]("key_size")
     def threshold = column[Int]("threshold")
 
     def uniqueRepoIdRoleTypeIdx = index("key_gen_requests_unique_idx", (repoId, roleType), unique = true)
 
-    override def * = (id, repoId, status, roleType, keySize, threshold) <> ((KeyGenRequest.apply _).tupled, KeyGenRequest.unapply)
+    override def * = (id, repoId, status, roleType, keySize, keyType, threshold) <> ((KeyGenRequest.apply _).tupled, KeyGenRequest.unapply)
   }
 
   protected [db] val keyGenRequests = TableQuery[KeyGenRequestTable]
