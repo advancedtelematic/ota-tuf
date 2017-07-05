@@ -208,7 +208,7 @@ class RepoResourceSpec extends TufReposerverSpec
     timestampRole.signatures.head shouldNot be(newTimestampRole.signatures.head)
   }
 
-  test("creating a repo creates empty json for all roles") {
+  test("GET on a role returns valid json before targets are added") {
     val repoId = RepoId.generate()
 
     Post(apiUri(s"repo/${repoId.show}")).withHeaders(RawHeader("x-ats-namespace", repoId.show)) ~> routes ~> check {

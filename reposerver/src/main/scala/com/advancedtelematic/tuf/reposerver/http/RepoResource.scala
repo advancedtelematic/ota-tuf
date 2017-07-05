@@ -4,6 +4,7 @@ import akka.http.scaladsl.unmarshalling._
 import PredefinedFromStringUnmarshallers.CsvSeq
 import com.advancedtelematic.libats.data.RefinedUtils._
 import akka.http.scaladsl.server._
+import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
@@ -19,6 +20,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.target_store.{TargetStore, TargetUpload}
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
 import com.advancedtelematic.libtuf.data.TufDataType._
+
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}
 import com.advancedtelematic.libats.http.AnyvalMarshallingSupport._
@@ -26,6 +28,7 @@ import com.advancedtelematic.libats.codecs.AkkaCirce._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
+import org.slf4j.LoggerFactory
 
 import scala.collection.immutable
 
@@ -37,6 +40,8 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
   private val signedRoleGeneration = new SignedRoleGeneration(roleKeyStore)
   private val targetUpload = new TargetUpload(roleKeyStore, targetStore, messageBusPublisher)
   private val NamespaceHeader = headerValueByName("x-ats-namespace").map(Namespace)
+
+  val log = LoggerFactory.getLogger(this.getClass)
 
   private val targetCustomParameters: Directive1[TargetCustom] =
     parameters(
@@ -62,7 +67,6 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
    complete {
      roleKeyStore
        .createRoot(repoId)
-       .flatMap(_ ⇒ signedRoleGeneration.regenerateSignedRoles(repoId))
        .flatMap(_ => repoNamespaceRepo.persist(repoId, namespace))
        .map(_ => repoId)
    }
@@ -96,7 +100,12 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
               signedRoleGeneration.fetchRootRole(repoId)
           }
         case _ =>
-          signedRoleRepo.find(repoId, roleType)
+          signedRoleRepo.find(repoId, roleType).recoverWith {
+            case notFoundError @ SignedRoleRepository.SignedRoleNotFound =>
+              signedRoleGeneration.regenerateSignedRoles(repoId)
+                .recoverWith { case err => log.warn("Could not generate signed roles", err) ; FastFuture.failed(notFoundError) }
+                .flatMap(_ => signedRoleRepo.find(repoId, roleType))
+          }
       }
 
       signedRoleFut.map(_.content)
