@@ -3,9 +3,11 @@ package com.advancedtelematic.libtuf.crypt
 import java.io.{StringReader, StringWriter}
 import java.security
 import java.security.spec.{PKCS8EncodedKeySpec, X509EncodedKeySpec}
-import java.security.{Signature ⇒ _, _}
+import java.security.{Signature => _, _}
 
-import com.advancedtelematic.libtuf.data.TufDataType.{EdTufKey, EdTufPrivateKey, EdKeyType, KeyId, KeyType, RSATufKey, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, TufKey, TufPrivateKey, ValidKeyId, ValidSignature}
+import org.bouncycastle.jce.ECNamedCurveTable
+import org.bouncycastle.jce.spec.ECParameterSpec
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, KeyId, KeyType, RSATufKey, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, TufKey, TufPrivateKey, ValidKeyId, ValidSignature}
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
 import org.bouncycastle.util.encoders.{Base64, Hex}
@@ -109,15 +111,24 @@ object TufCrypto {
 }
 
 protected [crypt] class EdCrypto extends TufCrypto[EdKeyType.type] {
-  private val generator = KeyPairGenerator.getInstance("EdDSA", "EdDSA")
+  private lazy val generator = {
+    val generator = KeyPairGenerator.getInstance("ECDSA", "BC")
+    val ecP = ECNamedCurveTable.getParameterSpec("curve25519")
+    val ecSpec = new ECParameterSpec(ecP.getCurve, ecP.getG, ecP.getN, ecP.getH, ecP.getSeed)
+    generator.initialize(ecSpec)
+    generator
+  }
 
   override def parsePublic(publicKeyHex: String): Try[EdTufKey] = Try {
-    EdTufKey(new EdDSAPublicKey(new X509EncodedKeySpec(Hex.decode(publicKeyHex))))
+    val spec = new X509EncodedKeySpec(Hex.decode(publicKeyHex))
+    val fac = KeyFactory.getInstance("ECDSA", "BC")
+    EdTufKey(fac.generatePublic(spec))
   }
 
   override def parsePrivate(privateKeyHex: String): Try[EdTufPrivateKey] = Try {
-    val bytes = Hex.decode(privateKeyHex)
-    EdTufPrivateKey(new EdDSAPrivateKey(new PKCS8EncodedKeySpec(bytes)))
+    val spec = new PKCS8EncodedKeySpec(Hex.decode(privateKeyHex))
+    val fac = KeyFactory.getInstance("ECDSA", "BC")
+    EdTufPrivateKey(fac.generatePrivate(spec))
   }
 
   override def generateKeyPair(keySize: Int): (EdTufKey, EdTufPrivateKey) = {
@@ -131,7 +142,7 @@ protected [crypt] class EdCrypto extends TufCrypto[EdKeyType.type] {
 
   override def convert(publicKey: PublicKey): EdTufKey = EdTufKey(publicKey)
 
-  override def signer: security.Signature = java.security.Signature.getInstance("NONEwithEdDSA", "EdDSA")
+  override def signer: security.Signature = java.security.Signature.getInstance("SHA512withECDSA", "BC")
 
   override val signatureMethod: SignatureMethod = SignatureMethod.ED25519
 }
@@ -144,7 +155,7 @@ protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
       throw new IllegalArgumentException("Key size too small, must be >= 2048")
     }
     val keyGen = KeyPairGenerator.getInstance("RSA", "BC")
-    keyGen.initialize(size, new SecureRandom())
+    keyGen.initialize(size)
     val keyPair = keyGen.generateKeyPair()
     (RSATufKey(keyPair.getPublic), RSATufPrivateKey(keyPair.getPrivate))
   }

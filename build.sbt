@@ -78,3 +78,4 @@ lazy val ota_tuf = (project in file("."))
   .settings(scalaVersion := "2.11.11")
   .settings(crossScalaVersions := Seq("2.11.11", "2.12.2"))
   .aggregate(libtuf, keyserver, reposerver)
+

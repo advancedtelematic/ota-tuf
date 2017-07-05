@@ -20,7 +20,6 @@ import com.advancedtelematic.tuf.reposerver.http.NamespaceExtractor
 import com.advancedtelematic.tuf.reposerver.http.TufReposerverRoutes
 import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStore, S3Credentials, S3TargetStore}
 import com.amazonaws.regions.Regions
-import net.i2p.crypto.eddsa.EdDSASecurityProvider
 
 trait Settings {
   lazy val config = ConfigFactory.load()
@@ -55,7 +54,6 @@ object Boot extends BootApp
   implicit val _db = db
 
   Security.addProvider(new BouncyCastleProvider)
-  Security.addProvider(new EdDSASecurityProvider)
 
   log.info(s"Starting $version on http://$host:$port")
 
