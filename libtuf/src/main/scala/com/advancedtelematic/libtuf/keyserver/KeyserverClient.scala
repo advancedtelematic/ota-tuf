@@ -42,7 +42,7 @@ class KeyserverHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorMate
   private def apiUri(path: Path) =
     uri.withPath(Empty / "api" / "v1" ++ Slash(path))
 
-  private def KeyStoreError(msg: String) = RawError(ErrorCode("key_store_remote_error"), StatusCodes.BadGateway, msg)
+  private def KeyserverError(msg: String) = RawError(ErrorCode("keyserver_remote_error"), StatusCodes.BadGateway, msg)
 
   override def createRoot(repoId: RepoId): Future[Json] = {
     val entity = HttpEntity(ContentTypes.`application/json`, Json.obj("threshold" -> Json.fromInt(1)).noSpaces)
@@ -82,7 +82,7 @@ class KeyserverHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorMate
         if(errorHandler.isDefinedAt(r))
           errorHandler(r)
         else
-          FastFuture.failed(KeyStoreError(s"Unexpected response from RoleKeyStore: $r"))
+          FastFuture.failed(KeyserverError(s"Unexpected response from Keyserver: $r"))
     }
   }
 }
