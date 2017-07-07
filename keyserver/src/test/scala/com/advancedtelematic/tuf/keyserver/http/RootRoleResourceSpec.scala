@@ -395,6 +395,22 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
+  test("POST returns 400 when signature is not a valid ed25519 signature") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId, keyType = EdKeyType).futureValue
+
+    val rootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[RootRole]
+    }
+
+    val rootKeyId = rootRole.roles(RoleType.ROOT).keyids.head
+    val signedPayload = clientSignPayload(rootKeyId, rootRole, "not the same payload")
+
+    Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+    }
+  }
 
   def clientSignPayload[T : Encoder](rootKeyId: KeyId, role: RootRole, payloadToSign: T): SignedPayload[RootRole] = {
     val vaultKey = fakeVault.findKey(rootKeyId).futureValue

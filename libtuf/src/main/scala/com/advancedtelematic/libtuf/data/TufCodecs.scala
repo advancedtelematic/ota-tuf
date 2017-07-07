@@ -5,7 +5,6 @@ import akka.http.scaladsl.model.Uri
 import io.circe.syntax._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.crypt.TufCrypto._
 import com.advancedtelematic.libtuf.data.TufDataType._
 import io.circe._
 import cats.syntax.functor._
