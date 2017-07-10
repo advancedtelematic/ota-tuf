@@ -1,10 +1,14 @@
 package com.advancedtelematic.libtuf.data
 
+import java.time.Instant
+
 import com.advancedtelematic.libats.messaging_datatype.MessageCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType._
-import com.advancedtelematic.libtuf.data.TufDataType.{RoleType, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RoleType, TargetName, TargetVersion}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
+import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
+import cats.syntax.either._
 
 object ClientCodecs {
   import TufCodecs._
@@ -27,8 +31,18 @@ object ClientCodecs {
   implicit val rootRoleEncoder: Encoder[RootRole] = deriveEncoder
   implicit val rootRoleDecoder: Decoder[RootRole] = deriveDecoder
 
+  val legacyTargetCustomDecoder = Decoder.instance { cursor =>
+    val now = Instant.now
+    for {
+      name <- cursor.downField("name").as[TargetName]
+      version <- cursor.downField("version").as[TargetVersion]
+      hardwareids <- cursor.downField("hardwareIds").as[Seq[HardwareIdentifier]]
+      format <- cursor.downField("targetFormat").as[Option[TargetFormat]]
+    } yield TargetCustom(name, version, hardwareids, format, now, now)
+  }
+
   implicit val targetCustomEncoder: Encoder[TargetCustom] = deriveEncoder
-  implicit val targetCustomDecoder: Decoder[TargetCustom] = deriveDecoder
+  implicit val targetCustomDecoder: Decoder[TargetCustom] = deriveDecoder[TargetCustom] or legacyTargetCustomDecoder
 
   implicit val targetsRoleEncoder: Encoder[TargetsRole] = deriveEncoder
   implicit val targetsRoleDecoder: Decoder[TargetsRole] = deriveDecoder
