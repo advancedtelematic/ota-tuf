@@ -1,7 +1,5 @@
 package com.advancedtelematic.tuf.reposerver.http
 
-import java.time.Instant
-
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers.RawHeader
@@ -28,7 +26,6 @@ import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.tuf.reposerver.data.Messages.PackageStorageUsage
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem
-
 import scala.concurrent.Future
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
@@ -382,18 +379,17 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
-  val testEntity = HttpEntity(ByteString("""
-                                           |Like all the men of the Library, in my younger days I traveled;
-                                           |I have journeyed in quest of a book, perhaps the catalog of catalogs.
-                                           |""".stripMargin))
-
-  val fileBodyPart = BodyPart("file", testEntity, Map("filename" -> "babel.txt"))
-
-  val form = Multipart.FormData(fileBodyPart)
-
-
   test("uploading a target changes targets json") {
     val repoId = addTargetToRepo()
+
+    val entity = HttpEntity(ByteString("""
+                                         |Like all the men of the Library, in my younger days I traveled;
+                                         |I have journeyed in quest of a book, perhaps the catalog of catalogs.
+                                       """.stripMargin))
+
+    val fileBodyPart = BodyPart("file", entity, Map("filename" -> "babel.txt"))
+
+    val form = Multipart.FormData(fileBodyPart)
 
     Put(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing?name=name&version=version"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -401,7 +397,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     Get(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      responseEntity.dataBytes.runReduce(_ ++ _).futureValue shouldBe testEntity.getData()
+      responseEntity.dataBytes.runReduce(_ ++ _).futureValue shouldBe entity.getData()
     }
   }
 
@@ -415,6 +411,16 @@ class RepoResourceSpec extends TufReposerverSpec
 
   test("accept name/version, hardwareIds, targetFormat") {
     val repoId = addTargetToRepo()
+
+    val entity = HttpEntity(ByteString("""
+                                         |Like all the men of the Library, in my younger days I traveled;
+                                         |I have journeyed in quest of a book, perhaps the catalog of catalogs.
+                                       """.stripMargin))
+
+    val fileBodyPart = BodyPart("file", entity, Map("filename" -> "babel.txt"))
+
+    val form = Multipart.FormData(fileBodyPart)
+
     val targetfileName: TargetFilename = Refined.unsafeApply("target/with/desc")
 
     Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.value}?name=somename&version=someversion&hardwareIds=1,2,3&targetFormat=binary"), form) ~> routes ~> check {
@@ -433,38 +439,22 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
-  test("on updates, updatedAt in target custom is updated, createdAt is unchanged") {
-    val repoId = addTargetToRepo()
-    val targetfileName: TargetFilename = Refined.unsafeApply("target/to/update")
-
-    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.value}?name=somename&version=someversion"), form) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-    }
-
-    val now = Instant.now
-
-    Thread.sleep(1000)
-
-    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.value}?name=somename&version=someversion"), form) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-    }
-
-    Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-
-      val custom = responseAs[SignedPayload[TargetsRole]].signed.targets(targetfileName).customParsed[TargetCustom]
-
-      custom.map(_.createdAt).get.isBefore(now) shouldBe true
-      custom.map(_.updatedAt).get.isAfter(now) shouldBe true
-    }
-  }
-
-
   test("publishes usage messages to bus") {
     val repoId = RepoId.generate()
+
     val source = memoryMessageBus.subscribe[PackageStorageUsage]()
 
     withNamespace(s"default-${repoId.show}") { implicit ns =>
+      val entity = HttpEntity(ByteString(
+        """
+          |Like all the men of the Library, in my younger days I traveled;
+          |I have journeyed in quest of a book, perhaps the catalog of catalogs.
+        """.stripMargin))
+
+      val fileBodyPart = BodyPart("file", entity, Map("filename" -> "babel.txt"))
+
+      val form = Multipart.FormData(fileBodyPart)
+
       Post(apiUri(s"repo/${repoId.show}")).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.OK
       }

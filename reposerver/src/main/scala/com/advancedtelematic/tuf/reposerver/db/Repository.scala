@@ -1,7 +1,5 @@
 package com.advancedtelematic.tuf.reposerver.db
 
-import java.time.Instant
-
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.http.ErrorCode
@@ -14,18 +12,12 @@ import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
-import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport.MissingNamespaceException
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.control.NoStackTrace
 
 trait DatabaseSupport {
   implicit val ec: ExecutionContext
   implicit val db: Database
-}
-
-object TargetItemRepositorySupport {
-  case class MissingNamespaceException(repoId: RepoId) extends Exception(s"Unknown namespace for repo $repoId") with NoStackTrace
 }
 
 trait TargetItemRepositorySupport extends DatabaseSupport {
@@ -35,19 +27,8 @@ trait TargetItemRepositorySupport extends DatabaseSupport {
 protected [db] class TargetItemRepository()(implicit db: Database, ec: ExecutionContext) {
   import Schema.targetItems
 
-  def persist(targetItem: TargetItem): Future[TargetItem] = db.run {
-    val findQ = targetItems.filter(_.repoId === targetItem.repoId).filter(_.filename === targetItem.filename)
-    val now = Instant.now
-
-    findQ.result.headOption.flatMap {
-      case Some(existing) =>
-        val targetCustom = targetItem.custom.map(_.copy(updatedAt = now, createdAt = existing.custom.map(_.createdAt).getOrElse(now)))
-        val newTargetItem = targetItem.copy(custom = targetCustom)
-        findQ.update(newTargetItem).map(_ => newTargetItem)
-      case None =>
-        (targetItems += targetItem.copy(custom = targetItem.custom.map(_.copy(createdAt = now)))).map(_ => targetItem)
-    }.transactionally
-  }
+  def persist(targetItem: TargetItem): Future[TargetItem] =
+    db.run(targetItems.insertOrUpdate(targetItem).map(_ => targetItem))
 
   def findFor(repoId: RepoId): Future[Seq[TargetItem]] =
     db.run {
@@ -67,8 +48,7 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
         Schema.repoNamespaces
           .filter(_.repoId === repoId)
           .map(_.namespace)
-          .result
-          .failIfNotSingle(MissingNamespaceException(repoId))
+          .result.head
 
       ns.zip(usage)
     }

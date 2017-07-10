@@ -18,11 +18,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 object ClientDataType {
   type ClientHashes = Map[HashMethod, Refined[String, ValidChecksum]]
 
-  case class TargetCustom(name: TargetName, version: TargetVersion, hardwareIds: Seq[HardwareIdentifier],
-                          targetFormat: Option[TargetFormat],
-                          createdAt: Instant = Instant.now,
-                          updatedAt: Instant = Instant.now
-                         )
+  case class TargetCustom(name: TargetName, version: TargetVersion, hardwareIds: Seq[HardwareIdentifier], targetFormat: Option[TargetFormat])
 
   case class ClientTargetItem(hashes: ClientHashes,
                               length: Long, custom: Option[Json]) {

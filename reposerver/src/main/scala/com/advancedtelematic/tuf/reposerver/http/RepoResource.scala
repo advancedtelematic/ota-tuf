@@ -49,9 +49,7 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
       'version.as[TargetVersion],
       'hardwareIds.as(CsvSeq[HardwareIdentifier]).?(immutable.Seq.empty[HardwareIdentifier]),
       'targetFormat.as[TargetFormat].?
-    ).tmap { case (name, version, hardwareIds, targetFormat) =>
-      TargetCustom(name, version, hardwareIds, targetFormat)
-    }
+    ).as(TargetCustom)
 
   private val TargetFilenamePath = Segments.flatMap {
     _.mkString("/").refineTry[ValidTargetFilename].toOption
