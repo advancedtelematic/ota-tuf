@@ -15,7 +15,7 @@ import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.messaging_datatype.DataType._
 import eu.timepit.refined.api.Refined
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
 import Schema._
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
@@ -25,6 +25,8 @@ import com.advancedtelematic.libtuf.data.ClientCodecs
 import com.advancedtelematic.libtuf.data.TufSlickMappings._
 import org.slf4j.LoggerFactory
 
+import scala.concurrent.duration.Duration
+
 
 
 object AnyvalCodecMigrationApp extends BootApp with DatabaseConfig with Settings {
@@ -32,12 +34,16 @@ object AnyvalCodecMigrationApp extends BootApp with DatabaseConfig with Settings
 
   implicit val _db = db
 
-  (new AnyvalCodecMigration).run
+  Await.result((new AnyvalCodecMigration).run, Duration.Inf)
+
+  log.info("Migration finished")
+
+  system.terminate()
 }
 
 
 class AnyvalCodecMigration(implicit db: Database, ec: ExecutionContext, actorSystem: ActorSystem, materializer: ActorMaterializer) {
-  implicit val log = LoggerFactory.getLogger(this.getClass)
+  val log = LoggerFactory.getLogger(this.getClass)
 
   type Row = (RepoId, TargetFilename, Json)
 
