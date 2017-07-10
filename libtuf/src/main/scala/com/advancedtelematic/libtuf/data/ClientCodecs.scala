@@ -34,24 +34,28 @@ object ClientCodecs {
   val legacyTargetCustomDecoder = Decoder.instance { cursor =>
     val now = Instant.now
     for {
-      name <- cursor.downField("name").as[TargetName]
-      version <- cursor.downField("version").as[TargetVersion]
+      name <- cursor.downField("name").downField("value").as[TargetName]
+      version <- cursor.downField("version").downField("value").as[TargetVersion]
       hardwareids <- cursor.downField("hardwareIds").as[Seq[HardwareIdentifier]]
       format <- cursor.downField("targetFormat").as[Option[TargetFormat]]
-    } yield TargetCustom(name, version, hardwareids, format, now, now)
+      createdAt <- cursor.downField("createdAt").as[Option[Instant]]
+      updatedAt <- cursor.downField("updatedAt").as[Option[Instant]]
+    } yield TargetCustom(name, version, hardwareids, format, createdAt.getOrElse(now), updatedAt.getOrElse(now))
   }
 
+  val targetCustomDerivedDecoder = deriveDecoder[TargetCustom]
+
+  implicit val targetCustomDecoder: Decoder[TargetCustom] =  targetCustomDerivedDecoder or legacyTargetCustomDecoder
   implicit val targetCustomEncoder: Encoder[TargetCustom] = deriveEncoder
-  implicit val targetCustomDecoder: Decoder[TargetCustom] = deriveDecoder[TargetCustom] or legacyTargetCustomDecoder
 
   implicit val targetsRoleEncoder: Encoder[TargetsRole] = deriveEncoder
   implicit val targetsRoleDecoder: Decoder[TargetsRole] = deriveDecoder
 
-  implicit val targetNameEncoder: Encoder[TargetName] = deriveEncoder
-  implicit val targetNameDecoder: Decoder[TargetName] = deriveDecoder
+  implicit val targetNameEncoder: Encoder[TargetName] = anyValStringEncoder
+  implicit val targetNameDecoder: Decoder[TargetName] = anyValStringDecoder
 
-  implicit val targetVersionEncoder: Encoder[TargetVersion] = deriveEncoder
-  implicit val targetVersionDecoder: Decoder[TargetVersion] = deriveDecoder
+  implicit val targetVersionEncoder: Encoder[TargetVersion] = anyValStringEncoder
+  implicit val targetVersionDecoder: Decoder[TargetVersion] = anyValStringDecoder
 
   implicit val clientTargetItemEncoder: Encoder[ClientTargetItem] = deriveEncoder
   implicit val clientTargetItemDecoder: Decoder[ClientTargetItem] = deriveDecoder
