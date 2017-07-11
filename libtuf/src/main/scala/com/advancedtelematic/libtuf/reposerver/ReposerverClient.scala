@@ -27,6 +27,8 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem
 
 object ReposerverClient {
+  import com.advancedtelematic.libats.codecs.CirceAnyVal._
+
   object RequestTargetItem {
     implicit val encoder: Encoder[RequestTargetItem] = deriveEncoder
     implicit val decoder: Decoder[RequestTargetItem] = deriveDecoder
