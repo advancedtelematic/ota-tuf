@@ -51,8 +51,9 @@ class KeyGeneratorLeader(vaultClient: VaultClient)(implicit val db: Database) ex
 
   def waiting(totalTasks: Int, remaining: Int): Receive =
     if(remaining == 0) {
+      val nextInterval = if(totalTasks > 0) 0.seconds else 3.seconds
       log.info("Finished generating {} keys", totalTasks)
-      context.system.scheduler.scheduleOnce(3.seconds, self, Tick)
+      context.system.scheduler.scheduleOnce(nextInterval, self, Tick)
       receive
     } else {
       {
