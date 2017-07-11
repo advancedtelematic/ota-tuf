@@ -6,4 +6,6 @@ libraryDependencies ++= {
   )
 }
 
+mainClass in Compile := Some("com.advancedtelematic.tuf.reposerver.Boot")
+
 Revolver.settings
