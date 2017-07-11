@@ -57,25 +57,26 @@ class AnyvalCodecMigrationSpec extends TufReposerverSpec with DatabaseSpec with 
 
   test("converts old json to json supported by new codecs") {
     val repoId = RepoId.generate()
+    val instant = Instant.now.minusSeconds(2)
     val custom = """{"name":{"value":"qemux86-64-ota"},"version":{"value":"ffd79847609f2c979deed5d81ec87833bd88f35bb15aa860454442db05d3129c"},"hardwareIds":["qemux86-64-ota"],"targetFormat":null}"""
     val items = runMigration(repoId, custom).futureValue
 
     items.headOption.map(_.repoId) should contain(repoId)
-    items.headOption.flatMap(_.custom.map(_.updatedAt)).get shouldBe a[Instant]
+    items.headOption.flatMap(_.custom.map(_.updatedAt)).get.isAfter(instant) shouldBe true
 
     forAll(rawJson(repoId).futureValue) { raw =>
       decode(raw)(ClientCodecs.targetCustomDerivedDecoder).valueOr(throw _) shouldBe a[TargetCustom]
     }
   }
 
-  test("works for json with value with createdAt/updatedAt") {
+  test("preserves db dates when createdAt/updatedAt are provided") {
     val repoId = RepoId.generate()
     val instant = Instant.parse("2017-07-10T13:27:28Z")
     val custom = """{"name":{"value":"qemux86-64-ota"},"version":{"value":"ffd79847609f2c979deed5d81ec87833bd88f35bb15aa860454442db05d3129c"},"hardwareIds":["qemux86-64-ota"],"targetFormat":null, "createdAt": "2017-07-10T13:27:28Z", "updatedAt": "2017-07-10T13:27:28Z"}"""
     val items = runMigration(repoId, custom).futureValue
 
     items.headOption.map(_.repoId) should contain(repoId)
-    items.headOption.flatMap(_.custom.map(_.updatedAt)) should contain(instant)
+    items.headOption.flatMap(_.custom.map(_.updatedAt)).get.isAfter(instant) shouldBe true
 
     forAll(rawJson(repoId).futureValue) { raw =>
       decode(raw)(ClientCodecs.targetCustomDerivedDecoder).valueOr(throw _) shouldBe a[TargetCustom]

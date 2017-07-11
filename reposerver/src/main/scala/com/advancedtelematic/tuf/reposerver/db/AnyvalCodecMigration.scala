@@ -1,11 +1,13 @@
 package com.advancedtelematic.tuf.reposerver.db
 
+import java.time.Instant
+
 import akka.{Done, NotUsed}
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import com.advancedtelematic.libats.http.BootApp
 import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
 import com.advancedtelematic.libats.slick.codecs.SlickRefined
-import com.advancedtelematic.libats.slick.db.{DatabaseConfig, SlickCirceMapper, SlickUUIDKey}
+import com.advancedtelematic.libats.slick.db.{DatabaseConfig, SlickCirceMapper, SlickExtensions, SlickUUIDKey}
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.reposerver.Settings
@@ -45,21 +47,21 @@ object AnyvalCodecMigrationApp extends BootApp with DatabaseConfig with Settings
 class AnyvalCodecMigration(implicit db: Database, ec: ExecutionContext, actorSystem: ActorSystem, materializer: ActorMaterializer) {
   val log = LoggerFactory.getLogger(this.getClass)
 
-  type Row = (RepoId, TargetFilename, Json)
+  type Row = (RepoId, TargetFilename, Json, Instant, Instant)
 
   val flow: Flow[Row, Row, NotUsed] = Flow[Row].mapAsyncUnordered(5)(convert)
 
-  val sink: Sink[Row, Future[Done]] = Sink.foreach[Row] { case (repoId, filename, _) => log.info(s"Processed ($repoId, $filename)") }
+  val sink: Sink[Row, Future[Done]] = Sink.foreach[Row] { case (repoId, filename, _, _, _) => log.info(s"Processed ($repoId, $filename)") }
 
   def run: Future[Done] = {
-    val query = sql"SELECT repo_id, filename, custom from target_items where custom is not null".as[Row]
+    val query = sql"SELECT repo_id, filename, custom, created_at, updated_at from target_items where custom is not null".as[Row]
 
     val source = db.stream(query)
 
     Source.fromPublisher(source).via(flow).runWith(sink)
   }
 
-  def convert(row: Row): Future[Row] = row match { case (repoId, filename, json) =>
+  def convert(row: Row): Future[Row] = row match { case (repoId, filename, json, createdAt, updatedAt) =>
     val dbio =
       json.as[TargetCustom](ClientCodecs.legacyTargetCustomDecoder) match {
         case Left(_) =>
@@ -71,7 +73,7 @@ class AnyvalCodecMigration(implicit db: Database, ec: ExecutionContext, actorSys
             .filter(_.repoId === repoId)
             .filter(_.filename === filename)
             .map(_.custom)
-            .update(Option(old))
+            .update(Option(old.copy(createdAt = createdAt, updatedAt = updatedAt)))
             .map(_ => row)
       }
 
@@ -82,7 +84,9 @@ class AnyvalCodecMigration(implicit db: Database, ec: ExecutionContext, actorSys
     val repoId = SlickUUIDKey.dbMapping[RepoId].getValue(r.rs, 1)
     val filename: TargetFilename = SlickRefined.refinedMappedType[String, ValidTargetFilename, Refined].getValue(r.rs, 2)
     val json = SlickCirceMapper.jsonMapper.getValue(r.rs, 3)
+    val createdAt = SlickExtensions.javaInstantMapping.getValue(r.rs, 4)
+    val updatedAt = SlickExtensions.javaInstantMapping.getValue(r.rs, 5)
 
-    (repoId, filename, json)
+    (repoId, filename, json, createdAt, updatedAt)
   }
 }
