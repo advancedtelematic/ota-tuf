@@ -20,11 +20,14 @@ import eu.timepit.refined.api.Refined
 import scala.concurrent.{Await, ExecutionContext, Future}
 import Schema._
 import akka.actor.ActorSystem
+import akka.http.scaladsl.util.FastFuture
 import akka.stream.ActorMaterializer
 import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libtuf.data.ClientCodecs
 import com.advancedtelematic.libtuf.data.TufSlickMappings._
+import com.advancedtelematic.libtuf.keyserver.{KeyserverClient, KeyserverHttpClient}
+import com.advancedtelematic.tuf.reposerver.http.SignedRoleGeneration
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration.Duration
@@ -36,7 +39,9 @@ object AnyvalCodecMigrationApp extends BootApp with DatabaseConfig with Settings
 
   implicit val _db = db
 
-  Await.result((new AnyvalCodecMigration).run, Duration.Inf)
+  lazy val keyStoreClient = new KeyserverHttpClient(keyServerUri)
+
+  Await.result(new AnyvalCodecMigration(keyStoreClient).run, Duration.Inf)
 
   log.info("Migration finished")
 
@@ -44,40 +49,62 @@ object AnyvalCodecMigrationApp extends BootApp with DatabaseConfig with Settings
 }
 
 
-class AnyvalCodecMigration(implicit db: Database, ec: ExecutionContext, actorSystem: ActorSystem, materializer: ActorMaterializer) {
+class AnyvalCodecMigration(keystoreClient: KeyserverClient)(implicit db: Database, ec: ExecutionContext, actorSystem: ActorSystem, materializer: ActorMaterializer) {
   val log = LoggerFactory.getLogger(this.getClass)
 
-  type Row = (RepoId, TargetFilename, Json, Instant, Instant)
+  case class Row(repoId: RepoId, filename: TargetFilename, json: Json, createdAt: Instant, updatedAt: Instant)
 
-  val flow: Flow[Row, Row, NotUsed] = Flow[Row].mapAsyncUnordered(5)(convert)
+  val roleSigning = new SignedRoleGeneration(keystoreClient)
 
-  val sink: Sink[Row, Future[Done]] = Sink.foreach[Row] { case (repoId, filename, _, _, _) => log.info(s"Processed ($repoId, $filename)") }
+  val convertJsonFlow: Flow[Row, Row, NotUsed] = Flow[Row].mapAsyncUnordered(5)(convertJson)
+
+  val regenerateIfOutdatedFlow: Flow[Row, Row, NotUsed] = Flow[Row].mapAsyncUnordered(3)(regenerateRolesIfOutdated)
+
+  val sink: Sink[Row, Future[Done]] = Sink.foreach[Row] { case Row(repoId, filename, _, _, _) => log.info(s"Processed ($repoId, $filename)") }
 
   def run: Future[Done] = {
     val query = sql"SELECT repo_id, filename, custom, created_at, updated_at from target_items where custom is not null".as[Row]
 
     val source = db.stream(query)
 
-    Source.fromPublisher(source).via(flow).runWith(sink)
+    Source.fromPublisher(source)
+      .via(convertJsonFlow)
+      .via(regenerateIfOutdatedFlow)
+      .runWith(sink)
   }
 
-  def convert(row: Row): Future[Row] = row match { case (repoId, filename, json, createdAt, updatedAt) =>
-    val dbio =
-      json.as[TargetCustom](ClientCodecs.legacyTargetCustomDecoder) match {
-        case Left(_) =>
-          log.info(s"No change required for ($repoId, $filename)")
-          DBIO.successful(row)
-        case Right(old) =>
-          log.info(s"Changing json for ($repoId, $filename)")
-          targetItems
-            .filter(_.repoId === repoId)
-            .filter(_.filename === filename)
-            .map(_.custom)
-            .update(Option(old.copy(createdAt = createdAt, updatedAt = updatedAt)))
-            .map(_ => row)
-      }
+  def regenerateRolesIfOutdated(row: Row): Future[Row] = {
+    val needsUpdate = db.run {
+      sql"SELECT 1 from signed_roles sr join target_items ti using(repo_id) where ti.repo_id = '#${row.repoId.uuid.toString}' and ti.filename = '#${row.filename}' and ti.updated_at > sr.updated_at and sr.role_type = 'TARGETS' LIMIT 1".as[Int].headOption.map(_.isDefined)
+    }
 
-    db.run(dbio)
+    needsUpdate.flatMap {
+      case true =>
+        log.info(s"signed role generation needed for (${row.repoId}, ${row.filename})")
+        roleSigning
+          .regenerateSignedRoles(row.repoId)
+          .recover { case ex =>
+            log.error(s"Could not regenerate signed roles for ${row.repoId}: ${ex.getMessage}")
+          }.map(_ => row)
+      case false =>
+        FastFuture.successful(row)
+    }
+  }
+
+  def convertJson(row: Row): Future[Row] = db.run {
+    row.json.as[TargetCustom](ClientCodecs.legacyTargetCustomDecoder) match {
+      case Left(_) =>
+        log.info("No json reformat needed")
+        DBIO.successful(row)
+      case Right(old) =>
+        log.info(s"Changing json for (${row.repoId}, ${row.filename})")
+        targetItems
+          .filter(_.repoId === row.repoId)
+          .filter(_.filename === row.filename)
+          .map(_.custom)
+          .update(Option(old.copy(createdAt = row.createdAt, updatedAt = row.updatedAt)))
+          .map(_ => row)
+    }
   }
 
   implicit val getRowResult: GetResult[Row] = GetResult { r =>
@@ -87,6 +114,6 @@ class AnyvalCodecMigration(implicit db: Database, ec: ExecutionContext, actorSys
     val createdAt = SlickExtensions.javaInstantMapping.getValue(r.rs, 4)
     val updatedAt = SlickExtensions.javaInstantMapping.getValue(r.rs, 5)
 
-    (repoId, filename, json, createdAt, updatedAt)
+    Row(repoId, filename, json, createdAt, updatedAt)
   }
 }
