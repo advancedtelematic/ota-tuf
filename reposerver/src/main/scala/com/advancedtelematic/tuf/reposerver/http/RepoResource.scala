@@ -67,8 +67,8 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
 
   private def createRepo(namespace: Namespace, repoId: RepoId): Route =
    complete {
-     roleKeyStore
-       .createRoot(repoId)
+     repoNamespaceRepo.ensureNotExists(namespace)
+       .flatMap(_ => roleKeyStore.createRoot(repoId))
        .flatMap(_ => repoNamespaceRepo.persist(repoId, namespace))
        .map(_ => repoId)
    }

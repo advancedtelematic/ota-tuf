@@ -25,6 +25,7 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import cats.syntax.either._
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
+import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.tuf.reposerver.data.Messages.PackageStorageUsage
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem
@@ -479,6 +480,24 @@ class RepoResourceSpec extends TufReposerverSpec
 
       source.runWith(Sink.head).futureValue shouldBe a[PackageStorageUsage]
     }
+  }
+
+  test("create a repo returns 409 if repo for namespace already exists") {
+    val repoId = RepoId.generate()
+
+    Post(apiUri(s"repo/${repoId.show}")).withHeaders(RawHeader("x-ats-namespace", repoId.show)) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    fakeRoleStore.fetchRootRole(repoId).futureValue shouldBe a[SignedPayload[Json]]
+
+    val otherRepoId = RepoId.generate()
+
+    Post(apiUri(s"repo/${otherRepoId.show}")).withHeaders(RawHeader("x-ats-namespace", repoId.show)) ~> routes ~> check {
+      status shouldBe StatusCodes.Conflict
+    }
+
+    fakeRoleStore.fetchRootRole(otherRepoId).failed.futureValue.asInstanceOf[RawError].code.code shouldBe "root_role_not_found"
   }
 
   test("authenticates user for put/get") (pending)
