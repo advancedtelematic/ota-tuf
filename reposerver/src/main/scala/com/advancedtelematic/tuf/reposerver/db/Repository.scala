@@ -3,6 +3,7 @@ package com.advancedtelematic.tuf.reposerver.db
 import java.time.Instant
 
 import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.http.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity, RawError}
@@ -135,10 +136,18 @@ protected[db] class RepoNamespaceRepository()(implicit db: Database, ec: Executi
   import com.advancedtelematic.libats.slick.db.SlickPipeToUnit.pipeToUnit
   import Schema.repoNamespaces
 
+  val MissingRepoNamespace = MissingEntity[(RepoId, Namespace)]()
+
+  val AlreadyExists = EntityAlreadyExists[(RepoId, Namespace)]()
+
   def persist(repoId: RepoId, namespace: Namespace): Future[Unit] = db.run {
-    (repoNamespaces += (repoId, namespace))
-      .handleIntegrityErrors(EntityAlreadyExists[RepoId]())
+    (repoNamespaces += (repoId, namespace)).handleIntegrityErrors(AlreadyExists)
   }
+
+  def ensureNotExists(namespace: Namespace): Future[Unit] =
+    findFor(namespace)
+      .flatMap(_ => FastFuture.failed(AlreadyExists))
+      .recover { case MissingRepoNamespace => () }
 
   def findFor(namespace: Namespace): Future[RepoId] = db.run {
     repoNamespaces
@@ -146,7 +155,7 @@ protected[db] class RepoNamespaceRepository()(implicit db: Database, ec: Executi
       .map(_.repoId)
       .result
       .headOption
-      .failIfNone(MissingEntity[RepoId]())
+      .failIfNone(MissingRepoNamespace)
   }
 
   def belongsTo(repoId: RepoId, namespace: Namespace): Future[Boolean] = db.run {
