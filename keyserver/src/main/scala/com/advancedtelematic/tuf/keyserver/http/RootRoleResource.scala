@@ -43,7 +43,7 @@ class RootRoleResource(vaultClient: VaultClient)
           require(genRequest.threshold > 0, "threshold must be greater than 0")
 
           val f = rootRoleGeneration
-            .createDefaultGenRequest(repoId, genRequest.threshold)
+            .createDefaultGenRequest(repoId, genRequest.threshold, genRequest.keyType)
             .map(StatusCodes.Accepted -> _)
 
           complete(f)
@@ -95,4 +95,4 @@ object ClientRootGenRequest {
   implicit val decoder: Decoder[ClientRootGenRequest] = io.circe.generic.semiauto.deriveDecoder
 }
 
-case class ClientRootGenRequest(threshold: Int = 1)
+case class ClientRootGenRequest(threshold: Int = 1, keyType: KeyType = RsaKeyType)

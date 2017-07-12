@@ -11,13 +11,11 @@ import slick.jdbc.MySQLProfile.api._
 import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNel
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientKey, RoleKeys, RootRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.tuf.keyserver.db._
-
-
 
 class RootRoleGeneration(vaultClient: VaultClient)
                         (implicit val db: Database, val ec: ExecutionContext)
@@ -26,14 +24,15 @@ class RootRoleGeneration(vaultClient: VaultClient)
     with SignedRootRoleSupport {
 
   private val DEFAULT_ROLES = RoleType.ALL
-  private val DEFAULT_KEY_SIZE = 2048
+  private val DEFAULT_RSA_KEY_SIZE = 2048
   private val DEFAULT_ROLE_EXPIRE = Duration.ofDays(365)
 
   val roleSigning = new RoleSigning(vaultClient)
 
-  def createDefaultGenRequest(repoId: RepoId, threshold: Int): Future[Seq[KeyGenId]] = {
+  def createDefaultGenRequest(repoId: RepoId, threshold: Int, keyType: KeyType): Future[Seq[KeyGenId]] = {
     val reqs = DEFAULT_ROLES.map { roleType =>
-      KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, roleType, DEFAULT_KEY_SIZE, threshold)
+      KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, roleType, DEFAULT_RSA_KEY_SIZE, keyType,
+        threshold)
     }
 
     keyGenRepo.persistAll(reqs).map(_.map(_.id))
@@ -58,11 +57,10 @@ class RootRoleGeneration(vaultClient: VaultClient)
     await(ensureKeysGenerated(repoId))
 
     val repoKeys = await(keyRepo.repoKeysByRole(repoId))
-
     val keys = repoKeys.values.flatMap(_._2).toList.distinct
 
     val clientKeys = keys.map { key =>
-      key.id -> ClientKey(key.keyType, key.publicKey)
+      key.id -> key.toTufKey
     }.toMap
 
     val roles = repoKeys

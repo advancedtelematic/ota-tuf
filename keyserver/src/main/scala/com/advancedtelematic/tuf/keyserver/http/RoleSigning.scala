@@ -5,7 +5,7 @@ import java.security.{PrivateKey, PublicKey}
 import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.{NonEmptyList, ValidatedNel}
-import com.advancedtelematic.libtuf.crypt.RsaKeyPair
+import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.Key
@@ -24,7 +24,7 @@ object RoleSigning {
 
   def isValid[T : Encoder](value: T, signature: ClientSignature, publicKey: PublicKey): Boolean = {
     val sig = Signature(signature.sig, signature.method)
-    RsaKeyPair.isValid(publicKey, sig, value.asJson.canonical.getBytes)
+    TufCrypto.isValid(publicKey, sig, value.asJson.canonical.getBytes)
   }
 }
 
@@ -54,7 +54,7 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
 
   def signForClient[T : Encoder](payload: T)(key: Key): Future[ClientSignature] = {
     fetchPrivateKey(key).map { privateKey =>
-      val signature = calculateSignature(payload, privateKey)
+      val signature = calculateSignature(payload, key, privateKey)
       ClientSignature(key.id, signature.method, signature.sig)
     }
   }
@@ -78,13 +78,11 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
     }
   }
 
-  private def calculateSignature[T : Encoder](payload: T, privateKey: PrivateKey): Signature = {
+  private def calculateSignature[T : Encoder](payload: T, key: Key, privateKey: PrivateKey): Signature = {
     val bytes = payload.asJson.canonical.getBytes
-    RsaKeyPair.sign(privateKey, bytes)
+    TufCrypto.sign(key.keyType, privateKey, bytes)
   }
 
   private def fetchPrivateKey(key: Key): Future[PrivateKey] =
-    vaultClient.findKey(key.id).flatMap { vaultKey =>
-      Future.fromTry(RsaKeyPair.parseKeyPair(vaultKey.privateKey).map(_.getPrivate))
-    }
+    vaultClient.findKey(key.id).map(_.privateKey.keyval)
 }

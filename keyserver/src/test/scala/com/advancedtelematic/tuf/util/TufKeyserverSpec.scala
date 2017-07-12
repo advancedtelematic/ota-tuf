@@ -45,7 +45,7 @@ class FakeVault extends VaultClient {
 }
 
 abstract class TufKeyserverSpec extends FunSuite with Matchers with ScalaFutures with Settings {
-  Security.addProvider(new BouncyCastleProvider())
+  Security.addProvider(new BouncyCastleProvider)
 
   val fakeVault = new FakeVault
 }

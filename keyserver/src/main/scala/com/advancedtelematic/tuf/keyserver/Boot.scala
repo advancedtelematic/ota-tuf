@@ -42,7 +42,7 @@ object Boot extends BootApp
 
   implicit val _db = db
 
-  Security.addProvider(new BouncyCastleProvider())
+  Security.addProvider(new BouncyCastleProvider)
 
   log.info(s"Starting $version on http://$host:$port")
 

@@ -1,14 +1,15 @@
 package com.advancedtelematic.libtuf.data
 
-import java.security.{PrivateKey, PublicKey}
-
-import akka.http.scaladsl.model.Uri
 import cats.syntax.either._
-import cats.syntax.show._
-import com.advancedtelematic.libtuf.crypt.RsaKeyPair
-import com.advancedtelematic.libtuf.crypt.RsaKeyPair._
+import akka.http.scaladsl.model.Uri
+import io.circe.syntax._
+import cats.syntax.either._
+import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufDataType._
 import io.circe._
+import cats.syntax.functor._
+
+import scala.util.Try
 
 object TufCodecs {
   import io.circe.generic.semiauto._
@@ -16,39 +17,6 @@ object TufCodecs {
 
   implicit val uriEncoder: Encoder[Uri] = Encoder[String].contramap(_.toString)
   implicit val uriDecoder: Decoder[Uri] = Decoder[String].map(Uri.apply)
-
-  implicit val privateKeyEncoder: Encoder[PrivateKey] = Encoder.instance { privateKey =>
-    Json.obj("private" -> Json.fromString(privateKey.show))
-  }
-
-  implicit val privateKeyDecoder: Decoder[PrivateKey] = Decoder.instance { cursor =>
-    val aCursor = cursor.downField("private")
-
-    aCursor
-      .as[String]
-      .flatMap { str =>
-        Either
-          .fromTry(RsaKeyPair.parseKeyPair(str))
-          .map(_.getPrivate)
-          .leftMap(ex => DecodingFailure(ex.getMessage, aCursor.history))
-      }
-  }
-
-  implicit val publicKeyEncoder: Encoder[PublicKey] = Encoder.instance { publicKey =>
-    Json.obj("public" -> Json.fromString(publicKey.show))
-  }
-
-  implicit val publicKeyDecoder: Decoder[PublicKey] = Decoder.instance { cursor =>
-    val aCursor = cursor.downField("public")
-
-    aCursor
-      .as[String]
-      .flatMap { str =>
-        Either
-          .fromTry(RsaKeyPair.parsePublic(str))
-          .leftMap(ex => DecodingFailure(ex.getMessage, aCursor.history))
-      }
-  }
 
   implicit val signatureEncoder: Encoder[Signature] = deriveEncoder
   implicit val signatureDecoder: Decoder[Signature] = deriveDecoder
@@ -61,4 +29,47 @@ object TufCodecs {
 
   implicit val checkSumEncoder: Encoder[Checksum] = deriveEncoder
   implicit val checkSumDecoder: Decoder[Checksum] = deriveDecoder
+
+  implicit val rsaKeyTypeEncoder: Encoder[RsaKeyType.type] = Encoder[String].contramap(_ ⇒ "RSA")
+  implicit val rsaKeyTypeDecoder: Decoder[RsaKeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "RSA", RsaKeyType, "RsaKeyType"))
+
+  implicit val edKeyTypeEncoder: Encoder[EdKeyType.type] = Encoder[String].contramap(_ ⇒ "ED25519")
+  implicit val edKeyTypeDecoder: Decoder[EdKeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "ED25519", EdKeyType, "RsaKeyType"))
+
+  implicit val keyTypeDecoder: Decoder[KeyType] = List[Decoder[KeyType]](rsaKeyTypeDecoder.widen, edKeyTypeDecoder.widen).reduceLeft(_ or _)
+
+  implicit val keyTypeEncoder: Encoder[KeyType] = Encoder.instance {
+    case RsaKeyType ⇒ RsaKeyType.asJson
+    case EdKeyType ⇒ EdKeyType.asJson
+  }
+
+  implicit val tufKeyEncoder: Encoder[TufKey] = Encoder.instance {
+    case key @ RSATufKey(_) ⇒
+      Json.obj("keyval" →
+        Json.obj("public" -> RsaKeyType.crypto.encode(key)), "keytype" → RsaKeyType.asJson)
+    case key @ EdTufKey(_) ⇒
+      Json.obj("keyval" →
+        Json.obj("public" -> EdKeyType.crypto.encode(key)), "keytype" → EdKeyType.asJson)
+  }
+
+  implicit val tufPrivateKeyEncoder: Encoder[TufPrivateKey] = Encoder.instance {
+    case key @ RSATufPrivateKey(_) ⇒
+      Json.obj("keyval" →
+        Json.obj("private" -> RsaKeyType.crypto.encode(key)), "keytype" → RsaKeyType.asJson)
+    case key @ EdTufPrivateKey(_) ⇒
+      Json.obj("keyval" →
+        Json.obj("private" -> EdKeyType.crypto.encode(key)), "keytype" → EdKeyType.asJson)
+  }
+
+  private def tufKeyDecoder[T](field: String, decodeFn: (KeyType, String) ⇒ Try[T]): Decoder[T] = Decoder.instance { cursor ⇒
+    for {
+      keyType ← cursor.downField("keytype").as[KeyType]
+      keyVal ← cursor.downField("keyval").downField(field).as[String]
+      key ← Either.fromTry(decodeFn(keyType, keyVal)).leftMap(ex => DecodingFailure(ex.getMessage, cursor.history))
+    } yield key
+  }
+
+  implicit val tufKeyDecoder: Decoder[TufKey] = tufKeyDecoder("public", TufCrypto.parsePublic)
+
+  implicit val tufPrivateKeyDecoder: Decoder[TufPrivateKey] = tufKeyDecoder("private", TufCrypto.parsePrivate)
 }

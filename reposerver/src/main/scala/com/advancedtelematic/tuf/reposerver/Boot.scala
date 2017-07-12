@@ -6,7 +6,6 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server.{Directives, Route}
 import com.advancedtelematic.libtuf.keyserver.KeyserverHttpClient
-
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import cats.syntax.either._
 import com.advancedtelematic.libats.http.BootApp
@@ -54,7 +53,7 @@ object Boot extends BootApp
 
   implicit val _db = db
 
-  Security.addProvider(new BouncyCastleProvider())
+  Security.addProvider(new BouncyCastleProvider)
 
   log.info(s"Starting $version on http://$host:$port")
 

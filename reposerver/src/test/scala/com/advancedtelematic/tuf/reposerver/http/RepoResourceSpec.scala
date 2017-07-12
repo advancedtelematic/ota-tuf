@@ -10,7 +10,7 @@ import akka.util.ByteString
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libats.messaging_datatype.DataType.{HashMethod, TargetFilename, ValidTargetFilename}
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
-import com.advancedtelematic.libtuf.crypt.{RsaKeyPair, Sha256Digest}
+import com.advancedtelematic.libtuf.crypt.{Sha256Digest, TufCrypto}
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleTypeToMetaPathOp, RootRole, SnapshotRole, TargetCustom, TargetsRole, TimestampRole}
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, _}
 import io.circe.syntax._
@@ -506,7 +506,7 @@ class RepoResourceSpec extends TufReposerverSpec
     val signature = signedPayload.signatures.head.toSignature
     val signed = signedPayload.signed
 
-    val isValid = RsaKeyPair.isValid(fakeRoleStore.publicKey(repoId), signature, signed.asJson.canonical.getBytes)
+    val isValid = TufCrypto.isValid(fakeRoleStore.publicKey(repoId), signature, signed.asJson.canonical.getBytes)
     isValid shouldBe true
   }
 
