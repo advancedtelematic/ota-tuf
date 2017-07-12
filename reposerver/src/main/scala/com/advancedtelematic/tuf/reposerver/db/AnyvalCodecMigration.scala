@@ -94,7 +94,7 @@ class AnyvalCodecMigration(keystoreClient: KeyserverClient)(implicit db: Databas
   def convertJson(row: Row): Future[Row] = db.run {
     row.json.as[TargetCustom](ClientCodecs.legacyTargetCustomDecoder) match {
       case Left(_) =>
-        log.info("No json reformat needed")
+        log.info(s"No json reformat needed for ${row.repoId}, ${row.filename}")
         DBIO.successful(row)
       case Right(old) =>
         log.info(s"Changing json for (${row.repoId}, ${row.filename})")
