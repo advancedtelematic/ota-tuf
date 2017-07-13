@@ -108,13 +108,23 @@ object TufDataType {
   sealed trait TufKey {
     val keyval: PublicKey
     lazy val id = keyval.id
+    def keytype: KeyType
   }
-  case class RSATufKey(override val keyval: PublicKey) extends TufKey
-  case class EdTufKey(override val keyval: PublicKey) extends TufKey
+  case class RSATufKey(override val keyval: PublicKey) extends TufKey {
+    override def keytype: KeyType = RsaKeyType
+  }
+  case class EdTufKey(override val keyval: PublicKey) extends TufKey {
+    override def keytype: KeyType = EdKeyType
+  }
 
   sealed trait TufPrivateKey {
     val keyval: PrivateKey
+    def keytype: KeyType
   }
-  case class RSATufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey
-  case class EdTufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey
+  case class RSATufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey {
+    override def keytype: KeyType = RsaKeyType
+  }
+  case class EdTufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey {
+    override def keytype: KeyType = EdKeyType
+  }
 }
