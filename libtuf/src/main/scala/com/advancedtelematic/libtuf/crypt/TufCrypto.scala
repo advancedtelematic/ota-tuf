@@ -17,6 +17,7 @@ import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import java.security.KeyFactory
 import io.circe.Json
+import scala.util.control.NoStackTrace
 import scala.util.Try
 
 trait TufCrypto[T <: KeyType] {
@@ -38,6 +39,10 @@ trait TufCrypto[T <: KeyType] {
 }
 
 object TufCrypto {
+  case class SignatureMethodMismatch(fromKey: SignatureMethod, fromSig: SignatureMethod)
+      extends Exception(s"SignatureMethod mismatch, The key is for $fromKey but the signature is for $fromSig")
+      with NoStackTrace
+
   val rsaCrypto = new RsaCrypto
 
   val edCrypto = new EdCrypto
@@ -51,6 +56,16 @@ object TufCrypto {
     val validSignature = base64Sig.refineTry[ValidSignature].get
 
     Signature(validSignature, keyType.crypto.signatureMethod)
+  }
+
+  def convert[T <: KeyType](keyType: T, publicKey: PublicKey): T#Pub =
+    keyType.crypto.convert(publicKey)
+
+  def isValid[T <: KeyType](keyType: T, publicKey: PublicKey, signature: Signature, data: Array[Byte]): Boolean = {
+    val keyMethod = keyType.crypto.signatureMethod
+    if (keyMethod != signature.method)
+      throw new SignatureMethodMismatch(keyMethod, signature.method)
+    isValid(publicKey, signature, data)
   }
 
   def isValid(publicKey: PublicKey, signature: Signature, data: Array[Byte]): Boolean = {
