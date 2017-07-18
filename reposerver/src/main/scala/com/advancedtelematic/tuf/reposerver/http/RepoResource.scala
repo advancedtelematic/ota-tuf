@@ -32,10 +32,15 @@ import org.slf4j.LoggerFactory
 
 import scala.collection.immutable
 
+import com.advancedtelematic.tuf.reposerver.Settings
+
 class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: NamespaceValidation,
                    targetStore: TargetStore, messageBusPublisher: MessageBusPublisher)
                   (implicit val db: Database, val ec: ExecutionContext) extends Directives
-  with TargetItemRepositorySupport with SignedRoleRepositorySupport with RepoNamespaceRepositorySupport {
+  with TargetItemRepositorySupport
+  with SignedRoleRepositorySupport
+  with RepoNamespaceRepositorySupport
+  with Settings {
 
   private val signedRoleGeneration = new SignedRoleGeneration(roleKeyStore)
   private val targetUpload = new TargetUpload(roleKeyStore, targetStore, messageBusPublisher)
@@ -86,9 +91,11 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
 
   private def addTargetFromContent(filename: TargetFilename, repoId: RepoId): Route = {
     targetCustomParameters { custom =>
-      fileUpload("file") { case (_, file) =>
-        val action = targetUpload.store(repoId, filename, file, custom)
-        complete(action)
+      withSizeLimit(userRepoSizeLimit) {
+        fileUpload("file") { case (_, file) =>
+          val action = targetUpload.store(repoId, filename, file, custom)
+          complete(action)
+        }
       }
     }
   }
