@@ -9,9 +9,10 @@ import akka.util.ByteString
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
+import com.advancedtelematic.libtuf.data.Messages.TufTargetAdded
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
-import com.advancedtelematic.tuf.reposerver.data.Messages.{PackageStorageUsage, TufTargetAdded}
+import com.advancedtelematic.tuf.reposerver.data.Messages.PackageStorageUsage
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport
 import com.advancedtelematic.tuf.reposerver.http.SignedRoleGeneration
@@ -36,7 +37,7 @@ class TargetUpload(roleKeyStore: KeyserverClient,
       (namespace, usage) <- targetItemRepo.usage(repoId)
       _ <- messageBusPublisher.publish(PackageStorageUsage(namespace.get, Instant.now, usage))
       _ <- messageBusPublisher.publish(
-        TufTargetAdded(namespace.get, target.filename, target.checksum, target.length, target.custom))
+        TufTargetAdded(namespace, target.filename, target.checksum, target.length, target.custom))
     } yield ()
 
     f.recover {
