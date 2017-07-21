@@ -9,13 +9,11 @@ import akka.util.ByteString
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
-import com.advancedtelematic.libtuf.data.Messages.TufTargetAdded
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.data.Messages.PackageStorageUsage
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport
-import com.advancedtelematic.tuf.reposerver.http.SignedRoleGeneration
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore.{TargetBytes, TargetRedirect}
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api.Database
@@ -28,16 +26,12 @@ class TargetUpload(roleKeyStore: KeyserverClient,
                   (implicit val db: Database, val ec: ExecutionContext)
   extends TargetItemRepositorySupport {
 
-  private val signedRoleGeneration = new SignedRoleGeneration(roleKeyStore)
-
   private val _log = LoggerFactory.getLogger(this.getClass)
 
-  def publishUploadMessages(repoId: RepoId, target: TargetItem): Future[Unit] = {
+  def publishUploadMessages(repoId: RepoId): Future[Unit] = {
     val f = for {
       (namespace, usage) <- targetItemRepo.usage(repoId)
       _ <- messageBusPublisher.publish(PackageStorageUsage(namespace.get, Instant.now, usage))
-      _ <- messageBusPublisher.publish(
-        TufTargetAdded(namespace, target.filename, target.checksum, target.length, target.custom))
     } yield ()
 
     f.recover {
@@ -47,13 +41,11 @@ class TargetUpload(roleKeyStore: KeyserverClient,
   }
 
 
-  def store(repoId: RepoId, targetFile: TargetFilename, fileData: Source[ByteString, Any], custom: TargetCustom): Future[Unit] = {
+  def store(repoId: RepoId, targetFile: TargetFilename, fileData: Source[ByteString, Any], custom: TargetCustom): Future[TargetItem] = {
     for {
       storeResult <- targetStore.store(repoId, targetFile, fileData)
-      item = TargetItem(repoId, targetFile, storeResult.uri, storeResult.checksum, storeResult.size, Some(custom))
-      _ <- signedRoleGeneration.addToTarget(item)
-      _ <- publishUploadMessages(repoId, item)
-    } yield ()
+      _ <- publishUploadMessages(repoId)
+    } yield TargetItem(repoId, targetFile, storeResult.uri, storeResult.checksum, storeResult.size, Some(custom))
   }
 
   def retrieve(repoId: RepoId, targetFilename: TargetFilename): Future[HttpResponse] = {

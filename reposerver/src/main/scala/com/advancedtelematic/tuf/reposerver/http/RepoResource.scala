@@ -8,6 +8,7 @@ import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
+import com.advancedtelematic.libtuf.data.Messages.TufTargetAdded
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, RoleType}
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
@@ -21,13 +22,14 @@ import com.advancedtelematic.tuf.reposerver.target_store.{TargetStore, TargetUpl
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
 import com.advancedtelematic.libtuf.data.TufDataType._
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 import com.advancedtelematic.libats.http.AnyvalMarshallingSupport._
 import com.advancedtelematic.libats.codecs.AkkaCirce._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
+import io.circe.Json
 import org.slf4j.LoggerFactory
 
 import scala.collection.immutable
@@ -78,23 +80,33 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
        .map(_ => repoId)
    }
 
-  private def addTarget(filename: TargetFilename, repoId: RepoId, clientItem: RequestTargetItem): Route =
+  private def addTargetItem(namespace: Namespace, item: TargetItem): Future[Json] =
+    for {
+      result <- signedRoleGeneration.addToTarget(item)
+      _ <- messageBusPublisher.publish(
+        TufTargetAdded(namespace, item.filename, item.checksum, item.length, item.custom))
+    } yield result
+
+  private def addTarget(namespace: Namespace, filename: TargetFilename, repoId: RepoId, clientItem: RequestTargetItem): Route =
     complete {
       val custom = for {
         name <- clientItem.name
         version <- clientItem.version
       } yield TargetCustom(name, version, clientItem.hardwareIds, clientItem.targetFormat)
 
-      val item = TargetItem(repoId, filename, clientItem.uri, clientItem.checksum, clientItem.length, custom)
-      signedRoleGeneration.addToTarget(item)
+      addTargetItem(namespace, TargetItem(repoId, filename, clientItem.uri, clientItem.checksum, clientItem.length, custom))
     }
 
-  private def addTargetFromContent(filename: TargetFilename, repoId: RepoId): Route = {
+  private def addTargetFromContent(namespace: Namespace, filename: TargetFilename, repoId: RepoId): Route = {
     targetCustomParameters { custom =>
       withSizeLimit(userRepoSizeLimit) {
         fileUpload("file") { case (_, file) =>
-          val action = targetUpload.store(repoId, filename, file, custom)
-          complete(action)
+          complete {
+            for {
+              item <- targetUpload.store(repoId, filename, file, custom)
+              result <- addTargetItem(namespace, item)
+            } yield result
+          }
         }
       }
     }
@@ -122,17 +134,17 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
   }
 
   private def modifyRepoRoutes(repoId: RepoId)  =
-    namespaceValidation(repoId) { _ =>
+    namespaceValidation(repoId) { namespace =>
       (get & path(RoleType.JsonRoleTypeMetaPath)) { roleType =>
         findRole(repoId, roleType)
       } ~
       (post & path("targets" / TargetFilenamePath)) { filename =>
         entity(as[RequestTargetItem]) { clientItem =>
-          addTarget(filename, repoId, clientItem)
+          addTarget(namespace, filename, repoId, clientItem)
         }
       } ~
       (put & path("targets" / TargetFilenamePath)) { filename =>
-        addTargetFromContent(filename, repoId)
+        addTargetFromContent(namespace, filename, repoId)
       } ~
       (get & path("targets" / TargetFilenamePath)) { filename =>
         complete(targetUpload.retrieve(repoId, filename))
