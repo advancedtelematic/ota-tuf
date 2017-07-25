@@ -12,6 +12,7 @@ import com.advancedtelematic.libats.messaging_datatype.DataType.{HashMethod, Tar
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.{Sha256Digest, TufCrypto}
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleTypeToMetaPathOp, RootRole, SnapshotRole, TargetCustom, TargetsRole, TimestampRole}
+import com.advancedtelematic.libtuf.data.Messages.TufTargetAdded
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, _}
 import io.circe.syntax._
 import io.circe.{Encoder, Json}
@@ -461,26 +462,6 @@ class RepoResourceSpec extends TufReposerverSpec
   }
 
 
-  test("publishes usage messages to bus") {
-    val repoId = RepoId.generate()
-    val source = memoryMessageBus.subscribe[PackageStorageUsage]()
-
-    withNamespace(s"default-${repoId.show}") { implicit ns =>
-      Post(apiUri(s"repo/${repoId.show}")).namespaced ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-      }
-
-      Put(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing?name=pkgname&version=pkgversion&desc=wat"), form).namespaced ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-      }
-
-      Get(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing")).namespaced ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-      }
-
-      source.runWith(Sink.head).futureValue shouldBe a[PackageStorageUsage]
-    }
-  }
 
   test("create a repo returns 409 if repo for namespace already exists") {
     val repoId = RepoId.generate()
@@ -518,5 +499,71 @@ class RepoResourceSpec extends TufReposerverSpec
     }
 
     repoId
+  }
+}
+
+
+// Test for message publishing in separate class
+// because MemoryMessageBus maintains queue and supports only single subscriber.
+//
+class RepoResourceTufTargetSpec extends TufReposerverSpec
+    with ResourceSpec  with Inspectors with Whenever with PatienceConfiguration {
+
+  override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
+
+  val testFile = {
+    val checksum = Sha256Digest.digest("hi".getBytes)
+    RequestTargetItem(Uri.Empty, checksum, targetFormat = None, name = None, version = None, hardwareIds = Seq.empty, length = "hi".getBytes.length)
+  }
+
+  test("publishes messages to bus on adding target") {
+    val repoId = RepoId.generate()
+    val source = memoryMessageBus.subscribe[TufTargetAdded]()
+
+    withNamespace(s"default-${repoId.show}") { implicit ns =>
+      Post(apiUri(s"repo/${repoId.show}")).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      source.runWith(Sink.head).futureValue shouldBe a[TufTargetAdded]
+    }
+  }
+}
+
+class RepoResourceTufTargetUploadSpec extends TufReposerverSpec
+    with ResourceSpec  with Inspectors with Whenever with PatienceConfiguration {
+
+  override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
+
+  val testEntity = HttpEntity(ByteString("""
+                                           |Like all the men of the Library, in my younger days I traveled;
+                                           |I have journeyed in quest of a book, perhaps the catalog of catalogs.
+                                           |""".stripMargin))
+
+  val fileBodyPart = BodyPart("file", testEntity, Map("filename" -> "babel.txt"))
+
+  val form = Multipart.FormData(fileBodyPart)
+
+  test("publishes usage messages to bus") {
+    val repoId = RepoId.generate()
+    val source = memoryMessageBus.subscribe[PackageStorageUsage]()
+
+    withNamespace(s"default-${repoId.show}") { implicit ns =>
+      Post(apiUri(s"repo/${repoId.show}")).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      Put(apiUri(s"repo/${repoId.show}/targets/some/file?name=pkgname&version=pkgversion&desc=wat"), form).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      val messages = source.take(2).runWith(Sink.seq).futureValue
+      messages.head shouldBe a[PackageStorageUsage]
+      messages.last shouldBe a[TufTargetAdded]
+    }
   }
 }
