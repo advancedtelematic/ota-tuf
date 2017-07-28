@@ -1,0 +1,140 @@
+[{
+  "id": "${DEPLOY_ENV}/${REPOSERVER_JOB_NAME}",
+  "uris": ["/root/docker.tar.gz"],
+  "constraints": [["rack_id", "CLUSTER", "$MARATHON_CONSTRAINTS"]],
+  "cpus": 0.2,
+  "mem": 1048,
+  "instances": 1,
+  "container": {
+    "type": "DOCKER",
+    "docker": {
+      "image": "advancedtelematic/tuf-reposerver:${DOCKER_TAG}",
+      "parameters": [{"key": "log-driver", "value": "syslog"},
+                     {"key": "log-opt", "value": "tag=${REPOSERVER_JOB_NAME}"}],
+      "forcePullImage": true,
+      "network": "BRIDGE",
+      "portMappings": [{
+        "containerPort": 9001,
+        "hostPort": 0,
+        "protocol": "tcp"
+      }]
+    }
+  },
+  "env": {
+    "BIND_PORT": "9001",
+    "DB_MIGRATE": true,
+    "DB_PASSWORD": "${DB_PASSWORD}",
+    "DB_URL": "${DB_URL}",
+    "DB_USER": "${DB_USER}",
+    "JAVA_OPTS": "-Xmx900m",
+    "KAFKA_BOOTSTRAP_SERVERS": "${KAFKA_BOOTSTRAP_SERVERS}",
+    "KAFKA_HOST": "${KAFKA_HOST}",
+    "KAFKA_TOPIC_SUFFIX": "${KAFKA_TOPIC_SUFFIX}",
+    "SERVICE_NAME": "${REPOSERVER_JOB_NAME}",
+    "SERVICE_SCOPE": "internal",
+    "SERVICE_TYPE": "http",
+    "SERVICE_IMAGE": "advancedtelematic/tuf-reposerver:${DOCKER_TAG}",
+    "SERVICE_HEALTH_CHECK": "curl --show-error --silent %<host>s:%<port>s/health",
+    "TUF_REPOSERVER_AWS_ACCESS_KEY": "${TUF_REPOSERVER_AWS_ACCESS_KEY}",
+    "TUF_REPOSERVER_AWS_BUCKET_ID": "${TUF_REPOSERVER_AWS_BUCKET_ID}",
+    "TUF_REPOSERVER_AWS_REGION": "${TUF_REPOSERVER_AWS_REGION}",
+    "TUF_REPOSERVER_AWS_SECRET_KEY": "${TUF_REPOSERVER_AWS_SECRET_KEY}"
+  },
+  "healthChecks": [{
+    "protocol": "HTTP",
+    "path": "/health",
+    "intervalSeconds": 30
+  }]
+},
+{
+  "id": "${DEPLOY_ENV}/${KEYSERVER_JOB_NAME}",
+  "uris": ["/root/docker.tar.gz"],
+  "constraints": [["rack_id", "CLUSTER", "$MARATHON_CONSTRAINTS"]],
+  "cpus": 0.2,
+  "mem": 1048,
+  "instances": 1,
+  "args": ["-main", "com.advancedtelematic.tuf.keyserver.Boot"],
+  "container": {
+    "type": "DOCKER",
+    "docker": {
+      "image": "advancedtelematic/tuf-keyserver:${DOCKER_TAG}",
+      "parameters": [{"key": "log-driver", "value": "syslog"},
+                     {"key": "log-opt", "value": "tag=${KEYSERVER_JOB_NAME}"}],
+      "forcePullImage": true,
+      "network": "BRIDGE",
+      "portMappings": [{
+        "containerPort": 9001,
+        "hostPort": 0,
+        "protocol": "tcp"
+      }]
+    }
+  },
+  "env": {
+    "BIND_PORT": "9001",
+    "DB_MIGRATE": true,
+    "DB_PASSWORD": "${DB_PASSWORD}",
+    "DB_URL": "${DB_URL}",
+    "DB_USER": "${DB_USER}",
+    "JAVA_OPTS": "-Xmx900m",
+    "KAFKA_BOOTSTRAP_SERVERS": "${KAFKA_BOOTSTRAP_SERVERS}",
+    "KAFKA_HOST": "${KAFKA_HOST}",
+    "KAFKA_TOPIC_SUFFIX": "${KAFKA_TOPIC_SUFFIX}",
+    "SERVICE_NAME": "${KEYSERVER_JOB_NAME}",
+    "SERVICE_SCOPE": "internal",
+    "SERVICE_TYPE": "http",
+    "SERVICE_IMAGE": "advancedtelematic/tuf-keyserver:${DOCKER_TAG}",
+    "SERVICE_HEALTH_CHECK": "curl --show-error --silent %<host>s:%<port>s/health",
+    "TUF_VAULT_TOKEN": "${TUF_VAULT_TOKEN}"
+  },
+  "healthChecks": [{
+    "protocol": "HTTP",
+    "path": "/health",
+    "intervalSeconds": 30
+  }]
+},
+{
+  "id": "${DEPLOY_ENV}/${KEYSERVER_JOB_NAME}-daemon",
+  "uris": ["/root/docker.tar.gz"],
+  "constraints": [["rack_id", "CLUSTER", "$MARATHON_CONSTRAINTS"]],
+  "cpus": 0.2,
+  "mem": 1048,
+  "instances": 1,
+  "args": ["-main", "com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationDaemon"],
+  "container": {
+    "type": "DOCKER",
+    "docker": {
+      "image": "advancedtelematic/tuf-keyserver:${DOCKER_TAG}",
+      "parameters": [{"key": "log-driver", "value": "syslog"},
+                     {"key": "log-opt", "value": "tag=${KEYSERVER_JOB_NAME}-daemon"}],
+      "forcePullImage": true,
+      "network": "BRIDGE",
+      "portMappings": [{
+        "containerPort": 9001,
+        "hostPort": 0,
+        "protocol": "tcp"
+      }]
+    }
+  },
+  "env": {
+    "BIND_PORT": "9001",
+    "DB_MIGRATE": true,
+    "DB_PASSWORD": "${DB_PASSWORD}",
+    "DB_URL": "${DB_URL}",
+    "DB_USER": "${DB_USER}",
+    "JAVA_OPTS": "-Xmx900m",
+    "KAFKA_BOOTSTRAP_SERVERS": "${KAFKA_BOOTSTRAP_SERVERS}",
+    "KAFKA_HOST": "${KAFKA_HOST}",
+    "KAFKA_TOPIC_SUFFIX": "${KAFKA_TOPIC_SUFFIX}",
+    "SERVICE_NAME": "${KEYSERVER_JOB_NAME}-daemon",
+    "SERVICE_SCOPE": "internal",
+    "SERVICE_TYPE": "http",
+    "SERVICE_IMAGE": "advancedtelematic/tuf-keyserver:${DOCKER_TAG}",
+    "SERVICE_HEALTH_CHECK": "curl --show-error --silent %<host>s:%<port>s/health",
+    "TUF_VAULT_TOKEN": "${TUF_VAULT_TOKEN}"
+  },
+  "healthChecks": [{
+    "protocol": "HTTP",
+    "path": "/health",
+    "intervalSeconds": 30
+  }]
+}]
