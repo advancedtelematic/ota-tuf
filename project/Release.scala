@@ -17,7 +17,7 @@ object Release {
       releaseProcess := Seq(
         checkSnapshotDependencies,
         releaseStepCommand("ivySbt +libtuf/publish"),
-        ReleaseStep(releaseStepTask(publish in Docker))
+        releaseStepCommand("keyserver/docker:publish reposerver/docker:publish")
       ),
       releaseIgnoreUntrackedFiles := true
     )
