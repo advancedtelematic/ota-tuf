@@ -11,15 +11,23 @@ import sbtrelease.ReleasePlugin.autoImport._
 
 object Release {
 
-  lazy val settings = {
+  def settings(toPublish: Project*) = {
+
+    val publishSteps = toPublish.map(p => ReleaseStep(releaseStepTask(publish in p)))
+
+    val prepareSteps: Seq[ReleaseStep] = Seq(
+      checkSnapshotDependencies)
+
+    val dockerPublishSteps: Seq[ReleaseStep] = Seq(
+      releaseStepCommand("keyserver/docker:publish"),
+      releaseStepCommand("reposerver/docker:publish")
+    )
+
+    val allSteps = prepareSteps ++ dockerPublishSteps ++ publishSteps
 
     Seq(
-      releaseProcess := Seq(
-        checkSnapshotDependencies,
-        releaseStepCommand("ivySbt +libtuf/publish"),
-        releaseStepCommand("keyserver/docker:publish reposerver/docker:publish")
-      ),
-      releaseIgnoreUntrackedFiles := true
+      releaseIgnoreUntrackedFiles := true,
+      releaseProcess := allSteps
     )
   }
 }
