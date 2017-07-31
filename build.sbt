@@ -49,7 +49,7 @@ lazy val commonSettings = Seq(
   (testOptions in UnitTest := Seq(Tests.Filter(unitFilter))) ++
   (testOptions in IntegrationTest := Seq(Tests.Filter(itFilter))) ++
   Versioning.settings ++
-  Release.settings ++ commonDeps
+  commonDeps
 
 lazy val libtuf = (project in file("libtuf"))
   .enablePlugins(BuildInfoPlugin, Versioning.Plugin)
@@ -77,5 +77,6 @@ lazy val ota_tuf = (project in file("."))
   .settings(Publish.disable)
   .settings(scalaVersion := "2.11.11")
   .settings(crossScalaVersions := Seq("2.11.11", "2.12.2"))
+  .settings(Release.settings(libtuf, keyserver, reposerver))
   .aggregate(libtuf, keyserver, reposerver)
 
