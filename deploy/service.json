@@ -22,7 +22,7 @@
   },
   "env": {
     "BIND_PORT": "9001",
-    "DB_MIGRATE": true,
+    "DB_MIGRATE": "true",
     "DB_PASSWORD": "${DB_PASSWORD}",
     "DB_URL": "${DB_URL}",
     "DB_USER": "${DB_USER}",
@@ -73,7 +73,7 @@
   },
   "env": {
     "BIND_PORT": "9001",
-    "DB_MIGRATE": true,
+    "DB_MIGRATE": "true",
     "DB_PASSWORD": "${DB_PASSWORD}",
     "DB_URL": "${DB_URL}",
     "DB_USER": "${DB_USER}",
@@ -119,7 +119,7 @@
   },
   "env": {
     "BIND_PORT": "9001",
-    "DB_MIGRATE": true,
+    "DB_MIGRATE": "true",
     "DB_PASSWORD": "${DB_PASSWORD}",
     "DB_URL": "${DB_URL}",
     "DB_USER": "${DB_USER}",
