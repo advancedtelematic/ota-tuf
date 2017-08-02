@@ -16,6 +16,7 @@ import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 
 import scala.concurrent.Future
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directive1
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -33,7 +34,7 @@ import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
-import com.advancedtelematic.tuf.reposerver.target_store.LocalTargetStore
+import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStore, TargetUpload}
 
 object FakeRoleStore extends KeyserverClient {
 
@@ -100,9 +101,29 @@ trait LongHttpRequest {
   implicit def default(implicit system: ActorSystem) = RouteTestTimeout(10.seconds.dilated(system))
 }
 
+trait FakeHttpClientSpec {
+  class FakeHttpClient extends (HttpRequest => Future[HttpResponse]) {
+    val fileUri: Uri = "http://testfile"
+    lazy val fileBody = HttpEntity.apply(ContentTypes.`text/plain(UTF-8)`, "Test text 1".getBytes())
+
+    override def apply(req: HttpRequest): Future[HttpResponse] = Future.successful {
+      req match {
+        case HttpRequest(_, uri, _, _, _) if uri.toString().endsWith("testfile") =>
+          HttpResponse(entity = fileBody)
+        case HttpRequest(_, uri, _, _, _) =>
+          HttpResponse(StatusCodes.NotFound, entity = s"[fakehttpserver] $uri not found")
+      }
+    }
+  }
+
+  val fakeHttpClient = new FakeHttpClient
+}
+
+
 trait ResourceSpec extends TufReposerverSpec
   with ScalatestRouteTest
   with DatabaseSpec
+  with FakeHttpClientSpec
   with LongHttpRequest {
   def apiUri(path: String): String = "/api/v1/" + path
 
@@ -113,9 +134,10 @@ trait ResourceSpec extends TufReposerverSpec
   }
 
   val localStorage = new LocalTargetStore(Files.createTempDirectory("target-storage").toFile)
+  lazy val targetUpload = new TargetUpload(fakeRoleStore, localStorage, fakeHttpClient, messageBusPublisher)
 
   val memoryMessageBus = new MemoryMessageBus
   val messageBusPublisher = memoryMessageBus.publisher()
 
-  lazy val routes = new TufReposerverRoutes(fakeRoleStore, namespaceValidation, localStorage, messageBusPublisher).routes
+  lazy val routes = new TufReposerverRoutes(fakeRoleStore, namespaceValidation, targetUpload, messageBusPublisher).routes
 }

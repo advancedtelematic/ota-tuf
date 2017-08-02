@@ -3,6 +3,7 @@ package com.advancedtelematic.tuf.reposerver.http
 import akka.http.scaladsl.unmarshalling._
 import PredefinedFromStringUnmarshallers.CsvSeq
 import com.advancedtelematic.libats.data.RefinedUtils._
+import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libats.data.Namespace
@@ -18,7 +19,7 @@ import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.messaging_datatype.DataType.{TargetFilename, ValidTargetFilename}
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.tuf.reposerver.target_store.{TargetStore, TargetUpload}
+import com.advancedtelematic.tuf.reposerver.target_store.TargetUpload
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
 import com.advancedtelematic.libtuf.data.TufDataType._
 
@@ -37,7 +38,7 @@ import scala.collection.immutable
 import com.advancedtelematic.tuf.reposerver.Settings
 
 class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: NamespaceValidation,
-                   targetStore: TargetStore, messageBusPublisher: MessageBusPublisher)
+                   targetUpload: TargetUpload, messageBusPublisher: MessageBusPublisher)
                   (implicit val db: Database, val ec: ExecutionContext) extends Directives
   with TargetItemRepositorySupport
   with SignedRoleRepositorySupport
@@ -45,7 +46,6 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
   with Settings {
 
   private val signedRoleGeneration = new SignedRoleGeneration(roleKeyStore)
-  private val targetUpload = new TargetUpload(roleKeyStore, targetStore, messageBusPublisher)
   private val NamespaceHeader = headerValueByName("x-ats-namespace").map(Namespace)
 
   val log = LoggerFactory.getLogger(this.getClass)
@@ -107,6 +107,14 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
               result <- addTargetItem(namespace, item)
             } yield result
           }
+        }
+      } ~
+      parameter('fileUri) { fileUri =>
+        complete {
+          for {
+            item <- targetUpload.storeFromUri(repoId, filename, Uri(fileUri), custom)
+            result <- addTargetItem(namespace, item)
+          } yield result
         }
       }
     }

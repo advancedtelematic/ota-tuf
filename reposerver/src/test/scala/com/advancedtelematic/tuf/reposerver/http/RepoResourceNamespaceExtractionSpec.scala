@@ -21,7 +21,7 @@ class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
 
   implicit val ec = ExecutionContext.global
 
-  override lazy val routes: Route = new RepoResource(fakeRoleStore, NamespaceExtractor.default, localStorage, messageBusPublisher).route
+  override lazy val routes: Route = new RepoResource(fakeRoleStore, NamespaceExtractor.default, targetUpload, messageBusPublisher).route
 
   val testFile = {
     val checksum = Sha256Digest.digest("hi".getBytes)
