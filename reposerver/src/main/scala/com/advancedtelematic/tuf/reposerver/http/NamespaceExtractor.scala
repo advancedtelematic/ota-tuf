@@ -1,6 +1,7 @@
 package com.advancedtelematic.tuf.reposerver.http
 
 import akka.http.scaladsl.server.{AuthorizationFailedRejection, Directive1, Directives}
+import com.advancedtelematic.libats.auth.NamespaceDirectives
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
@@ -9,30 +10,33 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.ExecutionContext
 import slick.jdbc.MySQLProfile.api._
 
-abstract class NamespaceValidation(implicit val ec: ExecutionContext, val db: Database)
-  extends RepoNamespaceRepositorySupport with Directives {
 
+abstract class NamespaceValidation(val extractor: Directive1[Namespace]) {
   def apply(repoId: RepoId): Directive1[Namespace]
 }
 
-object NamespaceExtractor {
+class DatabaseNamespaceValidation(extractor: Directive1[Namespace])
+                                 (implicit val ec: ExecutionContext, val db: Database)
+  extends NamespaceValidation(extractor) with RepoNamespaceRepositorySupport {
+
+  import Directives._
+
   private val _log = LoggerFactory.getLogger(this.getClass)
 
-  def default(implicit ec: ExecutionContext, db: Database): NamespaceValidation = new NamespaceValidation {
-    def apply(repoId: RepoId): Directive1[Namespace] = {
-      optionalHeaderValueByName("x-ats-namespace").flatMap {
-        case Some(namespace) =>
-          onSuccess(repoNamespaceRepo.belongsTo(repoId, Namespace(namespace))).flatMap {
-            case true =>
-              provide(Namespace(namespace))
-            case false =>
-              _log.info(s"User not allowed for ($repoId, $namespace)")
-              reject(AuthorizationFailedRejection)
-          }
-        case None =>
-          _log.info(s"User not allowed, no namespace provided for $repoId")
-          reject(AuthorizationFailedRejection)
-      }
+  override def apply(repoId: RepoId): Directive1[Namespace] = extractor.flatMap { namespace =>
+    onSuccess(repoNamespaceRepo.belongsTo(repoId, namespace)).flatMap {
+      case true =>
+        provide(namespace)
+      case false =>
+        _log.info(s"User not allowed for ($repoId, $namespace)")
+        reject(AuthorizationFailedRejection)
     }
   }
+}
+
+object NamespaceValidation {
+  private lazy val fromConfig: Directive1[Namespace] = NamespaceDirectives.fromConfig().map(_.namespace)
+
+  def withDatabase(implicit ec: ExecutionContext, db: Database): NamespaceValidation =
+    new DatabaseNamespaceValidation(fromConfig)
 }

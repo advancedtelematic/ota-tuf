@@ -17,7 +17,7 @@ import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import scala.concurrent.Future
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model._
-import akka.http.scaladsl.server.Directive1
+import akka.http.scaladsl.server.{Directive1, Directives}
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 
@@ -25,6 +25,7 @@ import scala.concurrent.duration._
 import scala.collection.JavaConverters._
 import scala.util.Try
 import akka.testkit.TestDuration
+import com.advancedtelematic.libats.auth.NamespaceDirectives
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.messaging.MemoryMessageBus
 import com.advancedtelematic.libtuf.crypt.TufCrypto
@@ -124,13 +125,17 @@ trait ResourceSpec extends TufReposerverSpec
   with ScalatestRouteTest
   with DatabaseSpec
   with FakeHttpClientSpec
-  with LongHttpRequest {
+  with LongHttpRequest
+  with Directives {
+
   def apiUri(path: String): String = "/api/v1/" + path
 
   val fakeRoleStore = FakeRoleStore
 
-  val namespaceValidation = new NamespaceValidation {
-    override def apply(repoId: RepoId): Directive1[Namespace] = provide(Namespace("default"))
+  val defaultNamespaceExtractor = NamespaceDirectives.defaultNamespaceExtractor.map(_.namespace)
+
+  val namespaceValidation = new NamespaceValidation(defaultNamespaceExtractor) {
+    override def apply(repoId: RepoId): Directive1[Namespace] = defaultNamespaceExtractor
   }
 
   val localStorage = new LocalTargetStore(Files.createTempDirectory("target-storage").toFile)

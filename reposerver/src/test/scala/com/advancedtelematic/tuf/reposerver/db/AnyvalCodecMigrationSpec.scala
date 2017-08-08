@@ -9,7 +9,7 @@ import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libtuf.data.ClientCodecs
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import com.advancedtelematic.tuf.reposerver.util.{FakeRoleStore, TufReposerverSpec}
 import eu.timepit.refined.api.Refined
 import org.scalatest.Inspectors

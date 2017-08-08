@@ -483,7 +483,7 @@ class RepoResourceSpec extends TufReposerverSpec
       status shouldBe StatusCodes.OK
     }
 
-    fakeRoleStore.fetchRootRole(repoId).futureValue shouldBe a[SignedPayload[Json]]
+    fakeRoleStore.fetchRootRole(repoId).futureValue shouldBe a[SignedPayload[_]]
 
     val otherRepoId = RepoId.generate()
 

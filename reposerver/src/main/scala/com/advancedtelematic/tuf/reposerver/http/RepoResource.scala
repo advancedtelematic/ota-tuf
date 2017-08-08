@@ -46,7 +46,6 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
   with Settings {
 
   private val signedRoleGeneration = new SignedRoleGeneration(roleKeyStore)
-  private val NamespaceHeader = headerValueByName("x-ats-namespace").map(Namespace)
 
   val log = LoggerFactory.getLogger(this.getClass)
 
@@ -160,7 +159,7 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
     }
 
   val route =
-    (pathPrefix("user_repo") & NamespaceHeader) { namespace =>
+    (pathPrefix("user_repo") & namespaceValidation.extractor) { namespace =>
       (post & pathEnd) {
         val repoId = RepoId.generate()
         createRepo(namespace, repoId)
@@ -170,7 +169,7 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
       }
     } ~
     pathPrefix("repo" / RepoId.Path) { repoId =>
-      (pathEnd & post & NamespaceHeader) { namespace =>
+      (pathEnd & post & namespaceValidation.extractor) { namespace =>
         createRepo(namespace, repoId)
       } ~
         modifyRepoRoutes(repoId)
