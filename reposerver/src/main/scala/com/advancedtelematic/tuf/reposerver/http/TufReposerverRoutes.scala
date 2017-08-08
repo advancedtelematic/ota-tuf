@@ -8,7 +8,7 @@ import com.advancedtelematic.libats.slick.monitoring.DbHealthResource
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.VersionInfo
-import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
+import com.advancedtelematic.tuf.reposerver.target_store.TargetUpload
 import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.ExecutionContext
@@ -16,7 +16,7 @@ import scala.concurrent.ExecutionContext
 
 class TufReposerverRoutes(keyserverClient: KeyserverClient,
                           namespaceValidation: NamespaceValidation,
-                          targetStore: TargetStore,
+                          targetUpload: TargetUpload,
                           messageBusPublisher: MessageBusPublisher)
                          (implicit val db: Database, val ec: ExecutionContext, mat: Materializer) extends VersionInfo {
 
@@ -26,7 +26,7 @@ class TufReposerverRoutes(keyserverClient: KeyserverClient,
     handleRejections(rejectionHandler) {
       ErrorHandler.handleErrors {
         pathPrefix("api" / "v1") {
-            new RepoResource(keyserverClient, namespaceValidation, targetStore, messageBusPublisher).route
+            new RepoResource(keyserverClient, namespaceValidation, targetUpload, messageBusPublisher).route
         } ~ DbHealthResource(versionMap).route
       }
     }

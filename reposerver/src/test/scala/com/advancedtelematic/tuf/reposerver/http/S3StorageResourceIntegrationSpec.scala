@@ -4,7 +4,7 @@ import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model.{HttpEntity, Multipart, StatusCodes}
 import akka.util.ByteString
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
-import com.advancedtelematic.tuf.reposerver.target_store.S3TargetStore
+import com.advancedtelematic.tuf.reposerver.target_store.{S3TargetStore, TargetUpload}
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 import org.scalatest.{BeforeAndAfterAll, Inspectors}
 import org.scalatest.concurrent.PatienceConfiguration
@@ -19,9 +19,10 @@ class S3StorageResourceIntegrationSpec extends TufReposerverSpec
   lazy val credentials = new Settings {}.s3Credentials
 
   lazy val s3Storage = new S3TargetStore(credentials)
+  override lazy val targetUpload = new TargetUpload(fakeRoleStore, s3Storage, fakeHttpClient, messageBusPublisher)
 
   override lazy val routes = new RepoResource(fakeRoleStore, namespaceValidation,
-    s3Storage, messageBusPublisher).route
+    targetUpload, messageBusPublisher).route
 
   test("uploading a target changes targets json") {
     pending // Needs valid s3 credentials to run

@@ -19,6 +19,7 @@ import com.advancedtelematic.libats.messaging.MessageBus
 import com.advancedtelematic.tuf.reposerver.http.NamespaceExtractor
 import com.advancedtelematic.tuf.reposerver.http.TufReposerverRoutes
 import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStore, S3Credentials, S3TargetStore}
+import com.advancedtelematic.tuf.reposerver.target_store.TargetUpload
 import com.amazonaws.regions.Regions
 
 trait Settings {
@@ -64,10 +65,15 @@ object Boot extends BootApp
   val messageBusPublisher = MessageBus.publisher(system, config).valueOr(throw _)
 
   val targetStore = if(useS3) new S3TargetStore(s3Credentials) else LocalTargetStore(targetStoreRoot)
+  val targetUpload = new TargetUpload(
+    keyStoreClient,
+    targetStore,
+    req => Http.get(system).singleRequest(req),
+    messageBusPublisher)
 
   val routes: Route =
     (versionHeaders(version) & logResponseMetrics(projectName)) {
-      new TufReposerverRoutes(keyStoreClient, NamespaceExtractor.default, targetStore, messageBusPublisher).routes
+      new TufReposerverRoutes(keyStoreClient, NamespaceExtractor.default, targetUpload, messageBusPublisher).routes
     }
 
   Http().bindAndHandle(routes, host, port)

@@ -407,6 +407,19 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
+  test("uploading a target from a uri changes targets json") {
+    val repoId = addTargetToRepo()
+
+    Put(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing?name=name&version=version&fileUri=${fakeHttpClient.fileUri}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseEntity.dataBytes.runReduce(_ ++ _).futureValue shouldBe fakeHttpClient.fileBody.getData()
+    }
+  }
+
   test("returns 404 if target does not exist") {
     val repoId = addTargetToRepo()
 

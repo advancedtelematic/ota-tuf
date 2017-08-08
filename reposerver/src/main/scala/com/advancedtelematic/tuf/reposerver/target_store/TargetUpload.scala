@@ -19,9 +19,11 @@ import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api.Database
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.control.NoStackTrace
 
 class TargetUpload(roleKeyStore: KeyserverClient,
                    targetStore: TargetStore,
+                   httpClient: HttpRequest => Future[HttpResponse],
                    messageBusPublisher: MessageBusPublisher)
                   (implicit val db: Database, val ec: ExecutionContext)
   extends TargetItemRepositorySupport {
@@ -46,6 +48,17 @@ class TargetUpload(roleKeyStore: KeyserverClient,
       storeResult <- targetStore.store(repoId, targetFile, fileData)
       _ <- publishUploadMessages(repoId)
     } yield TargetItem(repoId, targetFile, storeResult.uri, storeResult.checksum, storeResult.size, Some(custom))
+  }
+
+  case class DownloadError(msg: String) extends Exception(msg) with NoStackTrace
+
+  def storeFromUri(repoId: RepoId, targetFile: TargetFilename, fileUri: Uri, custom: TargetCustom): Future[TargetItem] = {
+    httpClient(HttpRequest(uri = fileUri)).flatMap { response =>
+      response.status match {
+        case StatusCodes.OK => store(repoId, targetFile, response.entity.dataBytes, custom)
+        case _ => Future.failed(DownloadError("Unable to download file " + fileUri.toString))
+      }
+    }
   }
 
   def retrieve(repoId: RepoId, targetFilename: TargetFilename): Future[HttpResponse] = {
