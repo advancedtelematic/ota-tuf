@@ -23,26 +23,26 @@ import com.advancedtelematic.tuf.reposerver.target_store.TargetUpload
 import com.amazonaws.regions.Regions
 
 trait Settings {
-  lazy val config = ConfigFactory.load()
+  private lazy val _config = ConfigFactory.load()
 
-  lazy val host = config.getString("server.host")
-  lazy val port = config.getInt("server.port")
+  lazy val host = _config.getString("server.host")
+  lazy val port = _config.getInt("server.port")
 
-  lazy val keyServerUri = Uri(config.getString("keyserver.uri"))
+  lazy val keyServerUri = Uri(_config.getString("keyserver.uri"))
 
-  lazy val targetStoreRoot = config.getString("storage.localStorageRoot")
+  lazy val targetStoreRoot = _config.getString("storage.localStorageRoot")
 
   lazy val s3Credentials = {
-    val accessKey = config.getString("storage.s3.accessKey")
-    val secretKey = config.getString("storage.s3.secretKey")
-    val bucketId = config.getString("storage.s3.bucketId")
-    val region = Regions.fromName(config.getString("storage.s3.region"))
+    val accessKey = _config.getString("storage.s3.accessKey")
+    val secretKey = _config.getString("storage.s3.secretKey")
+    val bucketId = _config.getString("storage.s3.bucketId")
+    val region = Regions.fromName(_config.getString("storage.s3.region"))
     new S3Credentials(accessKey, secretKey, bucketId, region)
   }
 
-  lazy val useS3 = config.getString("storage.type").equals("s3")
+  lazy val useS3 = _config.getString("storage.type").equals("s3")
 
-  lazy val userRepoSizeLimit = config.getInt("reposerver.sizeLimit")
+  lazy val userRepoSizeLimit = _config.getInt("reposerver.sizeLimit")
 }
 
 object Boot extends BootApp

@@ -12,7 +12,7 @@ lazy val commonDeps = libraryDependencies ++= {
   val akkaV = "2.4.17"
   val akkaHttpV = "10.0.3"
   val scalaTestV = "3.0.0"
-  val libatsV = "0.0.1-67-g052b15d"
+  val libatsV = "0.0.1-90-g0bd3fca"
 
   Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaV,
