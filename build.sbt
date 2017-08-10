@@ -28,6 +28,7 @@ lazy val commonDeps = libraryDependencies ++= {
     "com.advancedtelematic" %% "libats-slick" % libatsV,
     "com.advancedtelematic" %% "libats-messaging" % libatsV,
     "com.advancedtelematic" %% "libats-messaging-datatype" % libatsV,
+    "com.advancedtelematic" %% "libats-metrics-akka" % libatsV changing(),
 
     "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV,
     "org.scalatest"     %% "scalatest" % scalaTestV % "test"
