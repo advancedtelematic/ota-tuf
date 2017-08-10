@@ -1,6 +1,7 @@
 package com.advancedtelematic.tuf.reposerver
 
 import java.security.Security
+import java.util.concurrent.TimeUnit
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.Uri
@@ -51,7 +52,8 @@ object Boot extends BootApp
   with DatabaseConfig
   with BootMigrations
   with MetricsSupport
-  with DatabaseMetrics {
+  with DatabaseMetrics
+  with InfluxdbMetricsReporterSupport {
 
   implicit val _db = db
 
