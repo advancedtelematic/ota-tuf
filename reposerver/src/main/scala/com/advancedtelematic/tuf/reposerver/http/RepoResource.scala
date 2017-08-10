@@ -85,7 +85,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
        .map(_ => repoId)
    }
 
-  private def addTargetItem(namespace: Namespace, item: TargetItem): Future[Json] =
+  private def addTargetItem(namespace: Namespace, item: TargetItem): Future[SignedPayload[Json]] =
     for {
       result <- signedRoleGeneration.addToTarget(item)
       _ <- messageBusPublisher.publish(

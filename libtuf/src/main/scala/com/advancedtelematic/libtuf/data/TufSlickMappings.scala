@@ -6,10 +6,11 @@ import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.crypt.TufCrypto.KeyOps
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
-import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, EdKeyType, KeyType, RsaKeyType}
+import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, EdKeyType, KeyType, RsaKeyType, SignedPayload}
 import ClientCodecs._
 import TufCodecs._
 import com.advancedtelematic.libats.slick.db.SlickCirceMapper
+import io.circe.Json
 
 object TufSlickMappings {
 
@@ -32,4 +33,6 @@ object TufSlickMappings {
   implicit val checksumMapper = SlickCirceMapper.circeMapper[Checksum]
 
   implicit val targetCustomMapper = SlickCirceMapper.circeMapper[TargetCustom]
+
+  implicit val jsonSignedPayloadMapper = SlickCirceMapper.circeMapper[SignedPayload[Json]]
 }

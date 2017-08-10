@@ -25,7 +25,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
   def store(repoId: RepoId, signedPayload: SignedPayload[TargetsRole]): Future[ValidatedNel[String, SignedPayload[TargetsRole]]] =
     payloadSignatureIsValid(repoId, signedPayload).flatMap {
       case v @ Valid(_) =>
-        val signedRole = SignedRole.withChecksum(repoId, RoleType.TARGETS, signedPayload.asJson, signedPayload.signed.version)
+        val signedRole = SignedRole.withChecksum(repoId, RoleType.TARGETS, signedPayload, signedPayload.signed.version)
         signedRoleRepo.persist(signedRole).map(_ => v)
       case i @ Invalid(_) =>
         FastFuture.successful(i)
