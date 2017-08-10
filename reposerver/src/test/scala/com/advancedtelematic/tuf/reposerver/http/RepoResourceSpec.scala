@@ -1,21 +1,24 @@
 package com.advancedtelematic.tuf.reposerver.http
 
 import java.time.Instant
+import java.time.temporal.{ChronoUnit, TemporalUnit}
+import java.util.concurrent.TimeUnit
 
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.stream.scaladsl.Sink
 import akka.util.ByteString
+import cats.data.NonEmptyList
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libats.messaging_datatype.DataType.{HashMethod, TargetFilename, ValidTargetFilename}
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.{Sha256Digest, TufCrypto}
-import com.advancedtelematic.libtuf.data.ClientDataType.{RoleTypeToMetaPathOp, RootRole, SnapshotRole, TargetCustom, TargetsRole, TimestampRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RoleTypeToMetaPathOp, RootRole, SnapshotRole, TargetCustom, TargetsRole, TimestampRole}
 import com.advancedtelematic.libtuf.data.Messages.TufTargetAdded
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, _}
 import io.circe.syntax._
-import io.circe.{Encoder, Json}
+import io.circe.{Decoder, Encoder, Json}
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.prop.Whenever
 import org.scalatest.time.{Seconds, Span}
@@ -496,6 +499,54 @@ class RepoResourceSpec extends TufReposerverSpec
 
   test("authenticates user for put/get") (pending)
 
+  test("accepts an offline signed targets.json") {
+    val repoId = addTargetToRepo()
+
+    val targetFilename: TargetFilename = Refined.unsafeApply("some/file/name")
+    val targets = Map(targetFilename -> ClientTargetItem(Map.empty, 0, None))
+
+    val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), targets, 2)
+
+    val signedPayload = fakeRoleStore.sign(repoId, RoleType.TARGETS, targetsRole).futureValue
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/targets.json"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[TargetsRole]].signed.targets.keys should contain(targetFilename)
+    }
+  }
+
+  test("rejects offline targets.json with bad signatures") {
+    val repoId = addTargetToRepo()
+
+    val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), Map.empty, 2)
+
+    val invalidSignedPayload = fakeRoleStore.sign(repoId, RoleType.TARGETS, "something else signed").futureValue
+
+    val signedPayload = SignedPayload(invalidSignedPayload.signatures, targetsRole)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+      responseAs[JsonErrors].head should include("Invalid signature for key")
+    }
+  }
+
+  test("rejects offline targets.json with less signatures than the required threshold") {
+    val repoId = addTargetToRepo()
+
+    val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), Map.empty, 2)
+
+    val signedPayload = SignedPayload(Seq.empty, targetsRole)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+      responseAs[JsonErrors].head should include("Valid signature count must be >= threshold")
+    }
+  }
+
   def signaturesShouldBeValid[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Assertion = {
     val signature = signedPayload.signatures.head.toSignature
     val signed = signedPayload.signed
@@ -579,4 +630,14 @@ class RepoResourceTufTargetUploadSpec extends TufReposerverSpec
       messages.last shouldBe a[TufTargetAdded]
     }
   }
+}
+
+object JsonErrors {
+  import io.circe.generic.semiauto._
+  implicit val jsonErrorsEncoder: Encoder[JsonErrors] = deriveEncoder
+  implicit val jsonErrorsDecoder: Decoder[JsonErrors] = deriveDecoder
+}
+
+case class JsonErrors(errors: NonEmptyList[String]) {
+  def head: String = errors.head
 }

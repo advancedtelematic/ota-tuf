@@ -2,10 +2,13 @@ package com.advancedtelematic.tuf.reposerver.http
 
 import akka.http.scaladsl.unmarshalling._
 import PredefinedFromStringUnmarshallers.CsvSeq
+import akka.http.scaladsl.marshalling.ToResponseMarshallable
+import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.libats.data.RefinedUtils._
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.util.FastFuture
+import cats.data.Validated.{Invalid, Valid}
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
@@ -17,27 +20,29 @@ import com.advancedtelematic.tuf.reposerver.db.{RepoNamespaceRepositorySupport, 
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.messaging_datatype.DataType.{TargetFilename, ValidTargetFilename}
-import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.tuf.reposerver.target_store.TargetUpload
+import com.advancedtelematic.tuf.reposerver.target_store.{TargetStore, TargetUpload}
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
 import com.advancedtelematic.libtuf.data.TufDataType._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 import com.advancedtelematic.libats.http.AnyvalMarshallingSupport._
+import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.codecs.AkkaCirce._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
 import io.circe.Json
+import io.circe.syntax._
 import org.slf4j.LoggerFactory
 
 import scala.collection.immutable
-
 import com.advancedtelematic.tuf.reposerver.Settings
 
-class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: NamespaceValidation,
+class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: NamespaceValidation,
                    targetUpload: TargetUpload, messageBusPublisher: MessageBusPublisher)
                   (implicit val db: Database, val ec: ExecutionContext) extends Directives
   with TargetItemRepositorySupport
@@ -45,7 +50,8 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
   with RepoNamespaceRepositorySupport
   with Settings {
 
-  private val signedRoleGeneration = new SignedRoleGeneration(roleKeyStore)
+  private val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
+  private val offlineSignedRoleStorage = new OfflineSignedRoleStorage(keyserverClient)
 
   val log = LoggerFactory.getLogger(this.getClass)
 
@@ -74,7 +80,7 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
   private def createRepo(namespace: Namespace, repoId: RepoId): Route =
    complete {
      repoNamespaceRepo.ensureNotExists(namespace)
-       .flatMap(_ => roleKeyStore.createRoot(repoId))
+       .flatMap(_ => keyserverClient.createRoot(repoId))
        .flatMap(_ => repoNamespaceRepo.persist(repoId, namespace))
        .map(_ => repoId)
    }
@@ -125,7 +131,7 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
         case RoleType.ROOT =>
           signedRoleRepo.find(repoId, roleType).recoverWith {
             case SignedRoleRepository.SignedRoleNotFound =>
-              signedRoleGeneration.fetchRootRole(repoId)
+              signedRoleGeneration.fetchAndCacheRootRole(repoId)
           }
         case _ =>
           signedRoleRepo.find(repoId, roleType).recoverWith {
@@ -145,16 +151,31 @@ class RepoResource(roleKeyStore: KeyserverClient, namespaceValidation: Namespace
       (get & path(RoleType.JsonRoleTypeMetaPath)) { roleType =>
         findRole(repoId, roleType)
       } ~
-      (post & path("targets" / TargetFilenamePath)) { filename =>
-        entity(as[RequestTargetItem]) { clientItem =>
-          addTarget(namespace, filename, repoId, clientItem)
+      pathPrefix("targets") {
+        path(TargetFilenamePath) { filename =>
+          post {
+            entity(as[RequestTargetItem]) { clientItem =>
+              addTarget(namespace, filename, repoId, clientItem)
+            }
+          } ~
+          put {
+            addTargetFromContent(namespace, filename, repoId)
+          } ~
+          get {
+            complete(targetUpload.retrieve(repoId, filename))
+          }
+        } ~
+        (pathEnd & put & entity(as[SignedPayload[TargetsRole]])) { signed =>
+          val f: Future[ToResponseMarshallable] = offlineSignedRoleStorage.store(repoId, signed).map {
+            case Valid(_) =>
+              StatusCodes.NoContent
+            case Invalid(errors) =>
+              val obj = Json.obj("errors" -> errors.asJson)
+              StatusCodes.BadRequest -> obj
+          }
+
+          complete(f)
         }
-      } ~
-      (put & path("targets" / TargetFilenamePath)) { filename =>
-        addTargetFromContent(namespace, filename, repoId)
-      } ~
-      (get & path("targets" / TargetFilenamePath)) { filename =>
-        complete(targetUpload.retrieve(repoId, filename))
       }
     }
 

@@ -221,7 +221,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       forAll(signedPayload.signatures) { sig =>
         sig.keyid shouldBe targetKey.id
 
-        val isValidT = RoleSigning.isValid(signedPayload.signed, sig, targetKey.publicKey)
+        val isValidT = TufCrypto.isValid(signedPayload.signed, sig, targetKey.publicKey)
         isValidT shouldBe true
       }
     }

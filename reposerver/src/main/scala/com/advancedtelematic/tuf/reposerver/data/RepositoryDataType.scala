@@ -12,6 +12,7 @@ import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 object RepositoryDataType {
   case class TargetItem(repoId: RepoId, filename: TargetFilename, uri: Uri, checksum: Checksum, length: Long, custom: Option[TargetCustom] = None)
 
+  // TODO: Use SignedPayload[Json] for content
   case class SignedRole(repoId: RepoId, roleType: RoleType, content: Json, checksum: Checksum, length: Long, version: Int)
 
   implicit class SignedRoleMetaItemOps(signedRole: SignedRole) {

@@ -19,15 +19,6 @@ import slick.jdbc.MySQLProfile.api._
 import io.circe.syntax._
 import cats.implicits._
 
-object RoleSigning {
-  import com.advancedtelematic.libtuf.crypt.CanonicalJson._
-
-  def isValid[T : Encoder](value: T, signature: ClientSignature, publicKey: PublicKey): Boolean = {
-    val sig = Signature(signature.sig, signature.method)
-    TufCrypto.isValid(publicKey, sig, value.asJson.canonical.getBytes)
-  }
-}
-
 class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: ExecutionContext)
   extends KeyRepositorySupport {
 
@@ -59,6 +50,7 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
     }
   }
 
+  // TODO: DUplication
   def signatureIsValid[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Future[ValidatedNel[String, List[ClientSignature]]] = {
     val publicKeysF = keyRepo.repoKeysForRole(repoId, RoleType.ROOT)
     val sigsByKeyId = signedPayload.signatures.map(s => s.keyid -> s).toMap
@@ -67,7 +59,7 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
       publicKeys.par.map { key =>
         sigsByKeyId.get(key.id) match {
           case Some(sig) =>
-            if (RoleSigning.isValid(signedPayload.signed, sig, key.publicKey))
+            if (TufCrypto.isValid(signedPayload.signed, sig, key.publicKey))
               Valid(sig)
             else
               Invalid(NonEmptyList.of(s"Invalid signature for key ${sig.keyid}"))

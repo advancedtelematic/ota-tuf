@@ -5,7 +5,7 @@ import java.util.UUID
 
 import akka.http.scaladsl.server.PathMatchers
 import akka.http.scaladsl.unmarshalling.Unmarshaller
-import cats.Show
+import cats.{Functor, Show}
 import com.advancedtelematic.libats.codecs.CirceEnum
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.libats.slick.codecs.SlickEnum
