@@ -48,7 +48,11 @@
     "protocol": "HTTP",
     "path": "/health",
     "intervalSeconds": 30
-  }]
+  }],
+  "unreachableStrategy": {
+    "inactiveAfterSeconds": 0,
+    "expungeAfterSeconds": 0
+  }
 },
 {
   "id": "${DEPLOY_ENV}/${KEYSERVER_JOB_NAME}",
@@ -96,7 +100,11 @@
     "protocol": "HTTP",
     "path": "/health",
     "intervalSeconds": 30
-  }]
+  }],
+  "unreachableStrategy": {
+    "inactiveAfterSeconds": 0,
+    "expungeAfterSeconds": 0
+  }
 },
 {
   "id": "${DEPLOY_ENV}/${KEYSERVER_JOB_NAME}-daemon",
@@ -144,5 +152,9 @@
     "protocol": "HTTP",
     "path": "/health",
     "intervalSeconds": 30
-  }]
+  }],
+  "unreachableStrategy": {
+    "inactiveAfterSeconds": 0,
+    "expungeAfterSeconds": 0
+  }
 }]
