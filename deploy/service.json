@@ -88,6 +88,8 @@
     "SERVICE_TYPE": "http",
     "SERVICE_IMAGE": "advancedtelematic/tuf-keyserver:${DOCKER_TAG}",
     "SERVICE_HEALTH_CHECK": "curl --show-error --silent %<host>s:%<port>s/health",
+    "TUF_VAULT_HOST": "${TUF_VAULT_HOST}",
+    "TUF_VAULT_PORT": "${TUF_VAULT_PORT}",
     "TUF_VAULT_TOKEN": "${TUF_VAULT_TOKEN}"
   },
   "healthChecks": [{
@@ -134,6 +136,8 @@
     "SERVICE_TYPE": "http",
     "SERVICE_IMAGE": "advancedtelematic/tuf-keyserver:${DOCKER_TAG}",
     "SERVICE_HEALTH_CHECK": "curl --show-error --silent %<host>s:%<port>s/health",
+    "TUF_VAULT_HOST": "${TUF_VAULT_HOST}",
+    "TUF_VAULT_PORT": "${TUF_VAULT_PORT}",
     "TUF_VAULT_TOKEN": "${TUF_VAULT_TOKEN}"
   },
   "healthChecks": [{
