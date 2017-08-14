@@ -11,7 +11,6 @@ import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import com.advancedtelematic.libtuf.data.TufDataType._
 import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libats.test.DatabaseSpec
-import io.circe.syntax._
 
 import scala.concurrent.Future
 import akka.actor.ActorSystem
@@ -79,15 +78,14 @@ object FakeRoleStore extends KeyserverClient {
     FastFuture.successful(SignedPayload(List(signature), payload))
   }
 
-  override def fetchRootRole(repoId: RepoId): Future[SignedPayload[Json]] = {
+  override def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]] = {
     Future.fromTry {
       Try {
         val role = rootRole(repoId)
         val signature = signWithRoot(repoId, role)
-        SignedPayload(List(signature), role.asJson)
+        SignedPayload(List(signature), role)
       }.recover {
-        case ex: NoSuchElementException =>
-          throw RootRoleNotFound
+        case _: NoSuchElementException => throw RootRoleNotFound
       }
     }
   }

@@ -156,6 +156,22 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
+  test("GET on root.json returns a cached version if available") {
+    val newRepoId = addTargetToRepo()
+
+    val rootRole =
+      Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
+        responseAs[SignedPayload[RootRole]].signed
+      }
+
+    fakeRoleStore.deleteRepo(newRepoId)
+    addTargetToRepo(newRepoId) shouldBe newRepoId
+
+    Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
+      responseAs[SignedPayload[RootRole]].signed shouldBe rootRole
+    }
+  }
+
   test("GET on root.json gets json from keyserver if not available locally") {
     val newRepoId = RepoId.generate()
 

@@ -129,10 +129,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
     complete {
       val signedRoleFut = roleType match {
         case RoleType.ROOT =>
-          signedRoleRepo.find(repoId, roleType).recoverWith {
-            case SignedRoleRepository.SignedRoleNotFound =>
-              signedRoleGeneration.fetchAndCacheRootRole(repoId)
-          }
+          signedRoleGeneration.fetchAndCacheRootRole(repoId)
         case _ =>
           signedRoleRepo.find(repoId, roleType).recoverWith {
             case notFoundError @ SignedRoleRepository.SignedRoleNotFound =>

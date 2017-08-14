@@ -11,6 +11,7 @@ import akka.stream.ActorMaterializer
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libats.http.ErrorCode
 import com.advancedtelematic.libats.http.Errors.RawError
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RepoId, RsaKeyType, SignedPayload}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType._
@@ -18,7 +19,8 @@ import io.circe.{Decoder, Encoder, Json}
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
-import com.advancedtelematic.libtuf.data.TufCodecs.{signedPayloadDecoder, keyTypeEncoder}
+import com.advancedtelematic.libtuf.data.TufCodecs.{keyTypeEncoder, signedPayloadDecoder}
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 
 trait KeyserverClient {
   val RootRoleNotFound = RawError(ErrorCode("root_role_not_found"), StatusCodes.FailedDependency, "root role was not found in upstream key store")
@@ -28,7 +30,7 @@ trait KeyserverClient {
 
   def sign[T : Decoder : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]]
 
-  def fetchRootRole(repoId: RepoId): Future[SignedPayload[Json]]
+  def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]]
 }
 
 class KeyserverHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer) extends KeyserverClient {
@@ -61,10 +63,10 @@ class KeyserverHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorMate
     execHttp[SignedPayload[T]](req)()
   }
 
-  override def fetchRootRole(repoId: RepoId): Future[SignedPayload[Json]] = {
+  override def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]] = {
     val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("root") / repoId.show))
 
-    execHttp[SignedPayload[Json]](req) {
+    execHttp[SignedPayload[RootRole]](req) {
       case response if response.status == StatusCodes.NotFound =>
         Future.failed(RootRoleNotFound)
     }
