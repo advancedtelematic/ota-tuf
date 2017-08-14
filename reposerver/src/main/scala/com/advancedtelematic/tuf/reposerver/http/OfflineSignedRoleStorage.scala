@@ -12,9 +12,7 @@ import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
 import io.circe.Encoder
 import cats.implicits._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.TufCodecs._
 import slick.jdbc.MySQLProfile.api._
-import io.circe.syntax._
 
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}

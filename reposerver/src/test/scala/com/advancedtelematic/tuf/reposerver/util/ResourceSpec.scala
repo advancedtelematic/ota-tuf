@@ -12,7 +12,6 @@ import com.advancedtelematic.libtuf.data.TufDataType._
 import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libats.test.DatabaseSpec
 import io.circe.syntax._
-import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 
 import scala.concurrent.Future
 import akka.actor.ActorSystem
@@ -95,9 +94,7 @@ object FakeRoleStore extends KeyserverClient {
 
   private def signWithRoot[T : Encoder](repoId: RepoId, payload: T): ClientSignature = {
     val key = keyPair(repoId)
-    TufCrypto
-      .sign(RsaKeyType, key.getPrivate, payload.asJson.canonical.getBytes)
-      .toClient(key.getPublic.id)
+    TufCrypto.signPayload(RSATufPrivateKey(key.getPrivate), payload).toClient(key.getPublic.id)
   }
 }
 

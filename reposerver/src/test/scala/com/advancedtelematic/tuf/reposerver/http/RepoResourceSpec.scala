@@ -1,8 +1,7 @@
 package com.advancedtelematic.tuf.reposerver.http
 
 import java.time.Instant
-import java.time.temporal.{ChronoUnit, TemporalUnit}
-import java.util.concurrent.TimeUnit
+import java.time.temporal.ChronoUnit
 
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model._
@@ -555,13 +554,8 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), targets, 2)
 
-    // val signedPayload = fakeRoleStore.sign(repoId, RoleType.TARGETS, targetsRole).futureValue
-    // fakeRoleStore.deleteRepo(repoId)
-
     val (pub, sec) = TufCrypto.generateKeyPair(EdKeyType, 256)
-
-    val signature = TufCrypto.sign(EdKeyType, sec.keyval, targetsRole.asJson.canonical.getBytes).toClient(pub.id)
-
+    val signature = TufCrypto.signPayload(sec, targetsRole).toClient(pub.id)
     val signedPayload = SignedPayload(List(signature), targetsRole)
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {

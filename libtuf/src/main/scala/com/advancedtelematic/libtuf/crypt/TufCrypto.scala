@@ -51,7 +51,12 @@ object TufCrypto {
 
   val edCrypto = new EdCrypto
 
-  def sign[T <: KeyType](keyType: T, privateKey: PrivateKey, data: Array[Byte]): Signature = {
+  def signPayload[T : Encoder](key: TufPrivateKey, payload: T): Signature = {
+    val bytes = payload.asJson.canonical.getBytes
+    sign(key.keytype, key.keyval, bytes)
+  }
+
+  private def sign[T <: KeyType](keyType: T, privateKey: PrivateKey, data: Array[Byte]): Signature = {
     val signer = keyType.crypto.signer
 
     signer.initSign(privateKey)

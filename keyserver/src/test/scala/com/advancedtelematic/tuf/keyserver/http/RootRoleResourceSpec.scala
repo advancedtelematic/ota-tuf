@@ -2,7 +2,6 @@ package com.advancedtelematic.tuf.keyserver.http
 
 import java.security.PrivateKey
 
-import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
 import com.advancedtelematic.tuf.util.{ResourceSpec, TufKeyserverSpec}
@@ -414,7 +413,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
   def clientSignPayload[T : Encoder](rootKeyId: KeyId, role: RootRole, payloadToSign: T): SignedPayload[RootRole] = {
     val vaultKey = fakeVault.findKey(rootKeyId).futureValue
-    val signature = TufCrypto.sign(vaultKey.keyType, vaultKey.privateKey.keyval, payloadToSign.asJson.canonical.getBytes)
+    val signature = TufCrypto.signPayload(vaultKey.privateKey, payloadToSign)
     val clientSignature = ClientSignature(rootKeyId, signature.method, signature.sig)
     SignedPayload(Seq(clientSignature), role)
   }
