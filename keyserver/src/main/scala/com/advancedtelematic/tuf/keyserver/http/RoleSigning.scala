@@ -50,7 +50,6 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
     }
   }
 
-  // TODO: DUplication
   def signatureIsValid[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Future[ValidatedNel[String, List[ClientSignature]]] = {
     val publicKeysF = keyRepo.repoKeysForRole(repoId, RoleType.ROOT)
     val sigsByKeyId = signedPayload.signatures.map(s => s.keyid -> s).toMap
@@ -70,6 +69,7 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
     }
   }
 
+  // TODO: Should not be here?
   private def calculateSignature[T : Encoder](payload: T, key: Key, privateKey: PrivateKey): Signature = {
     val bytes = payload.asJson.canonical.getBytes
     TufCrypto.sign(key.keyType, privateKey, bytes)

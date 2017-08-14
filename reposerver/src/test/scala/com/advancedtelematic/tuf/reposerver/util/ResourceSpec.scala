@@ -63,6 +63,9 @@ object FakeRoleStore extends KeyserverClient {
     keys.put(repoId, new KeyPair(publicKey.keyval, privateKey.keyval))
   }
 
+  def deleteRepo(repoId: RepoId): Option[KeyPair] =
+    Option(keys.remove(repoId))
+
   override def createRoot(repoId: RepoId, keyType: KeyType): Future[Json] = {
     if (keys.contains(repoId)) {
       FastFuture.failed(RootRoleConflict)

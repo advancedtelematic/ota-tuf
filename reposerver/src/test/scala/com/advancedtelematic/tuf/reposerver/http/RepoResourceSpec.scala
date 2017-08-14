@@ -547,6 +547,29 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
+  test("rejects offline targets.json if public keys are not available") {
+    val repoId = addTargetToRepo()
+
+    val targetFilename: TargetFilename = Refined.unsafeApply("some/file/name")
+    val targets = Map(targetFilename -> ClientTargetItem(Map.empty, 0, None))
+
+    val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), targets, 2)
+
+    // val signedPayload = fakeRoleStore.sign(repoId, RoleType.TARGETS, targetsRole).futureValue
+    // fakeRoleStore.deleteRepo(repoId)
+
+    val (pub, sec) = TufCrypto.generateKeyPair(EdKeyType, 256)
+
+    val signature = TufCrypto.sign(EdKeyType, sec.keyval, targetsRole.asJson.canonical.getBytes).toClient(pub.id)
+
+    val signedPayload = SignedPayload(List(signature), targetsRole)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+      responseAs[JsonErrors].head should include(s"No public key available for key ${pub.id}")
+    }
+  }
+
   def signaturesShouldBeValid[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Assertion = {
     val signature = signedPayload.signatures.head.toSignature
     val signed = signedPayload.signed
