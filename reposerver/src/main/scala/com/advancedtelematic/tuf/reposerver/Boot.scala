@@ -17,6 +17,7 @@ import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.libats.messaging.MessageBus
+import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
 import com.advancedtelematic.tuf.reposerver.http.NamespaceExtractor
 import com.advancedtelematic.tuf.reposerver.http.TufReposerverRoutes
 import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStore, S3Credentials, S3TargetStore}
