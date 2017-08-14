@@ -16,6 +16,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
+import com.advancedtelematic.metrics.{InfluxDbMetricsReporterSettings, InfluxdbMetricsReporterSupport}
 
 import scala.concurrent.duration.Duration
 
@@ -38,7 +39,8 @@ object Boot extends BootApp
   with DatabaseConfig
   with BootMigrations
   with MetricsSupport
-  with DatabaseMetrics {
+  with DatabaseMetrics
+  with InfluxdbMetricsReporterSupport {
 
   implicit val _db = db
 
