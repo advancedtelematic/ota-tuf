@@ -411,6 +411,30 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
+  test("POST to keys/targets adds new public key to root role") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId).futureValue
+
+    val (publicKey, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
+
+    val newRootRole = Put(apiUri(s"root/${repoId.show}/keys/targets"), publicKey) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val rootRole = responseAs[SignedPayload[RootRole]].signed
+
+      val targetKeys = rootRole.roles(RoleType.TARGETS)
+      targetKeys.keyids should contain(publicKey.id)
+
+      rootRole.keys(publicKey.id) shouldBe publicKey
+
+      rootRole
+    }
+
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed shouldBe newRootRole
+    }
+  }
+
   def clientSignPayload[T : Encoder](rootKeyId: KeyId, role: RootRole, payloadToSign: T): SignedPayload[RootRole] = {
     val vaultKey = fakeVault.findKey(rootKeyId).futureValue
     val signature = TufCrypto.signPayload(vaultKey.privateKey, payloadToSign)

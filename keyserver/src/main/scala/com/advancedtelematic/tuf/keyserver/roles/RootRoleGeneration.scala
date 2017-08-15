@@ -41,9 +41,12 @@ class RootRoleGeneration(vaultClient: VaultClient)
   def findOrGenerate(repoId: RepoId): Future[SignedPayload[RootRole]] = {
     signedRootRoleRepo.find(repoId).flatMap {
       case Some(signedPayload) => FastFuture.successful(signedPayload)
-      case None => signRoot(repoId).flatMap(persistSigned(repoId))
+      case None => forceGenerate(repoId)
     }
   }
+
+  def forceGenerate(repoId: RepoId): Future[SignedPayload[RootRole]] =
+    signRoot(repoId).flatMap(persistSigned(repoId))
 
   def forceRetry(repoId: RepoId): Future[Seq[KeyGenId]] = {
     keyGenRepo.findBy(repoId).map { genRequests =>

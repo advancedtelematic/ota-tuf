@@ -86,6 +86,12 @@ class RootRoleResource(vaultClient: VaultClient)
             }
           complete(f)
         }
+    } ~
+    path("keys" / "targets") {
+      entity(as[TufKey]) { tufKey =>
+        val f = rootRoleKeyEdit.addPublicKey(repoId, RoleType.TARGETS, tufKey)
+        complete(f)
+      }
     }
   }
 }
