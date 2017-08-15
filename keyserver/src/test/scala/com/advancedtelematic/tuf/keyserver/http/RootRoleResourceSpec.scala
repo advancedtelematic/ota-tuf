@@ -4,12 +4,11 @@ import java.security.PrivateKey
 
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
-import com.advancedtelematic.tuf.util.{ResourceSpec, TufKeyserverSpec}
+import com.advancedtelematic.tuf.util.{ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
 import io.circe.generic.auto._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import cats.syntax.show._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
@@ -19,7 +18,7 @@ import org.scalatest.Inspectors
 import org.scalatest.concurrent.PatienceConfiguration
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{TufPrivateKey, RSATufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{RSATufPrivateKey, TufPrivateKey}
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
@@ -34,12 +33,11 @@ class RootRoleResourceSpec extends TufKeyserverSpec
   with ResourceSpec
   with KeyGenRequestSupport
   with KeyRepositorySupport
+  with RootGenerationSpecSupport
   with PatienceConfiguration
   with Inspectors {
 
   implicit val ec = ExecutionContext.global
-
-  val keyGenerationOp = new KeyGenerationOp(fakeVault)
 
   override implicit def patienceConfig = PatienceConfig(timeout = Span(20, Seconds), interval = Span(500, Millis))
 
@@ -440,18 +438,6 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     val signature = TufCrypto.signPayload(vaultKey.privateKey, payloadToSign)
     val clientSignature = ClientSignature(rootKeyId, signature.method, signature.sig)
     SignedPayload(Seq(clientSignature), role)
-  }
-
-  def processKeyGenerationRequest(repoId: RepoId): Future[Seq[Key]] = {
-    keyGenRepo.findBy(repoId).flatMap { ids ⇒
-      Future.sequence {
-        ids.map(_.id).map { id =>
-          keyGenRepo
-            .find(id)
-            .flatMap(keyGenerationOp.processGenerationRequest)
-        }
-      }.map(_.flatten)
-    }
   }
 
   def generateRootRole(repoId: RepoId, threshold: Int = 1, keyType: KeyType = RsaKeyType): Future[Seq[Key]] = {

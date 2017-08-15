@@ -39,7 +39,7 @@ object AnyvalCodecMigrationApp extends BootApp with DatabaseConfig with Settings
 
   implicit val _db = db
 
-  lazy val keyStoreClient = new KeyserverHttpClient(keyServerUri)
+  lazy val keyStoreClient = KeyserverHttpClient(keyServerUri)
 
   Await.result(new AnyvalCodecMigration(keyStoreClient).run, Duration.Inf)
 

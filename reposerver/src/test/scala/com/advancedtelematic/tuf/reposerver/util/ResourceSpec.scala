@@ -94,6 +94,8 @@ object FakeRoleStore extends KeyserverClient {
     val key = keyPair(repoId)
     TufCrypto.signPayload(RSATufPrivateKey(key.getPrivate), payload).toClient(key.getPublic.id)
   }
+
+  override def addTargetKey(repoId: RepoId, key: TufKey) = throw new NotImplementedError("addTargetKey not implemented for fake http keyserver")
 }
 
 trait LongHttpRequest {

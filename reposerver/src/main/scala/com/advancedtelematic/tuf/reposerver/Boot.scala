@@ -62,7 +62,7 @@ object Boot extends BootApp
 
   log.info(s"Starting $version on http://$host:$port")
 
-  lazy val keyStoreClient = new KeyserverHttpClient(keyServerUri)
+  lazy val keyStoreClient = KeyserverHttpClient(keyServerUri)
 
   val messageBusPublisher = MessageBus.publisher(system, config).valueOr(throw _)
 

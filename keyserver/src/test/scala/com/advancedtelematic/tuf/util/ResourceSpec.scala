@@ -3,13 +3,50 @@ package com.advancedtelematic.tuf.util
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import com.advancedtelematic.tuf.keyserver.http.TufKeyserverRoutes
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
+import akka.http.scaladsl.server.Route
+
 import scala.concurrent.duration._
 import akka.testkit.TestDuration
 import com.advancedtelematic.libats.test.DatabaseSpec
+import com.advancedtelematic.libtuf.data.TufDataType.RepoId
+import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.Key
+import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
+
+import scala.concurrent.{Future, Promise}
 
 trait LongHttpRequest {
   implicit def default(implicit system: ActorSystem) =
     RouteTestTimeout(10.seconds.dilated(system))
+}
+
+trait HttpClientSpecSupport {
+  self: ResourceSpec =>
+
+  def testHttpClient(req: HttpRequest): Future[HttpResponse] = {
+    val p = Promise[HttpResponse]()
+    req ~> Route.seal(routes) ~> check { p.success(response) }
+    p.future
+  }
+}
+
+trait RootGenerationSpecSupport {
+  self: ResourceSpec with KeyGenRequestSupport =>
+
+  private val keyGenerationOp = new KeyGenerationOp(fakeVault)
+
+  def processKeyGenerationRequest(repoId: RepoId): Future[Seq[Key]] = {
+    keyGenRepo.findBy(repoId).flatMap { ids ⇒
+      Future.sequence {
+        ids.map(_.id).map { id =>
+          keyGenRepo
+            .find(id)
+            .flatMap(keyGenerationOp.processGenerationRequest)
+        }
+      }.map(_.flatten)
+    }
+  }
 }
 
 trait ResourceSpec extends TufKeyserverSpec
