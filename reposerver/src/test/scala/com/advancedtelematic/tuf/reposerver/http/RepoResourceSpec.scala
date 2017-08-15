@@ -52,7 +52,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
   override def beforeAll(): Unit = {
     super.beforeAll()
-    fakeRoleStore.generateKey(repoId)
+    fakeKeyserverClient.createRoot(repoId).futureValue
   }
 
   test("POST returns latest signed json") {
@@ -164,7 +164,7 @@ class RepoResourceSpec extends TufReposerverSpec
         responseAs[SignedPayload[RootRole]].signed
       }
 
-    fakeRoleStore.deleteRepo(newRepoId)
+    fakeKeyserverClient.deleteRepo(newRepoId)
     addTargetToRepo(newRepoId) shouldBe newRepoId
 
     Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
@@ -175,7 +175,7 @@ class RepoResourceSpec extends TufReposerverSpec
   test("GET on root.json gets json from keyserver if not available locally") {
     val newRepoId = RepoId.generate()
 
-    fakeRoleStore.generateKey(newRepoId)
+    fakeKeyserverClient.createRoot(newRepoId).futureValue
 
     Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -336,7 +336,7 @@ class RepoResourceSpec extends TufReposerverSpec
     withNamespace("myns") { implicit ns =>
       Post(apiUri(s"repo/${newRepoId.show}")).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.OK
-        fakeRoleStore.rootRole(newRepoId) shouldBe a[RootRole]
+        fakeKeyserverClient.fetchRootRole(newRepoId).futureValue.signed shouldBe a[RootRole]
       }
     }
   }
@@ -346,7 +346,7 @@ class RepoResourceSpec extends TufReposerverSpec
       Post(apiUri(s"user_repo")).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.OK
         val newRepoId = responseAs[RepoId]
-        fakeRoleStore.rootRole(newRepoId) shouldBe a[RootRole]
+        fakeKeyserverClient.fetchRootRole(newRepoId).futureValue.signed shouldBe a[RootRole]
       }
     }
   }
@@ -501,7 +501,7 @@ class RepoResourceSpec extends TufReposerverSpec
       status shouldBe StatusCodes.OK
     }
 
-    fakeRoleStore.fetchRootRole(repoId).futureValue shouldBe a[SignedPayload[_]]
+    fakeKeyserverClient.fetchRootRole(repoId).futureValue shouldBe a[SignedPayload[_]]
 
     val otherRepoId = RepoId.generate()
 
@@ -509,7 +509,7 @@ class RepoResourceSpec extends TufReposerverSpec
       status shouldBe StatusCodes.Conflict
     }
 
-    fakeRoleStore.fetchRootRole(otherRepoId).failed.futureValue.asInstanceOf[RawError].code.code shouldBe "root_role_not_found"
+    fakeKeyserverClient.fetchRootRole(otherRepoId).failed.futureValue.asInstanceOf[RawError].code.code shouldBe "root_role_not_found"
   }
 
   test("authenticates user for put/get") (pending)
@@ -522,7 +522,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), targets, 2)
 
-    val signedPayload = fakeRoleStore.sign(repoId, RoleType.TARGETS, targetsRole).futureValue
+    val signedPayload = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targetsRole).futureValue
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
@@ -539,7 +539,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), Map.empty, 2)
 
-    val invalidSignedPayload = fakeRoleStore.sign(repoId, RoleType.TARGETS, "something else signed").futureValue
+    val invalidSignedPayload = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, "something else signed").futureValue
 
     val signedPayload = SignedPayload(invalidSignedPayload.signatures, targetsRole)
 
@@ -580,16 +580,33 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
+  test("adding a target public key delegates to keyserver") {
+    val repoId = RepoId.generate()
+    fakeKeyserverClient.createRoot(repoId).futureValue // Does not use `addTargetToRepo` to avoid caching
+    val (pub, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
+
+    Put(apiUri(s"repo/${repoId.show}/keys/targets"), pub) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/root.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val rootRole = responseAs[SignedPayload[RootRole]].signed
+      rootRole.roles(RoleType.TARGETS).keyids should contain(pub.id)
+      rootRole.keys(pub.id) shouldBe pub
+    }
+  }
+
   def signaturesShouldBeValid[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Assertion = {
     val signature = signedPayload.signatures.head.toSignature
     val signed = signedPayload.signed
 
-    val isValid = TufCrypto.isValid(fakeRoleStore.publicKey(repoId), signature, signed.asJson.canonical.getBytes)
+    val isValid = TufCrypto.isValid(fakeKeyserverClient.publicKey(repoId), signature, signed.asJson.canonical.getBytes)
     isValid shouldBe true
   }
 
   def addTargetToRepo(repoId: RepoId = RepoId.generate()): RepoId = {
-    fakeRoleStore.createRoot(repoId)
+    fakeKeyserverClient.createRoot(repoId)
 
     Post(apiUri(s"repo/${repoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK

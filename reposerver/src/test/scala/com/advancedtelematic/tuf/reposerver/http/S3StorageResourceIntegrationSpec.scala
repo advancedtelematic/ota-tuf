@@ -19,16 +19,17 @@ class S3StorageResourceIntegrationSpec extends TufReposerverSpec
   lazy val credentials = new Settings {}.s3Credentials
 
   lazy val s3Storage = new S3TargetStore(credentials)
-  override lazy val targetUpload = new TargetUpload(fakeRoleStore, s3Storage, fakeHttpClient, messageBusPublisher)
+  override lazy val targetUpload = new TargetUpload(fakeKeyserverClient, s3Storage, fakeHttpClient, messageBusPublisher)
 
-  override lazy val routes = new RepoResource(fakeRoleStore, namespaceValidation,
+
+  override lazy val routes = new RepoResource(fakeKeyserverClient, namespaceValidation,
     targetUpload, messageBusPublisher).route
 
   test("uploading a target changes targets json") {
     pending // Needs valid s3 credentials to run
 
     val repoId = RepoId.generate()
-    fakeRoleStore.generateKey(repoId)
+    fakeKeyserverClient.generateKey(repoId)
 
     val entity = HttpEntity(ByteString("""
                                          |Like all the men of the Library, in my younger days I traveled;

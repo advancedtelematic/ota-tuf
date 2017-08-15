@@ -24,8 +24,7 @@ class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
 
   val dbValidation = new DatabaseNamespaceValidation(NamespaceDirectives.defaultNamespaceExtractor.map(_.namespace))
 
-  override lazy val routes: Route = new RepoResource(fakeRoleStore, dbValidation, targetUpload, messageBusPublisher).route
-
+  override lazy val routes: Route = new RepoResource(fakeKeyserverClient, dbValidation, targetUpload, messageBusPublisher).route
 
   val testFile = {
     val checksum = Sha256Digest.digest("hi".getBytes)
