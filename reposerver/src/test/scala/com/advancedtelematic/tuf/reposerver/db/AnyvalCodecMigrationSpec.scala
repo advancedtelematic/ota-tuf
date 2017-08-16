@@ -9,8 +9,8 @@ import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libtuf.data.ClientCodecs
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
-import com.advancedtelematic.tuf.reposerver.util.{FakeRoleStore, TufReposerverSpec}
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
+import com.advancedtelematic.tuf.reposerver.util.{FakeKeyserverClient, TufReposerverSpec}
 import eu.timepit.refined.api.Refined
 import org.scalatest.Inspectors
 import org.scalatest.concurrent.PatienceConfiguration
@@ -37,7 +37,7 @@ class AnyvalCodecMigrationSpec extends TufReposerverSpec with DatabaseSpec with 
 
   override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(10, Seconds))
 
-  val migration = new AnyvalCodecMigration(FakeRoleStore)
+  val migration = new AnyvalCodecMigration(FakeKeyserverClient)
 
   val checksum = """{"method":"sha256","hash":"f1dd71a40a06265079b34a1ffb7bd2d0917c0e3234bf11a72ecb20020d9b9a9b"}"""
   val filename: TargetFilename = Refined.unsafeApply("somefilename")
@@ -88,8 +88,8 @@ class AnyvalCodecMigrationSpec extends TufReposerverSpec with DatabaseSpec with 
   test("regenerate target role if json is outdated") {
     val repoId = RepoId.generate()
 
-    FakeRoleStore.createRoot(repoId).futureValue
-    val roleSigning = new SignedRoleGeneration(FakeRoleStore)
+    FakeKeyserverClient.createRoot(repoId).futureValue
+    val roleSigning = new SignedRoleGeneration(FakeKeyserverClient)
 
     roleSigning.regenerateSignedRoles(repoId).futureValue
 

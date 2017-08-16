@@ -5,20 +5,22 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.model.Uri.Path.{Empty, Slash}
 import akka.http.scaladsl.model.{StatusCodes, _}
-import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
+import akka.http.scaladsl.unmarshalling.{FromEntityUnmarshaller, Unmarshaller}
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.ActorMaterializer
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libats.http.ErrorCode
 import com.advancedtelematic.libats.http.Errors.RawError
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RepoId, RsaKeyType, SignedPayload}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RepoId, RsaKeyType, SignedPayload, TufKey}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType._
 import io.circe.{Decoder, Encoder, Json}
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
-import com.advancedtelematic.libtuf.data.TufCodecs.{signedPayloadDecoder, keyTypeEncoder}
+import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 
 trait KeyserverClient {
   val RootRoleNotFound = RawError(ErrorCode("root_role_not_found"), StatusCodes.FailedDependency, "root role was not found in upstream key store")
@@ -28,14 +30,20 @@ trait KeyserverClient {
 
   def sign[T : Decoder : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]]
 
-  def fetchRootRole(repoId: RepoId): Future[SignedPayload[Json]]
+  def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]]
+
+  def addTargetKey(repoId: RepoId, key: TufKey): Future[Unit]
 }
 
-class KeyserverHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer) extends KeyserverClient {
+object KeyserverHttpClient {
+  def apply(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer): KeyserverHttpClient =
+    new KeyserverHttpClient(uri, req => Http().singleRequest(req))
+}
+
+class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResponse])
+                         (implicit system: ActorSystem, mat: ActorMaterializer) extends KeyserverClient {
   import io.circe.syntax._
   import system.dispatcher
-
-  private val _http = Http()
 
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
@@ -61,21 +69,29 @@ class KeyserverHttpClient(uri: Uri)(implicit system: ActorSystem, mat: ActorMate
     execHttp[SignedPayload[T]](req)()
   }
 
-  override def fetchRootRole(repoId: RepoId): Future[SignedPayload[Json]] = {
+  override def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]] = {
     val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("root") / repoId.show))
 
-    execHttp[SignedPayload[Json]](req) {
+    execHttp[SignedPayload[RootRole]](req) {
       case response if response.status == StatusCodes.NotFound =>
         Future.failed(RootRoleNotFound)
     }
   }
+
+  override def addTargetKey(repoId: RepoId, key: TufKey): Future[Unit] = {
+    val entity = HttpEntity(ContentTypes.`application/json`, key.asJson.noSpaces)
+    val req = HttpRequest(HttpMethods.PUT, uri = apiUri(Path("root") / repoId.show / "keys" / "targets")).withEntity(entity)
+    execHttp[Unit](req)()
+  }
+
+  private implicit val unitFromEntityUnmarshaller: FromEntityUnmarshaller[Unit] = Unmarshaller.strict(_ => ())
 
   private def defaultErrorHandler[T](): PartialFunction[HttpResponse, Future[T]] = PartialFunction.empty
 
   private def execHttp[T : ClassTag](request: HttpRequest)
                                     (errorHandler: PartialFunction[HttpResponse, Future[T]] = defaultErrorHandler())
                                     (implicit um: FromEntityUnmarshaller[T]): Future[T] = {
-    _http.singleRequest(request).flatMap {
+    httpClient(request).flatMap {
       case r @ HttpResponse(status, _, _, _) if status.isSuccess() =>
         um(r.entity)
       case r =>

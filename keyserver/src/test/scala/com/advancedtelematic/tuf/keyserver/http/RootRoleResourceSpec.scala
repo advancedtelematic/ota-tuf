@@ -2,15 +2,13 @@ package com.advancedtelematic.tuf.keyserver.http
 
 import java.security.PrivateKey
 
-import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
-import com.advancedtelematic.tuf.util.{ResourceSpec, TufKeyserverSpec}
+import com.advancedtelematic.tuf.util.{ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
 import io.circe.generic.auto._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import cats.syntax.show._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
@@ -20,7 +18,7 @@ import org.scalatest.Inspectors
 import org.scalatest.concurrent.PatienceConfiguration
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{TufPrivateKey, RSATufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{RSATufPrivateKey, TufPrivateKey}
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
@@ -35,12 +33,11 @@ class RootRoleResourceSpec extends TufKeyserverSpec
   with ResourceSpec
   with KeyGenRequestSupport
   with KeyRepositorySupport
+  with RootGenerationSpecSupport
   with PatienceConfiguration
   with Inspectors {
 
   implicit val ec = ExecutionContext.global
-
-  val keyGenerationOp = new KeyGenerationOp(fakeVault)
 
   override implicit def patienceConfig = PatienceConfig(timeout = Span(20, Seconds), interval = Span(500, Millis))
 
@@ -221,7 +218,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       forAll(signedPayload.signatures) { sig =>
         sig.keyid shouldBe targetKey.id
 
-        val isValidT = RoleSigning.isValid(signedPayload.signed, sig, targetKey.publicKey)
+        val isValidT = TufCrypto.isValid(signedPayload.signed, sig, targetKey.publicKey)
         isValidT shouldBe true
       }
     }
@@ -412,23 +409,35 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
-  def clientSignPayload[T : Encoder](rootKeyId: KeyId, role: RootRole, payloadToSign: T): SignedPayload[RootRole] = {
-    val vaultKey = fakeVault.findKey(rootKeyId).futureValue
-    val signature = TufCrypto.sign(vaultKey.keyType, vaultKey.privateKey.keyval, payloadToSign.asJson.canonical.getBytes)
-    val clientSignature = ClientSignature(rootKeyId, signature.method, signature.sig)
-    SignedPayload(Seq(clientSignature), role)
+  test("POST to keys/targets adds new public key to root role") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId).futureValue
+
+    val (publicKey, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
+
+    val newRootRole = Put(apiUri(s"root/${repoId.show}/keys/targets"), publicKey) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val rootRole = responseAs[SignedPayload[RootRole]].signed
+
+      val targetKeys = rootRole.roles(RoleType.TARGETS)
+      targetKeys.keyids should contain(publicKey.id)
+
+      rootRole.keys(publicKey.id) shouldBe publicKey
+
+      rootRole
+    }
+
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed shouldBe newRootRole
+    }
   }
 
-  def processKeyGenerationRequest(repoId: RepoId): Future[Seq[Key]] = {
-    keyGenRepo.findBy(repoId).flatMap { ids ⇒
-      Future.sequence {
-        ids.map(_.id).map { id =>
-          keyGenRepo
-            .find(id)
-            .flatMap(keyGenerationOp.processGenerationRequest)
-        }
-      }.map(_.flatten)
-    }
+  def clientSignPayload[T : Encoder](rootKeyId: KeyId, role: RootRole, payloadToSign: T): SignedPayload[RootRole] = {
+    val vaultKey = fakeVault.findKey(rootKeyId).futureValue
+    val signature = TufCrypto.signPayload(vaultKey.privateKey, payloadToSign)
+    val clientSignature = ClientSignature(rootKeyId, signature.method, signature.sig)
+    SignedPayload(Seq(clientSignature), role)
   }
 
   def generateRootRole(repoId: RepoId, threshold: Int = 1, keyType: KeyType = RsaKeyType): Future[Seq[Key]] = {

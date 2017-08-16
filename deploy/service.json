@@ -21,6 +21,13 @@
     }
   },
   "env": {
+    "AUTHPLUS_CLIENT_ID": "${AUTHPLUS_CLIENT_ID}",
+    "AUTHPLUS_CLIENT_SECRET": "${AUTHPLUS_CLIENT_SECRET}",
+    "AUTH_PLUS_HOST": "${AUTH_PLUS_HOST}",
+    "AUTH_PLUS_PORT": "${AUTH_PLUS_PORT}",
+    "AUTH_PLUS_SCHEME": "https",
+    "AUTH_PROTOCOL": "oauth.accesstoken",
+    "AUTH_VERIFICATION": "auth-plus",
     "BIND_PORT": "9001",
     "DB_MIGRATE": "true",
     "DB_PASSWORD": "${REPOSERVER_DB_PASSWORD}",

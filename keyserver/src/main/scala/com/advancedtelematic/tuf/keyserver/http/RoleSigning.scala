@@ -1,7 +1,5 @@
 package com.advancedtelematic.tuf.keyserver.http
 
-import java.security.{PrivateKey, PublicKey}
-
 import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.{NonEmptyList, ValidatedNel}
@@ -16,22 +14,10 @@ import io.circe.Encoder
 
 import scala.concurrent.{ExecutionContext, Future}
 import slick.jdbc.MySQLProfile.api._
-import io.circe.syntax._
 import cats.implicits._
-
-object RoleSigning {
-  import com.advancedtelematic.libtuf.crypt.CanonicalJson._
-
-  def isValid[T : Encoder](value: T, signature: ClientSignature, publicKey: PublicKey): Boolean = {
-    val sig = Signature(signature.sig, signature.method)
-    TufCrypto.isValid(publicKey, sig, value.asJson.canonical.getBytes)
-  }
-}
 
 class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: ExecutionContext)
   extends KeyRepositorySupport {
-
-  import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 
   def signFor[T : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]] = {
     val roleKeys = keyRepo.repoKeysForRole(repoId, roleType)
@@ -54,7 +40,7 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
 
   def signForClient[T : Encoder](payload: T)(key: Key): Future[ClientSignature] = {
     fetchPrivateKey(key).map { privateKey =>
-      val signature = calculateSignature(payload, key, privateKey)
+      val signature = TufCrypto.signPayload(privateKey, payload)
       ClientSignature(key.id, signature.method, signature.sig)
     }
   }
@@ -67,7 +53,7 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
       publicKeys.par.map { key =>
         sigsByKeyId.get(key.id) match {
           case Some(sig) =>
-            if (RoleSigning.isValid(signedPayload.signed, sig, key.publicKey))
+            if (TufCrypto.isValid(signedPayload.signed, sig, key.publicKey))
               Valid(sig)
             else
               Invalid(NonEmptyList.of(s"Invalid signature for key ${sig.keyid}"))
@@ -78,11 +64,6 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
     }
   }
 
-  private def calculateSignature[T : Encoder](payload: T, key: Key, privateKey: PrivateKey): Signature = {
-    val bytes = payload.asJson.canonical.getBytes
-    TufCrypto.sign(key.keyType, privateKey, bytes)
-  }
-
-  private def fetchPrivateKey(key: Key): Future[PrivateKey] =
-    vaultClient.findKey(key.id).map(_.privateKey.keyval)
+  private def fetchPrivateKey(key: Key): Future[TufPrivateKey] =
+    vaultClient.findKey(key.id).map(_.privateKey)
 }

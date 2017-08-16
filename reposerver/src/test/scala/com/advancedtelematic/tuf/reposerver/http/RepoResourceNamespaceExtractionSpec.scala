@@ -8,6 +8,7 @@ import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.prop.Whenever
 import org.scalatest.{BeforeAndAfterAll, Inspectors}
 import cats.syntax.show._
+import com.advancedtelematic.libats.auth.NamespaceDirectives
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
 import scala.concurrent.ExecutionContext
@@ -21,7 +22,9 @@ class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
 
   implicit val ec = ExecutionContext.global
 
-  override lazy val routes: Route = new RepoResource(fakeRoleStore, NamespaceExtractor.default, targetUpload, messageBusPublisher).route
+  val dbValidation = new DatabaseNamespaceValidation(NamespaceDirectives.defaultNamespaceExtractor.map(_.namespace))
+
+  override lazy val routes: Route = new RepoResource(fakeKeyserverClient, dbValidation, targetUpload, messageBusPublisher).route
 
   val testFile = {
     val checksum = Sha256Digest.digest("hi".getBytes)

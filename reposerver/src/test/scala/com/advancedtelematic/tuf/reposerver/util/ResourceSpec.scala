@@ -11,13 +11,11 @@ import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import com.advancedtelematic.libtuf.data.TufDataType._
 import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libats.test.DatabaseSpec
-import io.circe.syntax._
-import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 
 import scala.concurrent.Future
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model._
-import akka.http.scaladsl.server.Directive1
+import akka.http.scaladsl.server.{Directive1, Directives}
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 
@@ -25,6 +23,7 @@ import scala.concurrent.duration._
 import scala.collection.JavaConverters._
 import scala.util.Try
 import akka.testkit.TestDuration
+import com.advancedtelematic.libats.auth.NamespaceDirectives
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.messaging.MemoryMessageBus
 import com.advancedtelematic.libtuf.crypt.TufCrypto
@@ -36,9 +35,11 @@ import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
 import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStore, TargetUpload}
 
-object FakeRoleStore extends KeyserverClient {
+object FakeKeyserverClient extends KeyserverClient {
 
   private val keys = new ConcurrentHashMap[RepoId, KeyPair]()
+
+  private val rootRoles = new ConcurrentHashMap[RepoId, RootRole]()
 
   def publicKey(repoId: RepoId): PublicKey =
     keys.asScala(repoId).getPublic
@@ -46,7 +47,7 @@ object FakeRoleStore extends KeyserverClient {
   private def keyPair(repoId: RepoId): KeyPair =
     keys.asScala(repoId)
 
-  def rootRole(repoId: RepoId) = {
+  private def generateRoot(repoId: RepoId): RootRole = {
     val rootKey = keys.asScala(repoId)
     val clientKeys = Map(rootKey.getPublic.id -> RSATufKey(rootKey.getPublic))
 
@@ -62,11 +63,15 @@ object FakeRoleStore extends KeyserverClient {
     keys.put(repoId, new KeyPair(publicKey.keyval, privateKey.keyval))
   }
 
+  def deleteRepo(repoId: RepoId): Option[KeyPair] =
+    Option(keys.remove(repoId))
+
   override def createRoot(repoId: RepoId, keyType: KeyType): Future[Json] = {
     if (keys.contains(repoId)) {
       FastFuture.failed(RootRoleConflict)
     } else {
       generateKey(repoId)
+      rootRoles.put(repoId, generateRoot(repoId))
       FastFuture.successful(Json.obj())
     }
   }
@@ -76,24 +81,35 @@ object FakeRoleStore extends KeyserverClient {
     FastFuture.successful(SignedPayload(List(signature), payload))
   }
 
-  override def fetchRootRole(repoId: RepoId): Future[SignedPayload[Json]] = {
-    Future.fromTry {
-      Try {
-        val role = rootRole(repoId)
-        val signature = signWithRoot(repoId, role)
-        SignedPayload(List(signature), role.asJson)
-      }.recover {
-        case ex: NoSuchElementException =>
-          throw RootRoleNotFound
-      }
+  override def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]] = Future.fromTry {
+    Try {
+      val role = rootRoles.asScala(repoId)
+      val signature = signWithRoot(repoId, role)
+      SignedPayload(List(signature), role)
+    }.recover {
+      case _: NoSuchElementException => throw RootRoleNotFound
     }
   }
 
   private def signWithRoot[T : Encoder](repoId: RepoId, payload: T): ClientSignature = {
     val key = keyPair(repoId)
-    TufCrypto
-      .sign(RsaKeyType, key.getPrivate, payload.asJson.canonical.getBytes)
-      .toClient(key.getPublic.id)
+    TufCrypto.signPayload(RSATufPrivateKey(key.getPrivate), payload).toClient(key.getPublic.id)
+  }
+
+  override def addTargetKey(repoId: RepoId, key: TufKey): Future[Unit] = {
+    if(!rootRoles.containsKey(repoId))
+      FastFuture.failed(RootRoleNotFound)
+    else {
+      rootRoles.computeIfPresent(repoId, (_: RepoId, role: RootRole) => {
+        val newKeys = role.keys + (key.id -> key)
+        val targetRoleKeys = role.roles(RoleType.TARGETS)
+        val newTargetKeys = RoleKeys(targetRoleKeys.keyids :+ key.id, targetRoleKeys.threshold)
+
+        role.copy(keys = newKeys, roles = role.roles + (RoleType.TARGETS -> newTargetKeys))
+      })
+
+      FastFuture.successful(())
+    }
   }
 }
 
@@ -124,20 +140,24 @@ trait ResourceSpec extends TufReposerverSpec
   with ScalatestRouteTest
   with DatabaseSpec
   with FakeHttpClientSpec
-  with LongHttpRequest {
+  with LongHttpRequest
+  with Directives {
+
   def apiUri(path: String): String = "/api/v1/" + path
 
-  val fakeRoleStore = FakeRoleStore
+  val fakeKeyserverClient = FakeKeyserverClient
 
-  val namespaceValidation = new NamespaceValidation {
-    override def apply(repoId: RepoId): Directive1[Namespace] = provide(Namespace("default"))
+  val defaultNamespaceExtractor = NamespaceDirectives.defaultNamespaceExtractor.map(_.namespace)
+
+  val namespaceValidation = new NamespaceValidation(defaultNamespaceExtractor) {
+    override def apply(repoId: RepoId): Directive1[Namespace] = defaultNamespaceExtractor
   }
 
   val localStorage = new LocalTargetStore(Files.createTempDirectory("target-storage").toFile)
-  lazy val targetUpload = new TargetUpload(fakeRoleStore, localStorage, fakeHttpClient, messageBusPublisher)
+  lazy val targetUpload = new TargetUpload(fakeKeyserverClient, localStorage, fakeHttpClient, messageBusPublisher)
 
   val memoryMessageBus = new MemoryMessageBus
   val messageBusPublisher = memoryMessageBus.publisher()
 
-  lazy val routes = new TufReposerverRoutes(fakeRoleStore, namespaceValidation, targetUpload, messageBusPublisher).routes
+  lazy val routes = new TufReposerverRoutes(fakeKeyserverClient, namespaceValidation, targetUpload, messageBusPublisher).routes
 }

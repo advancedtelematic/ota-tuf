@@ -105,7 +105,7 @@ protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext
   import KeyRepository._
   import com.advancedtelematic.libats.slick.db.SlickPipeToUnit.pipeToUnit
 
-  protected[db] def persist(key: Key): Future[Unit] = db.run(persistAction(key))
+  def persist(key: Key): Future[Unit] = db.run(persistAction(key))
 
   def find(keyId: KeyId): Future[Key] =
     db.run(keys.filter(_.id === keyId).result.failIfNotSingle(KeyNotFound))
@@ -163,6 +163,15 @@ trait RoleRepositorySupport extends DatabaseSupport {
 protected [db] class RoleRepository()(implicit db: Database, ec: ExecutionContext) {
   def persist(role: Role): Future[Role] =
     db.run(persistAction(role))
+
+  def find(repoId: RepoId, roleType: RoleType): Future[Role] = db.run {
+    Schema.roles
+      .filter(_.repoId === repoId)
+      .filter(_.roleType === roleType)
+      .result
+      .failIfNotSingle(MissingEntity[Role])
+  }
+
 
   protected [db] def persistAction(role: Role): DBIO[Role] =
       (Schema.roles += role).map(_ => role)

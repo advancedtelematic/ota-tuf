@@ -5,7 +5,7 @@ import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId}
+import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId, SignedPayload}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
 import io.circe.Json
 import slick.jdbc.MySQLProfile.api._
@@ -36,7 +36,7 @@ object Schema {
   class SignedRoleTable(tag: Tag) extends Table[SignedRole](tag, "signed_roles") {
     def repoId = column[RepoId]("repo_id")
     def roleType = column[RoleType]("role_type")
-    def content = column[Json]("content")
+    def content = column[SignedPayload[Json]]("content")
     def checksum = column[Checksum]("checksum")
     def length = column[Long]("length")
     def version = column[Int]("version")

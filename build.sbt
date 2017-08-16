@@ -1,3 +1,5 @@
+import CustomSettings._
+
 def itFilter(name: String): Boolean = name endsWith "IntegrationSpec"
 
 def unitFilter(name: String): Boolean = !itFilter(name)
@@ -12,7 +14,7 @@ lazy val commonDeps = libraryDependencies ++= {
   val akkaV = "2.4.17"
   val akkaHttpV = "10.0.3"
   val scalaTestV = "3.0.0"
-  val libatsV = "0.0.1-93-g2c1a6db"
+  lazy val libatsV = libatsVersion.value
 
   Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaV,
@@ -39,10 +41,11 @@ lazy val commonSettings = Seq(
   organization := "com.advancedtelematic",
   scalaVersion := "2.11.11",
   crossScalaVersions := Seq("2.11.11", "2.12.2"),
-  scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8", "-Ywarn-unused-import"),
+  scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8", "-Ywarn-unused-import", "-Xexperimental"),
   resolvers += "ATS Releases" at "http://nexus.advancedtelematic.com:8081/content/repositories/releases",
   resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content/repositories/snapshots",
   resolvers += "version99 Empty loggers" at "http://version99.qos.ch",
+  libatsVersion := "0.0.1-93-g2c1a6db",
   buildInfoOptions += BuildInfoOption.ToMap,
   buildInfoOptions += BuildInfoOption.BuildTime) ++
   Seq(inConfig(ItTest)(Defaults.testTasks): _*) ++

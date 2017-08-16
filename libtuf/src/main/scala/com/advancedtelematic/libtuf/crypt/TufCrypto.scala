@@ -7,7 +7,7 @@ import java.security.{Signature => _, _}
 
 import org.bouncycastle.jce.ECNamedCurveTable
 import org.bouncycastle.jce.spec.ECParameterSpec
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, KeyId, KeyType, RSATufKey, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, TufKey, TufPrivateKey, ValidKeyId, ValidSignature}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, EdKeyType, EdTufKey, EdTufPrivateKey, KeyId, KeyType, RSATufKey, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, TufKey, TufPrivateKey, ValidKeyId, ValidSignature}
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
 import org.bouncycastle.util.encoders.{Base64, Hex}
@@ -16,7 +16,11 @@ import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import java.security.KeyFactory
-import io.circe.Json
+
+import io.circe.{Encoder, Json}
+import io.circe.syntax._
+import com.advancedtelematic.libtuf.crypt.CanonicalJson._
+
 import scala.util.control.NoStackTrace
 import scala.util.Try
 
@@ -47,7 +51,12 @@ object TufCrypto {
 
   val edCrypto = new EdCrypto
 
-  def sign[T <: KeyType](keyType: T, privateKey: PrivateKey, data: Array[Byte]): Signature = {
+  def signPayload[T : Encoder](key: TufPrivateKey, payload: T): Signature = {
+    val bytes = payload.asJson.canonical.getBytes
+    sign(key.keytype, key.keyval, bytes)
+  }
+
+  private def sign[T <: KeyType](keyType: T, privateKey: PrivateKey, data: Array[Byte]): Signature = {
     val signer = keyType.crypto.signer
 
     signer.initSign(privateKey)
@@ -64,7 +73,7 @@ object TufCrypto {
   def isValid[T <: KeyType](keyType: T, publicKey: PublicKey, signature: Signature, data: Array[Byte]): Boolean = {
     val keyMethod = keyType.crypto.signatureMethod
     if (keyMethod != signature.method)
-      throw new SignatureMethodMismatch(keyMethod, signature.method)
+      throw SignatureMethodMismatch(keyMethod, signature.method)
     isValid(publicKey, signature, data)
   }
 
@@ -78,6 +87,11 @@ object TufCrypto {
     signer.initVerify(publicKey)
     signer.update(data)
     signer.verify(decodedSig)
+  }
+
+  def isValid[T : Encoder](value: T, signature: ClientSignature, publicKey: PublicKey): Boolean = {
+    val sig = Signature(signature.sig, signature.method)
+    TufCrypto.isValid(publicKey, sig, value.asJson.canonical.getBytes)
   }
 
   implicit class PublicKeyOps(key: PublicKey) {
