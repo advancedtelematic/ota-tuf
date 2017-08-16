@@ -6,7 +6,7 @@ import cats.syntax.show._
 import com.advancedtelematic.libats.messaging_datatype.DataType.HashMethod.HashMethod
 import com.advancedtelematic.libats.messaging_datatype.DataType.{TargetFilename, ValidChecksum}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{TufKey, HardwareIdentifier, KeyId, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, RoleType, TargetName, TargetVersion, TufKey}
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.{Decoder, Json}
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
@@ -53,8 +53,14 @@ object ClientDataType {
 
   case class MetaItem(hashes: ClientHashes, length: Long)
 
-  trait VersionedRole {
+  sealed trait VersionedRole {
     val version: Int
+
+    def roleType: RoleType = this match {
+      case _: TargetsRole => RoleType.TARGETS
+      case _: SnapshotRole => RoleType.SNAPSHOT
+      case _: TimestampRole => RoleType.TIMESTAMP
+    }
   }
 
   case class TargetsRole(expires: Instant,

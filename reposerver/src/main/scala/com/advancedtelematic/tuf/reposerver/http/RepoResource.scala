@@ -22,7 +22,7 @@ import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.messaging_datatype.DataType.{TargetFilename, ValidTargetFilename}
 import com.advancedtelematic.libtuf.data.ClientDataType.{TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.tuf.reposerver.target_store.{TargetStore, TargetUpload}
+import com.advancedtelematic.tuf.reposerver.target_store.TargetUpload
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
 import com.advancedtelematic.libtuf.data.TufDataType._
 

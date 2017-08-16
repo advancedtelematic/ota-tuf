@@ -4,7 +4,7 @@ import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.{NonEmptyList, ValidatedNel}
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.ClientDataType.TargetsRole
+import com.advancedtelematic.libtuf.data.ClientDataType.{TargetsRole, VersionedRole}
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, RoleType, SignedPayload}
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
@@ -29,10 +29,10 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
         FastFuture.successful(i)
     }
 
-  private def payloadSignatureIsValid[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Future[ValidatedNel[String, SignedPayload[T]]] = async {
+  private def payloadSignatureIsValid[T <: VersionedRole : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Future[ValidatedNel[String, SignedPayload[T]]] = async {
     val rootRole = await(keyserverClient.fetchRootRole(repoId)).signed
 
-    val publicKeys = rootRole.keys.filterKeys(keyId => rootRole.roles(RoleType.TARGETS).keyids.contains(keyId))
+    val publicKeys = rootRole.keys.filterKeys(keyId => rootRole.roles(signedPayload.signed.roleType).keyids.contains(keyId))
 
     val sigsByKeyId = signedPayload.signatures.map(s => s.keyid -> s).toMap
 

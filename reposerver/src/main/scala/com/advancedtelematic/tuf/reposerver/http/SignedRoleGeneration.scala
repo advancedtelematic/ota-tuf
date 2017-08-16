@@ -6,7 +6,6 @@ import java.time.temporal.ChronoUnit
 import cats.implicits._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType._
-import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, SignedPayload}
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
@@ -75,9 +74,8 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
       .map { signedRole =>
         signedRole
           .content
-          .asJson
+          .signed
           .hcursor
-          .downField("signed")
           .downField("version")
           .as[Int]
           .getOrElse(0) + 1
