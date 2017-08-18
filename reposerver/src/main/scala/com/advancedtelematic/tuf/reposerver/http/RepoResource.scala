@@ -72,7 +72,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   private def UserRepoId(namespace: Namespace): Directive1[RepoId] = Directive.Empty.tflatMap { _ =>
     onComplete(repoNamespaceRepo.findFor(namespace)).flatMap {
       case Success(repoId) => provide(repoId)
-      case Failure(_: MissingEntity[_]) => reject(AuthorizationFailedRejection)
+      case Failure(_: MissingEntity[_]) => failWith(MissingEntity[Namespace]())
       case Failure(ex) => failWith(ex)
     }
   }

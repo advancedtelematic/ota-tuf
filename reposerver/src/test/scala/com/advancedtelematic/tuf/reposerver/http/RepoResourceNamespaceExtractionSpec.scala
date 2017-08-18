@@ -2,6 +2,7 @@ package com.advancedtelematic.tuf.reposerver.http
 
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server.Route
+import com.advancedtelematic.libats.http.ErrorHandler
 import com.advancedtelematic.libtuf.crypt.Sha256Digest
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import org.scalatest.concurrent.PatienceConfiguration
@@ -24,7 +25,9 @@ class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
 
   val dbValidation = new DatabaseNamespaceValidation(NamespaceDirectives.defaultNamespaceExtractor.map(_.namespace))
 
-  override lazy val routes: Route = new RepoResource(fakeKeyserverClient, dbValidation, targetUpload, messageBusPublisher).route
+  override lazy val routes: Route = ErrorHandler.handleErrors {
+    new RepoResource(fakeKeyserverClient, dbValidation, targetUpload, messageBusPublisher).route
+  }
 
   val testFile = {
     val checksum = Sha256Digest.digest("hi".getBytes)
@@ -56,7 +59,7 @@ class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
   test("reject when user repo does not belong to user namespace") {
     withNamespace("authnamespace") { implicit ns =>
       Post(s"/user_repo/targets/myfile", testFile).namespaced ~> Route.seal(routes) ~> check {
-        status shouldBe StatusCodes.Forbidden
+        status shouldBe StatusCodes.NotFound
       }
     }
   }
