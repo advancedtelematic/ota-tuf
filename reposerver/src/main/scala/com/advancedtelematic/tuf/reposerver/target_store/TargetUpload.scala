@@ -2,8 +2,11 @@ package com.advancedtelematic.tuf.reposerver.target_store
 
 import java.time.Instant
 
+import akka.actor.ActorSystem
+import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.headers.Location
 import akka.http.scaladsl.model._
+import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
@@ -20,6 +23,16 @@ import slick.jdbc.MySQLProfile.api.Database
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
+
+object TargetUpload {
+  def apply(roleKeyStore: KeyserverClient,
+            targetStore: TargetStore,
+            messageBusPublisher: MessageBusPublisher)
+           (implicit db: Database, ec: ExecutionContext, system: ActorSystem, mat: Materializer): TargetUpload = {
+    val _http = Http()
+    new TargetUpload(roleKeyStore, targetStore, req => _http.singleRequest(req), messageBusPublisher)
+  }
+}
 
 class TargetUpload(roleKeyStore: KeyserverClient,
                    targetStore: TargetStore,

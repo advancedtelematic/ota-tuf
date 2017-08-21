@@ -1,7 +1,6 @@
 package com.advancedtelematic.tuf.reposerver
 
 import java.security.Security
-import java.util.concurrent.TimeUnit
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.Uri
@@ -68,11 +67,7 @@ object Boot extends BootApp
 
   val targetStore = if(useS3) new S3TargetStore(s3Credentials) else LocalTargetStore(targetStoreRoot)
 
-  val targetUpload = new TargetUpload(
-    keyStoreClient,
-    targetStore,
-    req => Http.get(system).singleRequest(req),
-    messageBusPublisher)
+  val targetUpload = TargetUpload(keyStoreClient,  targetStore, messageBusPublisher)
 
   val routes: Route =
     (versionHeaders(version) & logResponseMetrics(projectName)) {
