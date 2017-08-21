@@ -30,7 +30,7 @@ lazy val commonDeps = libraryDependencies ++= {
     "com.advancedtelematic" %% "libats-slick" % libatsV,
     "com.advancedtelematic" %% "libats-messaging" % libatsV,
     "com.advancedtelematic" %% "libats-messaging-datatype" % libatsV,
-    "com.advancedtelematic" %% "libats-metrics-akka" % libatsV changing(),
+    "com.advancedtelematic" %% "libats-metrics-akka" % libatsV,
 
     "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV,
     "org.scalatest"     %% "scalatest" % scalaTestV % "test"
@@ -45,7 +45,7 @@ lazy val commonSettings = Seq(
   resolvers += "ATS Releases" at "http://nexus.advancedtelematic.com:8081/content/repositories/releases",
   resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content/repositories/snapshots",
   resolvers += "version99 Empty loggers" at "http://version99.qos.ch",
-  libatsVersion := "0.0.1-93-g2c1a6db",
+  libatsVersion := "0.0.1-99-gcdbccd8",
   buildInfoOptions += BuildInfoOption.ToMap,
   buildInfoOptions += BuildInfoOption.BuildTime) ++
   Seq(inConfig(ItTest)(Defaults.testTasks): _*) ++
