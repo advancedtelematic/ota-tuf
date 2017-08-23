@@ -34,7 +34,7 @@ object TufCodecs {
   implicit val rsaKeyTypeDecoder: Decoder[RsaKeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "RSA", RsaKeyType, "RsaKeyType"))
 
   implicit val edKeyTypeEncoder: Encoder[EdKeyType.type] = Encoder[String].contramap(_ ⇒ "ED25519")
-  implicit val edKeyTypeDecoder: Decoder[EdKeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "ED25519", EdKeyType, "RsaKeyType"))
+  implicit val edKeyTypeDecoder: Decoder[EdKeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "ED25519", EdKeyType, "EdcKeyType"))
 
   implicit val keyTypeDecoder: Decoder[KeyType] = List[Decoder[KeyType]](rsaKeyTypeDecoder.widen, edKeyTypeDecoder.widen).reduceLeft(_ or _)
 

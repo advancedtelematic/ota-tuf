@@ -2,10 +2,12 @@ package com.advancedtelematic.tuf.reposerver.target_store
 
 import java.time.Instant
 
+import cats.implicits._
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.headers.Location
 import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.headers.Location
+import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
@@ -20,7 +22,7 @@ import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore.{TargetBytes, TargetRedirect}
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api.Database
-
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.StorageMethod._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
 
@@ -43,18 +45,18 @@ class TargetUpload(roleKeyStore: KeyserverClient,
 
   private val _log = LoggerFactory.getLogger(this.getClass)
 
+  case class DownloadError(msg: String) extends Exception(msg) with NoStackTrace
+
   def publishUploadMessages(repoId: RepoId): Future[Unit] = {
     val f = for {
       (namespace, usage) <- targetItemRepo.usage(repoId)
       _ <- messageBusPublisher.publish(PackageStorageUsage(namespace.get, Instant.now, usage))
     } yield ()
 
-    f.recover {
-      case ex =>
-        _log.warn("Could not publish bus message", ex)
+    f.handleError { ex =>
+      _log.warn("Could not publish bus message", ex)
     }
   }
-
 
   def store(repoId: RepoId, targetFile: TargetFilename, fileData: Source[ByteString, Any], custom: TargetCustom): Future[TargetItem] = {
     for {
@@ -62,8 +64,6 @@ class TargetUpload(roleKeyStore: KeyserverClient,
       _ <- publishUploadMessages(repoId)
     } yield TargetItem(repoId, targetFile, storeResult.uri, storeResult.checksum, storeResult.size, Some(custom))
   }
-
-  case class DownloadError(msg: String) extends Exception(msg) with NoStackTrace
 
   def storeFromUri(repoId: RepoId, targetFile: TargetFilename, fileUri: Uri, custom: TargetCustom): Future[TargetItem] = {
     httpClient(HttpRequest(uri = fileUri)).flatMap { response =>
@@ -75,6 +75,21 @@ class TargetUpload(roleKeyStore: KeyserverClient,
   }
 
   def retrieve(repoId: RepoId, targetFilename: TargetFilename): Future[HttpResponse] = {
+    targetItemRepo.findByFilename(repoId, targetFilename).flatMap { item =>
+      item.storageMethod match {
+        case Managed =>
+          retrieveFromManaged(repoId, targetFilename)
+        case Unmanaged =>
+          redirectToUnmanaged(item)
+      }
+    }
+  }
+
+  private def redirectToUnmanaged(item: TargetItem): Future[HttpResponse] = FastFuture.successful {
+    HttpResponse(StatusCodes.Found, List(Location(item.uri)))
+  }
+
+  private def retrieveFromManaged(repoId: RepoId, targetFilename: TargetFilename): Future[HttpResponse] = {
     // TODO: Publish usage/inflight https://advancedtelematic.atlassian.net/browse/PRO-2803
     targetStore.retrieve(repoId, targetFilename).map {
       case TargetBytes(bytes, size) =>

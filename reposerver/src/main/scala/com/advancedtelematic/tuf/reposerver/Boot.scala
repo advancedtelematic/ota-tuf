@@ -18,8 +18,7 @@ import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.libats.messaging.MessageBus
 import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
-import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStore, S3Credentials, S3TargetStore}
-import com.advancedtelematic.tuf.reposerver.target_store.TargetUpload
+import com.advancedtelematic.tuf.reposerver.target_store._
 import com.amazonaws.regions.Regions
 
 trait Settings {

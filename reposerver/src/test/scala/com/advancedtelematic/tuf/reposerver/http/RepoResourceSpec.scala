@@ -5,15 +5,16 @@ import java.time.temporal.ChronoUnit
 
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model._
-import akka.http.scaladsl.model.headers.RawHeader
+import akka.http.scaladsl.model.headers.{Location, RawHeader}
 import akka.stream.scaladsl.Sink
 import akka.util.ByteString
 import cats.data.NonEmptyList
 import cats.syntax.show.toShowOps
+import cats.syntax.option._
 import com.advancedtelematic.libats.messaging_datatype.DataType.{HashMethod, TargetFilename, ValidTargetFilename}
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.{Sha256Digest, TufCrypto}
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RoleTypeToMetaPathOp, RootRole, SnapshotRole, TargetCustom, TargetsRole, TimestampRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientHashes, ClientTargetItem, RoleTypeToMetaPathOp, RootRole, SnapshotRole, TargetCustom, TargetsRole, TimestampRole}
 import com.advancedtelematic.libtuf.data.Messages.TufTargetAdded
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, _}
 import io.circe.syntax._
@@ -492,8 +493,6 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
-
-
   test("create a repo returns 409 if repo for namespace already exists") {
     val repoId = RepoId.generate()
 
@@ -512,25 +511,90 @@ class RepoResourceSpec extends TufReposerverSpec
     fakeKeyserverClient.fetchRootRole(otherRepoId).failed.futureValue.asInstanceOf[RawError].code.code shouldBe "root_role_not_found"
   }
 
-  test("authenticates user for put/get") (pending)
+  val offlineTargetFilename: TargetFilename = Refined.unsafeApply("some/file/name")
+
+  val offlineTargets = {
+    val targetCustomJson =
+      TargetCustom(TargetName("name"), TargetVersion("version"), Seq.empty, TargetFormat.BINARY.some)
+        .asJson
+        .deepMerge(Json.obj("uri" -> Uri("https://ats.com").asJson))
+
+    val hashes: ClientHashes = Map(HashMethod.SHA256 -> Refined.unsafeApply("8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"))
+
+    Map(offlineTargetFilename -> ClientTargetItem(hashes, 0, targetCustomJson.some))
+  }
+
+  def buildSignedTargetsRole(repoId: RepoId, targets: Map[TargetFilename, ClientTargetItem]): SignedPayload[TargetsRole] = {
+    val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), targets, 2)
+    fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targetsRole).futureValue
+  }
 
   test("accepts an offline signed targets.json") {
     val repoId = addTargetToRepo()
 
-    val targetFilename: TargetFilename = Refined.unsafeApply("some/file/name")
-    val targets = Map(targetFilename -> ClientTargetItem(Map.empty, 0, None))
-
-    val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), targets, 2)
-
-    val signedPayload = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targetsRole).futureValue
+    val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
-    Get(apiUri(s"repo/${repoId.show}/targets.json"), signedPayload) ~> routes ~> check {
+    Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[SignedPayload[TargetsRole]].signed.targets.keys should contain(targetFilename)
+      val targets = responseAs[SignedPayload[TargetsRole]].signed.targets
+      targets.keys should contain(offlineTargetFilename)
+    }
+  }
+
+  test("getting offline target item redirects to custom url") {
+    val repoId = addTargetToRepo()
+
+    val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/targets/${offlineTargetFilename.value}")) ~> routes ~> check {
+      status shouldBe StatusCodes.Found
+      header[Location].map(_.value()) should contain("https://ats.com")
+    }
+  }
+
+  test("PUT offline target fails when target does not include custom meta") {
+    val repoId = addTargetToRepo()
+
+    val targets = Map(offlineTargetFilename -> ClientTargetItem(Map.empty, 0, None))
+    val signedPayload = buildSignedTargetsRole(repoId, targets)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+      responseAs[JsonErrors].head should include("target item error some/file/name: All offline signed target items must contain custom metadata")
+    }
+  }
+
+  test("rejects requests with invalid/missing checksums") {
+    val clientTargetItem = offlineTargets(offlineTargetFilename).copy(hashes = Map.empty)
+    val targets = Map(offlineTargetFilename -> clientTargetItem)
+    val signedPayload = buildSignedTargetsRole(repoId, targets)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+      responseAs[JsonErrors].head should include("Invalid/Missing Checksum")
+    }
+  }
+
+  test("rejects requests with no uri in target custom") {
+    val repoId = addTargetToRepo()
+
+    val targetCustomJson = TargetCustom(TargetName("name"), TargetVersion("version"), Seq.empty, TargetFormat.BINARY.some).asJson
+
+    val hashes: ClientHashes = Map(HashMethod.SHA256 -> Refined.unsafeApply("8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"))
+    val targets = Map(offlineTargetFilename -> ClientTargetItem(hashes, 0, targetCustomJson.some))
+        val signedPayload = buildSignedTargetsRole(repoId, targets)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+      responseAs[JsonErrors].head should include("failed cursor, List(DownField(uri))")
     }
   }
 

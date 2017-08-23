@@ -21,7 +21,6 @@ class S3StorageResourceIntegrationSpec extends TufReposerverSpec
   lazy val s3Storage = new S3TargetStore(credentials)
   override lazy val targetUpload = new TargetUpload(fakeKeyserverClient, s3Storage, fakeHttpClient, messageBusPublisher)
 
-
   override lazy val routes = new RepoResource(fakeKeyserverClient, namespaceValidation,
     targetUpload, messageBusPublisher).route
 

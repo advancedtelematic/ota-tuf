@@ -2,6 +2,7 @@ package com.advancedtelematic.tuf.reposerver.data
 
 import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
+import com.advancedtelematic.libats.slick.codecs.SlickEnum
 import com.advancedtelematic.libtuf.crypt.Sha256Digest
 import com.advancedtelematic.libtuf.data.ClientDataType.{MetaItem, MetaPath, _}
 import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId, SignedPayload}
@@ -12,7 +13,13 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 
 object RepositoryDataType {
-  case class TargetItem(repoId: RepoId, filename: TargetFilename, uri: Uri, checksum: Checksum, length: Long, custom: Option[TargetCustom] = None)
+  object StorageMethod extends Enumeration with SlickEnum {
+    type StorageMethod = Value
+    val Managed, Unmanaged = Value
+  }
+  import StorageMethod._
+
+  case class TargetItem(repoId: RepoId, filename: TargetFilename, uri: Uri, checksum: Checksum, length: Long, custom: Option[TargetCustom] = None, storageMethod: StorageMethod = Managed)
 
   case class SignedRole(repoId: RepoId, roleType: RoleType, content: SignedPayload[Json], checksum: Checksum, length: Long, version: Int)
 
