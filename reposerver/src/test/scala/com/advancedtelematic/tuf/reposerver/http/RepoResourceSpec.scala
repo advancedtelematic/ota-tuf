@@ -712,7 +712,7 @@ class RepoResourceTufTargetSpec extends TufReposerverSpec
   }
 }
 
-class RepoResourceTufTargetUploadSpec extends TufReposerverSpec
+class RepoResourceTufTargetStoreSpec extends TufReposerverSpec
     with ResourceSpec  with Inspectors with Whenever with PatienceConfiguration {
 
   override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))

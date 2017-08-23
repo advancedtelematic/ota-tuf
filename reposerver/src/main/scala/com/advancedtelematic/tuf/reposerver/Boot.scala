@@ -64,13 +64,13 @@ object Boot extends BootApp
 
   val messageBusPublisher = MessageBus.publisher(system, config).valueOr(throw _)
 
-  val targetStore = if(useS3) new S3TargetStore(s3Credentials) else LocalTargetStore(targetStoreRoot)
+  val targetStoreEngine = if(useS3) new S3TargetStoreEngine(s3Credentials) else LocalTargetStoreEngine(targetStoreRoot)
 
-  val targetUpload = TargetUpload(keyStoreClient,  targetStore, messageBusPublisher)
+  val targetStore = TargetStore(keyStoreClient,  targetStoreEngine, messageBusPublisher)
 
   val routes: Route =
     (versionHeaders(version) & logResponseMetrics(projectName)) {
-      new TufReposerverRoutes(keyStoreClient, NamespaceValidation.withDatabase, targetUpload, messageBusPublisher).routes
+      new TufReposerverRoutes(keyStoreClient, NamespaceValidation.withDatabase, targetStore, messageBusPublisher).routes
     }
 
   Http().bindAndHandle(routes, host, port)
