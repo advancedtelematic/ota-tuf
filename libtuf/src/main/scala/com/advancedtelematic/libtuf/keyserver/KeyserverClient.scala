@@ -36,8 +36,11 @@ trait KeyserverClient {
 }
 
 object KeyserverHttpClient {
-  def apply(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer): KeyserverHttpClient =
-    new KeyserverHttpClient(uri, req => Http().singleRequest(req))
+
+  def apply(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer): KeyserverHttpClient = {
+    val _http = Http()
+    new KeyserverHttpClient(uri, req => _http.singleRequest(req))
+  }
 }
 
 class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResponse])
