@@ -10,7 +10,6 @@ import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId,
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.{Decoder, Json}
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
-import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 
 object ClientDataType {
