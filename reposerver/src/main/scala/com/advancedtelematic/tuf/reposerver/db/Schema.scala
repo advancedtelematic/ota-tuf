@@ -9,6 +9,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId, SignedPa
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
 import io.circe.Json
 import slick.jdbc.MySQLProfile.api._
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.StorageMethod._
 
 object Schema {
   import com.advancedtelematic.libats.slick.codecs.SlickRefined._
@@ -25,10 +26,11 @@ object Schema {
     def custom = column[Option[TargetCustom]]("custom")
     def checksum = column[Checksum]("checksum")
     def length = column[Long]("length")
+    def storageMethod = column[StorageMethod]("storage_method")
 
     def pk = primaryKey("target_items_pk", (repoId, filename))
 
-    override def * = (repoId, filename, uri, checksum, length, custom) <> ((TargetItem.apply _).tupled, TargetItem.unapply)
+    override def * = (repoId, filename, uri, checksum, length, custom, storageMethod) <> ((TargetItem.apply _).tupled, TargetItem.unapply)
   }
 
   protected [db] val targetItems = TableQuery[TargetItemTable]

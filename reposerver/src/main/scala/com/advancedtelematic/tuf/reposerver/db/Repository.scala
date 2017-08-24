@@ -7,6 +7,7 @@ import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.http.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity, RawError}
+import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
@@ -16,6 +17,7 @@ import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport.MissingNamespaceException
+import com.advancedtelematic.tuf.reposerver.http.Errors
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
@@ -36,7 +38,9 @@ trait TargetItemRepositorySupport extends DatabaseSupport {
 protected [db] class TargetItemRepository()(implicit db: Database, ec: ExecutionContext) {
   import Schema.targetItems
 
-  def persist(targetItem: TargetItem): Future[TargetItem] = db.run {
+  def persist(targetItem: TargetItem): Future[TargetItem] = db.run(persistAction(targetItem))
+
+  protected [db] def persistAction(targetItem: TargetItem): DBIO[TargetItem] = {
     val findQ = targetItems.filter(_.repoId === targetItem.repoId).filter(_.filename === targetItem.filename)
     val now = Instant.now
 
@@ -50,10 +54,17 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
     }.transactionally
   }
 
-  def findFor(repoId: RepoId): Future[Seq[TargetItem]] =
-    db.run {
-      targetItems.filter(_.repoId === repoId).result
-    }
+  def findFor(repoId: RepoId): Future[Seq[TargetItem]] = db.run {
+    targetItems.filter(_.repoId === repoId).result
+  }
+
+  def findByFilename(repoId: RepoId, filename: TargetFilename): Future[TargetItem] = db.run {
+    targetItems
+      .filter(_.repoId === repoId)
+      .filter(_.filename === filename)
+      .result
+      .failIfNotSingle(Errors.TargetNotFoundError)
+  }
 
   def usage(repoId: RepoId): Future[(Namespace, Long)] =
     db.run {
@@ -85,7 +96,7 @@ object SignedRoleRepository {
     RawError(ErrorCode("invalid_version_bump"), StatusCodes.Conflict, s"Cannot bump version from $oldVersion to $newVersion")
 }
 
-protected[db] class SignedRoleRepository()(implicit db: Database, ec: ExecutionContext) {
+protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: ExecutionContext) {
   import SignedRoleRepository.InvalidVersionBumpError
   import Schema.signedRoles
   import SignedRoleRepository.SignedRoleNotFound
@@ -93,7 +104,7 @@ protected[db] class SignedRoleRepository()(implicit db: Database, ec: ExecutionC
   def persist(signedRole: SignedRole): Future[SignedRole] =
     db.run(persistAction(signedRole))
 
-  private def persistAction(signedRole: SignedRole): DBIO[SignedRole] = {
+  protected [db] def persistAction(signedRole: SignedRole): DBIO[SignedRole] = {
     signedRoles
       .filter(_.repoId === signedRole.repoId)
       .filter(_.roleType === signedRole.roleType)
@@ -104,10 +115,9 @@ protected[db] class SignedRoleRepository()(implicit db: Database, ec: ExecutionC
       .map(_ => signedRole)
   }
 
-  def persistAll(signedRoles: SignedRole*): Future[Seq[SignedRole]] =
-    db.run {
-      DBIO.sequence(signedRoles.map(persistAction)).transactionally
-    }
+  def persistAll(signedRoles: SignedRole*): Future[Seq[SignedRole]] = db.run {
+    DBIO.sequence(signedRoles.map(persistAction)).transactionally
+  }
 
   def find(repoId: RepoId, roleType: RoleType): Future[SignedRole] =
     db.run {
@@ -118,6 +128,13 @@ protected[db] class SignedRoleRepository()(implicit db: Database, ec: ExecutionC
         .headOption
         .failIfNone(SignedRoleNotFound)
     }
+
+  def storeAll(targetItemRepo: TargetItemRepository)(signedRole: SignedRole, items: Seq[TargetItem]): Future[Unit] = db.run {
+    persistAction(signedRole)
+      .andThen(DBIO.sequence(items.map(targetItemRepo.persistAction)))
+      .map(_ => ())
+      .transactionally
+  }
 
   private def ensureVersionBumpIsValid(signedRole: SignedRole)(oldSignedRole: Option[SignedRole]): DBIO[Unit] =
     oldSignedRole match {

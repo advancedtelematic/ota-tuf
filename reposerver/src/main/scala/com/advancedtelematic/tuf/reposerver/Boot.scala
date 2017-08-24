@@ -18,8 +18,7 @@ import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.libats.messaging.MessageBus
 import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
-import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStore, S3Credentials, S3TargetStore}
-import com.advancedtelematic.tuf.reposerver.target_store.TargetUpload
+import com.advancedtelematic.tuf.reposerver.target_store._
 import com.amazonaws.regions.Regions
 
 trait Settings {
@@ -65,13 +64,13 @@ object Boot extends BootApp
 
   val messageBusPublisher = MessageBus.publisher(system, config).valueOr(throw _)
 
-  val targetStore = if(useS3) new S3TargetStore(s3Credentials) else LocalTargetStore(targetStoreRoot)
+  val targetStoreEngine = if(useS3) new S3TargetStoreEngine(s3Credentials) else LocalTargetStoreEngine(targetStoreRoot)
 
-  val targetUpload = TargetUpload(keyStoreClient,  targetStore, messageBusPublisher)
+  val targetStore = TargetStore(keyStoreClient,  targetStoreEngine, messageBusPublisher)
 
   val routes: Route =
     (versionHeaders(version) & logResponseMetrics(projectName)) {
-      new TufReposerverRoutes(keyStoreClient, NamespaceValidation.withDatabase, targetUpload, messageBusPublisher).routes
+      new TufReposerverRoutes(keyStoreClient, NamespaceValidation.withDatabase, targetStore, messageBusPublisher).routes
     }
 
   Http().bindAndHandle(routes, host, port)

@@ -3,7 +3,6 @@
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-import cats.implicits._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType

@@ -33,7 +33,7 @@ import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
-import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStore, TargetUpload}
+import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStoreEngine, TargetStore}
 
 object FakeKeyserverClient extends KeyserverClient {
 
@@ -153,11 +153,11 @@ trait ResourceSpec extends TufReposerverSpec
     override def apply(repoId: RepoId): Directive1[Namespace] = defaultNamespaceExtractor
   }
 
-  val localStorage = new LocalTargetStore(Files.createTempDirectory("target-storage").toFile)
-  lazy val targetUpload = new TargetUpload(fakeKeyserverClient, localStorage, fakeHttpClient, messageBusPublisher)
+  val localStorage = new LocalTargetStoreEngine(Files.createTempDirectory("target-storage").toFile)
+  lazy val targetStore = new TargetStore(fakeKeyserverClient, localStorage, fakeHttpClient, messageBusPublisher)
 
   val memoryMessageBus = new MemoryMessageBus
   val messageBusPublisher = memoryMessageBus.publisher()
 
-  lazy val routes = new TufReposerverRoutes(fakeKeyserverClient, namespaceValidation, targetUpload, messageBusPublisher).routes
+  lazy val routes = new TufReposerverRoutes(fakeKeyserverClient, namespaceValidation, targetStore, messageBusPublisher).routes
 }

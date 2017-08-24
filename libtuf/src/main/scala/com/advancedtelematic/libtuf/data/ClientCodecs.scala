@@ -8,7 +8,6 @@ import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RoleTy
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
-import cats.syntax.either._
 import io.circe._
 
 object ClientCodecs {

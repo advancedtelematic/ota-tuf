@@ -22,7 +22,7 @@ import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.messaging_datatype.DataType.{TargetFilename, ValidTargetFilename}
 import com.advancedtelematic.libtuf.data.ClientDataType.{TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.tuf.reposerver.target_store.TargetUpload
+import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
 import com.advancedtelematic.libtuf.data.TufDataType._
 
@@ -43,7 +43,7 @@ import scala.collection.immutable
 import com.advancedtelematic.tuf.reposerver.Settings
 
 class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: NamespaceValidation,
-                   targetUpload: TargetUpload, messageBusPublisher: MessageBusPublisher)
+                   targetStore: TargetStore, messageBusPublisher: MessageBusPublisher)
                   (implicit val db: Database, val ec: ExecutionContext) extends Directives
   with TargetItemRepositorySupport
   with SignedRoleRepositorySupport
@@ -108,7 +108,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
         fileUpload("file") { case (_, file) =>
           complete {
             for {
-              item <- targetUpload.store(repoId, filename, file, custom)
+              item <- targetStore.store(repoId, filename, file, custom)
               result <- addTargetItem(namespace, item)
             } yield result
           }
@@ -117,7 +117,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       parameter('fileUri) { fileUri =>
         complete {
           for {
-            item <- targetUpload.storeFromUri(repoId, filename, Uri(fileUri), custom)
+            item <- targetStore.storeFromUri(repoId, filename, Uri(fileUri), custom)
             result <- addTargetItem(namespace, item)
           } yield result
         }
@@ -163,7 +163,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
             addTargetFromContent(namespace, filename, repoId)
           } ~
           get {
-            complete(targetUpload.retrieve(repoId, filename))
+            complete(targetStore.retrieve(repoId, filename))
           }
         } ~
         (pathEnd & put & entity(as[SignedPayload[TargetsRole]])) { signed =>

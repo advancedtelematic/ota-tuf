@@ -16,7 +16,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
-import com.advancedtelematic.metrics.{InfluxDbMetricsReporterSettings, InfluxdbMetricsReporterSupport}
+import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
 
 import scala.concurrent.duration.Duration
 

@@ -43,7 +43,7 @@ class AnyvalCodecMigrationSpec extends TufReposerverSpec with DatabaseSpec with 
   val filename: TargetFilename = Refined.unsafeApply("somefilename")
 
   def runMigration(repoId: RepoId, customJson: String): Future[Seq[TargetItem]] = {
-    val insertQ = sqlu"insert into target_items values('#${repoId.uuid.toString}', '#${filename.value}', 'http://', '#$checksum', 20, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '#$customJson')"
+    val insertQ = sqlu"insert into target_items values('#${repoId.uuid.toString}', '#${filename.value}', 'http://', '#$checksum', 20, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '#$customJson', 'Managed')"
 
     for {
       _ <- db.run(insertQ)

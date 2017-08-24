@@ -13,15 +13,15 @@ import akka.util.ByteString
 import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.reposerver.http.Errors
-import com.advancedtelematic.tuf.reposerver.target_store.TargetStore.{TargetBytes, TargetRetrieveResult, TargetStoreResult}
+import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{TargetBytes, TargetRetrieveResult, TargetStoreResult}
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
 
-object LocalTargetStore {
+object LocalTargetStoreEngine {
   private val _log = LoggerFactory.getLogger(this.getClass)
 
-  def apply(root: String)(implicit system: ActorSystem, mat: Materializer): LocalTargetStore = {
+  def apply(root: String)(implicit system: ActorSystem, mat: Materializer): LocalTargetStoreEngine = {
     val f = new File(root)
     if(!f.exists() && !f.getParentFile.canWrite) {
       throw new IllegalArgumentException(s"Could not open $root as local target store")
@@ -31,11 +31,11 @@ object LocalTargetStore {
     }
 
     _log.info(s"local fs blob store set to $root")
-    new LocalTargetStore(f)
+    new LocalTargetStoreEngine(f)
   }
 }
 
-class LocalTargetStore(root: File)(implicit val system: ActorSystem, val mat: Materializer) extends TargetStore {
+class LocalTargetStoreEngine(root: File)(implicit val system: ActorSystem, val mat: Materializer) extends TargetStoreEngine {
   import system.dispatcher
 
   val log = LoggerFactory.getLogger(this.getClass)

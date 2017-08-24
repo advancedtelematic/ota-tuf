@@ -1,75 +1,103 @@
 package com.advancedtelematic.tuf.reposerver.target_store
 
-import java.nio.file.{Path, Paths}
+import java.time.Instant
 
-import akka.Done
+import cats.implicits._
 import akka.actor.ActorSystem
-import akka.http.scaladsl.model.Uri
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.headers.Location
+import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
-import akka.stream.scaladsl.{Keep, Sink, Source}
+import akka.stream.scaladsl.Source
 import akka.util.ByteString
+import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
-import com.advancedtelematic.libtuf.crypt.Sha256Digest
-import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId}
-import com.advancedtelematic.tuf.reposerver.target_store.TargetStore.{TargetRetrieveResult, TargetStoreResult}
+import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
+import com.advancedtelematic.libtuf.data.TufDataType.RepoId
+import com.advancedtelematic.libtuf.keyserver.KeyserverClient
+import com.advancedtelematic.tuf.reposerver.data.Messages.PackageStorageUsage
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
+import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport
+import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{TargetBytes, TargetRedirect}
 import org.slf4j.LoggerFactory
-
-import scala.concurrent.Future
-import scala.util.{Failure, Success, Try}
-
+import slick.jdbc.MySQLProfile.api.Database
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.StorageMethod._
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.control.NoStackTrace
 
 object TargetStore {
-  case class TargetStoreResult(uri: Uri, checksum: Checksum, size: Long)
-
-  sealed trait TargetRetrieveResult
-  case class TargetRedirect(uri: Uri) extends TargetRetrieveResult
-  case class TargetBytes(bytes: Source[ByteString, Future[Done]], size: Long) extends TargetRetrieveResult
+  def apply(roleKeyStore: KeyserverClient,
+            targetStoreEngine: TargetStoreEngine,
+            messageBusPublisher: MessageBusPublisher)
+           (implicit db: Database, ec: ExecutionContext, system: ActorSystem, mat: Materializer): TargetStore = {
+    val _http = Http()
+    new TargetStore(roleKeyStore, targetStoreEngine, req => _http.singleRequest(req), messageBusPublisher)
+  }
 }
 
+class TargetStore(roleKeyStore: KeyserverClient,
+                  engine: TargetStoreEngine,
+                  httpClient: HttpRequest => Future[HttpResponse],
+                  messageBusPublisher: MessageBusPublisher)
+                 (implicit val db: Database, val ec: ExecutionContext)
+  extends TargetItemRepositorySupport {
 
-trait TargetStore {
   private val _log = LoggerFactory.getLogger(this.getClass)
 
-  def store(repoId: RepoId, filename: TargetFilename, fileData: Source[ByteString, Any]): Future[TargetStoreResult]
+  case class DownloadError(msg: String) extends Exception(msg) with NoStackTrace
 
-  def retrieve(repoId: RepoId, filename: TargetFilename): Future[TargetRetrieveResult]
+  def publishUploadMessages(repoId: RepoId): Future[Unit] = {
+    val f = for {
+      (namespace, usage) <- targetItemRepo.usage(repoId)
+      _ <- messageBusPublisher.publish(PackageStorageUsage(namespace.get, Instant.now, usage))
+    } yield ()
 
-  protected def write(fileData: Source[ByteString, Any],
-                      writeSink: Sink[ByteString, Future[(Uri, Long)]])
-                     (implicit system: ActorSystem, mat: Materializer): Future[TargetStoreResult] = {
-    implicit val ec = system.dispatcher
-    val digestCalculator = Sha256Digest.asSink
-
-    val (digestF, resultF) = fileData
-      .alsoToMat(digestCalculator)(Keep.right)
-      .toMat(writeSink)(Keep.both)
-      .run()
-
-    val writeAsync = for {
-      digest <- digestF
-      (uri, sizeBytes) <- resultF
-    } yield TargetStoreResult(uri, digest, sizeBytes)
-
-    writeAsync.andThen(logResult)
+    f.handleError { ex =>
+      _log.warn("Could not publish bus message", ex)
+    }
   }
 
-  private val logResult: PartialFunction[Try[TargetStoreResult], Unit] = {
-    case Success(packageStoreResult) =>
-      _log.debug(s"Package $packageStoreResult uploaded")
-    case Failure(t) =>
-      _log.error(s"Failed to write package", t)
+  def store(repoId: RepoId, targetFile: TargetFilename, fileData: Source[ByteString, Any], custom: TargetCustom): Future[TargetItem] = {
+    for {
+      storeResult <- engine.store(repoId, targetFile, fileData)
+      _ <- publishUploadMessages(repoId)
+    } yield TargetItem(repoId, targetFile, storeResult.uri, storeResult.checksum, storeResult.size, Some(custom))
   }
 
-  protected def storageFilename(repoId: RepoId, targetFilename: TargetFilename): Path = {
-    val prefixHash = Sha256Digest.digest(repoId.uuid.toString.getBytes).hash.value
+  def storeFromUri(repoId: RepoId, targetFile: TargetFilename, fileUri: Uri, custom: TargetCustom): Future[TargetItem] = {
+    httpClient(HttpRequest(uri = fileUri)).flatMap { response =>
+      response.status match {
+        case StatusCodes.OK => store(repoId, targetFile, response.entity.dataBytes, custom)
+        case _ => Future.failed(DownloadError("Unable to download file " + fileUri.toString))
+      }
+    }
+  }
 
-    val fileNameHash = Sha256Digest.digest(targetFilename.value.getBytes).hash.value
+  def retrieve(repoId: RepoId, targetFilename: TargetFilename): Future[HttpResponse] = {
+    targetItemRepo.findByFilename(repoId, targetFilename).flatMap { item =>
+      item.storageMethod match {
+        case Managed =>
+          retrieveFromManaged(repoId, targetFilename)
+        case Unmanaged =>
+          redirectToUnmanaged(item)
+      }
+    }
+  }
 
-    val (prefix, dir) = fileNameHash.splitAt(2)
+  private def redirectToUnmanaged(item: TargetItem): Future[HttpResponse] = FastFuture.successful {
+    HttpResponse(StatusCodes.Found, List(Location(item.uri)))
+  }
 
-    Paths.get(prefixHash, prefix, dir)
+  private def retrieveFromManaged(repoId: RepoId, targetFilename: TargetFilename): Future[HttpResponse] = {
+    // TODO: Publish usage/inflight https://advancedtelematic.atlassian.net/browse/PRO-2803
+    engine.retrieve(repoId, targetFilename).map {
+      case TargetBytes(bytes, size) =>
+        val entity = HttpEntity(MediaTypes.`application/octet-stream`, size, bytes)
+        HttpResponse(StatusCodes.OK, entity = entity)
+
+      case TargetRedirect(uri) =>
+        HttpResponse(StatusCodes.Found, List(Location(uri)))
+    }
   }
 }
-
-
-
