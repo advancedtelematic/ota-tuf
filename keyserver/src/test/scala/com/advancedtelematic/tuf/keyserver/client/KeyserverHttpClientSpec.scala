@@ -2,7 +2,7 @@ package com.advancedtelematic.tuf.keyserver.client
 
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, RepoId, RoleType}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RepoId, RoleType, TufPrivateKey}
 import com.advancedtelematic.libtuf.keyserver.KeyserverHttpClient
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 import com.advancedtelematic.tuf.util.{HttpClientSpecSupport, ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
@@ -79,5 +79,17 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
     } yield updated
 
     f.futureValue shouldBe (())
+  }
+
+  test("deletes a key") {
+    val repoId = RepoId.generate()
+
+    val f = for {
+      _ <- createAndProcessRoot(repoId)
+      signed <- client.fetchRootRole(repoId)
+      deleted <- client.deletePrivateKey(repoId, signed.signed.keys.keys.head)
+    } yield deleted
+
+    f.futureValue shouldBe a[EdTufPrivateKey]
   }
 }

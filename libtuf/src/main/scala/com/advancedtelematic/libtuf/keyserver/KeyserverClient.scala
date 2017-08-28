@@ -13,7 +13,7 @@ import com.advancedtelematic.libats.http.ErrorCode
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RepoId, RsaKeyType, SignedPayload, TufKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType._
 import io.circe.{Decoder, Encoder, Json}
 
@@ -37,6 +37,8 @@ trait KeyserverClient {
   def fetchUnsignedRoot(repoId: RepoId): Future[RootRole]
 
   def updateRoot(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit]
+
+  def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey]
 }
 
 object KeyserverHttpClient {
@@ -122,5 +124,10 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
     val entity = HttpEntity(ContentTypes.`application/json`, signedPayload.asJson.noSpaces)
     val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show / "unsigned")).withEntity(entity)
     execHttp[Unit](req)()
+  }
+
+  override def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey] = {
+    val req = HttpRequest(HttpMethods.DELETE, uri = apiUri(Path("root") / repoId.show / "private_keys" / keyId.value))
+    execHttp[TufPrivateKey](req)()
   }
 }

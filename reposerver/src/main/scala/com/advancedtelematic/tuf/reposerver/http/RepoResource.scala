@@ -148,12 +148,17 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
 
   private def modifyRepoRoutes(repoId: RepoId)  =
     namespaceValidation(repoId) { namespace =>
-      path("root") {
-        get {
-          complete(keyserverClient.fetchUnsignedRoot(repoId))
+      pathPrefix("root") {
+        pathEnd {
+          get {
+            complete(keyserverClient.fetchUnsignedRoot(repoId))
+          } ~
+          (post & entity(as[SignedPayload[RootRole]])) { signedPayload =>
+            complete(keyserverClient.updateRoot(repoId, signedPayload))
+          }
         } ~
-        (post & entity(as[SignedPayload[RootRole]])) { signedPayload =>
-          complete(keyserverClient.updateRoot(repoId, signedPayload))
+        (path("private_keys" / KeyIdPath) & delete) { keyId =>
+          complete(keyserverClient.deletePrivateKey(repoId, keyId))
         }
       } ~
       (get & path(RoleType.JsonRoleTypeMetaPath)) { roleType =>

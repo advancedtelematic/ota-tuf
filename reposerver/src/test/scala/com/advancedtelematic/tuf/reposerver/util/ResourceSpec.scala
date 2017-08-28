@@ -122,6 +122,12 @@ object FakeKeyserverClient extends KeyserverClient {
       signedPayload.signed
     })
   }
+
+  override def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey] = FastFuture.successful {
+    val k = keys.remove(repoId)
+    assert(k != null, "fake keyserver, Key does not exist")
+    RSATufPrivateKey(k.getPrivate)
+  }
 }
 
 trait LongHttpRequest {
