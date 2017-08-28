@@ -2,51 +2,32 @@ package com.advancedtelematic.tuf.reposerver.db
 
 import java.time.Instant
 
-import akka.{Done, NotUsed}
-import akka.stream.scaladsl.{Flow, Sink, Source}
-import com.advancedtelematic.libats.http.BootApp
-import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
-import com.advancedtelematic.libats.slick.codecs.SlickRefined
-import com.advancedtelematic.libats.slick.db.{DatabaseConfig, SlickCirceMapper, SlickExtensions, SlickUUIDKey}
-import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
-import com.advancedtelematic.libtuf.data.TufDataType.RepoId
-import com.advancedtelematic.tuf.reposerver.Settings
-import io.circe.Json
-import slick.jdbc.GetResult
-import slick.jdbc.MySQLProfile.api._
-import com.advancedtelematic.libats.messaging_datatype.DataType._
-import eu.timepit.refined.api.Refined
-
-import scala.concurrent.{Await, ExecutionContext, Future}
-import Schema._
 import akka.actor.ActorSystem
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.{Flow, Sink, Source}
+import akka.{Done, NotUsed}
+import com.advancedtelematic.libats.messaging_datatype.DataType.{TargetFilename, _}
+import com.advancedtelematic.libats.slick.codecs.SlickRefined
 import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
+import com.advancedtelematic.libats.slick.db._
 import com.advancedtelematic.libtuf.data.ClientCodecs
+import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
+import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.libtuf.data.TufSlickMappings._
-import com.advancedtelematic.libtuf.keyserver.{KeyserverClient, KeyserverHttpClient}
+import com.advancedtelematic.libtuf.keyserver.KeyserverClient
+import com.advancedtelematic.tuf.reposerver.db.Schema.targetItems
 import com.advancedtelematic.tuf.reposerver.http.SignedRoleGeneration
+import eu.timepit.refined.api.Refined
+import io.circe.Json
 import org.slf4j.LoggerFactory
+import slick.jdbc.GetResult
+import slick.jdbc.MySQLProfile.api._
 
-import scala.concurrent.duration.Duration
+import scala.concurrent.{ExecutionContext, Future}
 
 
-
-object AnyvalCodecMigrationApp extends BootApp with DatabaseConfig with Settings {
-  override lazy val projectName = "tuf-reposerver-migration"
-
-  implicit val _db = db
-
-  lazy val keyStoreClient = KeyserverHttpClient(keyServerUri)
-
-  Await.result(new AnyvalCodecMigration(keyStoreClient).run, Duration.Inf)
-
-  log.info("Migration finished")
-
-  system.terminate()
-}
 
 
 class AnyvalCodecMigration(keystoreClient: KeyserverClient)(implicit db: Database, ec: ExecutionContext, actorSystem: ActorSystem, materializer: ActorMaterializer) {
