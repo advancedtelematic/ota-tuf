@@ -30,8 +30,6 @@ class RootRoleResource(vaultClient: VaultClient)
   val rootRoleKeyEdit = new RootRoleKeyEdit(vaultClient)
   val roleSigning = new RoleSigning(vaultClient)
 
-  val KeyIdPath = Segment.flatMap(_.refineTry[ValidKeyId].toOption)
-
   val route =
     pathPrefix("root" / RepoId.Path) { repoId =>
       pathEnd {

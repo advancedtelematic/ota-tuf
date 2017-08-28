@@ -16,6 +16,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMe
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.Encoder
 import TufCrypto.PublicKeyOps
+import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 
 import scala.util.Try
 
@@ -36,11 +37,11 @@ object TufDataType {
   case class TargetVersion(value: String) extends AnyVal
 
   case class Checksum(method: HashMethod, hash: Refined[String, ValidChecksum])
-
   case class ValidKeyId()
   type KeyId = Refined[String, ValidKeyId]
   implicit val validKeyId: Validate.Plain[String, ValidKeyId] =
     ValidationUtils.validHexValidation(ValidKeyId(), length = 64)
+  val KeyIdPath = PathMatchers.Segment.flatMap(_.refineTry[ValidKeyId].toOption)
 
   case class ValidSignature()
   case class Signature(sig: Refined[String, ValidSignature], method: SignatureMethod = SignatureMethod.RSASSA_PSS)

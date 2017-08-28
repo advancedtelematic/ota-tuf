@@ -2,6 +2,7 @@ package com.advancedtelematic.tuf.reposerver.http
 
 import akka.http.scaladsl.unmarshalling._
 import PredefinedFromStringUnmarshallers.CsvSeq
+import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.libats.data.RefinedUtils._
@@ -20,7 +21,7 @@ import com.advancedtelematic.tuf.reposerver.db.{RepoNamespaceRepositorySupport, 
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.messaging_datatype.DataType.{TargetFilename, ValidTargetFilename}
-import com.advancedtelematic.libtuf.data.ClientDataType.{TargetCustom, TargetsRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
@@ -41,6 +42,8 @@ import org.slf4j.LoggerFactory
 
 import scala.collection.immutable
 import com.advancedtelematic.tuf.reposerver.Settings
+
+import scala.io.Source
 
 class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: NamespaceValidation,
                    targetStore: TargetStore, messageBusPublisher: MessageBusPublisher)
@@ -145,6 +148,19 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
 
   private def modifyRepoRoutes(repoId: RepoId)  =
     namespaceValidation(repoId) { namespace =>
+      pathPrefix("root") {
+        pathEnd {
+          get {
+            complete(keyserverClient.fetchUnsignedRoot(repoId))
+          } ~
+          (post & entity(as[SignedPayload[RootRole]])) { signedPayload =>
+            complete(keyserverClient.updateRoot(repoId, signedPayload))
+          }
+        } ~
+        (path("private_keys" / KeyIdPath) & delete) { keyId =>
+          complete(keyserverClient.deletePrivateKey(repoId, keyId))
+        }
+      } ~
       (get & path(RoleType.JsonRoleTypeMetaPath)) { roleType =>
         findRole(repoId, roleType)
       } ~
