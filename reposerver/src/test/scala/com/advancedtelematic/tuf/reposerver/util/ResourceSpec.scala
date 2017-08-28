@@ -37,6 +37,8 @@ import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStoreEngine
 
 object FakeKeyserverClient extends KeyserverClient {
 
+  import scala.concurrent.ExecutionContext.Implicits.global
+
   private val keys = new ConcurrentHashMap[RepoId, KeyPair]()
 
   private val rootRoles = new ConcurrentHashMap[RepoId, RootRole]()
@@ -110,6 +112,15 @@ object FakeKeyserverClient extends KeyserverClient {
 
       FastFuture.successful(())
     }
+  }
+
+  override def fetchUnsignedRoot(repoId: RepoId): Future[RootRole] = fetchRootRole(repoId).map(_.signed)
+
+  override def updateRoot(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = FastFuture.successful {
+    rootRoles.computeIfPresent(repoId, (t: RepoId, u: RootRole) => {
+      assert(u != null, "fake keyserver, Role does not exist")
+      signedPayload.signed
+    })
   }
 }
 

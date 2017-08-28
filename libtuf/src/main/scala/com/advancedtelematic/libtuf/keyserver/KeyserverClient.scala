@@ -33,6 +33,10 @@ trait KeyserverClient {
   def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]]
 
   def addTargetKey(repoId: RepoId, key: TufKey): Future[Unit]
+
+  def fetchUnsignedRoot(repoId: RepoId): Future[RootRole]
+
+  def updateRoot(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit]
 }
 
 object KeyserverHttpClient {
@@ -107,5 +111,16 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
 
         failureF.transform { t => r.discardEntityBytes() ; t }
     }
+  }
+
+  override def fetchUnsignedRoot(repoId: RepoId): Future[RootRole] = {
+    val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("root") / repoId.show / "unsigned"))
+    execHttp[RootRole](req)()
+  }
+
+  override def updateRoot(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = {
+    val entity = HttpEntity(ContentTypes.`application/json`, signedPayload.asJson.noSpaces)
+    val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show / "unsigned")).withEntity(entity)
+    execHttp[Unit](req)()
   }
 }
