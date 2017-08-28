@@ -60,7 +60,7 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
     val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show), entity = entity)
 
     execHttp[Json](req) {
-      case response if response.status == StatusCodes.Conflict =>
+      case StatusCodes.Conflict =>
         Future.failed(RootRoleConflict)
     }
   }
@@ -76,7 +76,7 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
     val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("root") / repoId.show))
 
     execHttp[SignedPayload[RootRole]](req) {
-      case response if response.status == StatusCodes.NotFound =>
+      case StatusCodes.NotFound =>
         Future.failed(RootRoleNotFound)
     }
   }
@@ -87,21 +87,25 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
     execHttp[Unit](req)()
   }
 
-  private implicit val unitFromEntityUnmarshaller: FromEntityUnmarshaller[Unit] = Unmarshaller.strict(_ => ())
+  private implicit val unitFromEntityUnmarshaller: FromEntityUnmarshaller[Unit] = Unmarshaller.strict(_.discardBytes())
 
-  private def defaultErrorHandler[T](): PartialFunction[HttpResponse, Future[T]] = PartialFunction.empty
+  private def defaultErrorHandler[T](): PartialFunction[StatusCode, Future[T]] = PartialFunction.empty
 
   private def execHttp[T : ClassTag](request: HttpRequest)
-                                    (errorHandler: PartialFunction[HttpResponse, Future[T]] = defaultErrorHandler())
+                                    (errorHandler: PartialFunction[StatusCode, Future[T]] = defaultErrorHandler())
                                     (implicit um: FromEntityUnmarshaller[T]): Future[T] = {
     httpClient(request).flatMap {
       case r @ HttpResponse(status, _, _, _) if status.isSuccess() =>
         um(r.entity)
       case r =>
-        if(errorHandler.isDefinedAt(r))
-          errorHandler(r)
-        else
-          FastFuture.failed(KeyserverError(s"Unexpected response from Keyserver: $r"))
+        val failureF = {
+          if (errorHandler.isDefinedAt(r.status))
+            errorHandler(r.status)
+          else
+            FastFuture.failed(KeyserverError(s"Unexpected response from Keyserver: $r"))
+        }
+
+        failureF.transform { t => r.discardEntityBytes() ; t }
     }
   }
 }
