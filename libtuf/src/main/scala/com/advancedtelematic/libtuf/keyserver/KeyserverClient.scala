@@ -1,12 +1,9 @@
 package com.advancedtelematic.libtuf.keyserver
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.model.Uri.Path.{Empty, Slash}
 import akka.http.scaladsl.model.{StatusCodes, _}
-import akka.http.scaladsl.unmarshalling.{FromEntityUnmarshaller, Unmarshaller}
-import akka.http.scaladsl.util.FastFuture
 import akka.stream.ActorMaterializer
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libats.http.ErrorCode
@@ -18,9 +15,9 @@ import com.advancedtelematic.libtuf.data.TufDataType.RoleType._
 import io.circe.{Decoder, Encoder, Json}
 
 import scala.concurrent.Future
-import scala.reflect.ClassTag
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.http.{ServiceHttpClient, ServiceHttpClientSupport}
 
 trait KeyserverClient {
   val RootRoleNotFound = RawError(ErrorCode("root_role_not_found"), StatusCodes.FailedDependency, "root role was not found in upstream key store")
@@ -41,41 +38,32 @@ trait KeyserverClient {
   def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey]
 }
 
-object KeyserverHttpClient {
-
-  def apply(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer): KeyserverHttpClient = {
-    val _http = Http()
-    new KeyserverHttpClient(uri, req => _http.singleRequest(req))
-  }
+object KeyserverHttpClient extends ServiceHttpClientSupport {
+  def apply(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer): KeyserverHttpClient =
+    new KeyserverHttpClient(uri, defaultHttpClient)
 }
 
 class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResponse])
-                         (implicit system: ActorSystem, mat: ActorMaterializer) extends KeyserverClient {
+                         (implicit system: ActorSystem, mat: ActorMaterializer) extends ServiceHttpClient(uri, httpClient) with KeyserverClient {
   import io.circe.syntax._
-  import system.dispatcher
-
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
   private def apiUri(path: Path) =
     uri.withPath(Empty / "api" / "v1" ++ Slash(path))
 
-  private def KeyserverError(msg: String) = RawError(ErrorCode("keyserver_remote_error"), StatusCodes.BadGateway, msg)
-
   override def createRoot(repoId: RepoId, keyType: KeyType): Future[Json] = {
-    val entity = HttpEntity(ContentTypes.`application/json`, Json.obj("threshold" -> 1.asJson, "keyType" -> keyType.asJson).noSpaces)
-    val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show), entity = entity)
+    val entity = Json.obj("threshold" -> 1.asJson, "keyType" -> keyType.asJson)
+    val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show))
 
-    execHttp[Json](req) {
+    execJsonHttp[Json, Json](req, entity) {
       case StatusCodes.Conflict =>
         Future.failed(RootRoleConflict)
     }
   }
 
   override def sign[T : Decoder : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]] = {
-    val entity = HttpEntity(ContentTypes.`application/json`, payload.asJson.noSpaces)
-    val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show / roleType.show), entity = entity)
-
-    execHttp[SignedPayload[T]](req)()
+    val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show / roleType.show))
+    execJsonHttp[SignedPayload[T], T](req, payload)()
   }
 
   override def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]] = {
@@ -88,31 +76,8 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
   }
 
   override def addTargetKey(repoId: RepoId, key: TufKey): Future[Unit] = {
-    val entity = HttpEntity(ContentTypes.`application/json`, key.asJson.noSpaces)
-    val req = HttpRequest(HttpMethods.PUT, uri = apiUri(Path("root") / repoId.show / "keys" / "targets")).withEntity(entity)
-    execHttp[Unit](req)()
-  }
-
-  private implicit val unitFromEntityUnmarshaller: FromEntityUnmarshaller[Unit] = Unmarshaller.strict(_.discardBytes())
-
-  private def defaultErrorHandler[T](): PartialFunction[StatusCode, Future[T]] = PartialFunction.empty
-
-  private def execHttp[T : ClassTag](request: HttpRequest)
-                                    (errorHandler: PartialFunction[StatusCode, Future[T]] = defaultErrorHandler())
-                                    (implicit um: FromEntityUnmarshaller[T]): Future[T] = {
-    httpClient(request).flatMap {
-      case r @ HttpResponse(status, _, _, _) if status.isSuccess() =>
-        um(r.entity)
-      case r =>
-        val failureF = {
-          if (errorHandler.isDefinedAt(r.status))
-            errorHandler(r.status)
-          else
-            FastFuture.failed(KeyserverError(s"Unexpected response from Keyserver: $r"))
-        }
-
-        failureF.transform { t => r.discardEntityBytes() ; t }
-    }
+    val req = HttpRequest(HttpMethods.PUT, uri = apiUri(Path("root") / repoId.show / "keys" / "targets"))
+    execJsonHttp[Unit, TufKey](req, key)()
   }
 
   override def fetchUnsignedRoot(repoId: RepoId): Future[RootRole] = {
@@ -121,9 +86,8 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
   }
 
   override def updateRoot(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = {
-    val entity = HttpEntity(ContentTypes.`application/json`, signedPayload.asJson.noSpaces)
-    val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show / "unsigned")).withEntity(entity)
-    execHttp[Unit](req)()
+    val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show / "unsigned"))
+    execJsonHttp[Unit, SignedPayload[RootRole]](req, signedPayload)()
   }
 
   override def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey] = {
