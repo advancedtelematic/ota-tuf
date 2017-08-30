@@ -8,19 +8,17 @@ import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity}
-import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
-import scala.concurrent.ExecutionContext
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
+import slick.jdbc.MySQLProfile.api._
+import scala.concurrent.{ExecutionContext, Future}
 
 trait DatabaseSupport {
   implicit val ec: ExecutionContext
   implicit val db: Database
 }
-
-import scala.concurrent.{ExecutionContext, Future}
 
 trait KeyGenRequestSupport extends DatabaseSupport {
   lazy val keyGenRepo = new KeyGenRequestRepository()
@@ -192,6 +190,41 @@ protected[db] class SignedRootRoleRepository()(implicit db: Database, ec: Execut
       .insertOrUpdate((repoId, expires, signedPayload.signed.version, signedPayload))
 
     db.run(io).map(_ => ())
+  }
+
+  def storeKeys(repoId: RepoId, rootRole: RootRole): Future[Unit] = {
+    val roles:DBIO[Map[RoleType, RoleId]] =
+      Schema.roles
+        .filter(_.repoId === repoId)
+        .map(role => role.roleType -> role.id)
+        .result
+        .map(_.toMap)
+
+    def clean(roleIds: Set[RoleId]): DBIO[Unit] =
+      Schema.keys
+        .filter(_.roleId.inSet(roleIds))
+        .delete
+        .map(_ => ())
+
+    def addKeys(roleMap: Map[RoleType, RoleId]): DBIO[Unit] = {
+      val newKeys: Seq[Key] = roleMap.flatMap { case (roleType, roleId) =>
+        rootRole.roles(roleType).keyids.map { keyid =>
+          val tuf = rootRole.keys(keyid)
+          Key(keyid, roleId, tuf.keytype, tuf.keyval)
+        }
+      }.toSeq
+
+      (Schema.keys ++= newKeys)
+        .map(_ => ())
+    }
+
+    val act = for {
+      roleMap <- roles
+      _ <- clean(roleMap.values.toSet)
+      _ <- addKeys(roleMap)
+    } yield ()
+
+    db.run(act.transactionally)
   }
 
   def nextVersion(repoId: RepoId): Future[Int] = db.run {
