@@ -79,7 +79,7 @@ class RootRoleGeneration(vaultClient: VaultClient)
   def storeUserSigned(repoId: RepoId, signed: SignedPayload[RootRole]): Future[ValidatedNel[String, SignedPayload[RootRole]]] = {
     roleSigning.signatureIsValid(repoId, signed).flatMap {
       case Valid(_) =>
-        persistSigned(repoId)(signed).map(Valid(_))
+        signedRootRoleRepo.storeKeys(repoId, signed.signed).flatMap(_ => persistSigned(repoId)(signed).map(Valid(_)))
       case r@Invalid(_) =>
         FastFuture.successful(r)
     }

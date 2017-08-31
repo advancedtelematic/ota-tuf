@@ -19,7 +19,7 @@ import org.scalatest.concurrent.PatienceConfiguration
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{RSATufPrivateKey, TufPrivateKey}
-import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
+import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKeyNotFound
@@ -372,6 +372,35 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
+    }
+  }
+
+  test("POST updates keys when signtaure is valid") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId).futureValue
+
+    val oldRootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[RootRole]
+    }
+    val (newKey, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
+
+    val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
+    val newKeys = (oldRootRole.keys - rootKeyId) + (newKey.id -> newKey)
+    val newRoles = (oldRootRole.roles - RoleType.ROOT) + (RoleType.ROOT -> RoleKeys(Seq(newKey.id), 1))
+    val rootRole = oldRootRole.copy(keys = newKeys, roles = newRoles)
+
+    val signedPayload = clientSignPayload(rootKeyId, rootRole, rootRole)
+
+    Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    val newUnsigned = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val resp = responseAs[RootRole]
+
+      rootRole.copy(version = rootRole.version + 1) shouldBe resp
     }
   }
 
