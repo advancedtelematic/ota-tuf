@@ -232,6 +232,25 @@ class RepoResourceSpec extends TufReposerverSpec
     timestampRole.signatures.head shouldNot be(newTimestampRole.signatures.head)
   }
 
+  test("refreshTimestampRoles() refreshes timestamp.json") {
+    def timestamp = Get(apiUri(s"repo/${repoId.show}/timestamp.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[TimestampRole]].signed.expires
+    }
+
+    val previous = timestamp
+
+    // make sure enough time has passed for the timestamp to be different
+    Thread.sleep(1000)
+
+    val generator = new SignedRoleGeneration(fakeKeyserverClient)
+    generator.refreshTimestampRoles().futureValue should be > 0
+
+    val current = timestamp
+
+    current.isAfter(previous) shouldBe true
+  }
+
   test("GET on a role returns valid json before targets are added") {
     val repoId = RepoId.generate()
 

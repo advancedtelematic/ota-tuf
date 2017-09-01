@@ -2,7 +2,6 @@ package com.advancedtelematic.tuf.reposerver.http
 
 import akka.http.scaladsl.unmarshalling._
 import PredefinedFromStringUnmarshallers.CsvSeq
-import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.libats.data.RefinedUtils._
@@ -42,8 +41,6 @@ import org.slf4j.LoggerFactory
 
 import scala.collection.immutable
 import com.advancedtelematic.tuf.reposerver.Settings
-
-import scala.io.Source
 
 class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: NamespaceValidation,
                    targetStore: TargetStore, messageBusPublisher: MessageBusPublisher)
