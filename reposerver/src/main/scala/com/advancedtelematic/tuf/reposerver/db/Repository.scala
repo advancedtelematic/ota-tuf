@@ -119,6 +119,21 @@ protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: Ex
     DBIO.sequence(signedRoles.map(persistAction)).transactionally
   }
 
+  def update(signedRole: SignedRole): Future[Int] =
+    db.run {
+      signedRoles
+        .filter(_.repoId === signedRole.repoId)
+        .filter(_.roleType === signedRole.roleType)
+        .update(signedRole)
+    }
+
+  def find(roleType: RoleType): Future[Seq[SignedRole]] =
+    db.run {
+      signedRoles
+        .filter(_.roleType === roleType)
+        .result
+    }
+
   def find(repoId: RepoId, roleType: RoleType): Future[SignedRole] =
     db.run {
       signedRoles
@@ -143,7 +158,6 @@ protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: Ex
       case _ => DBIO.successful(())
     }
 }
-
 
 trait RepoNamespaceRepositorySupport extends DatabaseSupport {
   lazy val repoNamespaceRepo = new RepoNamespaceRepository()

@@ -67,7 +67,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
     }
   }
 
-  private def nextVersion(repoId: RepoId, roleType: RoleType): Future[Int] = {
+  private def version(repoId: RepoId, roleType: RoleType): Future[Int] =
     signedRoleRepo
       .find(repoId, roleType)
       .map { signedRole =>
@@ -77,12 +77,14 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
           .hcursor
           .downField("version")
           .as[Int]
-          .getOrElse(0) + 1
+          .getOrElse(0)
       }
       .recover {
-        case SignedRoleNotFound => 1
+        case SignedRoleNotFound => 0
       }
-  }
+
+  private def nextVersion(repoId: RepoId, roleType: RoleType): Future[Int] =
+    version(repoId, roleType).map(_ + 1)
 
   private def genSnapshotRole(root: SignedRole, target: SignedRole, expireAt: Instant, version: Int): SnapshotRole = {
     val meta = List(root.asMetaRole, target.asMetaRole).toMap
@@ -96,6 +98,25 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
 
   private def defaultExpire: Instant =
     Instant.now().plus(31, ChronoUnit.DAYS)
+
+  def refreshTimestampRoles(): Future[Int] = {
+    val seqInt = signedRoleRepo.find(RoleType.SNAPSHOT).flatMap { snapshots =>
+      Future.sequence {
+        snapshots.map { snapshot =>
+          version(snapshot.repoId, RoleType.TIMESTAMP).flatMap { version =>
+            val timestampRole = genTimestampRole(snapshot, defaultExpire, version)
+
+            signRole(snapshot.repoId, RoleType.TIMESTAMP, timestampRole).flatMap { signedTimestamp =>
+              signedRoleRepo.update(signedTimestamp)
+            }
+          }
+        }
+      }
+    }
+
+    seqInt.map(_.sum)
+  }
+
 }
 
 protected class TargetRoleGeneration(roleSigningClient: KeyserverClient)
