@@ -3,6 +3,8 @@
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+import akka.stream.Materializer
+import akka.stream.scaladsl.{Flow, Sink}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
@@ -99,24 +101,21 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
   private def defaultExpire: Instant =
     Instant.now().plus(31, ChronoUnit.DAYS)
 
-  def refreshTimestampRoles(): Future[Int] = {
-    val seqInt = signedRoleRepo.find(RoleType.SNAPSHOT).flatMap { snapshots =>
-      Future.sequence {
-        snapshots.map { snapshot =>
-          version(snapshot.repoId, RoleType.TIMESTAMP).flatMap { version =>
-            val timestampRole = genTimestampRole(snapshot, defaultExpire, version)
+  def refreshTimestampRoles()(implicit mat: Materializer): Future[Int] = {
+    val updateFlow = Flow[SignedRole].mapAsyncUnordered(4) { snapshot =>
+      version(snapshot.repoId, RoleType.TIMESTAMP).flatMap { version =>
+        val timestampRole = genTimestampRole(snapshot, defaultExpire, version)
 
-            signRole(snapshot.repoId, RoleType.TIMESTAMP, timestampRole).flatMap { signedTimestamp =>
-              signedRoleRepo.update(signedTimestamp)
-            }
-          }
+        signRole(snapshot.repoId, RoleType.TIMESTAMP, timestampRole).flatMap { signedTimestamp =>
+          signedRoleRepo.update(signedTimestamp)
         }
       }
     }
 
-    seqInt.map(_.sum)
+    signedRoleRepo.findAll(RoleType.SNAPSHOT)
+      .via(updateFlow)
+      .runWith(Sink.reduce(_ + _))
   }
-
 }
 
 protected class TargetRoleGeneration(roleSigningClient: KeyserverClient)
