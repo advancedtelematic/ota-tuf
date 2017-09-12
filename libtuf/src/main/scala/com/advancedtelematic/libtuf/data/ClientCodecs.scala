@@ -39,7 +39,7 @@ object ClientCodecs {
 
   val targetCustomDerivedDecoder = deriveDecoder[TargetCustom]
 
-  implicit val targetCustomDecoder: Decoder[TargetCustom] =  targetCustomDerivedDecoder or legacyTargetCustomDecoder
+  implicit val targetCustomDecoder: Decoder[TargetCustom] = legacyTargetCustomDecoder or targetCustomDerivedDecoder
   implicit val targetCustomEncoder: Encoder[TargetCustom] = deriveEncoder
 
   implicit val targetsRoleEncoder: Encoder[TargetsRole] = deriveEncoder
