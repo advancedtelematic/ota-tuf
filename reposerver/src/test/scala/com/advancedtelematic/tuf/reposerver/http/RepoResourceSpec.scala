@@ -592,6 +592,37 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
+  test("re-generates snapshot role after storing offline target") {
+    val repoId = addTargetToRepo()
+
+    val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/snapshot.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[SnapshotRole]].signed.version shouldBe 2
+    }
+  }
+
+  test("re-generates timestamp role after storing offline target") {
+    val repoId = addTargetToRepo()
+
+    val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/timestamp.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[TimestampRole]].signed.version shouldBe 2
+    }
+  }
+
+
   test("PUT offline target fails when target does not include custom meta") {
     val repoId = addTargetToRepo()
 
@@ -717,7 +748,7 @@ class RepoResourceSpec extends TufReposerverSpec
 // because MemoryMessageBus maintains queue and supports only single subscriber.
 //
 class RepoResourceTufTargetSpec extends TufReposerverSpec
-    with ResourceSpec  with Inspectors with Whenever with PatienceConfiguration {
+    with ResourceSpec with PatienceConfiguration {
 
   override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
 
