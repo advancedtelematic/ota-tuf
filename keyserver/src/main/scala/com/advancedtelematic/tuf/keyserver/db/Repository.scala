@@ -193,35 +193,33 @@ protected[db] class SignedRootRoleRepository()(implicit db: Database, ec: Execut
   }
 
   def storeKeys(repoId: RepoId, rootRole: RootRole): Future[Unit] = {
-    val roles:DBIO[Map[RoleType, RoleId]] =
+    def cleanKeys(roleIds: Set[RoleId]): DBIO[_] =
+      Schema.keys
+        .filter(_.roleId.inSet(roleIds))
+        .delete
+
+    def addKeys(newRoot: RootRole, existingRoles: Map[RoleType, RoleId]): DBIO[_] = {
+      val newKeys = existingRoles.flatMap { case (roleType, roleId) =>
+        newRoot.roles(roleType).keyids.map { keyid =>
+          val tuf = newRoot.keys(keyid)
+          Key(keyid, roleId, tuf.keytype, tuf.keyval)
+        }
+      }
+
+      Schema.keys ++= newKeys
+    }
+
+    val existingRolesIO: DBIO[Map[RoleType, RoleId]] =
       Schema.roles
         .filter(_.repoId === repoId)
         .map(role => role.roleType -> role.id)
         .result
         .map(_.toMap)
 
-    def clean(roleIds: Set[RoleId]): DBIO[Unit] =
-      Schema.keys
-        .filter(_.roleId.inSet(roleIds))
-        .delete
-        .map(_ => ())
-
-    def addKeys(roleMap: Map[RoleType, RoleId]): DBIO[Unit] = {
-      val newKeys: Seq[Key] = roleMap.flatMap { case (roleType, roleId) =>
-        rootRole.roles(roleType).keyids.map { keyid =>
-          val tuf = rootRole.keys(keyid)
-          Key(keyid, roleId, tuf.keytype, tuf.keyval)
-        }
-      }.toSeq
-
-      (Schema.keys ++= newKeys)
-        .map(_ => ())
-    }
-
     val act = for {
-      roleMap <- roles
-      _ <- clean(roleMap.values.toSet)
-      _ <- addKeys(roleMap)
+      existingRoles <- existingRolesIO
+      _ <- cleanKeys(existingRoles.values.toSet)
+      _ <- addKeys(rootRole, existingRoles)
     } yield ()
 
     db.run(act.transactionally)

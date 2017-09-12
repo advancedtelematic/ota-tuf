@@ -2,8 +2,10 @@ package com.advancedtelematic.tuf.reposerver.db
 
 import java.time.Instant
 
+import akka.NotUsed
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.util.FastFuture
+import akka.stream.scaladsl.Source
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.http.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity, RawError}
@@ -127,11 +129,15 @@ protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: Ex
         .update(signedRole)
     }
 
-  def find(roleType: RoleType): Future[Seq[SignedRole]] =
-    db.run {
-      signedRoles
-        .filter(_.roleType === roleType)
-        .result
+
+
+  def findAll(roleType: RoleType): Source[SignedRole, NotUsed] =
+    Source.fromPublisher {
+      db.stream {
+        signedRoles
+          .filter(_.roleType === roleType)
+          .result
+      }
     }
 
   def find(repoId: RepoId, roleType: RoleType): Future[SignedRole] =
