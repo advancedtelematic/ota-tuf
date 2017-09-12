@@ -101,7 +101,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
   private def defaultExpire: Instant =
     Instant.now().plus(31, ChronoUnit.DAYS)
 
-  def refreshTimestampRoles()(implicit mat: Materializer): Future[Int] = {
+  def refreshAllTimestampRoles()(implicit mat: Materializer): Future[Int] = {
     val updateFlow = Flow[SignedRole].mapAsyncUnordered(4) { snapshot =>
       version(snapshot.repoId, RoleType.TIMESTAMP).flatMap { version =>
         val timestampRole = genTimestampRole(snapshot, defaultExpire, version)

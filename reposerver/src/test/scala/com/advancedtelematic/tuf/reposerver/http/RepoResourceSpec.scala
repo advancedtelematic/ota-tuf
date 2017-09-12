@@ -245,7 +245,7 @@ class RepoResourceSpec extends TufReposerverSpec
     Thread.sleep(1000)
 
     val generator = new SignedRoleGeneration(fakeKeyserverClient)
-    generator.refreshTimestampRoles().futureValue should be > 0
+    generator.refreshAllTimestampRoles().futureValue should be > 0
 
     val current = timestamp
 
