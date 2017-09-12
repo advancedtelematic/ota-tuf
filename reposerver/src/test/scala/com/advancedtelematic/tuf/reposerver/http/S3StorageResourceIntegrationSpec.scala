@@ -3,7 +3,7 @@ package com.advancedtelematic.tuf.reposerver.http
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model.{HttpEntity, Multipart, StatusCodes}
 import akka.util.ByteString
-import com.advancedtelematic.libtuf.data.TufDataType.RepoId
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
 import com.advancedtelematic.tuf.reposerver.target_store.{S3TargetStoreEngine, TargetStore}
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 import org.scalatest.{BeforeAndAfterAll, Inspectors}
@@ -28,7 +28,7 @@ class S3StorageResourceIntegrationSpec extends TufReposerverSpec
     pending // Needs valid s3 credentials to run
 
     val repoId = RepoId.generate()
-    fakeKeyserverClient.generateKey(repoId)
+    fakeKeyserverClient.createRoot(repoId).futureValue
 
     val entity = HttpEntity(ByteString("""
                                          |Like all the men of the Library, in my younger days I traveled;
