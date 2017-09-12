@@ -27,6 +27,8 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
         FastFuture.failed(Errors.RoleKeysNotFound)
       case keys =>
         signAll(payload, keys)
+    }.recoverWith {
+      case VaultClient.VaultKeyNotFound => Future.failed(Errors.PrivateKeysNotFound)
     }
   }
 

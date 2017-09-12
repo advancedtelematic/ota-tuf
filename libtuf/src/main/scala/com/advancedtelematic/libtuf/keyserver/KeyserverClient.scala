@@ -22,6 +22,7 @@ import com.advancedtelematic.libtuf.http.{ServiceHttpClient, ServiceHttpClientSu
 trait KeyserverClient {
   val RootRoleNotFound = RawError(ErrorCode("root_role_not_found"), StatusCodes.FailedDependency, "root role was not found in upstream key store")
   val RootRoleConflict = RawError(ErrorCode("root_role_conflict"), StatusCodes.Conflict, "root role already exists")
+  val RoleKeyNotFound = RawError(ErrorCode("role_key_not_found"), StatusCodes.PreconditionFailed, "can't sign since role was not found in upstream key store")
 
   def createRoot(repoId: RepoId, keyType: KeyType = RsaKeyType): Future[Json]
 
@@ -63,7 +64,10 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
 
   override def sign[T : Decoder : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]] = {
     val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show / roleType.show))
-    execJsonHttp[SignedPayload[T], T](req, payload)()
+    execJsonHttp[SignedPayload[T], T](req, payload) {
+      case StatusCodes.PreconditionFailed =>
+        Future.failed(RoleKeyNotFound)
+    }
   }
 
   override def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]] = {

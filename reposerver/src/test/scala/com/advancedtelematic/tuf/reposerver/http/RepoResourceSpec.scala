@@ -579,6 +579,19 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
+  test("POST /targets fails with 412 with offline targets.json") {
+    val repoId = RepoId.generate()
+    fakeKeyserverClient.createRoot(repoId).futureValue
+
+    val root = fakeKeyserverClient.fetchRootRole(repoId).futureValue
+
+    fakeKeyserverClient.deletePrivateKey(repoId, root.signed.roles(RoleType.TARGETS).keyids.head).futureValue
+
+    Post(apiUri(s"repo/${repoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
+      status shouldBe StatusCodes.PreconditionFailed
+    }
+  }
+
   test("PUT offline target fails when target does not include custom meta") {
     val repoId = addTargetToRepo()
 
