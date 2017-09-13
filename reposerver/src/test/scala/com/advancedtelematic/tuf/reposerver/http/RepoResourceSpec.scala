@@ -30,6 +30,7 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import cats.syntax.either._
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libats.http.Errors.RawError
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.data.Messages.PackageStorageUsage
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem
@@ -61,7 +62,7 @@ class RepoResourceSpec extends TufReposerverSpec
       status shouldBe StatusCodes.OK
 
       val signedPayload = responseAs[SignedPayload[Json]]
-      signaturesShouldBeValid(repoId, signedPayload)
+      signaturesShouldBeValid(repoId, RoleType.TARGETS, signedPayload)
 
       val signed = signedPayload.signed
       val targetsRole = signed.as[TargetsRole].valueOr(throw _)
@@ -116,7 +117,7 @@ class RepoResourceSpec extends TufReposerverSpec
         println(responseAs[SignedPayload[Json]].asJson.spaces2)
 
         val signedPayload = responseAs[SignedPayload[Json]]
-        signaturesShouldBeValid(repoId, signedPayload)
+        signaturesShouldBeValid(repoId, roleType, signedPayload)
       }
     }
   }
@@ -126,7 +127,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     Get(apiUri(s"repo/${newRepoId.show}/timestamp.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      signaturesShouldBeValid(newRepoId, responseAs[SignedPayload[TimestampRole]])
+      signaturesShouldBeValid(newRepoId, RoleType.TIMESTAMP, responseAs[SignedPayload[TimestampRole]])
     }
   }
 
@@ -135,7 +136,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     Get(apiUri(s"repo/${newRepoId.show}/snapshot.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      signaturesShouldBeValid(newRepoId, responseAs[SignedPayload[SnapshotRole]])
+      signaturesShouldBeValid(newRepoId, RoleType.SNAPSHOT, responseAs[SignedPayload[SnapshotRole]])
     }
   }
 
@@ -144,7 +145,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     Get(apiUri(s"repo/${newRepoId.show}/targets.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      signaturesShouldBeValid(newRepoId, responseAs[SignedPayload[TargetsRole]])
+      signaturesShouldBeValid(newRepoId, RoleType.TARGETS, responseAs[SignedPayload[TargetsRole]])
     }
   }
 
@@ -153,7 +154,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      signaturesShouldBeValid(newRepoId, responseAs[SignedPayload[RootRole]])
+      signaturesShouldBeValid(newRepoId, RoleType.ROOT, responseAs[SignedPayload[RootRole]])
     }
   }
 
@@ -180,7 +181,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      signaturesShouldBeValid(newRepoId, responseAs[SignedPayload[RootRole]])
+      signaturesShouldBeValid(newRepoId, RoleType.ROOT, responseAs[SignedPayload[RootRole]])
     }
   }
 
@@ -382,7 +383,7 @@ class RepoResourceSpec extends TufReposerverSpec
         status shouldBe StatusCodes.OK
 
         val signedPayload = responseAs[SignedPayload[Json]]
-        signaturesShouldBeValid(newRepoId, signedPayload)
+        signaturesShouldBeValid(newRepoId, RoleType.TARGETS, signedPayload)
       }
     }
   }
@@ -398,14 +399,14 @@ class RepoResourceSpec extends TufReposerverSpec
         status shouldBe StatusCodes.OK
 
         val signedPayload = responseAs[SignedPayload[Json]]
-        signaturesShouldBeValid(newRepoId, signedPayload)
+        signaturesShouldBeValid(newRepoId, RoleType.TARGETS, signedPayload)
       }
 
       Get(apiUri(s"user_repo/root.json"), testFile).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.OK
 
         val signedPayload = responseAs[SignedPayload[RootRole]]
-        signaturesShouldBeValid(newRepoId, signedPayload)
+        signaturesShouldBeValid(newRepoId, RoleType.ROOT, signedPayload)
       }
     }
   }
@@ -550,7 +551,6 @@ class RepoResourceSpec extends TufReposerverSpec
 
   test("accepts an offline signed targets.json") {
     val repoId = addTargetToRepo()
-
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
@@ -576,6 +576,19 @@ class RepoResourceSpec extends TufReposerverSpec
     Get(apiUri(s"repo/${repoId.show}/targets/${offlineTargetFilename.value}")) ~> routes ~> check {
       status shouldBe StatusCodes.Found
       header[Location].map(_.value()) should contain("https://ats.com")
+    }
+  }
+
+  test("POST /targets fails with 412 with offline targets.json") {
+    val repoId = RepoId.generate()
+    fakeKeyserverClient.createRoot(repoId).futureValue
+
+    val root = fakeKeyserverClient.fetchRootRole(repoId).futureValue
+
+    fakeKeyserverClient.deletePrivateKey(repoId, root.signed.roles(RoleType.TARGETS).keyids.head).futureValue
+
+    Post(apiUri(s"repo/${repoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
+      status shouldBe StatusCodes.PreconditionFailed
     }
   }
 
@@ -680,11 +693,11 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
-  def signaturesShouldBeValid[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Assertion = {
+  def signaturesShouldBeValid[T : Encoder](repoId: RepoId, roleType: RoleType, signedPayload: SignedPayload[T]): Assertion = {
     val signature = signedPayload.signatures.head.toSignature
     val signed = signedPayload.signed
 
-    val isValid = TufCrypto.isValid(fakeKeyserverClient.publicKey(repoId), signature, signed.asJson.canonical.getBytes)
+    val isValid = TufCrypto.isValid(fakeKeyserverClient.publicKey(repoId, roleType), signature, signed.asJson.canonical.getBytes)
     isValid shouldBe true
   }
 

@@ -9,6 +9,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
 import io.circe._
+import cats.syntax.either._
 
 object ClientCodecs {
   import TufCodecs._

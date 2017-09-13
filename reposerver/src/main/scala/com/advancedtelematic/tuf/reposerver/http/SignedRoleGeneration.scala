@@ -19,7 +19,7 @@ import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepository.SignedRoleNo
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
-
+import cats.syntax.either._
 
 class SignedRoleGeneration(keyserverClient: KeyserverClient)
                           (implicit val db: Database, val ec: ExecutionContext) extends SignedRoleRepositorySupport {

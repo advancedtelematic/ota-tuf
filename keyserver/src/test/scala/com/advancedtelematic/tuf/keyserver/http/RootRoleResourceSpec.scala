@@ -224,6 +224,26 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
+  test("POST to repoId/roletype return 412 when key is offline") {
+    val repoId = RepoId.generate()
+
+    generateRootRole(repoId).futureValue
+
+    val targetKeyId = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed.roles(RoleType.TARGETS).keyids.head
+    }
+
+    Delete(apiUri(s"root/${repoId.show}/private_keys/${targetKeyId.value}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[TufPrivateKey].keyval shouldBe a[PrivateKey]
+    }
+
+    Post(apiUri(s"root/${repoId.show}/targets"), Json.Null) ~> routes ~> check {
+      status shouldBe StatusCodes.PreconditionFailed
+    }
+  }
+
   test("returns 404 if there are no keys for given repo/roletype") {
     val repoId = RepoId.generate()
 

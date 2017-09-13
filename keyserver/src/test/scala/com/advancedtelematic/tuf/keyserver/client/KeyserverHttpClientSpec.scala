@@ -2,7 +2,7 @@ package com.advancedtelematic.tuf.keyserver.client
 
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RepoId, RoleType, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RepoId, RoleType, SignedPayload, TufPrivateKey}
 import com.advancedtelematic.libtuf.keyserver.KeyserverHttpClient
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 import com.advancedtelematic.tuf.util.{HttpClientSpecSupport, ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
@@ -91,5 +91,29 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
     } yield deleted
 
     f.futureValue shouldBe a[EdTufPrivateKey]
+  }
+
+  test("can sign json") {
+    val repoId = RepoId.generate()
+
+    val f = for {
+      _ <- createAndProcessRoot(repoId)
+      sig <- client.sign(repoId, RoleType.TARGETS, Json.Null)
+    } yield sig
+
+    f.futureValue shouldBe a[SignedPayload[_]]
+  }
+
+  test("signing with removed key produces RoleKeyNotFound error") {
+    val repoId = RepoId.generate()
+
+    val f = for {
+      _ <- createAndProcessRoot(repoId)
+      signed <- client.fetchRootRole(repoId)
+      _ <- client.deletePrivateKey(repoId, signed.signed.roles(RoleType.TARGETS).keyids.head)
+      sig <- client.sign(repoId, RoleType.TARGETS, Json.Null)
+    } yield sig
+
+    f.failed.futureValue shouldBe client.RoleKeyNotFound
   }
 }

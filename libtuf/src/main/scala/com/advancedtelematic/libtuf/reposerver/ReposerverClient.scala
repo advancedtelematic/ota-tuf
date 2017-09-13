@@ -45,6 +45,7 @@ object ReposerverClient {
 trait ReposerverClient {
   protected def ReposerverError(msg: String) = RawError(ErrorCode("reposerver_remote_error"), StatusCodes.BadGateway, msg)
   val RepoConflict   = RawError(ErrorCode("repo_conflict"), StatusCodes.Conflict, "repo already exists")
+  val OfflineKey = RawError(ErrorCode("offline_key"), StatusCodes.PreconditionFailed, "repo is using offline signing, can't add targets online")
 
   def createRoot(namespace: Namespace): Future[RepoId]
 
@@ -96,7 +97,10 @@ class ReposerverHttpClient(reposerverUri: Uri)
       uri = apiUri(Path("user_repo") / "targets" / fileName),
       entity = entity)
 
-    execHttp[NoContent](namespace, req)().map(_ => ())
+    execHttp[NoContent](namespace, req){
+      case resp if resp.status == StatusCodes.PreconditionFailed =>
+        Future.failed(OfflineKey)
+    }.map(_ => ())
   }
 
   private def payloadFrom(uri: Uri, checksum: Checksum, length: Int, name: Option[TargetName],
