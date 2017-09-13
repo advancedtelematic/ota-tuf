@@ -24,13 +24,17 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
                                         (implicit val db: Database, val ec: ExecutionContext)
   extends SignedRoleRepositorySupport with TargetItemRepositorySupport{
 
+  private val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
+
   def store(repoId: RepoId, signedPayload: SignedPayload[TargetsRole]): Future[ValidatedNel[String, SignedPayload[TargetsRole]]] =
     payloadSignatureIsValid(repoId, signedPayload).map { validated =>
       validated.product(payloadTargets(repoId, signedPayload))
     }.flatMap {
       case Valid((_, items)) =>
-        val signedRole = SignedRole.withChecksum(repoId, RoleType.TARGETS, signedPayload, signedPayload.signed.version)
-        signedRoleRepo.storeAll(targetItemRepo)(signedRole, items).map(_ => signedPayload.validNel)
+        val signedTargetRole = SignedRole.withChecksum(repoId, RoleType.TARGETS, signedPayload, signedPayload.signed.version)
+        signedRoleGeneration.regenerateSignedDependent(repoId, signedTargetRole, signedPayload.signed.expires)
+          .flatMap(dependent => signedRoleRepo.storeAll(targetItemRepo)(signedTargetRole :: dependent, items))
+          .map(_ => signedPayload.validNel)
       case i @ Invalid(_) =>
         FastFuture.successful(i)
     }

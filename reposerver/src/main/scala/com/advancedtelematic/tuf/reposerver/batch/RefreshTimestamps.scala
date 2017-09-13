@@ -15,5 +15,5 @@ object RefreshTimestamps extends BootApp with Settings with VersionInfo with Dat
   val keyStoreClient = KeyserverHttpClient(keyServerUri)
   val generator = new SignedRoleGeneration(keyStoreClient)
 
-  Await.result(generator.refreshTimestampRoles(), Duration.Inf)
+  Await.result(generator.refreshAllTimestampRoles(), Duration.Inf)
 }

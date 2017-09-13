@@ -117,7 +117,7 @@ protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: Ex
       .map(_ => signedRole)
   }
 
-  def persistAll(signedRoles: SignedRole*): Future[Seq[SignedRole]] = db.run {
+  def persistAll(signedRoles: List[SignedRole]): Future[Seq[SignedRole]] = db.run {
     DBIO.sequence(signedRoles.map(persistAction)).transactionally
   }
 
@@ -150,8 +150,8 @@ protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: Ex
         .failIfNone(SignedRoleNotFound)
     }
 
-  def storeAll(targetItemRepo: TargetItemRepository)(signedRole: SignedRole, items: Seq[TargetItem]): Future[Unit] = db.run {
-    persistAction(signedRole)
+  def storeAll(targetItemRepo: TargetItemRepository)(signedRoles: List[SignedRole], items: Seq[TargetItem]): Future[Unit] = db.run {
+    DBIO.sequence(signedRoles.map(persistAction))
       .andThen(DBIO.sequence(items.map(targetItemRepo.persistAction)))
       .map(_ => ())
       .transactionally

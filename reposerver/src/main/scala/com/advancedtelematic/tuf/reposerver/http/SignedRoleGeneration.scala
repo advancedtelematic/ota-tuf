@@ -28,26 +28,34 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
 
   def regenerateSignedRoles(repoId: RepoId): Future[SignedPayload[Json]] = {
     async {
-      val expireAt = defaultExpire
+      await(fetchAndCacheRootRole(repoId))
 
-      val signedRoot = await(fetchAndCacheRootRole(repoId))
+      val expireAt = defaultExpire
 
       val targetVersion = await(nextVersion(repoId, RoleType.TARGETS))
       val targetRole = await(targetRoleGeneration.generate(repoId, expireAt, targetVersion))
       val signedTarget = await(signRole(repoId, RoleType.TARGETS, targetRole))
 
-      val snapshotVersion = await(nextVersion(repoId, RoleType.SNAPSHOT))
-      val snapshotRole = genSnapshotRole(signedRoot, signedTarget, expireAt, snapshotVersion)
-      val signedSnapshot = await(signRole(repoId, RoleType.SNAPSHOT, snapshotRole))
+      val dependent = await(regenerateSignedDependent(repoId, signedTarget, expireAt))
 
-      val timestampVersion = await(nextVersion(repoId, RoleType.TIMESTAMP))
-      val timestampRole = genTimestampRole(signedSnapshot, expireAt, timestampVersion)
-      val signedTimestamp = await(signRole(repoId, RoleType.TIMESTAMP, timestampRole))
-
-      await(signedRoleRepo.persistAll(signedTarget, signedSnapshot, signedTimestamp))
+      await(signedRoleRepo.persistAll(signedTarget :: dependent))
 
       signedTarget.content
     }
+  }
+
+  def regenerateSignedDependent(repoId: RepoId, targetRole: SignedRole, expireAt: Instant): Future[List[SignedRole]] = async {
+    val signedRoot = await(fetchAndCacheRootRole(repoId))
+
+    val snapshotVersion = await(nextVersion(repoId, RoleType.SNAPSHOT))
+    val snapshotRole = genSnapshotRole(signedRoot, targetRole, expireAt, snapshotVersion)
+    val signedSnapshot = await(signRole(repoId, RoleType.SNAPSHOT, snapshotRole))
+
+    val timestampVersion = await(nextVersion(repoId, RoleType.TIMESTAMP))
+    val timestampRole = genTimestampRole(signedSnapshot, expireAt, timestampVersion)
+    val signedTimestamp = await(signRole(repoId, RoleType.TIMESTAMP, timestampRole))
+
+    List(signedSnapshot, signedTimestamp)
   }
 
   def addToTarget(targetItem: TargetItem): Future[SignedPayload[Json]] =
@@ -101,7 +109,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
   private def defaultExpire: Instant =
     Instant.now().plus(31, ChronoUnit.DAYS)
 
-  def refreshTimestampRoles()(implicit mat: Materializer): Future[Int] = {
+  def refreshAllTimestampRoles()(implicit mat: Materializer): Future[Int] = {
     val updateFlow = Flow[SignedRole].mapAsyncUnordered(4) { snapshot =>
       version(snapshot.repoId, RoleType.TIMESTAMP).flatMap { version =>
         val timestampRole = genTimestampRole(snapshot, defaultExpire, version)
