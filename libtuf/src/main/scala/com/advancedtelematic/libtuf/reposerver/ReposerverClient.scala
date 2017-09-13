@@ -40,12 +40,14 @@ object ReposerverClient {
                                version: Option[TargetVersion],
                                hardwareIds: Seq[HardwareIdentifier],
                                length: Long)
+
+  val RepoConflict   = RawError(ErrorCode("repo_conflict"), StatusCodes.Conflict, "repo already exists")
+  val OfflineKey = RawError(ErrorCode("offline_key"), StatusCodes.PreconditionFailed, "repo is using offline signing, can't add targets online")
 }
+
 
 trait ReposerverClient {
   protected def ReposerverError(msg: String) = RawError(ErrorCode("reposerver_remote_error"), StatusCodes.BadGateway, msg)
-  val RepoConflict   = RawError(ErrorCode("repo_conflict"), StatusCodes.Conflict, "repo already exists")
-  val OfflineKey = RawError(ErrorCode("offline_key"), StatusCodes.PreconditionFailed, "repo is using offline signing, can't add targets online")
 
   def createRoot(namespace: Namespace): Future[RepoId]
 
@@ -69,6 +71,7 @@ class ReposerverHttpClient(reposerverUri: Uri)
 
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
   import io.circe.syntax._
+  import ReposerverClient._
 
   private def apiUri(path: Path) =
     reposerverUri.withPath(Path("/api") / "v1" ++ Slash(path))
