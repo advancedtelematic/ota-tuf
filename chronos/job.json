@@ -38,5 +38,6 @@
       "value": "$DB_USER"
     }
   ],
+  "shell": false,
   "command": "-main com.advancedtelematic.tuf.reposerver.batch.RefreshTimestamps"
 }
