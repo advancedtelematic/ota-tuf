@@ -55,7 +55,7 @@ abstract class ServiceHttpClient(baseUri: Uri, httpClient: HttpRequest => Future
             FastFuture.failed(RemoteServiceError(s"Unexpected response from remote server: $r"))
         }
 
-        failureF.transform { t => r.discardEntityBytes() ; t }
+        failureF.map { t => r.discardEntityBytes() ; t }.recoverWith { case ex => r.discardEntityBytes(); Future.failed(ex) }
     }
   }
 }
