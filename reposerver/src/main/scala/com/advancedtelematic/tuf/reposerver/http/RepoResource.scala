@@ -127,19 +127,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
 
   private def findRole(repoId: RepoId, roleType: RoleType): Route = {
     complete {
-      val signedRoleFut = roleType match {
-        case RoleType.ROOT =>
-          signedRoleGeneration.fetchAndCacheRootRole(repoId)
-        case _ =>
-          signedRoleRepo.find(repoId, roleType).recoverWith {
-            case notFoundError @ SignedRoleRepository.SignedRoleNotFound =>
-              signedRoleGeneration.regenerateSignedRoles(repoId)
-                .recoverWith { case err => log.warn("Could not generate signed roles", err) ; FastFuture.failed(notFoundError) }
-                .flatMap(_ => signedRoleRepo.find(repoId, roleType))
-          }
-      }
-
-      signedRoleFut.map(_.content)
+      signedRoleGeneration.findRole(repoId, roleType).map(_.content)
     }
   }
 

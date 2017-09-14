@@ -1,5 +1,7 @@
 package com.advancedtelematic.tuf.reposerver.data
 
+import java.time.Instant
+
 import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
 import com.advancedtelematic.libats.slick.codecs.SlickEnum
@@ -21,7 +23,7 @@ object RepositoryDataType {
 
   case class TargetItem(repoId: RepoId, filename: TargetFilename, uri: Uri, checksum: Checksum, length: Long, custom: Option[TargetCustom] = None, storageMethod: StorageMethod = Managed)
 
-  case class SignedRole(repoId: RepoId, roleType: RoleType, content: SignedPayload[Json], checksum: Checksum, length: Long, version: Int)
+  case class SignedRole(repoId: RepoId, roleType: RoleType, content: SignedPayload[Json], checksum: Checksum, length: Long, version: Int, expireAt: Instant)
 
   implicit class SignedRoleMetaItemOps(signedRole: SignedRole) {
     def asMetaRole: (MetaPath, MetaItem) = {
@@ -31,10 +33,10 @@ object RepositoryDataType {
   }
 
   object SignedRole {
-    def withChecksum[T : Encoder](repoId: RepoId, roleType: RoleType, content: SignedPayload[T], version: Int): SignedRole = {
+    def withChecksum[T : Encoder](repoId: RepoId, roleType: RoleType, content: SignedPayload[T], version: Int, expireAt: Instant): SignedRole = {
       val canonicalJson = content.asJson.canonical
       val checksum = Sha256Digest.digest(canonicalJson.getBytes)
-      SignedRole(repoId, roleType, SignedPayload(content.signatures, content.signed.asJson), checksum, canonicalJson.length, version)
+      SignedRole(repoId, roleType, SignedPayload(content.signatures, content.signed.asJson), checksum, canonicalJson.length, version, expireAt: Instant)
     }
   }
 }

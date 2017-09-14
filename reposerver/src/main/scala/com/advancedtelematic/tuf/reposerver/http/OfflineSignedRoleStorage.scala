@@ -31,7 +31,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
       validated.product(payloadTargets(repoId, signedPayload))
     }.flatMap {
       case Valid((_, items)) =>
-        val signedTargetRole = SignedRole.withChecksum(repoId, RoleType.TARGETS, signedPayload, signedPayload.signed.version)
+        val signedTargetRole = SignedRole.withChecksum(repoId, RoleType.TARGETS, signedPayload, signedPayload.signed.version, signedPayload.signed.expires)
         signedRoleGeneration.regenerateSignedDependent(repoId, signedTargetRole, signedPayload.signed.expires)
           .flatMap(dependent => signedRoleRepo.storeAll(targetItemRepo)(signedTargetRole :: dependent, items))
           .map(_ => signedPayload.validNel)
