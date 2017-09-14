@@ -55,6 +55,7 @@ object ClientDataType {
 
   sealed trait VersionedRole {
     val version: Int
+    val expires: Instant
 
     def roleType: RoleType = this match {
       case _: TargetsRole => RoleType.TARGETS

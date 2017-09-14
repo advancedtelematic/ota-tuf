@@ -34,14 +34,20 @@ import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.data.Messages.PackageStorageUsage
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
 import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
+import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
 
 import scala.concurrent.Future
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 import eu.timepit.refined.api.Refined
 
+import scala.concurrent.ExecutionContext.Implicits
+
 class RepoResourceSpec extends TufReposerverSpec
-  with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration {
+  with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration with SignedRoleRepositorySupport {
+
+  implicit val ec = Implicits.global
 
   val repoId = RepoId.generate()
 
@@ -233,23 +239,22 @@ class RepoResourceSpec extends TufReposerverSpec
     timestampRole.signatures.head shouldNot be(newTimestampRole.signatures.head)
   }
 
-  test("refreshTimestampRoles() refreshes timestamp.json") {
-    def timestamp = Get(apiUri(s"repo/${repoId.show}/timestamp.json")) ~> routes ~> check {
+  test("timestamp.json is refreshed if expired") {
+    val role = Get(apiUri(s"repo/${repoId.show}/timestamp.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[SignedPayload[TimestampRole]].signed.expires
+      responseAs[SignedPayload[TimestampRole]]
     }
 
-    val previous = timestamp
+    val newRole = SignedRole.withChecksum(repoId, RoleType.TIMESTAMP, role, role.signed.version, Instant.now.minus(1, ChronoUnit.DAYS))
+    signedRoleRepo.update(newRole).futureValue
 
-    // make sure enough time has passed for the timestamp to be different
-    Thread.sleep(1000)
+    Get(apiUri(s"repo/${repoId.show}/timestamp.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val updatedRole = responseAs[SignedPayload[TimestampRole]].signed
 
-    val generator = new SignedRoleGeneration(fakeKeyserverClient)
-    generator.refreshAllTimestampRoles().futureValue should be > 0
-
-    val current = timestamp
-
-    current.isAfter(previous) shouldBe true
+      updatedRole.version shouldBe role.signed.version + 1
+      updatedRole.expires.isAfter(Instant.now) shouldBe true
+    }
   }
 
   test("GET on a role returns valid json before targets are added") {
@@ -345,9 +350,8 @@ class RepoResourceSpec extends TufReposerverSpec
 
     Get(apiUri(s"repo/${newRepoId.show}/timestamp.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      val targetsRole = responseAs[SignedPayload[TimestampRole]]
-
-      targetsRole.signed.version shouldBe 2
+      val role = responseAs[SignedPayload[TimestampRole]]
+      role.signed.version shouldBe 2
     }
   }
 

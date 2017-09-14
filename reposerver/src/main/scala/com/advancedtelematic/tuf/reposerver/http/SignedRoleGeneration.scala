@@ -3,15 +3,14 @@
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-import akka.stream.Materializer
-import akka.stream.scaladsl.{Flow, Sink}
+import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, SignedPayload}
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
-import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
+import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepository, SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Json}
 import slick.jdbc.MySQLProfile.api._
@@ -20,9 +19,12 @@ import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepository.SignedRoleNo
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 import cats.syntax.either._
+import org.slf4j.LoggerFactory
 
 class SignedRoleGeneration(keyserverClient: KeyserverClient)
                           (implicit val db: Database, val ec: ExecutionContext) extends SignedRoleRepositorySupport {
+
+  private val log = LoggerFactory.getLogger(this.getClass)
 
   val targetRoleGeneration = new TargetRoleGeneration(keyserverClient)
 
@@ -63,21 +65,63 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
 
   def signRole[T <: VersionedRole : Decoder : Encoder](repoId: RepoId, roleType: RoleType, role: T): Future[SignedRole] = {
     keyserverClient.sign(repoId, roleType, role).map { signedRole =>
-      SignedRole.withChecksum(repoId, roleType, signedRole, role.version)
+      SignedRole.withChecksum(repoId, roleType, signedRole, role.version, role.expires)
     }
   }
 
-  def fetchAndCacheRootRole(repoId: RepoId): Future[SignedRole] = {
+  private def fetchAndCacheRootRole(repoId: RepoId): Future[SignedRole] = {
     signedRoleRepo.find(repoId, RoleType.ROOT).recoverWith {
       case SignedRoleNotFound =>
         keyserverClient.fetchRootRole(repoId).flatMap { rootRole =>
-          val signedRoot = SignedRole.withChecksum(repoId, RoleType.ROOT, rootRole, version = rootRole.signed.version)
+          val signedRoot = SignedRole.withChecksum(repoId, RoleType.ROOT, rootRole, rootRole.signed.version, rootRole.signed.expires)
           signedRoleRepo.persist(signedRoot)
         }
     }
   }
 
-  private def version(repoId: RepoId, roleType: RoleType): Future[Int] =
+  private def findAndCacheRole(repoId: RepoId, roleType: RoleType): Future[SignedRole] = {
+    signedRoleRepo
+      .find(repoId, roleType)
+      .recoverWith { case SignedRoleNotFound => generateAndCacheRole(repoId, roleType) }
+  }
+
+  private def findFreshTimestamp(repoId: RepoId): Future[SignedRole] = {
+    signedRoleRepo.find(repoId, RoleType.TIMESTAMP).flatMap { role =>
+      if(role.expireAt.isBefore(Instant.now.plus(1, ChronoUnit.HOURS))) {
+        val timestampRole = role.content.signed.as[TimestampRole].valueOr(throw _)
+        val nextVersion = timestampRole.version + 1
+        val nextExpires = timestampRole.expires.plus(1, ChronoUnit.DAYS)
+        val newRole = timestampRole.copy(expires = nextExpires, version = nextVersion)
+
+        signRole(repoId, RoleType.TIMESTAMP, newRole).flatMap(signedRoleRepo.persist)
+      } else {
+        FastFuture.successful(role)
+      }
+    }.recoverWith {
+      case SignedRoleRepository.SignedRoleNotFound =>
+        generateAndCacheRole(repoId, RoleType.TIMESTAMP)
+    }
+  }
+
+  private def generateAndCacheRole(repoId: RepoId, roleType: RoleType): Future[SignedRole] = {
+    regenerateSignedRoles(repoId)
+      .recoverWith { case err => log.warn("Could not generate signed roles", err) ; FastFuture.failed(SignedRoleNotFound) }
+      .flatMap(_ => signedRoleRepo.find(repoId, roleType))
+  }
+
+
+  def findRole(repoId: RepoId, roleType: RoleType): Future[SignedRole] = {
+    roleType match {
+      case RoleType.ROOT =>
+        fetchAndCacheRootRole(repoId)
+      case RoleType.TIMESTAMP =>
+        findFreshTimestamp(repoId)
+      case _ =>
+        findAndCacheRole(repoId, roleType)
+    }
+  }
+
+  private def nextVersion(repoId: RepoId, roleType: RoleType): Future[Int] =
     signedRoleRepo
       .find(repoId, roleType)
       .map { signedRole =>
@@ -87,14 +131,11 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
           .hcursor
           .downField("version")
           .as[Int]
-          .getOrElse(0)
+          .getOrElse(0) + 1
       }
       .recover {
-        case SignedRoleNotFound => 0
+        case SignedRoleNotFound => 1
       }
-
-  private def nextVersion(repoId: RepoId, roleType: RoleType): Future[Int] =
-    version(repoId, roleType).map(_ + 1)
 
   private def genSnapshotRole(root: SignedRole, target: SignedRole, expireAt: Instant, version: Int): SnapshotRole = {
     val meta = List(root.asMetaRole, target.asMetaRole).toMap
@@ -108,22 +149,6 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
 
   private def defaultExpire: Instant =
     Instant.now().plus(31, ChronoUnit.DAYS)
-
-  def refreshAllTimestampRoles()(implicit mat: Materializer): Future[Int] = {
-    val updateFlow = Flow[SignedRole].mapAsyncUnordered(4) { snapshot =>
-      version(snapshot.repoId, RoleType.TIMESTAMP).flatMap { version =>
-        val timestampRole = genTimestampRole(snapshot, defaultExpire, version)
-
-        signRole(snapshot.repoId, RoleType.TIMESTAMP, timestampRole).flatMap { signedTimestamp =>
-          signedRoleRepo.update(signedTimestamp)
-        }
-      }
-    }
-
-    signedRoleRepo.findAll(RoleType.SNAPSHOT)
-      .via(updateFlow)
-      .runWith(Sink.reduce(_ + _))
-  }
 }
 
 protected class TargetRoleGeneration(roleSigningClient: KeyserverClient)
