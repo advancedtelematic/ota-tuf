@@ -69,13 +69,15 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
     }
   }
 
+  def updateCacheRootRole(repoId: RepoId): Future[SignedRole] =
+    keyserverClient.fetchRootRole(repoId).flatMap { rootRole =>
+      val signedRoot = SignedRole.withChecksum(repoId, RoleType.ROOT, rootRole, rootRole.signed.version, rootRole.signed.expires)
+      signedRoleRepo.persist(signedRoot)
+  }
+
   private def fetchAndCacheRootRole(repoId: RepoId): Future[SignedRole] = {
     signedRoleRepo.find(repoId, RoleType.ROOT).recoverWith {
-      case SignedRoleNotFound =>
-        keyserverClient.fetchRootRole(repoId).flatMap { rootRole =>
-          val signedRoot = SignedRole.withChecksum(repoId, RoleType.ROOT, rootRole, rootRole.signed.version, rootRole.signed.expires)
-          signedRoleRepo.persist(signedRoot)
-        }
+      case SignedRoleNotFound => updateCacheRootRole(repoId)
     }
   }
 
