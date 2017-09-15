@@ -139,7 +139,9 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
             complete(keyserverClient.fetchUnsignedRoot(repoId))
           } ~
           (post & entity(as[SignedPayload[RootRole]])) { signedPayload =>
-            complete(keyserverClient.updateRoot(repoId, signedPayload))
+            complete(keyserverClient.updateRoot(repoId, signedPayload).flatMap{ x =>
+                       signedRoleGeneration.updateCacheRootRole(repoId).map(_ => x)
+                     })
           }
         } ~
         (path("private_keys" / KeyIdPath) & delete) { keyId =>
