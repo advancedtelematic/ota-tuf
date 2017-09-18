@@ -87,21 +87,21 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
       .recoverWith { case SignedRoleNotFound => generateAndCacheRole(repoId, roleType) }
   }
 
-  private def findFreshTimestamp(repoId: RepoId): Future[SignedRole] = {
-    signedRoleRepo.find(repoId, RoleType.TIMESTAMP).flatMap { role =>
+  private def findFreshRole[T <: VersionedRole : Decoder : Encoder](repoId: RepoId, roleType: RoleType, updateRoleFn: (T, Instant, Int) => T): Future[SignedRole] = {
+    signedRoleRepo.find(repoId, roleType).flatMap { role =>
       if(role.expireAt.isBefore(Instant.now.plus(1, ChronoUnit.HOURS))) {
-        val timestampRole = role.content.signed.as[TimestampRole].valueOr(throw _)
-        val nextVersion = timestampRole.version + 1
-        val nextExpires = timestampRole.expires.plus(1, ChronoUnit.DAYS)
-        val newRole = timestampRole.copy(expires = nextExpires, version = nextVersion)
+        val versionedRole = role.content.signed.as[T].valueOr(throw _)
+        val nextVersion = versionedRole.version + 1
+        val nextExpires = versionedRole.expires.plus(1, ChronoUnit.DAYS)
+        val newRole = updateRoleFn(versionedRole, nextExpires, nextVersion)
 
-        signRole(repoId, RoleType.TIMESTAMP, newRole).flatMap(signedRoleRepo.persist)
+        signRole(repoId, roleType, newRole).flatMap(signedRoleRepo.persist)
       } else {
         FastFuture.successful(role)
       }
     }.recoverWith {
       case SignedRoleRepository.SignedRoleNotFound =>
-        generateAndCacheRole(repoId, RoleType.TIMESTAMP)
+        generateAndCacheRole(repoId, roleType)
     }
   }
 
@@ -111,13 +111,14 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
       .flatMap(_ => signedRoleRepo.find(repoId, roleType))
   }
 
-
   def findRole(repoId: RepoId, roleType: RoleType): Future[SignedRole] = {
     roleType match {
       case RoleType.ROOT =>
         fetchAndCacheRootRole(repoId)
-      case RoleType.TIMESTAMP =>
-        findFreshTimestamp(repoId)
+      case r @ RoleType.SNAPSHOT =>
+        findFreshRole[SnapshotRole](repoId, r, (role, expires, version) => role.copy(expires = expires, version = version))
+      case r @ RoleType.TIMESTAMP =>
+        findFreshRole[TimestampRole](repoId, r, (role, expires, version) => role.copy(expires = expires, version = version))
       case _ =>
         findAndCacheRole(repoId, roleType)
     }

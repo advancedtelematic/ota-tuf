@@ -7,7 +7,6 @@ import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.libats.data.RefinedUtils._
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server._
-import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.http.Errors.MissingEntity
@@ -16,7 +15,7 @@ import com.advancedtelematic.libtuf.data.Messages.TufTargetAdded
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, RoleType}
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
-import com.advancedtelematic.tuf.reposerver.db.{RepoNamespaceRepositorySupport, SignedRoleRepository, SignedRoleRepositorySupport, TargetItemRepositorySupport}
+import com.advancedtelematic.tuf.reposerver.db.{RepoNamespaceRepositorySupport, SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.messaging_datatype.DataType.{TargetFilename, ValidTargetFilename}

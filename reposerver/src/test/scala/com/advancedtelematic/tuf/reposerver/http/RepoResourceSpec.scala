@@ -257,6 +257,25 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
+  test("snapshot.json is refreshed if expired") {
+    val role = Get(apiUri(s"repo/${repoId.show}/snapshot.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[SnapshotRole]]
+    }
+
+    val newRole = SignedRole.withChecksum(repoId, RoleType.SNAPSHOT, role, role.signed.version, Instant.now.minus(1, ChronoUnit.DAYS))
+    signedRoleRepo.update(newRole).futureValue
+
+    Get(apiUri(s"repo/${repoId.show}/snapshot.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val updatedRole = responseAs[SignedPayload[SnapshotRole]].signed
+
+      updatedRole.version shouldBe role.signed.version + 1
+      updatedRole.expires.isAfter(Instant.now) shouldBe true
+    }
+  }
+
+
   test("GET on a role returns valid json before targets are added") {
     val repoId = RepoId.generate()
 
