@@ -28,7 +28,7 @@ object RepositoryDataType {
   implicit class SignedRoleMetaItemOps(signedRole: SignedRole) {
     def asMetaRole: (MetaPath, MetaItem) = {
       val hashes = Map(signedRole.checksum.method -> signedRole.checksum.hash)
-      signedRole.roleType.toMetaPath -> MetaItem(hashes, signedRole.length)
+      signedRole.roleType.toMetaPath -> MetaItem(hashes, signedRole.length, signedRole.version)
     }
   }
 

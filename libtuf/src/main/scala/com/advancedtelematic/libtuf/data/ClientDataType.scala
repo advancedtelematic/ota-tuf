@@ -51,7 +51,7 @@ object ClientDataType {
       (value.show + ".json").refineTry[ValidMetaPath].get
   }
 
-  case class MetaItem(hashes: ClientHashes, length: Long)
+  case class MetaItem(hashes: ClientHashes, length: Long, version: Int)
 
   sealed trait VersionedRole {
     val version: Int

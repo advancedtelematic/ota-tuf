@@ -1,4 +1,4 @@
- package com.advancedtelematic.tuf.reposerver.http
+package com.advancedtelematic.tuf.reposerver.http
 
 import java.time.Instant
 import java.time.temporal.ChronoUnit
