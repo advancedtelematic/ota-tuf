@@ -91,7 +91,7 @@ object FakeKeyserverClient extends KeyserverClient {
   }
 
   override def sign[T: Decoder : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]] = {
-    val key = keys.get(repoId).getOrElse(roleType, throw RoleKeyNotFound)
+    val key = Option(keys.get(repoId)).flatMap(_.get(roleType)).getOrElse(throw RoleKeyNotFound)
     val signature = TufCrypto.signPayload(RSATufPrivateKey(key.getPrivate), payload).toClient(key.getPublic.id)
 
     FastFuture.successful(SignedPayload(List(signature), payload))

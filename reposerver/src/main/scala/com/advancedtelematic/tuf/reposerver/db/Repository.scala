@@ -131,11 +131,11 @@ protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: Ex
 
 
 
-  def findAll(roleType: RoleType): Source[SignedRole, NotUsed] =
+  def findAll(roleTypes: RoleType*): Source[SignedRole, NotUsed] =
     Source.fromPublisher {
       db.stream {
         signedRoles
-          .filter(_.roleType === roleType)
+          .filter(_.roleType.inSet(roleTypes))
           .result
       }
     }
