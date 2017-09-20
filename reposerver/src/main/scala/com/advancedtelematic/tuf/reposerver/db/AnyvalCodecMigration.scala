@@ -15,7 +15,7 @@ import com.advancedtelematic.libats.slick.db._
 import com.advancedtelematic.libtuf.data.ClientCodecs
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
-import com.advancedtelematic.libtuf.data.TufSlickMappings._
+import com.advancedtelematic.libtuf_server.data.TufSlickMappings._
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.db.Schema.targetItems
 import com.advancedtelematic.tuf.reposerver.http.SignedRoleGeneration

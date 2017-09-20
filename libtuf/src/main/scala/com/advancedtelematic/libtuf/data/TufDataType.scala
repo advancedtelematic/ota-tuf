@@ -8,7 +8,6 @@ import akka.http.scaladsl.unmarshalling.Unmarshaller
 import cats.Show
 import com.advancedtelematic.libats.codecs.CirceEnum
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
-import com.advancedtelematic.libats.slick.codecs.SlickEnum
 import com.advancedtelematic.libats.messaging_datatype.DataType.HashMethod.HashMethod
 import com.advancedtelematic.libats.messaging_datatype.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.crypt.TufCrypto
@@ -25,7 +24,7 @@ object TufDataType {
   type HardwareIdentifier = Refined[String, ValidHardwareIdentifier]
   implicit val validHardwareIdentifier: Validate.Plain[String, ValidHardwareIdentifier] = ValidationUtils.validInBetween(min = 0, max = 200, ValidHardwareIdentifier())
 
-  object TargetFormat extends CirceEnum with SlickEnum {
+  object TargetFormat extends CirceEnum {
     type TargetFormat = Value
 
     val OSTREE, BINARY = Value
@@ -48,7 +47,7 @@ object TufDataType {
   implicit val validSignature: Validate.Plain[String, ValidSignature] =
     ValidationUtils.validBase64Validation(ValidSignature())
 
-  object RoleType extends Enumeration with SlickEnum {
+  object RoleType extends Enumeration {
     type RoleType = Value
 
     val ROOT, SNAPSHOT, TARGETS, TIMESTAMP = Value

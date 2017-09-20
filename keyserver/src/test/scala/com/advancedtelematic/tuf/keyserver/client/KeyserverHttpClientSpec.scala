@@ -2,7 +2,7 @@ package com.advancedtelematic.tuf.keyserver.client
 
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RepoId, RoleType, SignedPayload, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RepoId, RoleType, SignedPayload}
 import com.advancedtelematic.libtuf.keyserver.KeyserverHttpClient
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 import com.advancedtelematic.tuf.util.{HttpClientSpecSupport, ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
