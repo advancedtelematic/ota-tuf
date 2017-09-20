@@ -127,15 +127,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
   private def nextVersion(repoId: RepoId, roleType: RoleType): Future[Int] =
     signedRoleRepo
       .find(repoId, roleType)
-      .map { signedRole =>
-        signedRole
-          .content
-          .signed
-          .hcursor
-          .downField("version")
-          .as[Int]
-          .getOrElse(0) + 1
-      }
+      .map(_.version + 1)
       .recover {
         case SignedRoleNotFound => 1
       }
