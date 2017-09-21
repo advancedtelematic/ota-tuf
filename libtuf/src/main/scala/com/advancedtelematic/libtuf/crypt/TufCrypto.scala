@@ -70,14 +70,7 @@ object TufCrypto {
   def convert[T <: KeyType](keyType: T, publicKey: PublicKey): T#Pub =
     keyType.crypto.convert(publicKey)
 
-  def isValid[T <: KeyType](keyType: T, publicKey: PublicKey, signature: Signature, data: Array[Byte]): Boolean = {
-    val keyMethod = keyType.crypto.signatureMethod
-    if (keyMethod != signature.method)
-      throw SignatureMethodMismatch(keyMethod, signature.method)
-    isValid(publicKey, signature, data)
-  }
-
-  def isValid(publicKey: PublicKey, signature: Signature, data: Array[Byte]): Boolean = {
+  def isValid(signature: Signature, publicKey: PublicKey, data: Array[Byte]): Boolean = {
     val signer = signature.method match {
       case SignatureMethod.RSASSA_PSS ⇒ rsaCrypto.signer
       case SignatureMethod.ED25519 ⇒ edCrypto.signer
@@ -89,9 +82,9 @@ object TufCrypto {
     signer.verify(decodedSig)
   }
 
-  def isValid[T : Encoder](value: T, signature: ClientSignature, publicKey: PublicKey): Boolean = {
+  def isValid[T : Encoder](signature: ClientSignature, publicKey: PublicKey, value: T): Boolean = {
     val sig = Signature(signature.sig, signature.method)
-    TufCrypto.isValid(publicKey, sig, value.asJson.canonical.getBytes)
+    TufCrypto.isValid(sig, publicKey, value.asJson.canonical.getBytes)
   }
 
   implicit class PublicKeyOps(key: PublicKey) {

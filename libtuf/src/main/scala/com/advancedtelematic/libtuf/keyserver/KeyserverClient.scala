@@ -45,7 +45,7 @@ object KeyserverHttpClient extends ServiceHttpClientSupport {
 }
 
 class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResponse])
-                         (implicit system: ActorSystem, mat: ActorMaterializer) extends ServiceHttpClient(uri, httpClient) with KeyserverClient {
+                         (implicit system: ActorSystem, mat: ActorMaterializer) extends ServiceHttpClient(httpClient) with KeyserverClient {
   import io.circe.syntax._
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 

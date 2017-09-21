@@ -1,0 +1,89 @@
+= tuf command line tools
+
+== Obtaining the binary
+
+Binaries are compiled for each push to `master` and stored in teamcity.
+
+Download the archive file, unpack and run:
+
+    tar xvf <file>
+    cd garage-sign/
+    bin/garage-sign --help
+
+== buchtel use case
+
+1. Initialize a local ota-plus cache using a treehub.json downloaded from ats garage:
+
+    garage-sign init --repo buchtel --credentials treehub.json
+
+2. Generate a new Targets signing key with:
+
+    garage-sign gen-keys --repo buchtel --name buchtel-targets --type ec
+
+3. Push the Targets public key to the remote TUF repository with:
+
+   garage-sign push-targets-kes --repo buchtel --name buchtel-targets
+
+4. Initialize the targets.json metadata with:
+
+  garage-sign targets init --repo buchtel --expires '2018-10-28T13:31:26.713Z' --version 2
+
+5. Add new targets with:
+
+    garage-sign targets add \
+    --repo buchtel \
+    --name ${TARGET_NAME}
+    --version ${TARGET_VERSION} \
+    --length ${TARGET_LENGTH} \
+    --url ${TARGET_URL} \
+    --sha256 ${TARGET_HASH}
+
+6. Sign the targets.json metadata with:
+
+    garage-sign targets sign \
+    --repo buchtel
+    --key targets-01
+
+7. Push the targets.json metadata with:
+
+    garage-sign targets push --repo buchtel
+
+
+== Rotate root keys
+
+This is not compatible with the above use case as uploading a new
+targets key with an offline root key is not supported. After rotating
+root keys to offline storage root.json and it's key mapping need to be
+maintained offline by the user.
+
+1. Initialize a local ota-plus cache using a treehub.json downloaded from ats garage:
+
+    garage-sign init --repo buchtel --credentials treehub.json
+    
+2. Generate new root and target keys
+
+    garage-sign gen-keys --repo buchtel --name buchtel-root --type ec
+    
+    garage-sign gen-keys --repo buchtel --name buchtel-targets --type ec
+    
+3. Rotate Root Keys
+
+    garage-sign rotate --repo buchtel --new-root buchtel-root --new-targets buchtel-targets --old-root-alias old-root
+
+4. Check repository
+
+    tree tuf/buchtel/
+
+    tuf/buchtel
+    ├── auth.json
+    ├── keys
+    │   ├── buchtel-root.pub
+    │   ├── buchtel-root.sec
+    │   ├── buchtel-targets.pub
+    │   ├── buchtel-targets.sec
+    │   ├── old-root.pub
+    │   └── old-root.sec
+    └── roles
+        └── root.json
+
+    cat tuf/buchtel/root.json

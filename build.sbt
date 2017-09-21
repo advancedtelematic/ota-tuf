@@ -103,6 +103,10 @@ lazy val cli = (project in file("cli"))
   .configs(commonConfigs:_*)
   .settings(commonSettings)
   .settings(Publish.disable)
+  .settings(
+    topLevelDirectory := Some("garage-sign"),
+    executableScriptName := "garage-sign"
+  )
   .dependsOn(libtuf)
 
 lazy val ota_tuf = (project in file("."))

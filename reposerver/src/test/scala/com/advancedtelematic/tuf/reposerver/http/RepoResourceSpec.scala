@@ -37,12 +37,13 @@ import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetIte
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
 
-import scala.concurrent.Future
+import scala.concurrent.{Future, Promise}
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 import eu.timepit.refined.api.Refined
 
 import scala.concurrent.ExecutionContext.Implicits
+
 
 class RepoResourceSpec extends TufReposerverSpec
   with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration with SignedRoleRepositorySupport {
@@ -680,7 +681,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
-      responseAs[JsonErrors].head should include("failed cursor, List(DownField(uri))")
+      responseAs[JsonErrors].head should include("List(DownField(uri))")
     }
   }
 
@@ -748,10 +749,10 @@ class RepoResourceSpec extends TufReposerverSpec
   }
 
   def signaturesShouldBeValid[T : Encoder](repoId: RepoId, roleType: RoleType, signedPayload: SignedPayload[T]): Assertion = {
-    val signature = signedPayload.signatures.head.toSignature
+    val signature = signedPayload.signatures.head
     val signed = signedPayload.signed
 
-    val isValid = TufCrypto.isValid(fakeKeyserverClient.publicKey(repoId, roleType), signature, signed.asJson.canonical.getBytes)
+    val isValid = TufCrypto.isValid(signature, fakeKeyserverClient.publicKey(repoId, roleType), signed)
     isValid shouldBe true
   }
 
