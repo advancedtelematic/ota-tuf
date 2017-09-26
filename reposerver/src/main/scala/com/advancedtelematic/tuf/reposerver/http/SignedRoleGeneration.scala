@@ -92,7 +92,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
       if(role.expireAt.isBefore(Instant.now.plus(1, ChronoUnit.HOURS))) {
         val versionedRole = role.content.signed.as[T].valueOr(throw _)
         val nextVersion = versionedRole.version + 1
-        val nextExpires = versionedRole.expires.plus(1, ChronoUnit.DAYS)
+        val nextExpires = Instant.now.plus(1, ChronoUnit.DAYS)
         val newRole = updateRoleFn(versionedRole, nextExpires, nextVersion)
 
         signRole(repoId, roleType, newRole).flatMap(signedRoleRepo.persist)
