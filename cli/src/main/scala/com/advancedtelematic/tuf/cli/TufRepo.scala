@@ -1,7 +1,7 @@
 package com.advancedtelematic.tuf.cli
 
 import java.nio.file.{Files, Path, Paths}
-import java.time.Instant
+import java.time.{Instant, Period}
 import java.time.temporal.ChronoUnit
 
 import akka.actor.ActorSystem
@@ -37,6 +37,8 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
   private lazy val log = LoggerFactory.getLogger(this.getClass)
 
   private lazy val rolesPath = repoPath.resolve("roles")
+
+  val DEFAULT_EXPIRE_TIME = Period.ofDays(365)
 
   def init(credentialsPath: Path): Try[Unit] = {
     for {
@@ -115,7 +117,8 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     rolePath
   }
 
-  def addKeys(name: KeyName, keyType: KeyType, keySize: Int): Try[(TufKey, TufPrivateKey)] = storage.genKeys(name, keyType, keySize)
+  def genKeys(name: KeyName, keyType: KeyType, keySize: Int): Try[(TufKey, TufPrivateKey)] =
+    storage.genKeys(name, keyType, keySize)
 
   def rotateRoot(repoClient: UserReposerverClient,
                  newRootName: KeyName,
@@ -131,10 +134,11 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       oldRootPrivKey <- deleteOrReadKey(repoClient, oldRootName, oldRootPubKeyId)
       _ <- storage.writeKeys(oldRootName, oldRootPubKey, oldRootPrivKey).toFuture
       newKeySet = oldRootRole.keys ++ Map(newRootPubKey.id -> newRootPubKey, newTargetsPubKey.id -> newTargetsPubKey)
-      newRootRoleKeys = RoleKeys(Seq(newRootPubKey.id), oldRootRole.roles(RoleType.ROOT).threshold)
-      newTargetsRoleKeys = RoleKeys(Seq(newTargetsPubKey.id), oldRootRole.roles(RoleType.TARGETS).threshold)
+      newRootRoleKeys = RoleKeys(Seq(newRootPubKey.id), threshold = 1)
+      newTargetsRoleKeys = RoleKeys(Seq(newTargetsPubKey.id), threshold = 1)
       newRootRoleMap = oldRootRole.roles ++ Map(RoleType.ROOT -> newRootRoleKeys, RoleType.TARGETS -> newTargetsRoleKeys)
-      newRootRole = oldRootRole.copy(keys = newKeySet, roles = newRootRoleMap, version = oldRootRole.version + 1, oldRootRole.expires.plus(365, ChronoUnit.DAYS))
+      newExpireTime = oldRootRole.expires.plus(DEFAULT_EXPIRE_TIME)
+      newRootRole = oldRootRole.copy(keys = newKeySet, roles = newRootRoleMap, version = oldRootRole.version + 1, newExpireTime)
       newRootSignature = TufCrypto.signPayload(newRootPrivKey, newRootRole).toClient(newRootPubKey.id)
       newRootClientOldSignature = TufCrypto.signPayload(oldRootPrivKey, newRootRole).toClient(oldRootPubKeyId)
       newSignedRoot = SignedPayload(Seq(newRootSignature, newRootClientOldSignature), newRootRole)

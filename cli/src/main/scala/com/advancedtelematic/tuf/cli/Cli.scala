@@ -201,7 +201,7 @@ object Cli extends App with VersionInfo {
 
     val f: Future[_] = config.command match {
       case GenKeys =>
-        tufRepo.addKeys(config.rootKey, config.keyType, config.keySize).toFuture
+        tufRepo.genKeys(config.rootKey, config.keyType, config.keySize).toFuture
 
       case InitRepo =>
         tufRepo.init(config.credentialsPath).toFuture

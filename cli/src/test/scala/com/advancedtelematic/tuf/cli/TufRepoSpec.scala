@@ -5,7 +5,7 @@ import java.time.Instant
 
 import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, SignedPayload, TargetName, TargetVersion, TufKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RoleType, SignedPayload, TargetName, TargetVersion, TufKey}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
 import io.circe.jawn._
@@ -33,8 +33,8 @@ class TufRepoSpec extends CliSpec {
     val newRootName = KeyName(s"newroot${repo.name.value}")
     val newTargetsName = KeyName(s"targets${repo.name.value}")
 
-    val (pub, _) = repo.addKeys(newRootName, EdKeyType, 256).get
-    val (pubT, _) = repo.addKeys(newTargetsName, EdKeyType, 256).get
+    val (pub, _) = repo.genKeys(newRootName, EdKeyType, 256).get
+    val (pubT, _) = repo.genKeys(newTargetsName, EdKeyType, 256).get
 
     repo.rotateRoot(reposerverClient, newRootName, oldRootName, newTargetsName, None).map { s =>
       (pub, pubT, s)
@@ -44,7 +44,7 @@ class TufRepoSpec extends CliSpec {
   test("adds a key to a repo") {
     val repo = initRepo()
 
-    repo.addKeys(KeyName("newkey"), EdKeyType, 256)
+    repo.genKeys(KeyName("newkey"), EdKeyType, 256)
 
     Files.exists(repo.repoPath.resolve("keys").resolve("newkey.pub")) shouldBe true
   }
@@ -57,7 +57,7 @@ class TufRepoSpec extends CliSpec {
     repo.authConfig().get shouldBe a[AuthConfig]
   }
 
-  test("can rotate a key") {
+  test("root after rotate contains new key ids") {
     val repo = initRepo()
 
     val (pub, pubT, signedPayload) = rotate(repo).futureValue
@@ -67,6 +67,42 @@ class TufRepoSpec extends CliSpec {
     signedPayload.signed.keys.values should contain(pub)
     signedPayload.signed.keys.keys should contain(pubT.id)
     signedPayload.signed.keys.values should contain(pubT)
+  }
+
+  test("root after rotate is properly signed") {
+    val repo = initRepo()
+
+    val client = new FakeUserReposerverClient()
+
+    val oldRoot = client.root().futureValue.signed
+    val oldRootPubKeyId = oldRoot.roles(RoleType.ROOT).keyids.head
+    val oldRootPub = oldRoot.keys(oldRootPubKeyId)
+
+    val (pub, pubT, signedPayload) = rotate(repo, client).futureValue
+
+    signedPayload.isValidFor(pub)
+    signedPayload.isValidFor(oldRootPub)
+  }
+
+  test("new root role contains new root id") {
+    val repo = initRepo()
+
+    val (pub, pubT, signedPayload) = rotate(repo).futureValue
+
+    val rootRole = signedPayload.signed
+
+    rootRole.roles(RoleType.ROOT).keyids should contain(pub.id)
+    rootRole.roles(RoleType.TARGETS).keyids should contain(pubT.id)
+  }
+
+  test("new root role has proper version bump") {
+    val repo = initRepo()
+
+    val (pub, pubT, signedPayload) = rotate(repo).futureValue
+
+    val rootRole = signedPayload.signed
+
+    rootRole.version shouldBe 2
   }
 
   test("rotate key is signed by both root keys") {
@@ -90,13 +126,16 @@ class TufRepoSpec extends CliSpec {
   }
 
   test("initTargets creates an empty target") {
+    val now = Instant.now
+
     val repo = new TufRepo(RepoName(RandomNames() + "-repo"), Files.createTempDirectory("tuf-repo"))
 
-    val path = repo.initTargets(20, Instant.now.plusSeconds(1)).get
+    val path = repo.initTargets(20, now.plusSeconds(1)).get
     val role = parseFile(path.toFile).flatMap(_.as[TargetsRole]).valueOr(throw _)
 
     role.targets should be(empty)
-    role.expires.isAfter(Instant.now) shouldBe true
+
+    role.expires.isAfter(now) shouldBe true
     role.version shouldBe 20
   }
 
@@ -114,7 +153,7 @@ class TufRepoSpec extends CliSpec {
     val repo = initRepo()
 
     val targetsKeyName = KeyName("somekey")
-    val (pub, _) = repo.addKeys(targetsKeyName, EdKeyType, 256).get
+    val (pub, _) = repo.genKeys(targetsKeyName, EdKeyType, 256).get
 
     val path = repo.signTargets(targetsKeyName).get
     val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).valueOr(throw _)
