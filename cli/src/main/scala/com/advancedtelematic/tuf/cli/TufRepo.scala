@@ -1,17 +1,12 @@
 package com.advancedtelematic.tuf.cli
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path}
 import java.time.{Instant, Period}
-import java.time.temporal.ChronoUnit
-
-import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri
-import akka.stream.Materializer
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RoleKeys, RoleTypeToMetaPathOp, RootRole, TargetCustom, TargetsRole, VersionedRole}
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
-import com.advancedtelematic.tuf.cli.client.{AuthPlusClient, UserReposerverHtttpClient}
 import io.circe.{Decoder, Encoder}
 import org.slf4j.LoggerFactory
 import TryToFuture._
@@ -19,7 +14,7 @@ import TryToFuture._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 import cats.syntax.either._
-import com.advancedtelematic.libats.messaging_datatype.DataType.{HashMethod, TargetFilename, ValidChecksum, ValidTargetFilename}
+import com.advancedtelematic.libats.messaging_datatype.DataType.{HashMethod, ValidChecksum, ValidTargetFilename}
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._

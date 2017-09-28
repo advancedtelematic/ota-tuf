@@ -8,7 +8,7 @@ import java.time.temporal.ChronoUnit
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.util.FastFuture
-import akka.stream.{ActorMaterializer, Materializer}
+import akka.stream.ActorMaterializer
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, HardwareIdentifier, KeyId, KeyType, TargetName, TargetVersion}
@@ -20,7 +20,7 @@ import eu.timepit.refined.api.Refined
 import TryToFuture._
 import com.advancedtelematic.libats.messaging_datatype.DataType.ValidChecksum
 import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
-import com.advancedtelematic.tuf.cli.client.UserReposerverHtttpClient
+import com.advancedtelematic.tuf.cli.client.UserReposerverHtttClient
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -197,7 +197,7 @@ object Cli extends App with VersionInfo {
 
     lazy val tufRepo = new TufRepo(config.repoName, repoPath)
 
-    lazy val repoServer = UserReposerverHtttpClient.forRepo(tufRepo)
+    lazy val repoServer = UserReposerverHtttClient.forRepo(tufRepo)
 
     val f: Future[_] = config.command match {
       case GenKeys =>

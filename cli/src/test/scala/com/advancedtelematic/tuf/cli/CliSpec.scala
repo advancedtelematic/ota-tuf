@@ -15,7 +15,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{FunSuite, Matchers}
-
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 import scala.concurrent.Future
 
 abstract class CliSpec extends FunSuite with Matchers with ScalaFutures {
@@ -25,9 +25,6 @@ abstract class CliSpec extends FunSuite with Matchers with ScalaFutures {
 }
 
 class FakeUserReposerverClient extends UserReposerverClient {
-  import com.advancedtelematic.libtuf.data.TufCodecs._
-  import com.advancedtelematic.libtuf.data.ClientCodecs._
-
   private val (oldPublicKey, oldPrivateKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
 
   private var (targetsPubKey, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
@@ -71,7 +68,7 @@ class FakeUserReposerverClient extends UserReposerverClient {
 
     if(targetsRole.isValidFor(targetsPubKey)) {
       unsignedTargets = targetsRole.signed
-      FastFuture.successful(targetsRole)
+      FastFuture.successful(())
     } else
       FastFuture.failed(new RuntimeException("[test] invalid signatures for targets role"))
   }

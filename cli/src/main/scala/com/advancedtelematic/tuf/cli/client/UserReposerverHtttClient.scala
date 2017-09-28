@@ -11,7 +11,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import org.slf4j.LoggerFactory
 
-object UserReposerverHtttpClient extends ServiceHttpClientSupport {
+object UserReposerverHtttClient extends ServiceHttpClientSupport {
   private val log = LoggerFactory.getLogger(this.getClass)
 
   def apply(reposerverUri: Uri, token: String)
@@ -38,5 +38,5 @@ object UserReposerverHtttpClient extends ServiceHttpClientSupport {
              (implicit system: ActorSystem, mat: Materializer, ec: ExecutionContext): Future[UserReposerverClient] = for {
     authConfig <- repo.authConfig().toFuture
     token <- AuthPlusClient.tokenFor(authConfig)
-  } yield UserReposerverHtttpClient(toTufUri(authConfig.server), token.value)
+  } yield UserReposerverHtttClient(toTufUri(authConfig.server), token.value)
 }
