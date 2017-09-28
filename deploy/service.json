@@ -26,7 +26,7 @@
     "AUTH_PLUS_HOST": "${AUTH_PLUS_HOST}",
     "AUTH_PLUS_PORT": "${AUTH_PLUS_PORT}",
     "AUTH_PLUS_SCHEME": "https",
-    "AUTH_PROTOCOL": "oauth.accesstoken",
+    "AUTH_PROTOCOL": "none",
     "AUTH_VERIFICATION": "auth-plus",
     "BIND_PORT": "9001",
     "DB_MIGRATE": "true",
