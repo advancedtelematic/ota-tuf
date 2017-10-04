@@ -10,22 +10,6 @@ import cats.syntax.either._
 class TargetCustomDecoderSpec extends FunSuite with Matchers {
   import com.advancedtelematic.libtuf.data.ClientCodecs.targetCustomDecoder
 
-  test("decoder can decode json without timestamps") {
-    val str = """ {"name":{"value":"qemux86-64-ota"},"version":{"value":"ffd79847609f2c979deed5d81ec87833bd88f35bb15aa860454442db05d3129c"},"hardwareIds":["qemux86-64-ota"],"targetFormat":null}"""
-    val tc = parse(str).flatMap(_.as[TargetCustom]).valueOr(throw _)
-    tc shouldBe a[TargetCustom]
-  }
-
-  test("decoder can decode json with timestamps") {
-    val instant = Instant.parse("2017-07-10T13:27:28Z")
-    val str = """{"name":{"value":"qemux86-64-ota"},"version":{"value":"ffd79847609f2c979deed5d81ec87833bd88f35bb15aa860454442db05d3129c"},"hardwareIds":["qemux86-64-ota"],"targetFormat":null,"createdAt":"2017-07-10T13:27:28Z","updatedAt":"2017-07-10T13:27:28Z"}"""
-
-    val tc = parse(str).flatMap(_.as[TargetCustom]).valueOr(throw _)
-
-    tc.createdAt shouldBe instant
-    tc.updatedAt shouldBe instant
-  }
-
   test("decoder can decode new json") {
     val instant = Instant.parse("2017-07-10T13:27:28Z")
     val str = """{"name":"qemux86-64-ota","version":"ffd79847609f2c979deed5d81ec87833bd88f35bb15aa860454442db05d3129c","hardwareIds":["qemux86-64-ota"],"targetFormat":null,"createdAt":"2017-07-10T13:27:28Z","updatedAt":"2017-07-10T13:27:28Z"}"""

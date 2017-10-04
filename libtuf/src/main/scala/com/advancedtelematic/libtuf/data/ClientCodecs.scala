@@ -1,16 +1,11 @@
 package com.advancedtelematic.libtuf.data
 
-import java.time.Instant
-
-import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libats.messaging_datatype.MessageCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType._
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RoleType, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{RoleType, TargetName, TargetVersion}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
 import io.circe._
-import cats.syntax.either._
 
 object ClientCodecs {
   import TufCodecs._
@@ -27,22 +22,7 @@ object ClientCodecs {
   implicit val rootRoleEncoder: Encoder[RootRole] = deriveEncoder
   implicit val rootRoleDecoder: Decoder[RootRole] = deriveDecoder
 
-  val legacyTargetCustomDecoder = Decoder.instance { cursor =>
-    val now = Instant.now
-    for {
-      name <- cursor.downField("name").downField("value").as[TargetName]
-      version <- cursor.downField("version").downField("value").as[TargetVersion]
-      hardwareids <- cursor.downField("hardwareIds").as[Seq[HardwareIdentifier]]
-      format <- cursor.downField("targetFormat").as[Option[TargetFormat]]
-      uri <- cursor.downField("uri").as[Option[Uri]]
-      createdAt <- cursor.downField("createdAt").as[Option[Instant]]
-      updatedAt <- cursor.downField("updatedAt").as[Option[Instant]]
-    } yield TargetCustom(name, version, hardwareids, format, uri, createdAt.getOrElse(now), updatedAt.getOrElse(now))
-  }
-
-  val targetCustomDerivedDecoder = deriveDecoder[TargetCustom]
-
-  implicit val targetCustomDecoder: Decoder[TargetCustom] = legacyTargetCustomDecoder or targetCustomDerivedDecoder
+  implicit val targetCustomDecoder: Decoder[TargetCustom] = deriveDecoder
   implicit val targetCustomEncoder: Encoder[TargetCustom] = deriveEncoder
 
   implicit val targetsRoleEncoder: Encoder[TargetsRole] = deriveEncoder
