@@ -2,6 +2,7 @@ package com.advancedtelematic.libtuf.data
 
 import java.time.Instant
 
+import akka.http.scaladsl.model.Uri
 import cats.syntax.show._
 import com.advancedtelematic.libats.messaging_datatype.DataType.HashMethod.HashMethod
 import com.advancedtelematic.libats.messaging_datatype.DataType.{TargetFilename, ValidChecksum}
@@ -18,6 +19,7 @@ object ClientDataType {
 
   case class TargetCustom(name: TargetName, version: TargetVersion, hardwareIds: Seq[HardwareIdentifier],
                           targetFormat: Option[TargetFormat],
+                          uri: Option[Uri] = None,
                           createdAt: Instant = Instant.now,
                           updatedAt: Instant = Instant.now
                          )
@@ -27,13 +29,6 @@ object ClientDataType {
     def customParsed[T](implicit decoder: Decoder[T]): Option[T] =
       custom.flatMap(c => decoder.decodeJson(c).toOption)
   }
-
-  case class RootRole(keys: Map[KeyId, TufKey],
-                      roles: Map[RoleType, RoleKeys],
-                      version: Int,
-                      expires: Instant,
-                      consistent_snapshot: Boolean = false,
-                      _type: String = "Root")
 
   case class RoleKeys(keyids: Seq[KeyId], threshold: Int)
 
@@ -61,8 +56,16 @@ object ClientDataType {
       case _: TargetsRole => RoleType.TARGETS
       case _: SnapshotRole => RoleType.SNAPSHOT
       case _: TimestampRole => RoleType.TIMESTAMP
+      case _: RootRole => RoleType.ROOT
     }
   }
+
+  case class RootRole(keys: Map[KeyId, TufKey],
+                      roles: Map[RoleType, RoleKeys],
+                      version: Int,
+                      expires: Instant,
+                      consistent_snapshot: Boolean = false,
+                      _type: String = "Root") extends VersionedRole
 
   case class TargetsRole(expires: Instant,
                          targets: Map[TargetFilename, ClientTargetItem],

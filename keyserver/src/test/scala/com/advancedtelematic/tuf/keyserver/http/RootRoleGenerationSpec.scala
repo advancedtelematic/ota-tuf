@@ -51,7 +51,7 @@ with SignedRootRoleSupport {
 
       val sig = Signature(clientSignature.sig, clientSignature.method)
 
-      TufCrypto.isValid(publicKey, sig, signed.signed.asJson.canonical.getBytes) shouldBe true
+      TufCrypto.isValid(sig, publicKey, signed.signed.asJson.canonical.getBytes) shouldBe true
     }.futureValue
   }
 
@@ -73,7 +73,7 @@ with SignedRootRoleSupport {
 
       val sig = Signature(clientSignature.sig, clientSignature.method)
 
-      TufCrypto.isValid(publicKey, sig, signed.signed.asJson.canonical.getBytes) shouldBe true
+      TufCrypto.isValid(sig, publicKey, signed.signed.asJson.canonical.getBytes) shouldBe true
     }.futureValue
   }
 

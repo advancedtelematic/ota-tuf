@@ -19,6 +19,7 @@ import com.advancedtelematic.libtuf.data.TufCodecs.uriDecoder
 
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
+import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 
 class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
                                         (implicit val db: Database, val ec: ExecutionContext)
@@ -72,7 +73,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
         publicKeys.get(keyId)
           .toRight(s"No public key available for key ${sig.keyid}")
           .ensure(s"Invalid signature for key ${sig.keyid}") { key =>
-            TufCrypto.isValid(signedPayload.signed, sig, key.keyval)
+            signedPayload.isValidFor(key)
           }
           .map(_.id)
           .toValidatedNel

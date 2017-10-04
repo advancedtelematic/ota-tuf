@@ -5,7 +5,7 @@ import akka.http.scaladsl.model.StatusCodes
 import io.circe.syntax._
 import akka.stream.Materializer
 import cats.data.Validated.{Invalid, Valid}
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, ValidKeyId}
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.tuf.keyserver.roles.{RootRoleGeneration, RootRoleKeyEdit}
@@ -16,7 +16,6 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 
 import scala.concurrent.{ExecutionContext, Future}
-import com.advancedtelematic.libats.data.RefinedUtils._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType._
 

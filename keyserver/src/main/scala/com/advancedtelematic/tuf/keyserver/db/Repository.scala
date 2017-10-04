@@ -14,6 +14,7 @@ import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import slick.jdbc.MySQLProfile.api._
 import scala.concurrent.{ExecutionContext, Future}
+import com.advancedtelematic.libtuf_server.data.TufSlickMappings._
 
 trait DatabaseSupport {
   implicit val ec: ExecutionContext

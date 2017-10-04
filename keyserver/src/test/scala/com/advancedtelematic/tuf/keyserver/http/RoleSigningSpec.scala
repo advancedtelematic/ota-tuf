@@ -51,7 +51,7 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
     val clientSignature = roleSigning.signForClient(payload)(dbKey).futureValue
     val signature = Signature(clientSignature.sig, clientSignature.method)
 
-    TufCrypto.isValid(publicKey.keyval, signature, payload.asJson.canonical.getBytes) shouldBe true
+    TufCrypto.isValid(signature, publicKey.keyval, payload.asJson.canonical.getBytes) shouldBe true
   }
 
   test("generates valid ed25519 signatures")  {
@@ -64,7 +64,7 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
     val clientSignature = roleSigning.signForClient(payload)(dbKey).futureValue
     val signature = Signature(clientSignature.sig, clientSignature.method)
 
-    TufCrypto.isValid(publicKey.keyval, signature, payload.asJson.canonical.getBytes) shouldBe true
+    TufCrypto.isValid(signature, publicKey.keyval, payload.asJson.canonical.getBytes) shouldBe true
   }
 
 
@@ -76,6 +76,6 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
 
     val canonicalJson = """{"arrayMapProp":[{"aaa":0,"bbb":1}],"mapProp":{"aa":0,"bb":1},"propertyA":"some A","propertyB":"some B"}""".getBytes
 
-    TufCrypto.isValid(publicKey.keyval, signature, canonicalJson) shouldBe true
+    TufCrypto.isValid(signature, publicKey.keyval, canonicalJson) shouldBe true
   }
 }

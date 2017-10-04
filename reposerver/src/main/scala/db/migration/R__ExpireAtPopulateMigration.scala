@@ -9,13 +9,14 @@ import akka.http.scaladsl.util.FastFuture
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import com.advancedtelematic.libats.slick.db.{AppMigration, SlickCirceMapper, SlickUUIDKey}
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
+import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.reposerver.Settings
 import io.circe.Json
 import slick.jdbc.GetResult
 import slick.jdbc.MySQLProfile.api._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
+import com.advancedtelematic.libtuf_server.data.TufSlickMappings
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -58,7 +59,7 @@ class ExpireAtPopulateMigration()
 
   implicit val getRowResult: GetResult[Row] = GetResult { r =>
     val repoId = SlickUUIDKey.dbMapping[RepoId].getValue(r.rs, 1)
-    val roleType = RoleType.enumMapper.getValue(r.rs, 2)
+    val roleType = TufSlickMappings.roleTypeMapper.getValue(r.rs, 2)
     val json = SlickCirceMapper.jsonMapper.getValue(r.rs, 3)
 
     Row(repoId, roleType, json)

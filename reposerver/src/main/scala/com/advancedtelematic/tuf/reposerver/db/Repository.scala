@@ -18,6 +18,7 @@ import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
+import com.advancedtelematic.libtuf_server.data.TufSlickMappings._
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport.MissingNamespaceException
 import com.advancedtelematic.tuf.reposerver.http.Errors
 

@@ -22,18 +22,27 @@ lazy val commonDeps = libraryDependencies ++= {
     "com.typesafe.akka" %% "akka-http" % akkaHttpV,
     "com.typesafe.akka" %% "akka-slf4j" % akkaV,
 
-    "org.mariadb.jdbc" % "mariadb-java-client" % "1.4.4",
-
     "org.scala-lang.modules" %% "scala-async" % "0.9.6",
 
     "com.advancedtelematic" %% "libats" % libatsV,
-    "com.advancedtelematic" %% "libats-slick" % libatsV,
     "com.advancedtelematic" %% "libats-messaging" % libatsV,
     "com.advancedtelematic" %% "libats-messaging-datatype" % libatsV,
     "com.advancedtelematic" %% "libats-metrics-akka" % libatsV,
 
     "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV,
     "org.scalatest"     %% "scalatest" % scalaTestV % "test"
+  )
+}
+
+lazy val dbDependencies = libraryDependencies ++= {
+  lazy val libatsV = libatsVersion.value
+  lazy val slickV = "3.2.0"
+
+  Seq(
+    "com.advancedtelematic" %% "libats-slick" % libatsV,
+    "com.typesafe.slick" %% "slick" % slickV,
+    "com.typesafe.slick" %% "slick-hikaricp" % slickV,
+    "org.mariadb.jdbc" % "mariadb-java-client" % "1.4.4"
   )
 }
 
@@ -61,20 +70,43 @@ lazy val libtuf = (project in file("libtuf"))
   .settings(commonSettings)
   .settings(Publish.settings)
 
+lazy val libtufServer = (project in file("libtuf-server"))
+  .enablePlugins(BuildInfoPlugin, Versioning.Plugin, JavaAppPackaging)
+  .configs(commonConfigs:_*)
+  .settings(commonSettings)
+  .settings(dbDependencies)
+  .settings(Publish.disable)
+  .dependsOn(libtuf)
+
 lazy val keyserver = (project in file("keyserver"))
   .enablePlugins(BuildInfoPlugin, Versioning.Plugin, JavaAppPackaging)
   .configs(commonConfigs:_*)
   .settings(commonSettings)
   .settings(Publish.disable)
   .settings(Packaging.docker("tuf-keyserver"))
+  .settings(dbDependencies)
   .dependsOn(libtuf)
+  .dependsOn(libtufServer)
 
 lazy val reposerver = (project in file("reposerver"))
   .enablePlugins(BuildInfoPlugin, Versioning.Plugin, JavaAppPackaging)
   .configs(commonConfigs:_*)
   .settings(commonSettings)
+  .settings(dbDependencies)
   .settings(Publish.disable)
   .settings(Packaging.docker("tuf-reposerver"))
+  .dependsOn(libtuf)
+  .dependsOn(libtufServer)
+
+lazy val cli = (project in file("cli"))
+  .enablePlugins(BuildInfoPlugin, Versioning.Plugin, JavaAppPackaging)
+  .configs(commonConfigs:_*)
+  .settings(commonSettings)
+  .settings(Publish.disable)
+  .settings(
+    topLevelDirectory := Some("garage-sign"),
+    executableScriptName := "garage-sign"
+  )
   .dependsOn(libtuf)
 
 lazy val ota_tuf = (project in file("."))
@@ -82,5 +114,4 @@ lazy val ota_tuf = (project in file("."))
   .settings(scalaVersion := "2.11.11")
   .settings(crossScalaVersions := Seq("2.11.11", "2.12.2"))
   .settings(Release.settings(libtuf, keyserver, reposerver))
-  .aggregate(libtuf, keyserver, reposerver)
-
+  .aggregate(libtufServer, libtuf, keyserver, reposerver, cli)

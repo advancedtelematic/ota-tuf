@@ -2,6 +2,7 @@ package com.advancedtelematic.libtuf.data
 
 import java.time.Instant
 
+import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libats.messaging_datatype.MessageCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RoleType, TargetName, TargetVersion}
@@ -33,9 +34,10 @@ object ClientCodecs {
       version <- cursor.downField("version").downField("value").as[TargetVersion]
       hardwareids <- cursor.downField("hardwareIds").as[Seq[HardwareIdentifier]]
       format <- cursor.downField("targetFormat").as[Option[TargetFormat]]
+      uri <- cursor.downField("uri").as[Option[Uri]]
       createdAt <- cursor.downField("createdAt").as[Option[Instant]]
       updatedAt <- cursor.downField("updatedAt").as[Option[Instant]]
-    } yield TargetCustom(name, version, hardwareids, format, createdAt.getOrElse(now), updatedAt.getOrElse(now))
+    } yield TargetCustom(name, version, hardwareids, format, uri, createdAt.getOrElse(now), updatedAt.getOrElse(now))
   }
 
   val targetCustomDerivedDecoder = deriveDecoder[TargetCustom]

@@ -12,10 +12,10 @@ import com.advancedtelematic.libtuf.data.TufDataType._
 import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libats.test.DatabaseSpec
 
-import scala.concurrent.Future
+import scala.concurrent.{Future, Promise}
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model._
-import akka.http.scaladsl.server.{Directive1, Directives}
+import akka.http.scaladsl.server.{Directive1, Directives, Route}
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 
@@ -51,7 +51,8 @@ object FakeKeyserverClient extends KeyserverClient {
     role -> new KeyPair(publicKey.keyval, privateKey.keyval)
   }.toMap
 
-  private def generateRoot(repoId: RepoId): RootRole = {
+  // TODO: No support for EC keys
+  private def generateRoot(repoId: RepoId, keyType: KeyType): RootRole = {
     val roles = keys.get(repoId).map { case (role, keyPair) =>
       role -> RoleKeys(List(keyPair.getPublic.id), threshold = 1)
     }
@@ -84,7 +85,7 @@ object FakeKeyserverClient extends KeyserverClient {
       FastFuture.failed(RootRoleConflict)
     } else {
       generateKeys(repoId)
-      val rootRole = generateRoot(repoId)
+      val rootRole = generateRoot(repoId, keyType)
       rootRoles.put(repoId, rootRole)
       FastFuture.successful(rootRole.asJson)
     }
@@ -98,14 +99,8 @@ object FakeKeyserverClient extends KeyserverClient {
   }
 
   override def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]] =
-    Future.fromTry {
-      Try {
-        rootRoles.asScala(repoId)
-      }.recover {
-        case _: NoSuchElementException => throw RootRoleNotFound
-      }
-    }.flatMap { role =>
-      sign(repoId, RoleType.ROOT, role)
+    fetchUnsignedRoot(repoId).flatMap { unsigned =>
+      sign(repoId, RoleType.ROOT, unsigned)
     }
 
   override def addTargetKey(repoId: RepoId, key: TufKey): Future[Unit] = {
@@ -124,7 +119,15 @@ object FakeKeyserverClient extends KeyserverClient {
     }
   }
 
-  override def fetchUnsignedRoot(repoId: RepoId): Future[RootRole] = fetchRootRole(repoId).map(_.signed)
+  override def fetchUnsignedRoot(repoId: RepoId): Future[RootRole] = {
+    Future.fromTry {
+      Try {
+        rootRoles.asScala(repoId)
+      }.recover {
+        case _: NoSuchElementException => throw RootRoleNotFound
+      }
+    }
+  }
 
   override def updateRoot(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = FastFuture.successful {
     rootRoles.computeIfPresent(repoId, (t: RepoId, u: RootRole) => {
@@ -166,6 +169,16 @@ trait FakeHttpClientSpec {
   val fakeHttpClient = new FakeHttpClient
 }
 
+
+trait HttpClientSpecSupport {
+  self: ResourceSpec =>
+
+  def testHttpClient(req: HttpRequest): Future[HttpResponse] = {
+    val p = Promise[HttpResponse]()
+    req ~> Route.seal(routes) ~> check { p.success(response) }
+    p.future
+  }
+}
 
 trait ResourceSpec extends TufReposerverSpec
   with ScalatestRouteTest

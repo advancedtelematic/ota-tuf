@@ -55,7 +55,7 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
       publicKeys.par.map { key =>
         sigsByKeyId.get(key.id) match {
           case Some(sig) =>
-            if (TufCrypto.isValid(signedPayload.signed, sig, key.publicKey))
+            if (TufCrypto.isValid(sig, key.publicKey, signedPayload.signed))
               Valid(sig)
             else
               Invalid(NonEmptyList.of(s"Invalid signature for key ${sig.keyid}"))

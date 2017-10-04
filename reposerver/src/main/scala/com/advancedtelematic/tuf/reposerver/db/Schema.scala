@@ -20,7 +20,7 @@ object Schema {
   import com.advancedtelematic.libats.slick.db.SlickUriMapper._
   import com.advancedtelematic.libats.slick.db.SlickAnyVal._
   import com.advancedtelematic.libats.slick.db.SlickCirceMapper._
-  import com.advancedtelematic.libtuf.data.TufSlickMappings._
+  import com.advancedtelematic.libtuf_server.data.TufSlickMappings._
   import com.advancedtelematic.libats.slick.db.SlickExtensions.javaInstantMapping
 
   class TargetItemTable(tag: Tag) extends Table[TargetItem](tag, "target_items") {
