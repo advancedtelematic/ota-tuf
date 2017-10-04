@@ -2,7 +2,7 @@
 
 == Obtaining the binary
 
-Binaries are compiled for each push to `master` and stored in teamcity.
+Binaries are compiled for each push to `master` and stored in http://teamcity.prod01.internal.advancedtelematic.com:8111/viewType.html?buildTypeId=ota_tuf_BuildCliTools[teamcity].
 
 Download the archive file, unpack and run:
 
