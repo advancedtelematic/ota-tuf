@@ -71,11 +71,11 @@ lazy val libtuf = (project in file("libtuf"))
   .settings(Publish.settings)
 
 lazy val libtufServer = (project in file("libtuf-server"))
-  .enablePlugins(BuildInfoPlugin, Versioning.Plugin, JavaAppPackaging)
+  .enablePlugins(BuildInfoPlugin, Versioning.Plugin)
   .configs(commonConfigs:_*)
   .settings(commonSettings)
   .settings(dbDependencies)
-  .settings(Publish.disable)
+  .settings(Publish.settings)
   .dependsOn(libtuf)
 
 lazy val keyserver = (project in file("keyserver"))
