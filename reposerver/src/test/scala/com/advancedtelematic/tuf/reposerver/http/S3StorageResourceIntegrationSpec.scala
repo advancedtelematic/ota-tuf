@@ -3,7 +3,7 @@ package com.advancedtelematic.tuf.reposerver.http
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model.{HttpEntity, Multipart, StatusCodes}
 import akka.util.ByteString
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
+import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.reposerver.target_store.{S3TargetStoreEngine, TargetStore}
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 import org.scalatest.{BeforeAndAfterAll, Inspectors}

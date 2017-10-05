@@ -23,6 +23,7 @@ trait KeyserverClient {
   val RootRoleNotFound = RawError(ErrorCode("root_role_not_found"), StatusCodes.FailedDependency, "root role was not found in upstream key store")
   val RootRoleConflict = RawError(ErrorCode("root_role_conflict"), StatusCodes.Conflict, "root role already exists")
   val RoleKeyNotFound = RawError(ErrorCode("role_key_not_found"), StatusCodes.PreconditionFailed, "can't sign since role was not found in upstream key store")
+  val KeyError = RawError(ErrorCode("key_error"), StatusCodes.BadRequest, "key cannot be processed")
 
   def createRoot(repoId: RepoId, keyType: KeyType = RsaKeyType): Future[Json]
 
@@ -91,7 +92,9 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
 
   override def updateRoot(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = {
     val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show / "unsigned"))
-    execJsonHttp[Unit, SignedPayload[RootRole]](req, signedPayload)()
+    execJsonHttp[Unit, SignedPayload[RootRole]](req, signedPayload) {
+      case StatusCodes.BadRequest => Future.failed(KeyError)
+    }
   }
 
   override def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey] = {

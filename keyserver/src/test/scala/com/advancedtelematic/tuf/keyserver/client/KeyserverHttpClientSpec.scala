@@ -2,10 +2,13 @@ package com.advancedtelematic.tuf.keyserver.client
 
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RepoId, RoleType, SignedPayload}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, KeyId, RepoId, RoleType, SignedPayload, ValidKeyId}
+import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf.keyserver.KeyserverHttpClient
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 import com.advancedtelematic.tuf.util.{HttpClientSpecSupport, ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
+import eu.timepit.refined.refineV
 import io.circe.Json
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Millis, Seconds, Span}
@@ -30,6 +33,14 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
       _ <- client.createRoot(repoId, EdKeyType)
       _ <- processKeyGenerationRequest(repoId)
     } yield ()
+  }
+
+  def manipulateSignedRsaKey(payload: SignedPayload[RootRole]): SignedPayload[RootRole] = {
+    val kid: KeyId = refineV[ValidKeyId]("0" * 64).right.get
+    // change type of one of the RSA keys to Ed25519:
+    val key = EdTufKey(payload.signed.keys.values.head.keyval)
+    val signedCopy = payload.signed.copy(keys = payload.signed.keys.updated(kid, key))
+    payload.copy(signed = signedCopy)
   }
 
   test("creates a root") {
@@ -79,6 +90,20 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
     } yield updated
 
     f.futureValue shouldBe (())
+  }
+
+  test("root update with invalid key returns expected error") {
+    val repoId = RepoId.generate()
+
+    val f = for {
+      _ <- createAndProcessRoot(repoId)
+      signed <- client.fetchRootRole(repoId)
+      updated <- client.updateRoot(repoId, manipulateSignedRsaKey(signed))
+    } yield updated
+
+    val failure = f.failed.futureValue
+    failure shouldBe a[RawError]
+    failure.getMessage shouldBe "key cannot be processed"
   }
 
   test("deletes a key") {
