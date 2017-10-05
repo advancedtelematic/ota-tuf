@@ -2,6 +2,7 @@ package com.advancedtelematic.libtuf.crypt
 
 import java.io.{StringReader, StringWriter}
 import java.security
+import java.security.interfaces.RSAPublicKey
 import java.security.spec.{PKCS8EncodedKeySpec, X509EncodedKeySpec}
 import java.security.{Signature => _, _}
 
@@ -188,7 +189,12 @@ protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
 
     Try {
       val pemKeyPair = parser.readObject().asInstanceOf[SubjectPublicKeyInfo]
-      RSATufKey(converter.getPublicKey(pemKeyPair))
+      val pubKey = converter.getPublicKey(pemKeyPair)
+      pubKey match {
+        case rsaPubKey : RSAPublicKey if rsaPubKey.getModulus().bitLength() >= 2048 => RSATufKey(pubKey)
+        case _ : RSAPublicKey => throw new IllegalArgumentException("Key size too small, must be >= 2048")
+        case _ => throw new IllegalArgumentException("Key is not an RSAPublicKey")
+      }
     }
   }
 
