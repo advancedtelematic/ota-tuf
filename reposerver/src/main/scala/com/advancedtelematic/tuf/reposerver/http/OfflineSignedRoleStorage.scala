@@ -4,7 +4,6 @@ import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.{NonEmptyList, ValidatedNel}
-import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{TargetCustom, TargetsRole, VersionedRole}
 import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, KeyId, RepoId, RoleType, SignedPayload}
 import com.advancedtelematic.libtuf.keyserver.KeyserverClient

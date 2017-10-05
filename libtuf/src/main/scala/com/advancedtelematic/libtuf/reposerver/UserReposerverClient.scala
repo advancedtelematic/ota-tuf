@@ -1,21 +1,18 @@
 package com.advancedtelematic.libtuf.reposerver
 
-import akka.actor.ActorSystem
+import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.model.Uri.Path.Slash
-import akka.http.scaladsl.model._
-import akka.http.scaladsl.model.headers.RawHeader
-import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
-import akka.stream.Materializer
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TufKey, TufPrivateKey}
-import com.advancedtelematic.libtuf.http.ServiceHttpClient
-import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import com.advancedtelematic.libtuf.http.SHttpjServiceClient
+import io.circe.Decoder
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
+import scalaj.http.{Http, HttpRequest, HttpResponse}
 
 trait UserReposerverClient {
   def root(): Future[SignedPayload[RootRole]]
@@ -32,46 +29,43 @@ trait UserReposerverClient {
 }
 
 class UserReposerverHttpClient(reposerverUri: Uri,
-                               httpClient: HttpRequest => Future[HttpResponse],
-                               token: String)
-                              (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer)
-  extends ServiceHttpClient(httpClient) with UserReposerverClient {
+                               httpClient: HttpRequest => Future[HttpResponse[Array[Byte]]],
+                               token: String)(implicit ec: ExecutionContext)
+  extends SHttpjServiceClient(httpClient) with UserReposerverClient {
 
-  lazy val authHeader = RawHeader("Authorization", s"Bearer $token")
+  override protected def execHttp[T : ClassTag : Decoder](request: HttpRequest)(errorHandler: PartialFunction[Int, Future[T]]) =
+    super.execHttp(request.header("Authorization", s"Bearer $token"))(errorHandler)
 
-  override protected def execHttp[T: ClassTag](request: HttpRequest)(errorHandler: PartialFunction[StatusCode, Future[T]])(implicit um: FromEntityUnmarshaller[T]) =
-    super.execHttp(request.addHeader(authHeader))(errorHandler)
-
-  private def apiUri(path: Path) =
-    reposerverUri.withPath(Path("/api") / "v1" / "user_repo" ++ Slash(path))
+  private def apiUri(path: Path): String =
+    reposerverUri.withPath(Path("/api") / "v1" / "user_repo" ++ Slash(path)).toString()
 
   def root(): Future[SignedPayload[RootRole]] = {
-    val req = HttpRequest(HttpMethods.GET, apiUri(Path("root.json")))
+    val req = Http(apiUri(Path("root.json"))).method("GET")
     execHttp[SignedPayload[RootRole]](req)()
   }
 
   def deleteKey(keyId: KeyId): Future[TufPrivateKey] = {
-    val req = HttpRequest(HttpMethods.DELETE, apiUri(Path("root") / "private_keys" / keyId.value))
+    val req = Http(apiUri(Path("root") / "private_keys" / keyId.value)).method("DELETE")
     execHttp[TufPrivateKey](req)()
   }
 
   def pushSignedRoot(signedRoot: SignedPayload[RootRole]): Future[Unit] = {
-    val req = HttpRequest(HttpMethods.POST, apiUri(Path("root")))
+    val req = Http(apiUri(Path("root"))).method("POST")
     execJsonHttp[Unit, SignedPayload[RootRole]](req, signedRoot)()
   }
 
   def targets(): Future[SignedPayload[TargetsRole]] = {
-    val req = HttpRequest(HttpMethods.GET, apiUri(Path("targets.json")))
+    val req = Http(apiUri(Path("targets.json"))).method("GET")
     execHttp[SignedPayload[TargetsRole]](req)()
   }
 
   def pushTargets(role: SignedPayload[TargetsRole]): Future[Unit] = {
-    val req = HttpRequest(HttpMethods.PUT, apiUri(Path("targets")))
+    val req = Http(apiUri(Path("targets"))).method("PUT")
     execJsonHttp[Unit, SignedPayload[TargetsRole]](req, role)()
   }
 
   override def pushTargetsKey(key: TufKey): Future[TufKey] = {
-    val req = HttpRequest(HttpMethods.PUT, apiUri(Path("keys") / "targets"))
+    val req = Http(apiUri(Path("keys") / "targets")).method("PUT")
     execJsonHttp[Unit, TufKey](req, key)().map(_ => key)
   }
 }

@@ -37,7 +37,7 @@ import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetIte
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
 
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.Future
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 import eu.timepit.refined.api.Refined

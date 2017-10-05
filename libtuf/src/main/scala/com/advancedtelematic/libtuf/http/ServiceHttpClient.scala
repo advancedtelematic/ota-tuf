@@ -9,12 +9,11 @@ import akka.stream.Materializer
 import com.advancedtelematic.libats.http.{ErrorCode, ErrorRepresentation}
 import com.advancedtelematic.libats.http.Errors.RawError
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport
-import io.circe.{Decoder, Encoder}
+import io.circe.Encoder
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import cats.syntax.either._
 import ErrorRepresentation._
-import akka.event.slf4j.Logger
-import org.slf4j.{ILoggerFactory, LoggerFactory}
+import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
