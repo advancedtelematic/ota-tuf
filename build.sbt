@@ -25,20 +25,20 @@ lazy val commonDeps = libraryDependencies ++= {
     "org.scala-lang.modules" %% "scala-async" % "0.9.6",
 
     "com.advancedtelematic" %% "libats" % libatsV,
-    "com.advancedtelematic" %% "libats-messaging" % libatsV,
     "com.advancedtelematic" %% "libats-messaging-datatype" % libatsV,
-    "com.advancedtelematic" %% "libats-metrics-akka" % libatsV,
 
-    "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV,
+    "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test",
     "org.scalatest"     %% "scalatest" % scalaTestV % "test"
   )
 }
 
-lazy val dbDependencies = libraryDependencies ++= {
+lazy val serverDependencies = libraryDependencies ++= {
   lazy val libatsV = libatsVersion.value
   lazy val slickV = "3.2.0"
 
   Seq(
+    "com.advancedtelematic" %% "libats-messaging" % libatsV,
+    "com.advancedtelematic" %% "libats-metrics-akka" % libatsV,
     "com.advancedtelematic" %% "libats-slick" % libatsV,
     "com.typesafe.slick" %% "slick" % slickV,
     "com.typesafe.slick" %% "slick-hikaricp" % slickV,
@@ -70,11 +70,12 @@ lazy val libtuf = (project in file("libtuf"))
   .settings(commonSettings)
   .settings(Publish.settings)
 
+
 lazy val libtuf_server = (project in file("libtuf-server"))
   .enablePlugins(BuildInfoPlugin, Versioning.Plugin)
   .configs(commonConfigs:_*)
   .settings(commonSettings)
-  .settings(dbDependencies)
+  .settings(serverDependencies)
   .settings(Publish.settings)
   .dependsOn(libtuf)
 
@@ -84,7 +85,7 @@ lazy val keyserver = (project in file("keyserver"))
   .settings(commonSettings)
   .settings(Publish.disable)
   .settings(Packaging.docker("tuf-keyserver"))
-  .settings(dbDependencies)
+  .settings(serverDependencies)
   .dependsOn(libtuf)
   .dependsOn(libtuf_server)
 
@@ -92,7 +93,7 @@ lazy val reposerver = (project in file("reposerver"))
   .enablePlugins(BuildInfoPlugin, Versioning.Plugin, JavaAppPackaging)
   .configs(commonConfigs:_*)
   .settings(commonSettings)
-  .settings(dbDependencies)
+  .settings(serverDependencies)
   .settings(Publish.disable)
   .settings(Packaging.docker("tuf-reposerver"))
   .dependsOn(libtuf)
