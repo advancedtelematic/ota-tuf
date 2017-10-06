@@ -275,6 +275,23 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
+  test("targets.json is refreshed if expired") {
+    val role = Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[TargetsRole]]
+    }
+
+    val newRole = SignedRole.withChecksum(repoId, RoleType.TARGETS, role, role.signed.version, Instant.now.minus(1, ChronoUnit.DAYS))
+    signedRoleRepo.update(newRole).futureValue
+
+    Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val updatedRole = responseAs[SignedPayload[TargetsRole]].signed
+
+      updatedRole.version shouldBe role.signed.version + 1
+      updatedRole.expires.isAfter(Instant.now) shouldBe true
+    }
+  }
 
   test("GET on a role returns valid json before targets are added") {
     val repoId = RepoId.generate()
@@ -744,6 +761,24 @@ class RepoResourceSpec extends TufReposerverSpec
       val rootRole = responseAs[SignedPayload[RootRole]].signed
       rootRole.roles(RoleType.TARGETS).keyids should contain(pub.id)
       rootRole.keys(pub.id) shouldBe pub
+    }
+  }
+
+  test("rejects offline targets.json if expired") {
+    val repoId = addTargetToRepo()
+
+    val expiredTargetsRole = TargetsRole(Instant.now().minus(1, ChronoUnit.DAYS), offlineTargets, 2)
+    val signedPayload = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, expiredTargetsRole).futureValue
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    // delete the key to simulate offline targets.json
+    fakeKeyserverClient.deletePrivateKey(repoId, signedPayload.signatures.head.keyid).futureValue
+
+    Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
     }
   }
 
