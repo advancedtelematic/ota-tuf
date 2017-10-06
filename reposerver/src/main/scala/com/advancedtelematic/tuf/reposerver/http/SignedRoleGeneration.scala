@@ -102,6 +102,9 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
     }.recoverWith {
       case SignedRoleRepository.SignedRoleNotFound =>
         generateAndCacheRole(repoId, roleType)
+      case keyserverClient.RoleKeyNotFound =>
+        log.warn("Could not generate signed $roleType (for $repoId) because the keys are missing")
+        FastFuture.failed(SignedRoleNotFound)
     }
   }
 
@@ -119,6 +122,8 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
         findFreshRole[SnapshotRole](repoId, r, (role, expires, version) => role.copy(expires = expires, version = version))
       case r @ RoleType.TIMESTAMP =>
         findFreshRole[TimestampRole](repoId, r, (role, expires, version) => role.copy(expires = expires, version = version))
+      case r @ RoleType.TARGETS =>
+        findFreshRole[TargetsRole](repoId, r, (role, expires, version) => role.copy(expires = expires, version = version))
       case _ =>
         findAndCacheRole(repoId, roleType)
     }
