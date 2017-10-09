@@ -1,8 +1,10 @@
 package com.advancedtelematic.tuf.keyserver.client
 
+import java.security.interfaces.RSAPublicKey
+
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, KeyId, RepoId, RoleType, SignedPayload, ValidKeyId}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, KeyId, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf.keyserver.KeyserverHttpClient
@@ -140,5 +142,24 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
     } yield sig
 
     f.failed.futureValue shouldBe client.RoleKeyNotFound
+  }
+
+  test("minimum RSA key size when creating a repo") {
+    val repoId = RepoId.generate()
+
+    val f = for {
+      _ <- client.createRoot(repoId, RsaKeyType)
+      _ <- processKeyGenerationRequest(repoId)
+      rootRole <- client.fetchRootRole(repoId)
+    } yield rootRole.signed.keys.values
+
+    val keys = f.futureValue
+
+    keys.foreach { key =>
+      key.keyval match {
+        case rsaPubKey : RSAPublicKey =>
+          rsaPubKey.getModulus().bitLength() should be >= 2048
+      }
+    }
   }
 }
