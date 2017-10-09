@@ -28,7 +28,7 @@ with SignedRootRoleSupport {
 
   implicit val ec = ExecutionContext.global
 
-  override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
+  override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(10, Seconds))
 
   val rootGeneration = new RootRoleGeneration(fakeVault)
   val keyGenerationOp = new KeyGenerationOp(fakeVault)

@@ -1,9 +1,6 @@
 package com.advancedtelematic.tuf.cli.client
 
-import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri
-import akka.stream.Materializer
-import com.advancedtelematic.libtuf.http.ServiceHttpClientSupport
 import com.advancedtelematic.libtuf.reposerver.{UserReposerverClient, UserReposerverHttpClient}
 import com.advancedtelematic.tuf.cli.TufRepo
 
@@ -11,12 +8,22 @@ import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import org.slf4j.LoggerFactory
 
-object UserReposerverHtttClient extends ServiceHttpClientSupport {
+import scalaj.http.HttpRequest
+
+class ScalajHttpClient(implicit ec: ExecutionContext)
+  extends (scalaj.http.HttpRequest ⇒ Future[scalaj.http.HttpResponse[Array[Byte]]]) {
+  import scala.concurrent.blocking
+
+  override def apply(request: HttpRequest) = Future {
+    blocking { request.asBytes }
+  }
+}
+
+object UserReposerverHttpClient {
   private val log = LoggerFactory.getLogger(this.getClass)
 
-  def apply(reposerverUri: Uri, token: String)
-           (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer): UserReposerverHttpClient =
-    new UserReposerverHttpClient(reposerverUri, defaultHttpClient, token)
+  def apply(reposerverUri: Uri, token: String)(implicit ec: ExecutionContext): UserReposerverHttpClient =
+    new UserReposerverHttpClient(reposerverUri, new ScalajHttpClient, token)
 
   private def toTufUri(authPlusUri: Uri): Uri = {
     val host = authPlusUri.authority.host.toString()
@@ -35,8 +42,8 @@ object UserReposerverHtttClient extends ServiceHttpClientSupport {
   }
 
   def forRepo(repo: TufRepo)
-             (implicit system: ActorSystem, mat: Materializer, ec: ExecutionContext): Future[UserReposerverClient] = for {
+             (implicit ec: ExecutionContext): Future[UserReposerverClient] = for {
     authConfig <- repo.authConfig().toFuture
     token <- AuthPlusClient.tokenFor(authConfig)
-  } yield UserReposerverHtttClient(toTufUri(authConfig.server), token.value)
+  } yield UserReposerverHttpClient(toTufUri(authConfig.server), token.value)
 }

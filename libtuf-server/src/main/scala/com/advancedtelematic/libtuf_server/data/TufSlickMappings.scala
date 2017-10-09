@@ -2,7 +2,6 @@ package com.advancedtelematic.libtuf_server.data
 
 import java.security.PublicKey
 
-import com.advancedtelematic.libats.codecs.CirceEnum
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.crypt.TufCrypto.KeyOps
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
@@ -10,10 +9,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, EdKeyType, KeyTy
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libats.slick.db.SlickCirceMapper
-import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import io.circe.{Decoder, Encoder, Json}
-import slick.ast.BaseTypedType
-import slick.jdbc.JdbcType
+import io.circe.Json
 import slick.jdbc.MySQLProfile.api._
 
 // TODO: Use this in libats

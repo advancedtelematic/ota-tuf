@@ -1,0 +1,77 @@
+package com.advancedtelematic.libtuf.http
+
+import akka.http.scaladsl.model.StatusCodes
+import com.advancedtelematic.libats.http.Errors.RawError
+import com.advancedtelematic.libats.http.{ErrorCode, ErrorRepresentation}
+import io.circe.{Decoder, Encoder, Json}
+import org.slf4j.LoggerFactory
+
+import cats.syntax.either._
+import scala.concurrent.{ExecutionContext, Future}
+import scala.reflect.ClassTag
+import scala.util.{Failure, Success, Try}
+import scalaj.http.{HttpRequest, HttpResponse}
+import io.circe.syntax._
+
+abstract class SHttpjServiceClient(client: scalaj.http.HttpRequest ⇒ Future[scalaj.http.HttpResponse[Array[Byte]]])
+                                  (implicit ec: ExecutionContext) {
+
+  private val log = LoggerFactory.getLogger(this.getClass)
+
+  private def RemoteServiceError(msg: String) = RawError(ErrorCode("remote_service_error"), StatusCodes.BadGateway, msg)
+
+  private def defaultErrorHandler[T](): PartialFunction[Int, Future[T]] = PartialFunction.empty
+
+  protected def execJsonHttp[Res : ClassTag : Decoder, Req : Encoder]
+  (request: HttpRequest, entity: Req)
+  (errorHandler: PartialFunction[Int, Future[Res]] = defaultErrorHandler()): Future[Res] = {
+
+    val req = request
+      .postData(entity.asJson.noSpaces.getBytes)
+      .header("Content-Type", "application/json")
+      .method(request.method)
+
+    execHttp(req)(errorHandler)
+  }
+
+  private def tryErrorParsing(response: HttpResponse[Array[Byte]]): Try[String] = {
+    tryParseResponse[ErrorRepresentation](response)
+      .recoverWith { case _ ⇒
+        tryParseResponse[Json](response).flatMap { json ⇒
+          json.hcursor.downField("errors").as[List[String]].toTry.map(_.mkString)
+        }
+      }
+      .recover { case _ ⇒
+        new String(response.body)
+      }
+      .map { errorRepr ⇒
+        s"http/${response.code}: $errorRepr"
+      }
+      .recover { case _ ⇒
+        s"Unknown error: $response"
+      }
+  }
+
+  def tryParseResponse[T : ClassTag : Decoder](response: HttpResponse[Array[Byte]]): Try[T] =
+    if(implicitly[ClassTag[T]].runtimeClass.equals(classOf[Unit]))
+      Success(()).asInstanceOf[Try[T]]
+    else
+      io.circe.parser.parse(new String(response.body)).flatMap(_.as[T]).toTry
+
+  protected def execHttp[T : ClassTag : Decoder](request: HttpRequest)
+                           (errorHandler: PartialFunction[Int, Future[T]] = defaultErrorHandler()): Future[T] = {
+    client(request).flatMap { resp ⇒
+      if(resp.isSuccess)
+        Future.fromTry(tryParseResponse[T](resp))
+      else if(errorHandler.isDefinedAt(resp.code))
+        errorHandler(resp.code)
+      else
+        Future.fromTry {
+          tryErrorParsing(resp).flatMap { errorRepr ⇒
+            log.debug(s"request failed: $request")
+            Failure(RemoteServiceError(s"${this.getClass.getSimpleName}|Unexpected response from remote server at ${request.url}|$errorRepr"))
+          }
+        }
+    }
+  }
+}

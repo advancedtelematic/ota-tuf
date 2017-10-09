@@ -6,7 +6,7 @@ import io.circe.{Decoder, Encoder, Json}
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.model.Uri.Path.Slash
-import akka.http.scaladsl.model.headers.{Authorization, RawHeader}
+import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import akka.stream.Materializer
 import com.advancedtelematic.libats.data.Namespace

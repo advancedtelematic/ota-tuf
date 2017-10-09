@@ -1,42 +1,37 @@
 package com.advancedtelematic.tuf.cli.client
 
-import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri.Path
-import akka.http.scaladsl.model._
-import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials}
-import akka.stream.Materializer
-import com.advancedtelematic.libtuf.http.{ServiceHttpClient, ServiceHttpClientSupport}
+import com.advancedtelematic.libtuf.http.SHttpjServiceClient
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, AuthPlusToken}
-import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Decoder
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
-object AuthPlusClient extends ServiceHttpClientSupport {
-  def apply(conf: AuthConfig)
-           (implicit system: ActorSystem, mat: Materializer): AuthPlusClient =
-    new AuthPlusClient(conf, defaultHttpClient)
 
-  def tokenFor(conf: AuthConfig)(implicit system: ActorSystem, mat: Materializer): Future[AuthPlusToken] =
+object AuthPlusClient {
+  def apply(conf: AuthConfig)(implicit ec: ExecutionContext): AuthPlusClient =
+    new AuthPlusClient(conf, new ScalajHttpClient)
+
+  def tokenFor(conf: AuthConfig)(implicit ec: ExecutionContext): Future[AuthPlusToken] =
     apply(conf).authToken()
 }
 
 
-protected class AuthPlusClient(val config: AuthConfig, httpClient: HttpRequest => Future[HttpResponse])
-                              (implicit system: ActorSystem, mat: Materializer)
-  extends ServiceHttpClient(httpClient) {
+protected class AuthPlusClient(val config: AuthConfig,
+                               httpClient: scalaj.http.HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]])
+                              (implicit ec: ExecutionContext)
+  extends SHttpjServiceClient(httpClient) {
 
-  private def apiUri(path: Path) = config.server.withPath(path)
+  private def apiUri(path: Path): String = config.server.withPath(path).toString()
 
   private val tokenResponseDecoder =
     Decoder.decodeString.prepare(_.downField("access_token")).map(AuthPlusToken.apply)
 
   def authToken(): Future[AuthPlusToken] = {
-    val authHeaders = Authorization(BasicHttpCredentials(config.client_id, config.client_secret))
-    val entity = FormData("grant_type" -> "client_credentials").toEntity
 
-    val req = HttpRequest(HttpMethods.POST,
-      uri = apiUri(Path("/token")), entity = entity).withHeaders(authHeaders)
+    val req = scalaj.http.Http(apiUri(Path("/token")))
+      .auth(config.client_id, config.client_secret)
+      .postForm(Seq("grant_type" → "client_credentials"))
 
     implicit val _decoder = tokenResponseDecoder
     execHttp[AuthPlusToken](req)()

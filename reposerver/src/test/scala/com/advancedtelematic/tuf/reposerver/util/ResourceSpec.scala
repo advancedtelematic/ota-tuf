@@ -12,10 +12,10 @@ import com.advancedtelematic.libtuf.data.TufDataType._
 import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libats.test.DatabaseSpec
 
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.Future
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model._
-import akka.http.scaladsl.server.{Directive1, Directives, Route}
+import akka.http.scaladsl.server.{Directive1, Directives}
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 
@@ -169,16 +169,6 @@ trait FakeHttpClientSpec {
   val fakeHttpClient = new FakeHttpClient
 }
 
-
-trait HttpClientSpecSupport {
-  self: ResourceSpec =>
-
-  def testHttpClient(req: HttpRequest): Future[HttpResponse] = {
-    val p = Promise[HttpResponse]()
-    req ~> Route.seal(routes) ~> check { p.success(response) }
-    p.future
-  }
-}
 
 trait ResourceSpec extends TufReposerverSpec
   with ScalatestRouteTest
