@@ -2,7 +2,7 @@ package com.advancedtelematic.tuf.reposerver.http
 
 import akka.http.scaladsl.server.{AuthorizationFailedRejection, Directive1, Directives}
 import com.advancedtelematic.libats.auth.NamespaceDirectives
-import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import org.slf4j.LoggerFactory

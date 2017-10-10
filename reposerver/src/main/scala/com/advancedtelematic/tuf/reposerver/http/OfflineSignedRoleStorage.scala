@@ -5,20 +5,20 @@ import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.{NonEmptyList, ValidatedNel}
 import com.advancedtelematic.libtuf.data.ClientDataType.{TargetCustom, TargetsRole, VersionedRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, KeyId, RepoId, RoleType, SignedPayload}
-import com.advancedtelematic.libtuf.keyserver.KeyserverClient
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, RoleType, SignedPayload, TargetFilename}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, StorageMethod, TargetItem}
 import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import io.circe.Encoder
 import cats.implicits._
-import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
+import com.advancedtelematic.libats.data.DataType.Checksum
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import slick.jdbc.MySQLProfile.api._
-import com.advancedtelematic.libtuf.data.TufCodecs.uriDecoder
+import com.advancedtelematic.libats.http.HttpCodecs._
 
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
+import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 
 class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
                                         (implicit val db: Database, val ec: ExecutionContext)

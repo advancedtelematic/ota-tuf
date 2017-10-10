@@ -7,7 +7,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, KeyId, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.Errors.RawError
-import com.advancedtelematic.libtuf.keyserver.KeyserverHttpClient
+import com.advancedtelematic.libtuf_server.keyserver.KeyserverHttpClient
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 import com.advancedtelematic.tuf.util.{HttpClientSpecSupport, ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
 import eu.timepit.refined.refineV

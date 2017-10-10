@@ -12,17 +12,17 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
-import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
-import com.advancedtelematic.libtuf.data.TufDataType.RepoId
-import com.advancedtelematic.libtuf.keyserver.KeyserverClient
-import com.advancedtelematic.tuf.reposerver.data.Messages.PackageStorageUsage
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetFilename}
+import com.advancedtelematic.libtuf_server.data.Messages.PackageStorageUsage
+import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{TargetBytes, TargetRedirect}
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api.Database
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.StorageMethod._
+
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
 

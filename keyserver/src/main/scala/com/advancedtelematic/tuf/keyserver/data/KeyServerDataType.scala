@@ -3,15 +3,13 @@ package com.advancedtelematic.tuf.keyserver.data
 import java.security.PublicKey
 import java.util.UUID
 
-import com.advancedtelematic.libats.codecs.CirceEnum
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
-import com.advancedtelematic.libats.slick.codecs.SlickEnum
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, TufKey}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 
 object KeyServerDataType {
-  object KeyGenRequestStatus extends CirceEnum with SlickEnum {
+  object KeyGenRequestStatus extends Enumeration {
     type KeyGenRequestStatus = Value
 
     val REQUESTED, GENERATED, ERROR = Value

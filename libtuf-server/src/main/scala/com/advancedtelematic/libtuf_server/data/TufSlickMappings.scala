@@ -2,22 +2,18 @@ package com.advancedtelematic.libtuf_server.data
 
 import java.security.PublicKey
 
+import com.advancedtelematic.libats.data.DataType.Checksum
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.crypt.TufCrypto.KeyOps
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
-import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, EdKeyType, KeyType, RoleType, RsaKeyType, SignedPayload}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, KeyType, RoleType, RsaKeyType, SignedPayload}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libats.slick.db.SlickCirceMapper
 import io.circe.Json
 import slick.jdbc.MySQLProfile.api._
-
-// TODO: Use this in libats
-object SlickEnumMapper {
-  def enumMapper[E <: Enumeration](enum: E) = {
-    MappedColumnType.base[E#Value, String](_.toString, (s: String) ⇒ enum.withName(s))
-  }
-}
+import com.advancedtelematic.libats.codecs.CirceAts._
+import com.advancedtelematic.libats.slick.codecs.SlickEnumMapper
 
 object TufSlickMappings {
 

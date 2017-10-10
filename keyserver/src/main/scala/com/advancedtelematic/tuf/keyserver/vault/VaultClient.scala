@@ -35,7 +35,7 @@ trait VaultClient {
 }
 
 object VaultClient {
-  import com.advancedtelematic.libats.codecs.AkkaCirce._
+  import com.advancedtelematic.libats.codecs.CirceCodecs._
   import com.advancedtelematic.libtuf.data.TufCodecs._
 
   case class VaultKey(id: KeyId, keyType: KeyType, publicKey: String, privateKey: TufPrivateKey)

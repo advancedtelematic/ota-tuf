@@ -6,11 +6,10 @@ import akka.NotUsed
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.scaladsl.Source
-import com.advancedtelematic.libats.data.Namespace
-import com.advancedtelematic.libats.http.ErrorCode
+import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity, RawError}
-import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, TargetFilename}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
 import slick.jdbc.MySQLProfile.api._

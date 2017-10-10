@@ -5,17 +5,17 @@ import java.security.Security
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server.{Directives, Route}
-import com.advancedtelematic.libtuf.keyserver.KeyserverHttpClient
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import cats.syntax.either._
 import com.advancedtelematic.libats.http.BootApp
-import com.advancedtelematic.libats.monitoring.MetricsSupport
 import com.typesafe.config.ConfigFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.LogDirectives._
+import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.libats.messaging.MessageBus
+import com.advancedtelematic.libtuf_server.keyserver.KeyserverHttpClient
 import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
 import com.advancedtelematic.tuf.reposerver.target_store._

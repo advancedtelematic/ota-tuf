@@ -3,16 +3,15 @@ package com.advancedtelematic.tuf.reposerver.db
 import java.time.Instant
 
 import akka.http.scaladsl.model.Uri
-import com.advancedtelematic.libats.data.Namespace
-import com.advancedtelematic.libats.messaging_datatype.DataType.TargetFilename
+import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId, SignedPayload}
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, SignedPayload, TargetFilename}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
 import io.circe.Json
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.StorageMethod._
-
+import SlickMappings._
 
 object Schema {
   import com.advancedtelematic.libats.slick.codecs.SlickRefined._

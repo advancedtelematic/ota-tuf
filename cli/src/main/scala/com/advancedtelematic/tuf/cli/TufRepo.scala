@@ -1,11 +1,12 @@
 package com.advancedtelematic.tuf.cli
 
+import java.net.URI
 import java.nio.file.{Files, Path}
 import java.time.{Instant, Period}
-import akka.http.scaladsl.model.Uri
+
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RoleKeys, RoleTypeToMetaPathOp, RootRole, TargetCustom, TargetsRole, VersionedRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey, TufPrivateKey, ValidTargetFilename}
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
 import io.circe.{Decoder, Encoder}
 import org.slf4j.LoggerFactory
@@ -14,7 +15,7 @@ import TryToFuture._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 import cats.syntax.either._
-import com.advancedtelematic.libats.messaging_datatype.DataType.{HashMethod, ValidChecksum, ValidTargetFilename}
+import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -51,7 +52,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
 
   import cats.syntax.option._
 
-  def addTarget(name: TargetName, version: TargetVersion, length: Int, checksum: Refined[String, ValidChecksum], hardwareIds: List[HardwareIdentifier], url: Uri): Try[Path] = {
+  def addTarget(name: TargetName, version: TargetVersion, length: Int, checksum: Refined[String, ValidChecksum], hardwareIds: List[HardwareIdentifier], url: URI): Try[Path] = {
     for {
       targetsRole <- readUnsignedRole[TargetsRole](RoleType.TARGETS)
       targetFilename <- refineV[ValidTargetFilename](s"${name.value}-${version.value}").leftMap(s => new IllegalArgumentException(s)).toTry

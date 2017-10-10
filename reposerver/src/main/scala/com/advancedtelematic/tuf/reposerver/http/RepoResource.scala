@@ -8,17 +8,14 @@ import com.advancedtelematic.libats.data.RefinedUtils._
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server._
 import cats.data.Validated.{Invalid, Valid}
-import com.advancedtelematic.libats.data.Namespace
 import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
-import com.advancedtelematic.libtuf.data.Messages.TufTargetAdded
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, RoleType}
-import com.advancedtelematic.libtuf.keyserver.KeyserverClient
+import com.advancedtelematic.libtuf_server.data.Messages.TufTargetAdded
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import com.advancedtelematic.tuf.reposerver.db.{RepoNamespaceRepositorySupport, SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import slick.jdbc.MySQLProfile.api._
-import com.advancedtelematic.libats.messaging_datatype.DataType.{TargetFilename, ValidTargetFilename}
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
@@ -30,16 +27,20 @@ import scala.util.{Failure, Success}
 import com.advancedtelematic.libats.http.AnyvalMarshallingSupport._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libats.codecs.AkkaCirce._
+import com.advancedtelematic.libats.codecs.CirceCodecs._
+import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem
-import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
+import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
+import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem._
 import io.circe.Json
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
+import com.advancedtelematic.libats.http.UUIDKeyPath._
+import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 
 import scala.collection.immutable
 import com.advancedtelematic.tuf.reposerver.Settings
+import com.advancedtelematic.libtuf_server.data.Marshalling._
 
 class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: NamespaceValidation,
                    targetStore: TargetStore, messageBusPublisher: MessageBusPublisher)
@@ -147,7 +148,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
           complete(keyserverClient.deletePrivateKey(repoId, keyId))
         }
       } ~
-      (get & path(RoleType.JsonRoleTypeMetaPath)) { roleType =>
+      (get & path(JsonRoleTypeMetaPath)) { roleType =>
         findRole(repoId, roleType)
       } ~
       (put & path("keys" / "targets") & entity(as[TufKey])) { key =>

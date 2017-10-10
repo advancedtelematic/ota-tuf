@@ -1,12 +1,11 @@
 package com.advancedtelematic.tuf.cli
 
+import java.net.URI
 import java.nio.file.{Files, Path, Paths}
 import java.security.Security
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-import akka.http.scaladsl.model.Uri
-import akka.http.scaladsl.util.FastFuture
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, HardwareIdentifier, KeyId, KeyType, TargetName, TargetVersion}
@@ -16,7 +15,7 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import cats.syntax.option._
 import eu.timepit.refined.api.Refined
 import TryToFuture._
-import com.advancedtelematic.libats.messaging_datatype.DataType.ValidChecksum
+import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.client.UserReposerverHttpClient
 
@@ -52,7 +51,7 @@ case class Config(command: Command,
                   targetVersion: Option[TargetVersion] = None,
                   checksum: Option[Refined[String, ValidChecksum]] = None,
                   hardwareIds: List[HardwareIdentifier] = List.empty,
-                  targetUri: Uri = Uri.Empty,
+                  targetUri: URI = URI.create(""),
                   keySize: Int = 2048)
 
 object Cli extends App with VersionInfo {
@@ -158,7 +157,7 @@ object Cli extends App with VersionInfo {
             opt[Seq[HardwareIdentifier]]("hardwareids")
               .required()
               .action { (arg, c) => c.copy(hardwareIds = arg.toList) },
-            opt[Uri]("url")
+            opt[URI]("url")
               .required()
               .action { (arg, c) => c.copy(targetUri = arg) }
           ),
@@ -238,7 +237,7 @@ object Cli extends App with VersionInfo {
 
       case Help =>
         parser.showUsage()
-        FastFuture.successful(())
+        Future.successful(())
     }
 
     Await.result(f, Duration.Inf)

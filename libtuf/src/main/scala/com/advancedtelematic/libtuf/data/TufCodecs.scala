@@ -1,22 +1,22 @@
 package com.advancedtelematic.libtuf.data
 
 import cats.syntax.either._
-import akka.http.scaladsl.model.Uri
 import io.circe.syntax._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufDataType._
 import io.circe._
 import cats.syntax.functor._
+import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 
 import scala.util.Try
 
 object TufCodecs {
   import io.circe.generic.semiauto._
-  import com.advancedtelematic.libats.codecs.AkkaCirce._
+  import com.advancedtelematic.libats.codecs.CirceCodecs._
 
-  implicit val uriEncoder: Encoder[Uri] = Encoder[String].contramap(_.toString)
-  implicit val uriDecoder: Decoder[Uri] = Decoder[String].map(Uri.apply)
+  implicit val signatureMethodEncoder: Encoder[SignatureMethod] = Encoder.enumEncoder(SignatureMethod)
+  implicit val signatureMethodDecoder: Decoder[SignatureMethod] = Decoder.enumDecoder(SignatureMethod)
 
   implicit val signatureEncoder: Encoder[Signature] = deriveEncoder
   implicit val signatureDecoder: Decoder[Signature] = deriveDecoder
@@ -26,9 +26,6 @@ object TufCodecs {
 
   implicit def signedPayloadEncoder[T : Encoder]: Encoder[SignedPayload[T]] = deriveEncoder
   implicit def signedPayloadDecoder[T : Encoder : Decoder]: Decoder[SignedPayload[T]] = deriveDecoder
-
-  implicit val checkSumEncoder: Encoder[Checksum] = deriveEncoder
-  implicit val checkSumDecoder: Decoder[Checksum] = deriveDecoder
 
   implicit val rsaKeyTypeEncoder: Encoder[RsaKeyType.type] = Encoder[String].contramap(_ ⇒ "RSA")
   implicit val rsaKeyTypeDecoder: Decoder[RsaKeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "RSA", RsaKeyType, "RsaKeyType"))

@@ -3,8 +3,8 @@ package com.advancedtelematic.tuf.reposerver.db
 import java.time.Instant
 
 import akka.http.scaladsl.model.StatusCodes
-import com.advancedtelematic.libats.messaging_datatype.DataType.{HashMethod, ValidChecksum}
-import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, RepoId, RoleType, SignedPayload}
+import com.advancedtelematic.libats.data.DataType.{Checksum, HashMethod, ValidChecksum}
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, SignedPayload}
 import io.circe.Json
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libats.test.DatabaseSpec

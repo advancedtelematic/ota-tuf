@@ -1,24 +1,25 @@
 package com.advancedtelematic.libtuf.http
 
-import akka.http.scaladsl.model.StatusCodes
-import com.advancedtelematic.libats.http.Errors.RawError
-import com.advancedtelematic.libats.http.{ErrorCode, ErrorRepresentation}
 import io.circe.{Decoder, Encoder, Json}
-import org.slf4j.LoggerFactory
-
 import cats.syntax.either._
+import com.advancedtelematic.libats.data.ErrorRepresentation
+import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
+
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 import scalaj.http.{HttpRequest, HttpResponse}
 import io.circe.syntax._
+import org.slf4j.LoggerFactory
+
+object SHttpjServiceClient {
+  case class HttpjClientError(msg: String) extends Exception(s"remote_service_error: $msg")
+}
 
 abstract class SHttpjServiceClient(client: scalaj.http.HttpRequest ⇒ Future[scalaj.http.HttpResponse[Array[Byte]]])
                                   (implicit ec: ExecutionContext) {
 
   private val log = LoggerFactory.getLogger(this.getClass)
-
-  private def RemoteServiceError(msg: String) = RawError(ErrorCode("remote_service_error"), StatusCodes.BadGateway, msg)
 
   private def defaultErrorHandler[T](): PartialFunction[Int, Future[T]] = PartialFunction.empty
 
@@ -69,7 +70,7 @@ abstract class SHttpjServiceClient(client: scalaj.http.HttpRequest ⇒ Future[sc
         Future.fromTry {
           tryErrorParsing(resp).flatMap { errorRepr ⇒
             log.debug(s"request failed: $request")
-            Failure(RemoteServiceError(s"${this.getClass.getSimpleName}|Unexpected response from remote server at ${request.url}|$errorRepr"))
+            Failure(HttpjClientError(s"${this.getClass.getSimpleName}|Unexpected response from remote server at ${request.url}|$errorRepr"))
           }
         }
     }

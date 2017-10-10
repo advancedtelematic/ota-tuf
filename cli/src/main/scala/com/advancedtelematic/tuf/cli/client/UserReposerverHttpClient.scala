@@ -1,6 +1,7 @@
 package com.advancedtelematic.tuf.cli.client
 
-import akka.http.scaladsl.model.Uri
+import java.net.URI
+
 import com.advancedtelematic.libtuf.reposerver.{UserReposerverClient, UserReposerverHttpClient}
 import com.advancedtelematic.tuf.cli.TufRepo
 
@@ -22,21 +23,33 @@ class ScalajHttpClient(implicit ec: ExecutionContext)
 object UserReposerverHttpClient {
   private val log = LoggerFactory.getLogger(this.getClass)
 
-  def apply(reposerverUri: Uri, token: String)(implicit ec: ExecutionContext): UserReposerverHttpClient =
+  def apply(reposerverUri: URI, token: String)(implicit ec: ExecutionContext): UserReposerverHttpClient =
     new UserReposerverHttpClient(reposerverUri, new ScalajHttpClient, token)
 
-  private def toTufUri(authPlusUri: Uri): Uri = {
-    val host = authPlusUri.authority.host.toString()
+  private def toTufUri(authPlusUri: URI): URI = {
+    val host = authPlusUri.getHost
 
     "^(.+?)-.+?\\.(.+)$".r.findFirstMatchIn(host) match {
       case Some(m) =>
         val env = m.group(1)
         val rest = m.group(2)
 
-        authPlusUri.withHost(s"$env-tuf-reposerver-pub.$rest")
+        new URI(authPlusUri.getScheme,
+          authPlusUri.getRawUserInfo,
+          s"$env-tuf-reposerver-pub.$rest",
+          authPlusUri.getPath,
+          authPlusUri.getFragment
+        )
       case None =>
-        val url = authPlusUri.withHost(host.replace("auth-plus", "tuf-reposerver-pub"))
-        log.warn("Could not determine reposerver url from authplus url, using")
+        val url =
+          new URI(authPlusUri.getScheme,
+            authPlusUri.getRawUserInfo,
+            host.replace("auth-plus", "tuf-reposerver-pub"),
+            authPlusUri.getPath,
+            authPlusUri.getFragment)
+
+        log.warn("Could not determine reposerver url from authplus url, using $url")
+
         url
     }
   }
