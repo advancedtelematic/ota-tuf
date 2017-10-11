@@ -2,7 +2,6 @@ package com.advancedtelematic.tuf.cli.client
 
 import java.net.URI
 
-import com.advancedtelematic.libtuf.reposerver.{UserReposerverClient, UserReposerverHttpClient}
 import com.advancedtelematic.libtuf.reposerver.{UserReposerverClient, UserReposerverHttpClient => UserReposerverHttpClientClass}
 import com.advancedtelematic.tuf.cli.TufRepo
 import com.advancedtelematic.tuf.cli.TryToFuture._
@@ -24,7 +23,7 @@ object UserReposerverHttpClient {
   private val log = LoggerFactory.getLogger(this.getClass)
 
   def apply(reposerverUri: URI, token: String)(implicit ec: ExecutionContext): UserReposerverHttpClientClass =
-    new UserReposerverHttpClient(reposerverUri, new ScalajHttpClient, token)
+    new UserReposerverHttpClientClass(reposerverUri, new ScalajHttpClient, token)
 
   private def toTufUri(authPlusUri: URI): URI = {
     val host = authPlusUri.getHost

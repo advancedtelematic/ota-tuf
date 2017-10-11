@@ -3,27 +3,23 @@ package com.advancedtelematic.tuf.reposerver.http
 import akka.http.scaladsl.unmarshalling._
 import PredefinedFromStringUnmarshallers.CsvSeq
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
-import akka.http.scaladsl.model.StatusCodes
-import com.advancedtelematic.libats.data.RefinedUtils._
-import akka.http.scaladsl.model.Uri
+import akka.http.scaladsl.model.headers.{ETag, EntityTag, `If-Match`}
+import akka.http.scaladsl.model.{HttpResponse, StatusCodes, Uri}
 import akka.http.scaladsl.server._
 import cats.data.Validated.{Invalid, Valid}
+import com.advancedtelematic.libats.data.RefinedUtils._
 import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf_server.data.Messages.TufTargetAdded
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId}
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
 import com.advancedtelematic.tuf.reposerver.db.{RepoNamespaceRepositorySupport, SignedRoleRepositorySupport, TargetItemRepositorySupport}
-import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import slick.jdbc.MySQLProfile.api._
+import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepository.SignedRoleNotFound
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
 import com.advancedtelematic.libtuf.data.TufDataType._
-
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success}
 import com.advancedtelematic.libats.http.AnyvalMarshallingSupport._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -32,15 +28,18 @@ import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem._
+import com.advancedtelematic.libats.http.UUIDKeyPath._
+import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
+import com.advancedtelematic.tuf.reposerver.Settings
+import com.advancedtelematic.libtuf_server.data.Marshalling._
+import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
-import com.advancedtelematic.libats.http.UUIDKeyPath._
-import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
-
 import scala.collection.immutable
-import com.advancedtelematic.tuf.reposerver.Settings
-import com.advancedtelematic.libtuf_server.data.Marshalling._
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
+import slick.jdbc.MySQLProfile.api._
 
 class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: NamespaceValidation,
                    targetStore: TargetStore, messageBusPublisher: MessageBusPublisher)
@@ -126,12 +125,45 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   }
 
   private def findRole(repoId: RepoId, roleType: RoleType): Route = {
-    complete {
-      signedRoleGeneration.findRole(repoId, roleType).map(_.content)
+    onSuccess(signedRoleGeneration.findRole(repoId, roleType)) { signedRole =>
+      conditional(EntityTag(signedRole.checksum.hash.value)) {
+        complete(signedRole.content)
+      }
     }
   }
 
-  private def modifyRepoRoutes(repoId: RepoId)  =
+  private def storeSignedTarget[T](repoId: RepoId, signed: SignedPayload[TargetsRole]): Route = {
+    val f: Future[ToResponseMarshallable] = offlineSignedRoleStorage.store(repoId, signed).map {
+      case Valid(_) =>
+        StatusCodes.NoContent
+      case Invalid(errors) =>
+        val obj = Json.obj("errors" -> errors.asJson)
+        StatusCodes.BadRequest -> obj
+    }
+
+    complete(f)
+  }
+
+  private def toEntityTag(signedRole: SignedRole) =
+    EntityTag(signedRole.checksum.hash.value)
+
+  private def updateSignedTarget(repoId: RepoId, signedPayload: SignedPayload[TargetsRole], signedRole: SignedRole) =
+    optionalHeaderValueByType[`If-Match`]() {
+      case Some(_) =>
+        conditional(toEntityTag(signedRole)) {
+          onSuccess(offlineSignedRoleStorage.store(repoId, signedPayload)) {
+            case Valid(newSignedRole) =>
+              complete(HttpResponse(StatusCodes.NoContent).addHeader(ETag(toEntityTag(newSignedRole))))
+            case Invalid(errors) =>
+              val obj = Json.obj("errors" -> errors.asJson)
+              complete(StatusCodes.BadRequest -> obj)
+          }
+        }
+      case None =>
+        complete(StatusCodes.PreconditionRequired)
+    }
+
+  private def modifyRepoRoutes(repoId: RepoId) =
     namespaceValidation(repoId) { namespace =>
       pathPrefix("root") {
         pathEnd {
@@ -170,15 +202,14 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
           }
         } ~
         (pathEnd & put & entity(as[SignedPayload[TargetsRole]])) { signed =>
-          val f: Future[ToResponseMarshallable] = offlineSignedRoleStorage.store(repoId, signed).map {
-            case Valid(_) =>
-              StatusCodes.NoContent
-            case Invalid(errors) =>
-              val obj = Json.obj("errors" -> errors.asJson)
-              StatusCodes.BadRequest -> obj
+          onComplete(signedRoleRepo.find(repoId, RoleType.TARGETS)) {
+            case Success(signedRole) =>
+              updateSignedTarget(repoId, signed, signedRole)
+            case Failure(SignedRoleNotFound) =>
+              storeSignedTarget(repoId, signed)
+            case Failure(t) =>
+              failWith(t)
           }
-
-          complete(f)
         }
       }
     }

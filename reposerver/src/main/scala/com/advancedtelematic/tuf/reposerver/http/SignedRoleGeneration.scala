@@ -89,22 +89,26 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
 
   private def findFreshRole[T <: VersionedRole : Decoder : Encoder](repoId: RepoId, roleType: RoleType, updateRoleFn: (T, Instant, Int) => T): Future[SignedRole] = {
     signedRoleRepo.find(repoId, roleType).flatMap { role =>
-      if(role.expireAt.isBefore(Instant.now.plus(1, ChronoUnit.HOURS))) {
-        val versionedRole = role.content.signed.as[T].valueOr(throw _)
-        val nextVersion = versionedRole.version + 1
-        val nextExpires = Instant.now.plus(1, ChronoUnit.DAYS)
-        val newRole = updateRoleFn(versionedRole, nextExpires, nextVersion)
+      val futureRole =
+        if (role.expireAt.isBefore(Instant.now.plus(1, ChronoUnit.HOURS))) {
+          val versionedRole = role.content.signed.as[T].valueOr(throw _)
+          val nextVersion = versionedRole.version + 1
+          val nextExpires = Instant.now.plus(1, ChronoUnit.DAYS)
+          val newRole = updateRoleFn(versionedRole, nextExpires, nextVersion)
 
-        signRole(repoId, roleType, newRole).flatMap(signedRoleRepo.persist)
-      } else {
-        FastFuture.successful(role)
+          signRole(repoId, roleType, newRole).flatMap(signedRoleRepo.persist)
+        } else {
+          FastFuture.successful(role)
+        }
+
+      futureRole.recoverWith {
+        case keyserverClient.RoleKeyNotFound =>
+          log.info("Could not update $roleType (for $repoId) because the keys are missing, returning expired version")
+          FastFuture.successful(role)
       }
     }.recoverWith {
       case SignedRoleRepository.SignedRoleNotFound =>
         generateAndCacheRole(repoId, roleType)
-      case keyserverClient.RoleKeyNotFound =>
-        log.warn("Could not generate signed $roleType (for $repoId) because the keys are missing")
-        FastFuture.failed(SignedRoleNotFound)
     }
   }
 
