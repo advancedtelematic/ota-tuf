@@ -21,10 +21,9 @@ object Release {
     val dockerPublishSteps: Seq[ReleaseStep] = Seq(
       releaseStepCommand("keyserver/docker:publish"),
       releaseStepCommand("reposerver/docker:publish")
-      release
     )
 
-    val allSteps = prepareSteps ++ releaseCrossBuild ++ dockerPublishSteps ++ publishSteps
+    val allSteps = prepareSteps ++ dockerPublishSteps ++ publishSteps
 
     Seq(
       releaseIgnoreUntrackedFiles := true,
