@@ -14,10 +14,11 @@ import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
-
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType._
+import com.advancedtelematic.libtuf_server.data.Marshalling._
+import com.advancedtelematic.libats.http.UUIDKeyPath.UUIDKeyPathOp
 
 class RootRoleResource(vaultClient: VaultClient)
                       (implicit val db: Database, val ec: ExecutionContext, mat: Materializer)
@@ -61,7 +62,7 @@ class RootRoleResource(vaultClient: VaultClient)
           }
         }
       } ~
-      path(RoleType.Path) { roleType =>
+      path(RoleTypePath) { roleType =>
         (post & entity(as[Json])) { payload =>
           val f = roleSigning.signFor(repoId, roleType, payload)
           complete(f)

@@ -1,4 +1,4 @@
-package com.advancedtelematic.libtuf.keyserver
+package com.advancedtelematic.libtuf_server.keyserver
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri.Path
@@ -6,7 +6,7 @@ import akka.http.scaladsl.model.Uri.Path.{Empty, Slash}
 import akka.http.scaladsl.model.{StatusCodes, _}
 import akka.stream.ActorMaterializer
 import cats.syntax.show.toShowOps
-import com.advancedtelematic.libats.http.ErrorCode
+import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
@@ -17,7 +17,7 @@ import io.circe.{Decoder, Encoder, Json}
 import scala.concurrent.Future
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.http.{ServiceHttpClient, ServiceHttpClientSupport}
+import com.advancedtelematic.libtuf_server.http.{ServiceHttpClient, ServiceHttpClientSupport}
 
 trait KeyserverClient {
   val RootRoleNotFound = RawError(ErrorCode("root_role_not_found"), StatusCodes.FailedDependency, "root role was not found in upstream key store")

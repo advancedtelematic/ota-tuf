@@ -5,17 +5,17 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
-import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.{ClientDataType, TufDataType}
 import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, KeyId, RoleType, SignedPayload, TufKey, TufPrivateKey}
-import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{FunSuite, Matchers}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
+
 import scala.concurrent.Future
 
 abstract class CliSpec extends FunSuite with Matchers with ScalaFutures {
@@ -40,24 +40,24 @@ class FakeUserReposerverClient extends UserReposerverClient {
       RoleType.TARGETS -> RoleKeys(Seq(targetsPubKey.id), 1)
     ), 1, Instant.now.plus(1, ChronoUnit.HOURS))
 
-  override def root(): Future[SignedPayload[RootRole]] = FastFuture.successful {
+  override def root(): Future[SignedPayload[RootRole]] = Future.successful {
     val sig = TufCrypto.signPayload(oldPrivateKey, unsignedRoot).toClient(oldPublicKey.id)
     SignedPayload(Seq(sig), unsignedRoot)
   }
 
   override def deleteKey(keyId: KeyId): Future[TufPrivateKey] = {
     if(keyId == oldPublicKey.id)
-      FastFuture.successful(oldPrivateKey)
+      Future.successful(oldPrivateKey)
     else
-      FastFuture.failed(new RuntimeException(s"[test] key not found $keyId"))
+      Future.failed(new RuntimeException(s"[test] key not found $keyId"))
   }
 
   override def pushSignedRoot(signedRoot: TufDataType.SignedPayload[ClientDataType.RootRole]) = {
     if(signedRoot.isValidFor(oldPublicKey)) {
       unsignedRoot = signedRoot.signed
-      FastFuture.successful(())
+      Future.successful(())
     } else
-      FastFuture.failed(new RuntimeException("[test] invalid signatures for root role"))
+      Future.failed(new RuntimeException("[test] invalid signatures for root role"))
   }
 
   override def targets(): Future[SignedPayload[TargetsRole]] =
@@ -68,12 +68,12 @@ class FakeUserReposerverClient extends UserReposerverClient {
 
     if(targetsRole.isValidFor(targetsPubKey)) {
       unsignedTargets = targetsRole.signed
-      FastFuture.successful(())
+      Future.successful(())
     } else
-      FastFuture.failed(new RuntimeException("[test] invalid signatures for targets role"))
+      Future.failed(new RuntimeException("[test] invalid signatures for targets role"))
   }
 
-  override def pushTargetsKey(key: TufKey): Future[TufKey] = FastFuture.successful {
+  override def pushTargetsKey(key: TufKey): Future[TufKey] = Future.successful {
     targetsPubKey = key
     targetsPubKey
   }

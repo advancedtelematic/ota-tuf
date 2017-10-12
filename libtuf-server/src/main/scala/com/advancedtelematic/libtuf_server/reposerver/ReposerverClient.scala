@@ -1,7 +1,7 @@
-package com.advancedtelematic.libtuf.reposerver
+package com.advancedtelematic.libtuf_server.reposerver
 
 import akka.http.scaladsl.model._
-import com.advancedtelematic.libtuf.data.TufDataType.{Checksum, HardwareIdentifier, RepoId, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, TargetName, TargetVersion}
 import io.circe.{Decoder, Encoder, Json}
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri.Path
@@ -9,24 +9,22 @@ import akka.http.scaladsl.model.Uri.Path.Slash
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import akka.stream.Materializer
-import com.advancedtelematic.libats.data.Namespace
-import com.advancedtelematic.libats.http.ErrorCode
+import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
+import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.RawError
-import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libats.codecs.CirceRefined._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat._
 
 import scala.concurrent.{ExecutionContext, Future}
 import io.circe.generic.semiauto._
-import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.http.{ServiceHttpClient, ServiceHttpClientSupport}
+import com.advancedtelematic.libats.http.HttpCodecs._
+import com.advancedtelematic.libtuf_server.http.{ServiceHttpClient, ServiceHttpClientSupport}
 
 import scala.reflect.ClassTag
 
 object ReposerverClient {
-  import com.advancedtelematic.libats.codecs.CirceAnyVal._
+  import com.advancedtelematic.libats.codecs.CirceCodecs._
 
   object RequestTargetItem {
     implicit val encoder: Encoder[RequestTargetItem] = deriveEncoder

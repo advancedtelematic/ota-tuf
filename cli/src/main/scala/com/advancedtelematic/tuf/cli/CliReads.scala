@@ -3,7 +3,6 @@ package com.advancedtelematic.tuf.cli
 import java.nio.file.Path
 import java.time.Instant
 
-import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, KeyType, RsaKeyType}
 import eu.timepit.refined
 import eu.timepit.refined.api.{Refined, Validate}
@@ -15,7 +14,8 @@ import com.advancedtelematic.tuf.cli.DataType.AuthConfig
 
 object CliCodecs {
   import io.circe.generic.semiauto._
-  import com.advancedtelematic.libtuf.data.TufCodecs.{uriDecoder, uriEncoder}
+  import com.advancedtelematic.libats.codecs.CirceUri._
+
   implicit val authConfigDecoder = deriveDecoder[AuthConfig]
   implicit val authConfigEncoder = deriveEncoder[AuthConfig]
 }
@@ -38,6 +38,4 @@ object CliReads {
   implicit val pathRead: Read[Path] = Read.fileRead.map(_.toPath)
 
   implicit val instantRead: Read[Instant] = Read.stringRead.map(Instant.parse)
-
-  implicit val uriRead: Read[Uri] = Read.stringRead.map(Uri.apply)
 }

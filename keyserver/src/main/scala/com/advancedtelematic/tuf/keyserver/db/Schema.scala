@@ -19,6 +19,7 @@ object Schema {
   import com.advancedtelematic.libats.slick.db.SlickUriMapper._
   import com.advancedtelematic.libats.slick.db.SlickExtensions._
   import com.advancedtelematic.libtuf_server.data.TufSlickMappings._
+  import SlickMappings._
 
   class KeyGenRequestTable(tag: Tag) extends Table[KeyGenRequest](tag, "key_gen_requests") {
     def id = column[KeyGenId]("id", O.PrimaryKey)

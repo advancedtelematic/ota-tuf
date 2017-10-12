@@ -3,20 +3,19 @@ package com.advancedtelematic.tuf.reposerver.http
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server.Route
 import com.advancedtelematic.libats.http.ErrorHandler
-import com.advancedtelematic.libtuf.crypt.Sha256Digest
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.prop.Whenever
 import org.scalatest.{BeforeAndAfterAll, Inspectors}
 import cats.syntax.show._
 import com.advancedtelematic.libats.auth.NamespaceDirectives
+import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
+import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
 import scala.concurrent.ExecutionContext
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
-import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
-import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem
 
 class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
   with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration {

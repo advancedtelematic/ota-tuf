@@ -1,25 +1,25 @@
 package com.advancedtelematic.libtuf.data
 
+import java.net.URI
 import java.time.Instant
 
-import akka.http.scaladsl.model.Uri
 import cats.syntax.show._
-import com.advancedtelematic.libats.messaging_datatype.DataType.HashMethod.HashMethod
-import com.advancedtelematic.libats.messaging_datatype.DataType.{TargetFilename, ValidChecksum}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, RoleType, TargetName, TargetVersion, TufKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, RoleType, TargetFilename, TargetName, TargetVersion, TufKey}
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.{Decoder, Json}
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import cats.syntax.either._
+import com.advancedtelematic.libats.data.DataType.HashMethod.HashMethod
+import com.advancedtelematic.libats.data.DataType.ValidChecksum
 
 object ClientDataType {
   type ClientHashes = Map[HashMethod, Refined[String, ValidChecksum]]
 
   case class TargetCustom(name: TargetName, version: TargetVersion, hardwareIds: Seq[HardwareIdentifier],
                           targetFormat: Option[TargetFormat],
-                          uri: Option[Uri] = None,
+                          uri: Option[URI] = None,
                           createdAt: Instant = Instant.now,
                           updatedAt: Instant = Instant.now
                          )

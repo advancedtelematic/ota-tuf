@@ -1,6 +1,7 @@
 package com.advancedtelematic.tuf.cli.client
 
-import akka.http.scaladsl.model.Uri.Path
+import java.net.URI
+
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, AuthPlusToken}
 import io.circe.Decoder
@@ -22,14 +23,15 @@ protected class AuthPlusClient(val config: AuthConfig,
                               (implicit ec: ExecutionContext)
   extends SHttpjServiceClient(httpClient) {
 
-  private def apiUri(path: Path): String = config.server.withPath(path).toString()
+  private def apiUri(path: String): String =
+    URI.create(config.server.toString + "/" + path).toString
 
   private val tokenResponseDecoder =
     Decoder.decodeString.prepare(_.downField("access_token")).map(AuthPlusToken.apply)
 
   def authToken(): Future[AuthPlusToken] = {
 
-    val req = scalaj.http.Http(apiUri(Path("/token")))
+    val req = scalaj.http.Http(apiUri("/token"))
       .auth(config.client_id, config.client_secret)
       .postForm(Seq("grant_type" → "client_credentials"))
 

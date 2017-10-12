@@ -1,17 +1,18 @@
 package com.advancedtelematic.libtuf.data
 
-import com.advancedtelematic.libats.messaging_datatype.MessageCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType._
-import com.advancedtelematic.libtuf.data.TufDataType.{RoleType, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{RoleType, TargetFormat, TargetName, TargetVersion}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
+import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
-import io.circe._
 
 object ClientCodecs {
   import TufCodecs._
   import io.circe.generic.semiauto._
-  import RefinedStringEncoding._
-  import com.advancedtelematic.libats.codecs.AkkaCirce._
+  import com.advancedtelematic.libats.codecs.CirceCodecs._
+
+  implicit val targetFormatEncoder: Encoder[TargetFormat] = Encoder.enumEncoder(TargetFormat)
+  implicit val targetFormatDecoder: Decoder[TargetFormat] = Decoder.enumDecoder(TargetFormat)
 
   implicit val roleTypeKeyEncoder: KeyEncoder[RoleType] = KeyEncoder.encodeKeyString.contramap[RoleType](_.toString.toLowerCase)
   implicit val roleTypeKeyDecoder: KeyDecoder[RoleType] = KeyDecoder.decodeKeyString.map[RoleType](s => RoleType.withName(s.toUpperCase))

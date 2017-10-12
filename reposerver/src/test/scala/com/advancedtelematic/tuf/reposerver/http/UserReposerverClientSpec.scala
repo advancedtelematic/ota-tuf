@@ -1,16 +1,18 @@
 package com.advancedtelematic.tuf.reposerver.http
 
+import java.net.URI
 import java.time.Instant
 
-import com.advancedtelematic.libats.data.Namespace
+import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, RepoId, RoleType, SignedPayload, TufPrivateKey}
-import com.advancedtelematic.libtuf.reposerver.UserReposerverHttpClient
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 import org.scalatest.time.{Seconds, Span}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.reposerver.UserReposerverHttpClient
+
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 
 class UserReposerverClientSpec extends TufReposerverSpec
@@ -22,11 +24,11 @@ class UserReposerverClientSpec extends TufReposerverSpec
 
   implicit val ec: ExecutionContext = system.dispatcher
 
-  override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(10, Seconds))
+  override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(15, Seconds))
 
   val repoId = RepoId.generate()
 
-  val client = new UserReposerverHttpClient("http://localhost", testClient, "")
+  val client = new UserReposerverHttpClient(URI.create("http://localhost"), testClient, "")
 
   override def beforeAll(): Unit = {
     super.beforeAll()

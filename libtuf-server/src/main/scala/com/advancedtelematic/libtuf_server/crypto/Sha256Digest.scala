@@ -1,14 +1,13 @@
-package com.advancedtelematic.libtuf.crypt
+package com.advancedtelematic.libtuf_server.crypto
 
 import java.security.MessageDigest
 
 import akka.stream.scaladsl.Sink
 import akka.util.ByteString
-import com.advancedtelematic.libtuf.data.TufDataType.Checksum
-import com.advancedtelematic.libats.messaging_datatype.DataType.{HashMethod, ValidChecksum}
+import com.advancedtelematic.libats.data.DataType.{Checksum, HashMethod, ValidChecksum}
+import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.util.encoders.Hex
-import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 
 import scala.concurrent.{ExecutionContext, Future}
 

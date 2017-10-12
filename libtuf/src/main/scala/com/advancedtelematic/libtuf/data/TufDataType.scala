@@ -3,44 +3,43 @@ package com.advancedtelematic.libtuf.data
 import java.security.{PrivateKey, PublicKey}
 import java.util.UUID
 
-import akka.http.scaladsl.server.PathMatchers
-import akka.http.scaladsl.unmarshalling.Unmarshaller
 import cats.Show
-import com.advancedtelematic.libats.codecs.CirceEnum
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
-import com.advancedtelematic.libats.messaging_datatype.DataType.HashMethod.HashMethod
-import com.advancedtelematic.libats.messaging_datatype.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.Encoder
 import TufCrypto.PublicKeyOps
-import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
-
-import scala.util.Try
 
 object TufDataType {
   final case class ValidHardwareIdentifier()
   type HardwareIdentifier = Refined[String, ValidHardwareIdentifier]
-  implicit val validHardwareIdentifier: Validate.Plain[String, ValidHardwareIdentifier] = ValidationUtils.validInBetween(min = 0, max = 200, ValidHardwareIdentifier())
+  implicit val validHardwareIdentifier: Validate.Plain[String, ValidHardwareIdentifier] =
+    ValidationUtils.validInBetween(min = 0, max = 200, ValidHardwareIdentifier())
 
-  object TargetFormat extends CirceEnum {
+  object TargetFormat extends Enumeration {
     type TargetFormat = Value
 
     val OSTREE, BINARY = Value
-
-    implicit val targetFormatFromStringUnmarshaller = Unmarshaller.strict[String, TargetFormat](s => this.withName(s.toUpperCase))
   }
 
   case class TargetName(value: String) extends AnyVal
   case class TargetVersion(value: String) extends AnyVal
 
-  case class Checksum(method: HashMethod, hash: Refined[String, ValidChecksum])
+  case class ValidTargetFilename()
+  type TargetFilename = Refined[String, ValidTargetFilename]
+
+  implicit val validTargetFilename: Validate.Plain[String, ValidTargetFilename] =
+    Validate.fromPredicate(
+      f => f.nonEmpty && f.length < 254,
+      _ => "TargetFilename cannot be empty or bigger than 254 chars",
+      ValidTargetFilename()
+    )
+
   case class ValidKeyId()
   type KeyId = Refined[String, ValidKeyId]
   implicit val validKeyId: Validate.Plain[String, ValidKeyId] =
     ValidationUtils.validHexValidation(ValidKeyId(), length = 64)
-  val KeyIdPath = PathMatchers.Segment.flatMap(_.refineTry[ValidKeyId].toOption)
 
   case class ValidSignature()
   case class Signature(sig: Refined[String, ValidSignature], method: SignatureMethod = SignatureMethod.RSASSA_PSS)
@@ -55,16 +54,9 @@ object TufDataType {
     val ALL = List(ROOT, SNAPSHOT, TARGETS, TIMESTAMP)
 
     implicit val show = Show.show[Value](_.toString.toLowerCase)
-
-    val Path = PathMatchers.Segment.flatMap(v => Try(withName(v.toUpperCase)).toOption)
-
-    val JsonRoleTypeMetaPath = PathMatchers.Segment.flatMap { str =>
-      val (roleTypeStr, _) = str.splitAt(str.indexOf(".json"))
-      Try(RoleType.withName(roleTypeStr.toUpperCase)).toOption
-    }
   }
 
-  object SignatureMethod extends CirceEnum {
+  object SignatureMethod extends Enumeration {
     type SignatureMethod = Value
 
     val RSASSA_PSS = Value("rsassa-pss")

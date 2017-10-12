@@ -11,11 +11,10 @@ import akka.util.ByteString
 import cats.data.NonEmptyList
 import cats.syntax.show.toShowOps
 import cats.syntax.option._
-import com.advancedtelematic.libats.messaging_datatype.DataType.{HashMethod, TargetFilename, ValidTargetFilename}
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
-import com.advancedtelematic.libtuf.crypt.{Sha256Digest, TufCrypto}
+import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientHashes, ClientTargetItem, RoleTypeToMetaPathOp, RootRole, SnapshotRole, TargetCustom, TargetsRole, TimestampRole}
-import com.advancedtelematic.libtuf.data.Messages.TufTargetAdded
+import com.advancedtelematic.libtuf_server.data.Messages.{PackageStorageUsage, TufTargetAdded}
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, _}
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Json}
@@ -24,16 +23,17 @@ import org.scalatest.prop.Whenever
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import com.advancedtelematic.libats.codecs.AkkaCirce._
+import com.advancedtelematic.libats.codecs.CirceCodecs._
+import com.advancedtelematic.libats.http.HttpCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import cats.syntax.either._
+import com.advancedtelematic.libats.data.DataType.HashMethod
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.tuf.reposerver.data.Messages.PackageStorageUsage
-import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem._
-import com.advancedtelematic.libtuf.reposerver.ReposerverClient.RequestTargetItem
+import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
+import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
 

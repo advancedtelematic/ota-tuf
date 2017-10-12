@@ -11,32 +11,30 @@ lazy val UnitTest = config("ut").extend(Test)
 lazy val commonConfigs = Seq(ItTest, UnitTest)
 
 lazy val commonDeps = libraryDependencies ++= {
-  val akkaV = "2.4.17"
-  val akkaHttpV = "10.0.3"
   val scalaTestV = "3.0.0"
   lazy val libatsV = libatsVersion.value
+
+  Seq(
+    "org.scala-lang.modules" %% "scala-async" % "0.9.6",
+    "com.advancedtelematic" %% "libats" % libatsV,
+    "org.scalatest" %% "scalatest" % scalaTestV % "test"
+  )
+}
+
+lazy val serverDependencies = libraryDependencies ++= {
+  lazy val akkaV = "2.4.17"
+  lazy val akkaHttpV = "10.0.3"
+  lazy val libatsV = libatsVersion.value
+  lazy val slickV = "3.2.0"
 
   Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaV,
     "com.typesafe.akka" %% "akka-stream" % akkaV,
     "com.typesafe.akka" %% "akka-http" % akkaHttpV,
     "com.typesafe.akka" %% "akka-slf4j" % akkaV,
-
-    "org.scala-lang.modules" %% "scala-async" % "0.9.6",
-
-    "com.advancedtelematic" %% "libats" % libatsV,
-    "com.advancedtelematic" %% "libats-messaging-datatype" % libatsV,
-
     "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test",
-    "org.scalatest"     %% "scalatest" % scalaTestV % "test"
-  )
-}
 
-lazy val serverDependencies = libraryDependencies ++= {
-  lazy val libatsV = libatsVersion.value
-  lazy val slickV = "3.2.0"
-
-  Seq(
+    "com.advancedtelematic" %% "libats-http" % libatsV,
     "com.advancedtelematic" %% "libats-messaging" % libatsV,
     "com.advancedtelematic" %% "libats-metrics-akka" % libatsV,
     "com.advancedtelematic" %% "libats-slick" % libatsV,
@@ -54,7 +52,7 @@ lazy val commonSettings = Seq(
   resolvers += "ATS Releases" at "http://nexus.advancedtelematic.com:8081/content/repositories/releases",
   resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content/repositories/snapshots",
   resolvers += "version99 Empty loggers" at "http://version99.qos.ch",
-  libatsVersion := "0.0.1-99-gcdbccd8",
+  libatsVersion := "0.1.0-1-g667ffe7",
   buildInfoOptions += BuildInfoOption.ToMap,
   buildInfoOptions += BuildInfoOption.BuildTime) ++
   Seq(inConfig(ItTest)(Defaults.testTasks): _*) ++
@@ -69,7 +67,6 @@ lazy val libtuf = (project in file("libtuf"))
   .configs(commonConfigs:_*)
   .settings(commonSettings)
   .settings(Publish.settings)
-
 
 lazy val libtuf_server = (project in file("libtuf-server"))
   .enablePlugins(BuildInfoPlugin, Versioning.Plugin)

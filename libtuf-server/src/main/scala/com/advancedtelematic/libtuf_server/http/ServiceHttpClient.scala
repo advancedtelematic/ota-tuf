@@ -1,4 +1,4 @@
-package com.advancedtelematic.libtuf.http
+package com.advancedtelematic.libtuf_server.http
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
@@ -6,13 +6,12 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.{FromEntityUnmarshaller, Unmarshaller}
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
-import com.advancedtelematic.libats.http.{ErrorCode, ErrorRepresentation}
+import cats.syntax.either._
+import com.advancedtelematic.libats.data.{ErrorCode, ErrorRepresentation}
 import com.advancedtelematic.libats.http.Errors.RawError
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport
-import io.circe.Encoder
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import cats.syntax.either._
-import ErrorRepresentation._
+import io.circe.Encoder
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
