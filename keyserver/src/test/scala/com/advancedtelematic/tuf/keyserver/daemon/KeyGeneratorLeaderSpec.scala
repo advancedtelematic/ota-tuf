@@ -29,7 +29,7 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
 
   lazy val actorRef = system.actorOf(KeyGeneratorLeader.props(fakeVault))
 
-  override implicit def patienceConfig = PatienceConfig(timeout = Span(20, Seconds), interval = Span(300, Millis))
+  override implicit def patienceConfig = PatienceConfig(timeout = Span(30, Seconds), interval = Span(300, Millis))
 
   override def beforeAll(): Unit = {
     super.beforeAll()
