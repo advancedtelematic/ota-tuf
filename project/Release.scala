@@ -27,7 +27,8 @@ object Release {
 
     Seq(
       releaseIgnoreUntrackedFiles := true,
-      releaseProcess := allSteps
+      releaseProcess := allSteps,
+      releaseCrossBuild := true
     )
   }
 }
