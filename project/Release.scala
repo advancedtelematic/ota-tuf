@@ -13,7 +13,7 @@ object Release {
 
   def settings(toPublish: Project*) = {
 
-    val publishSteps = toPublish.map(p => ReleaseStep(releaseStepTask(publish in p)))
+    val publishSteps = toPublish.map(p => ReleaseStep(releaseStepTask(publish in p), enableCrossBuild = true))
 
     val prepareSteps: Seq[ReleaseStep] = Seq(
       checkSnapshotDependencies)
@@ -21,9 +21,10 @@ object Release {
     val dockerPublishSteps: Seq[ReleaseStep] = Seq(
       releaseStepCommand("keyserver/docker:publish"),
       releaseStepCommand("reposerver/docker:publish")
+      release
     )
 
-    val allSteps = prepareSteps ++ dockerPublishSteps ++ publishSteps
+    val allSteps = prepareSteps ++ releaseCrossBuild ++ dockerPublishSteps ++ publishSteps
 
     Seq(
       releaseIgnoreUntrackedFiles := true,
