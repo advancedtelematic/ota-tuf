@@ -31,7 +31,7 @@ docker run -d \
 
 function docker_vault() {
     id=$(docker ps | grep tuf-vault | awk {'print $1'})
-    sleep 3
+    sleep 5
     docker exec \
            -e VAULT_TOKEN=$VAULT_TOKEN \
            -e VAULT_ADDR='http://0.0.0.0:8200' $id vault $*
