@@ -138,21 +138,19 @@ object TufCrypto {
   def generateKeyPair[T <: KeyType](keyType: T, keySize: Int): (TufKey, TufPrivateKey) =
     keyType.crypto.generateKeyPair(keySize)
 
-  def verifySignatures[T : Encoder](signedPayload: SignedPayload[T], publicRootKeys: Seq[TufKey]):
+  def verifySignatures[T : Encoder](signedPayload: SignedPayload[T], publicKeys: Map[KeyId, TufKey]):
   ValidatedNel[String, List[ClientSignature]] = {
     import cats.implicits._
 
-    val sigsByKeyId = signedPayload.signatures.map(s => s.keyid -> s).toMap
-
-    publicRootKeys.par.map { key =>
-      sigsByKeyId.get(key.id) match {
-        case Some(sig) =>
-          if (isValid(sig, key.keyval, signedPayload.signed))
-            Valid(sig)
+    signedPayload.signatures.par.map { (clientSig : ClientSignature) =>
+      publicKeys.get(clientSig.keyid) match {
+        case Some(key) =>
+          if (TufCrypto.isValid(clientSig, key.keyval, signedPayload.signed))
+            Valid(clientSig)
           else
-            Invalid(NonEmptyList.of(s"Invalid signature for key ${sig.keyid}"))
+            s"Invalid signature for key ${clientSig.keyid}".invalidNel
         case None =>
-          Invalid(NonEmptyList.of(s"payload not signed with key ${key.id}"))
+          s"payload signed with unknown key ${clientSig.keyid}".invalidNel
       }
     }.toList.sequenceU
   }
@@ -173,7 +171,7 @@ object TufCrypto {
           .toValidatedNel
       }.toList.sequenceU
 
-    val threshold = rootRole.roles(RoleType.TARGETS).threshold
+    val threshold = rootRole.roles(signedPayload.signed.roleType).threshold
 
     validSignatureCount.ensure(NonEmptyList.of(s"Valid signature count must be >= threshold ($threshold)")) { validSignatures =>
       validSignatures.size >= threshold && threshold > 0

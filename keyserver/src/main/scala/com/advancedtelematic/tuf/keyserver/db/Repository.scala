@@ -174,6 +174,9 @@ protected [db] class RoleRepository()(implicit db: Database, ec: ExecutionContex
       .failIfNotSingle(MissingEntity[Role])
   }
 
+  def update(role: Role): Future[Role] = {
+    db.run(Schema.roles.filter(_.id === role.id).update(role).map(_ => role))
+  }
 
   protected [db] def persistAction(role: Role): DBIO[Role] =
       (Schema.roles += role).map(_ => role)

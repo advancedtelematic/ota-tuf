@@ -21,6 +21,7 @@ class RootRoleGeneration(vaultClient: VaultClient)
                         (implicit val db: Database, val ec: ExecutionContext)
   extends KeyGenRequestSupport
     with KeyRepositorySupport
+    with RoleRepositorySupport
     with SignedRootRoleSupport {
 
   private val DEFAULT_ROLES = RoleType.ALL
@@ -77,9 +78,12 @@ class RootRoleGeneration(vaultClient: VaultClient)
   }
 
   def storeUserSigned(repoId: RepoId, signed: SignedPayload[RootRole]): Future[ValidatedNel[String, SignedPayload[RootRole]]] = {
-    roleSigning.verifySignatures(repoId, signed).flatMap {
-      case Valid(_) =>
-        signedRootRoleRepo.storeKeys(repoId, signed.signed).flatMap(_ => persistSigned(repoId)(signed).map(Valid(_)))
+    roleSigning.newRootIsValid(repoId, signed).flatMap {
+      case Valid(newRootRole) => async {
+        await(signedRootRoleRepo.storeKeys(repoId, signed.signed))
+        await(roleRepo.update(newRootRole))
+        Valid(await(persistSigned(repoId)(signed)))
+      }
       case r@Invalid(_) =>
         FastFuture.successful(r)
     }
