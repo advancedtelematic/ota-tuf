@@ -1,26 +1,29 @@
 package com.advancedtelematic.tuf.cli
 
 import java.net.URI
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Path, Paths}
 import java.time.Instant
 
+import cats.syntax.either._
+import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RoleType, SignedPayload, TargetName, TargetVersion, TufKey}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RoleType, SignedPayload, TargetName, TargetVersion, TufKey}
+import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.tuf.cli.CliCodecs.authConfigDecoder
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
 import io.circe.jawn._
-import cats.syntax.either._
-import com.advancedtelematic.libtuf.data.TufCodecs._
 import eu.timepit.refined.api.Refined
-import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 
 import scala.concurrent.Future
+import scala.util.Try
 
 class TufRepoSpec extends CliSpec {
 
   import scala.concurrent.ExecutionContext.Implicits.global
 
-  lazy val treehubCredentials = Paths.get(this.getClass.getResource("/treehub.json").toURI)
+  lazy val treehubCredentials: Path = Paths.get(this.getClass.getResource("/treehub.json").toURI)
+  lazy val credentialsZip: Path = Paths.get(this.getClass.getResource("/credentials.zip").toURI)
 
   def initRepo(): TufRepo = {
     val repo = new TufRepo(RepoName(RandomNames() + "-repo"), Files.createTempDirectory("tuf-repo"))
@@ -52,9 +55,37 @@ class TufRepoSpec extends CliSpec {
   test("can read auth config for an initialized repo") {
     val repo = initRepo()
 
-    repo.init(treehubCredentials)
+    repo.init(treehubCredentials, KeyName("targets-for-init"))
 
     repo.authConfig().get shouldBe a[AuthConfig]
+  }
+
+  test("can initialize repo from ZIP file") {
+    val repo = initRepo()
+
+    repo.init(credentialsZip, KeyName("default-key"))
+
+    repo.authConfig().get shouldBe a[AuthConfig]
+  }
+
+  test("export zip file") {
+    val repo = initRepo()
+    repo.initFromZip(credentialsZip, KeyName("default-key"))
+    // overwrite with different auth values:
+    repo.init(treehubCredentials, KeyName("default-key"))
+    repo.genKeys(KeyName("default-key"), EdKeyType, 256)
+
+    RandomNames.apply()
+    val tempFilename = s"/tmp/tuf-repo-spec-export-${RandomNames()}.zip"
+    val tempPath = Paths.get(tempFilename)
+    repo.export(KeyName("default-key"), tempPath) shouldBe Try(())
+
+    // test the exported zip file by creating another repo from it:
+    val repoFromExported = initRepo()
+    repoFromExported.initFromZip(tempPath, KeyName("default-key"))
+    val credJson = parseFile(repoFromExported.repoPath.resolve("auth.json").toFile)
+    val oauth2Val = credJson.right.get.as[AuthConfig](authConfigDecoder)
+    oauth2Val.right.get.client_id shouldBe "fake-client-id"
   }
 
   test("root after rotate contains new key ids") {

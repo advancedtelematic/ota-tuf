@@ -12,9 +12,13 @@ Download the archive file, unpack and run:
 
 == buchtel use case
 
-1. Initialize a local ota-plus cache using a treehub.json downloaded from ats garage:
+1. Initialize a local ota-plus cache using credentials.zip downloaded from ATS Garage or treehub.json inside of it:
 
     garage-sign init --repo buchtel --credentials treehub.json
++
+or
++
+    garage-sign init --repo buchtel --credentials credentials.zip
 
 2. Generate a new Targets signing key with:
 
@@ -22,7 +26,7 @@ Download the archive file, unpack and run:
 
 3. Push the Targets public key to the remote TUF repository with:
 
-   garage-sign push-targets-kes --repo buchtel --name buchtel-targets
+   garage-sign push-targets-key --repo buchtel --name buchtel-targets
 
 4. Initialize the targets.json metadata with:
 
@@ -42,7 +46,7 @@ Download the archive file, unpack and run:
 
     garage-sign targets sign \
     --repo buchtel
-    --key targets-01
+    --key buchtel-targets
 
 7. Push the targets.json metadata with:
 
@@ -56,10 +60,14 @@ targets key with an offline root key is not supported. After rotating
 root keys to offline storage root.json and it's key mapping need to be
 maintained offline by the user.
 
-1. Initialize a local ota-plus cache using a treehub.json downloaded from ats garage:
+1. Initialize a local ota-plus cache using credentials.zip downloaded from ATS Garage or treehub.json inside of it:
 
     garage-sign init --repo buchtel --credentials treehub.json
-    
++
+or
++
+    garage-sign init --repo buchtel --credentials credentials.zip
+
 2. Generate new root and target keys
 
     garage-sign gen-keys --repo buchtel --name buchtel-root --type ec

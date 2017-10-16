@@ -8,7 +8,7 @@ import java.time.temporal.ChronoUnit
 
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, HardwareIdentifier, KeyId, KeyType, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType,HardwareIdentifier,KeyId,KeyType,TargetName,TargetVersion}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.slf4j.LoggerFactory
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -33,7 +33,7 @@ case object AddTarget extends Command
 case object SignTargets extends Command
 case object PushTargets extends Command
 case object PushTargetsKey extends Command
-
+case object Export extends Command
 
 case class Config(command: Command,
                   home: Path = Paths.get("tuf"),
@@ -52,7 +52,8 @@ case class Config(command: Command,
                   checksum: Option[Refined[String, ValidChecksum]] = None,
                   hardwareIds: List[HardwareIdentifier] = List.empty,
                   targetUri: URI = URI.create(""),
-                  keySize: Int = 2048)
+                  keySize: Int = 2048,
+                  exportPath: Option[Path] = None)
 
 object Cli extends App with VersionInfo {
   import CliReads._
@@ -79,100 +80,184 @@ object Cli extends App with VersionInfo {
     }
 
     cmd("init")
-      .action { (_, c) => c.copy(command = InitRepo) }
+      .action { (_, c) =>
+        c.copy(command = InitRepo)
+      }
       .text("Initialize an empty repository")
       .children(
-        opt[Path]("credentials").abbr("c")
-          .text("path to credentials file, usually treehub.json")
+        opt[Path]("credentials")
+          .abbr("c")
+          .text("path to credentials file, treehub.json or credentials.zip")
           .required()
           .action { (path, c) =>
             c.copy(credentialsPath = path)
+          },
+        opt[KeyName]("target-key-name")
+          .text("Target key name to look for in credentials.zip")
+          .action { (name, c) =>
+            c.copy(targetsKey = name)
           }
       )
 
     cmd("gen-keys")
-      .action { (_, c) => c.copy(command = GenKeys) }
+      .action { (_, c) =>
+        c.copy(command = GenKeys)
+      }
       .text("Generate new offline keys")
       .children(
         opt[KeyName]("name").abbr("n").required().action { (name, c) =>
           c.copy(rootKey = name)
         },
-        opt[KeyType]("type").abbr("t").action { (keyType, c) =>
-          c.copy(keyType = keyType)
-        }.text("key type, ec or rsa")
-        ,
-        opt[Int]("keysize").text("defaults to 2048 for RSA keys").action { (keySize, c) =>
-          c.copy(keySize = keySize)
+        opt[KeyType]("type")
+          .abbr("t")
+          .action { (keyType, c) =>
+            c.copy(keyType = keyType)
+          }
+          .text("key type, ec or rsa"),
+        opt[Int]("keysize").text("defaults to 2048 for RSA keys").action {
+          (keySize, c) =>
+            c.copy(keySize = keySize)
         }
       )
 
-    cmd("push-targets-key").action { (_, c) => c.copy(command = PushTargetsKey) }
+    cmd("push-targets-key")
+      .action { (_, c) =>
+        c.copy(command = PushTargetsKey)
+      }
       .children(
-        opt[KeyName]("name").required().action { (arg, c) => c.copy(targetsKey = arg) }
+        opt[KeyName]("name").required().action { (arg, c) =>
+          c.copy(targetsKey = arg)
+        }
       )
 
-    cmd("rotate").action { (_, c) => c.copy(command = Rotate) }
+    cmd("rotate")
+      .action { (_, c) =>
+        c.copy(command = Rotate)
+      }
       .text("Download root.json, sign a new root.json with offline keys")
       .children(
         opt[KeyName]("new-root")
           .text("new root key to add to root.json, must exist")
-          .required().action { (keyName, c) => c.copy(rootKey = keyName) },
+          .required()
+          .action { (keyName, c) =>
+            c.copy(rootKey = keyName)
+          },
         opt[KeyName]("new-targets")
           .text("new targets key to add to root.json, must exist")
-          .required().action { (keyName, c) => c.copy(targetsKey = keyName) },
+          .required()
+          .action { (keyName, c) =>
+            c.copy(targetsKey = keyName)
+          },
         opt[KeyName]("old-root-alias")
-          .text("old root key alias, the old root key will be saved under this name")
-          .required().action { (keyName, c) => c.copy(oldRootKey = keyName) },
+          .text(
+            "old root key alias, the old root key will be saved under this name")
+          .required()
+          .action { (keyName, c) =>
+            c.copy(oldRootKey = keyName)
+          },
         opt[KeyId]("old-keyid")
           .text("key id to remove from root.json. This setting is optional and this app will try to use the last of the keys defined in the current root.json")
-          .action { (keyId, c) => c.copy(oldKeyId = keyId.some) }
+          .action { (keyId, c) =>
+            c.copy(oldKeyId = keyId.some)
+          }
       )
 
-    cmd("targets").action { (_, c) => c.copy(command = InitTargets ) }
+    cmd("targets")
+      .action { (_, c) =>
+        c.copy(command = InitTargets)
+      }
       .children(
-        cmd("init").action { (_, c) => c.copy(command = InitTargets ) }
+        cmd("init")
+          .action { (_, c) =>
+            c.copy(command = InitTargets)
+          }
           .children(
             opt[Int]("version")
-              .action( (version, c) => c.copy(version = version) )
+              .action((version, c) => c.copy(version = version))
               .required(),
             opt[Instant]("expires")
-              .action( (expires, c) => c.copy(expires = expires) )
+              .action((expires, c) => c.copy(expires = expires))
               .required()
           ),
-        cmd("add").action { (_, c) => c.copy(command = AddTarget) }
+        cmd("add")
+          .action { (_, c) =>
+            c.copy(command = AddTarget)
+          }
           .children(
             opt[Int]("length")
               .required()
-              .action  { (arg, c) => c.copy(length = arg) }
+              .action { (arg, c) =>
+                c.copy(length = arg)
+              }
               .text("length in bytes"),
             opt[TargetName]("name")
               .required()
-              .action { (arg, c) => c.copy(targetName = arg.some) },
+              .action { (arg, c) =>
+                c.copy(targetName = arg.some)
+              },
             opt[TargetVersion]("version")
               .required()
-              .action { (arg, c) => c.copy(targetVersion = arg.some) },
+              .action { (arg, c) =>
+                c.copy(targetVersion = arg.some)
+              },
             opt[Refined[String, ValidChecksum]]("sha256")
               .required()
-              .action { (arg, c) => c.copy(checksum = arg.some) },
+              .action { (arg, c) =>
+                c.copy(checksum = arg.some)
+              },
             opt[Seq[HardwareIdentifier]]("hardwareids")
               .required()
-              .action { (arg, c) => c.copy(hardwareIds = arg.toList) },
+              .action { (arg, c) =>
+                c.copy(hardwareIds = arg.toList)
+              },
             opt[URI]("url")
               .required()
-              .action { (arg, c) => c.copy(targetUri = arg) }
+              .action { (arg, c) =>
+                c.copy(targetUri = arg)
+              }
           ),
-        cmd("sign").action { (_, c) => c.copy(command = SignTargets) }
+        cmd("sign")
+          .action { (_, c) =>
+            c.copy(command = SignTargets)
+          }
           .children(
-            opt[KeyName]("key-name").action { (arg, c) => c.copy(targetsKey = arg) }
+            opt[KeyName]("key-name")
+              .action { (arg, c) =>
+                c.copy(targetsKey = arg)
+              }
               .required()
           ),
-        cmd("push").action { (_, c) => c.copy(command = PushTargets) }
+        cmd("push").action { (_, c) =>
+          c.copy(command = PushTargets)
+        }
       )
 
     cmd("get-targets")
       .text("get a repo targets, show on console")
       .hidden()
-      .action { (_, c) => c.copy(command = GetTargets) }
+      .action { (_, c) =>
+        c.copy(command = GetTargets)
+      }
+
+    cmd("export-credentials")
+      .text("Copy existing credentials.zip with treehub.json updated from repo")
+      .action { (_, c) =>
+        c.copy(command = Export)
+      }
+      .children(
+        opt[KeyName]("target-key-name")
+          .text("name of target keys (public and private) to export")
+          .required()
+          .action { (argc, c) =>
+            c.copy(targetsKey = argc)
+          },
+        opt[Path]("to")
+          .text("name of ZIP file to export to")
+          .required()
+          .action { (arg, c) =>
+            c.copy(exportPath = Some(arg))
+          }
+      )
   }
 
   val default = Config(command = Help)
@@ -198,12 +283,18 @@ object Cli extends App with VersionInfo {
         tufRepo.genKeys(config.rootKey, config.keyType, config.keySize).toFuture
 
       case InitRepo =>
-        tufRepo.init(config.credentialsPath).toFuture
+        tufRepo.init(config.credentialsPath, config.targetsKey).toFuture
 
       case Rotate =>
-        repoServer.flatMap { client =>
-          tufRepo.rotateRoot(client, config.rootKey, config.oldRootKey, config.targetsKey, config.oldKeyId)
-        }.map(newRoot => log.info(newRoot.asJson.spaces2))
+        repoServer
+          .flatMap { client =>
+            tufRepo.rotateRoot(client,
+                               config.rootKey,
+                               config.oldRootKey,
+                               config.targetsKey,
+                               config.oldKeyId)
+          }
+          .map(newRoot => log.info(newRoot.asJson.spaces2))
 
       case GetTargets =>
         repoServer
@@ -211,17 +302,25 @@ object Cli extends App with VersionInfo {
           .map(targets => log.info(targets.asJson.spaces2))
 
       case InitTargets =>
-        tufRepo.initTargets(config.version, config.expires)
+        tufRepo
+          .initTargets(config.version, config.expires)
           .map(p => log.info(s"Wrote empty targets to $p"))
           .toFuture
 
       case AddTarget =>
-        tufRepo.addTarget(config.targetName.get, config.targetVersion.get, config.length, config.checksum.get, config.hardwareIds, config.targetUri)
+        tufRepo
+          .addTarget(config.targetName.get,
+                     config.targetVersion.get,
+                     config.length,
+                     config.checksum.get,
+                     config.hardwareIds,
+                     config.targetUri)
           .map(p => log.info(s"added target to $p"))
           .toFuture
 
       case SignTargets =>
-        tufRepo.signTargets(config.targetsKey)
+        tufRepo
+          .signTargets(config.targetsKey)
           .map(p => log.info(s"signed targets.json to $p"))
           .toFuture
 
@@ -234,6 +333,9 @@ object Cli extends App with VersionInfo {
         repoServer
           .flatMap(client => tufRepo.pushTargetsKey(client, config.targetsKey))
           .map(key => log.info(s"Pushed key ${key.id} to server"))
+
+      case Export =>
+        tufRepo.export(config.targetsKey, config.exportPath.get).toFuture
 
       case Help =>
         parser.showUsage()

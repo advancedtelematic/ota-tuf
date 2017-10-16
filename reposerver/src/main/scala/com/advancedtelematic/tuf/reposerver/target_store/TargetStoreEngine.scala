@@ -70,6 +70,3 @@ trait TargetStoreEngine {
     Paths.get(prefixHash, prefix, dir)
   }
 }
-
-
-
