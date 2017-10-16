@@ -148,7 +148,7 @@ object FakeKeyserverClient extends KeyserverClient {
 }
 
 trait LongHttpRequest {
-  implicit def default(implicit system: ActorSystem) = RouteTestTimeout(10.seconds.dilated(system))
+  implicit def default(implicit system: ActorSystem) = RouteTestTimeout(20.seconds.dilated(system))
 }
 
 trait FakeHttpClientSpec {
