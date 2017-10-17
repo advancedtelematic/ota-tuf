@@ -32,6 +32,8 @@ object ClientDataType {
 
   case class RoleKeys(keyids: Seq[KeyId], threshold: Int)
 
+  case class ETag(value: String) extends AnyVal
+
   case class ValidMetaPath()
   type MetaPath = Refined[String, ValidMetaPath]
 
@@ -44,6 +46,9 @@ object ClientDataType {
   implicit class RoleTypeToMetaPathOp(value: RoleType) {
     def toMetaPath: MetaPath =
       (value.show + ".json").refineTry[ValidMetaPath].get
+
+    def toETagPath: String =
+      toMetaPath.value + ".etag"
   }
 
   case class MetaItem(hashes: ClientHashes, length: Long, version: Int)

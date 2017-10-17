@@ -36,6 +36,6 @@ protected class AuthPlusClient(val config: AuthConfig,
       .postForm(Seq("grant_type" → "client_credentials"))
 
     implicit val _decoder = tokenResponseDecoder
-    execHttp[AuthPlusToken](req)()
+    execHttp[AuthPlusToken](req)().map(_.body)
   }
 }

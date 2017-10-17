@@ -51,7 +51,7 @@ class UserReposerverClientSpec extends TufReposerverSpec
   test("accepts a new targets role") {
     val targets = TargetsRole(Instant.now, Map.empty, 20)
     val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets).futureValue
-    client.pushTargets(signedTargets).futureValue
+    client.pushTargets(signedTargets, None).futureValue
   }
 
   test("moves key offline") {

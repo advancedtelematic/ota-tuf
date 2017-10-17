@@ -8,13 +8,14 @@ import java.time.temporal.ChronoUnit
 
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType,HardwareIdentifier,KeyId,KeyType,TargetName,TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, HardwareIdentifier, KeyId, KeyType, TargetName, TargetVersion}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.slf4j.LoggerFactory
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import cats.syntax.option._
 import eu.timepit.refined.api.Refined
 import TryToFuture._
+import cats.data.Validated.{Invalid, Valid}
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.client.UserReposerverHttpClient
@@ -31,6 +32,7 @@ case object GetTargets extends Command
 case object InitTargets extends Command
 case object AddTarget extends Command
 case object SignTargets extends Command
+case object PullTargets extends Command
 case object PushTargets extends Command
 case object PushTargetsKey extends Command
 case object Export extends Command
@@ -227,17 +229,20 @@ object Cli extends App with VersionInfo {
               }
               .required()
           ),
+        cmd("pull")
+          .action { (_, c) =>
+            c.copy(command = PullTargets)
+          }.children(
+            opt[KeyName]("root-key")
+              .action{ (arg, c) =>
+                c.copy(rootKey = arg)
+              }
+              .required()
+          ),
         cmd("push").action { (_, c) =>
           c.copy(command = PushTargets)
         }
       )
-
-    cmd("get-targets")
-      .text("get a repo targets, show on console")
-      .hidden()
-      .action { (_, c) =>
-        c.copy(command = GetTargets)
-      }
 
     cmd("export-credentials")
       .text("Copy existing credentials.zip with treehub.json updated from repo")
@@ -258,6 +263,13 @@ object Cli extends App with VersionInfo {
             c.copy(exportPath = Some(arg))
           }
       )
+
+    cmd("get-targets")
+      .text("get a repo targets, show on console")
+      .hidden()
+      .action { (_, c) =>
+        c.copy(command = GetTargets)
+      }
   }
 
   val default = Config(command = Help)
@@ -299,7 +311,7 @@ object Cli extends App with VersionInfo {
       case GetTargets =>
         repoServer
           .flatMap(_.targets())
-          .map(targets => log.info(targets.asJson.spaces2))
+          .map { case (targets,_) => log.info(targets.asJson.spaces2) }
 
       case InitTargets =>
         tufRepo
@@ -323,6 +335,11 @@ object Cli extends App with VersionInfo {
           .signTargets(config.targetsKey)
           .map(p => log.info(s"signed targets.json to $p"))
           .toFuture
+
+      case PullTargets =>
+        repoServer
+          .flatMap { tufRepo.pullTargets(_, config.rootKey) }
+          .map(_ => log.info("Pulled targets"))
 
       case PushTargets =>
         repoServer

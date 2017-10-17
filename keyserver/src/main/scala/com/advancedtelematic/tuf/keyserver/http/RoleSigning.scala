@@ -1,8 +1,7 @@
 package com.advancedtelematic.tuf.keyserver.http
 
 import akka.http.scaladsl.util.FastFuture
-import cats.data.Validated.{Invalid, Valid}
-import cats.data.{NonEmptyList, ValidatedNel}
+import cats.data.ValidatedNel
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType._
@@ -14,7 +13,6 @@ import io.circe.Encoder
 
 import scala.concurrent.{ExecutionContext, Future}
 import slick.jdbc.MySQLProfile.api._
-import cats.implicits._
 
 class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: ExecutionContext)
   extends KeyRepositorySupport {
@@ -47,22 +45,11 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
     }
   }
 
-  def signatureIsValid[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Future[ValidatedNel[String, List[ClientSignature]]] = {
+  def verifySignatures[T : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Future[ValidatedNel[String, List[ClientSignature]]] = {
     val publicKeysF = keyRepo.repoKeysForRole(repoId, RoleType.ROOT)
-    val sigsByKeyId = signedPayload.signatures.map(s => s.keyid -> s).toMap
 
     publicKeysF.map { publicKeys =>
-      publicKeys.par.map { key =>
-        sigsByKeyId.get(key.id) match {
-          case Some(sig) =>
-            if (TufCrypto.isValid(sig, key.publicKey, signedPayload.signed))
-              Valid(sig)
-            else
-              Invalid(NonEmptyList.of(s"Invalid signature for key ${sig.keyid}"))
-          case None =>
-            Invalid(NonEmptyList.of(s"payload not signed with key ${key.id}"))
-        }
-      }.toList.sequenceU
+      TufCrypto.verifySignatures(signedPayload, publicKeys.view.map(key => key.toTufKey))
     }
   }
 

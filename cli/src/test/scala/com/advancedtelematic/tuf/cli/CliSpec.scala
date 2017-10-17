@@ -1,12 +1,13 @@
 package com.advancedtelematic.tuf.cli
 
+import TryToFuture.TryToFutureOp
 import java.security.Security
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole, TargetsRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ETag, RoleKeys, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.{ClientDataType, TufDataType}
 import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, KeyId, RoleType, SignedPayload, TufKey, TufPrivateKey}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
@@ -17,6 +18,7 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
 
 import scala.concurrent.Future
+import scala.util.{Failure, Success, Try}
 
 abstract class CliSpec extends FunSuite with Matchers with ScalaFutures {
   Security.addProvider(new BouncyCastleProvider)
@@ -60,18 +62,20 @@ class FakeUserReposerverClient extends UserReposerverClient {
       Future.failed(new RuntimeException("[test] invalid signatures for root role"))
   }
 
-  override def targets(): Future[SignedPayload[TargetsRole]] =
+  override def targets(): Future[(SignedPayload[TargetsRole], ETag)] =
     throw new NotImplementedError("[test] targets not implemented for fake repo server")
 
-  def pushTargets(targetsRole: SignedPayload[TargetsRole]): Future[Unit] = {
-    val targetsPubKey = unsignedRoot.keys(unsignedRoot.roles(RoleType.TARGETS).keyids.head)
+  def pushTargets(targetsRole: SignedPayload[TargetsRole], etag: Option[ETag]): Future[Unit] =
+    Try(etag.get).flatMap { _ =>
+      val targetsPubKey = unsignedRoot.keys(unsignedRoot.roles(RoleType.TARGETS).keyids.head)
 
-    if(targetsRole.isValidFor(targetsPubKey)) {
-      unsignedTargets = targetsRole.signed
-      Future.successful(())
-    } else
-      Future.failed(new RuntimeException("[test] invalid signatures for targets role"))
-  }
+      if (targetsRole.isValidFor(targetsPubKey)) {
+        unsignedTargets = targetsRole.signed
+        Success(())
+      } else {
+        Failure(new RuntimeException("[test] invalid signatures for targets role"))
+      }
+    }.toFuture
 
   override def pushTargetsKey(key: TufKey): Future[TufKey] = Future.successful {
     targetsPubKey = key

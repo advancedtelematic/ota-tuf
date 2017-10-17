@@ -4,7 +4,7 @@ import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.{NonEmptyList, ValidatedNel}
-import com.advancedtelematic.libtuf.data.ClientDataType.{TargetCustom, TargetsRole, VersionedRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole, VersionedRole}
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, RoleType, SignedPayload, TargetFilename}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, StorageMethod, TargetItem}
 import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
@@ -14,10 +14,10 @@ import com.advancedtelematic.libats.data.DataType.Checksum
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.http.HttpCodecs._
+import com.advancedtelematic.libtuf.crypt.TufCrypto
 
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
-import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 
 class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
@@ -63,25 +63,6 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
   private def payloadSignatureIsValid[T <: VersionedRole : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Future[ValidatedNel[String, SignedPayload[T]]] = async {
     val rootRole = await(keyserverClient.fetchRootRole(repoId)).signed
 
-    val publicKeys = rootRole.keys.filterKeys(keyId => rootRole.roles(signedPayload.signed.roleType).keyids.contains(keyId))
-
-    val sigsByKeyId = signedPayload.signatures.map(s => s.keyid -> s).toMap
-
-    val validSignatureCount: ValidatedNel[String, List[KeyId]] =
-      sigsByKeyId.par.map { case (keyId, sig) =>
-        publicKeys.get(keyId)
-          .toRight(s"No public key available for key ${sig.keyid}")
-          .ensure(s"Invalid signature for key ${sig.keyid}") { key =>
-            signedPayload.isValidFor(key)
-          }
-          .map(_.id)
-          .toValidatedNel
-      }.toList.sequenceU
-
-    val threshold = rootRole.roles(RoleType.TARGETS).threshold
-
-    validSignatureCount.ensure(NonEmptyList.of(s"Valid signature count must be >= threshold ($threshold)")) { validSignatures =>
-      validSignatures.size >= threshold && threshold > 0
-    }.map(_ => signedPayload)
+    TufCrypto.payloadSignatureIsValid(rootRole, signedPayload)
   }
 }
