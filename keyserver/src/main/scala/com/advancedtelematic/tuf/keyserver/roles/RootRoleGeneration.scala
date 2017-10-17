@@ -99,7 +99,15 @@ class RootRoleGeneration(vaultClient: VaultClient)
     keyGenRepo.findBy(repoId).flatMap { keyGenReqs =>
       if(keyGenReqs.isEmpty)
         Future.failed(KeyRepository.KeyNotFound)
-      else if(keyGenReqs.exists(_.status != KeyGenRequestStatus.GENERATED))
+      else if (keyGenReqs.exists(_.status == KeyGenRequestStatus.ERROR)) {
+        val errors = keyGenReqs.foldLeft(Map.empty[KeyGenId, String]) { (errors, req) =>
+          if(req.status == KeyGenRequestStatus.ERROR)
+            errors + (req.id -> req.description)
+          else
+            errors
+        }
+        Future.failed(Errors.KeyGenerationFailed(repoId, errors))
+      } else if(keyGenReqs.exists(_.status != KeyGenRequestStatus.GENERATED))
         Future.failed(Errors.KeysNotReady)
       else
         Future.successful(())

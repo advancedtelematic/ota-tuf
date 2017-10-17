@@ -56,8 +56,10 @@ protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: Execut
     db.run(dbIO.transactionally)
   }
 
-  def setStatus(genId: KeyGenId, status: KeyGenRequestStatus): Future[KeyGenId] =
-    db.run(setStatusAction(genId, status))
+  def setStatus(genId: KeyGenId, status: KeyGenRequestStatus, cause: Option[Throwable] = None): Future[KeyGenId] = {
+    val causeRepr = cause.map(t => s"${t.getClass.getSimpleName}|${t.getMessage}").getOrElse("")
+    db.run(setStatusAction(genId, status, causeRepr))
+  }
 
   def setStatusAll(genIds: Seq[KeyGenId], status: KeyGenRequestStatus): Future[Seq[KeyGenId]] =
     db.run(DBIO.sequence(genIds.map(genId => setStatusAction(genId, status))).transactionally)
@@ -76,11 +78,11 @@ protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: Execut
         .result
     }
 
-  protected [db] def setStatusAction(id: KeyGenId, status: KeyGenRequestStatus): DBIO[KeyGenId] =
+  protected [db] def setStatusAction(id: KeyGenId, status: KeyGenRequestStatus, cause: String = ""): DBIO[KeyGenId] =
     keyGenRequests
       .filter(_.id === id)
-      .map(_.status)
-      .update(status)
+      .map(r => (r.status, r.description))
+      .update(status, cause)
       .handleSingleUpdateError(KeyGenRequestNotFound)
       .map(_ => id)
 

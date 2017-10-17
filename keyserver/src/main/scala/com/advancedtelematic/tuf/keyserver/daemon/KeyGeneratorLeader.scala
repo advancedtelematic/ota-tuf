@@ -146,7 +146,7 @@ class KeyGeneratorWorker(vaultClient: VaultClient)(implicit val db: Database) ex
           case ex =>
             log.error("Key generation failed: {}", ex.getMessage)
             keyGenRepo
-              .setStatus(kgr.id, KeyGenRequestStatus.ERROR)
+              .setStatus(kgr.id, KeyGenRequestStatus.ERROR, Option(ex))
               .map(_ => Failure(ex))
         }.pipeTo(sender)
   }

@@ -2,12 +2,14 @@ package com.advancedtelematic.tuf.keyserver.http
 
 import java.security.PrivateKey
 
+import cats.syntax.either._
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
 import com.advancedtelematic.tuf.util.{ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
 import io.circe.generic.auto._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import cats.syntax.show._
+import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId}
@@ -148,6 +150,25 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
       status shouldBe StatusCodes.Locked
+    }
+  }
+
+  test("GET returns 502 if key generation failed") {
+    val repoId = RepoId.generate()
+
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest()) ~> routes ~> check {
+      status shouldBe StatusCodes.Accepted
+    }
+
+    val requests = keyGenRepo.findBy(repoId).futureValue
+    val error = new Exception("test: generation failed")
+    val keyGenId = requests.head.id
+    keyGenRepo.setStatus(keyGenId, KeyGenRequestStatus.ERROR, Option(error)).futureValue
+
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.InternalServerError
+      val errorRepr = responseAs[ErrorRepresentation]
+      errorRepr.cause.flatMap(_.as[Map[KeyGenId, String]].toOption).flatMap(_.get(keyGenId)) should contain(s"Exception|test: generation failed")
     }
   }
 
@@ -395,7 +416,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
-  test("POST updates keys when signtaure is valid") {
+  test("POST updates keys when signature is valid") {
     val repoId = RepoId.generate()
     generateRootRole(repoId).futureValue
 
@@ -416,7 +437,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       status shouldBe StatusCodes.NoContent
     }
 
-    val newUnsigned = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+    Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       val resp = responseAs[RootRole]
 

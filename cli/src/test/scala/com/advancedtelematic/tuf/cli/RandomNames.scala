@@ -4,6 +4,7 @@ import scala.util.Random
 
 // see https://github.com/moby/moby/blob/master/pkg/namesgenerator/names-generator.go
 
+
 object RandomNames {
 
   val left = Vector(
