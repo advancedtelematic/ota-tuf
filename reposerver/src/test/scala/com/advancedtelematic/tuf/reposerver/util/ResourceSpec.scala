@@ -78,7 +78,7 @@ object FakeKeyserverClient extends KeyserverClient {
   }.toList
 
   def deleteRepo(repoId: RepoId): Option[RootRole] =
-    Option(keys.remove(repoId)).flatMap(_ => Option(rootRoles.remove(repoId)))
+    keys.asScala.remove(repoId).flatMap(_ => rootRoles.asScala.remove(repoId))
 
   override def createRoot(repoId: RepoId, keyType: KeyType): Future[Json] = {
     if (keys.contains(repoId)) {
@@ -92,10 +92,13 @@ object FakeKeyserverClient extends KeyserverClient {
   }
 
   override def sign[T: Decoder : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]] = {
-    val key = Option(keys.get(repoId)).flatMap(_.get(roleType)).getOrElse(throw RoleKeyNotFound)
-    val signature = TufCrypto.signPayload(RSATufPrivateKey(key.getPrivate), payload).toClient(key.getPublic.id)
+    val okey = keys.asScala.get(repoId).flatMap(_.get(roleType))
+    val fkey = okey.map(FastFuture.successful).getOrElse(FastFuture.failed(RoleKeyNotFound))
 
-    FastFuture.successful(SignedPayload(List(signature), payload))
+    fkey.map { key =>
+      val signature = TufCrypto.signPayload(RSATufPrivateKey(key.getPrivate), payload).toClient(key.getPublic.id)
+      SignedPayload(List(signature), payload)
+    }
   }
 
   override def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]] =
