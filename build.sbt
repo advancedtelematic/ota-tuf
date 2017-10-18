@@ -98,13 +98,14 @@ lazy val reposerver = (project in file("reposerver"))
   .dependsOn(libtuf_server)
 
 lazy val cli = (project in file("cli"))
-  .enablePlugins(BuildInfoPlugin, Versioning.Plugin, JavaAppPackaging)
+  .enablePlugins(BuildInfoPlugin, Versioning.Plugin, JavaAppPackaging, S3ReleasePlugin)
   .configs(commonConfigs:_*)
   .settings(commonSettings)
   .settings(Publish.disable)
   .settings(
     topLevelDirectory := Some("garage-sign"),
-    executableScriptName := "garage-sign"
+    executableScriptName := "garage-sign",
+    s3Bucket := "ats-tuf-cli-releases"
   )
   .dependsOn(libtuf)
 
