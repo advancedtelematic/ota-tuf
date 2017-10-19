@@ -29,10 +29,11 @@ object Schema {
     def keyType = column[KeyType]("key_type")
     def keySize = column[Int]("key_size")
     def threshold = column[Int]("threshold")
+    def description = column[String]("description")
 
     def uniqueRepoIdRoleTypeIdx = index("key_gen_requests_unique_idx", (repoId, roleType), unique = true)
 
-    override def * = (id, repoId, status, roleType, keySize, keyType, threshold) <> ((KeyGenRequest.apply _).tupled, KeyGenRequest.unapply)
+    override def * = (id, repoId, status, roleType, keySize, keyType, threshold, description) <> ((KeyGenRequest.apply _).tupled, KeyGenRequest.unapply)
   }
 
   protected [db] val keyGenRequests = TableQuery[KeyGenRequestTable]

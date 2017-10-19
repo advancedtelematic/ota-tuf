@@ -25,7 +25,8 @@ object KeyServerDataType {
                            status: KeyGenRequestStatus, roleType: RoleType,
                            keySize: Int,
                            keyType: KeyType,
-                           threshold: Int = 1)
+                           threshold: Int = 1,
+                           description: String = "")
 
   case class Key(id: KeyId, roleId: RoleId, keyType: KeyType, publicKey: PublicKey) {
     def toTufKey: TufKey = keyType.crypto.convert(publicKey)
