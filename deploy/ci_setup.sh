@@ -55,7 +55,7 @@ function mysqladmin_alive {
            mysqladmin ping --protocol=TCP -h ota_tuf-mariadb -P 3306 -u root -proot
 }
 
-sleep 10
+sleep 20
 
 docker_vault policy-write ota-tuf /tmp/resources/vault_policy.hcl
 
