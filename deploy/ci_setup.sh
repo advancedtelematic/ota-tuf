@@ -23,29 +23,30 @@ MYSQL_PORT=${MYSQL_PORT-3306}
 VAULT_TOKEN=f8c637c5-b762-e6a7-7974-bf45d3061106
 
 sudo docker run -d \
-       --cap-add IPC_LOCK \
-       --name tuf-vault \
-       -e VAULT_DEV_ROOT_TOKEN_ID=$VAULT_TOKEN \
-       --volume $(pwd)/keyserver/src/main/resources:/tmp/resources \
-       -p 8200:8200 vault
+     --cap-add IPC_LOCK \
+     --name tuf-vault \
+     -e VAULT_DEV_ROOT_TOKEN_ID=$VAULT_TOKEN \
+     --volume $(pwd)/keyserver/src/main/resources:/tmp/resources \
+     -p 8200:8200 \
+     -d vault
 
 function docker_vault() {
     id=$(docker ps | grep tuf-vault | awk {'print $1'})
     sudo docker exec \
-           -e VAULT_TOKEN=$VAULT_TOKEN \
-           -e VAULT_ADDR='http://0.0.0.0:8200' $id vault $*
+         -e VAULT_TOKEN=$VAULT_TOKEN \
+         -e VAULT_ADDR='http://0.0.0.0:8200' $id vault $*
 }
 
 docker run -d \
-  --name ota_tuf-mariadb \
-  -p $MYSQL_PORT:3306 \
-  -v $(pwd)/ota_tuf_entrypoint.d:/docker-entrypoint-initdb.d \
-  -e MYSQL_ROOT_PASSWORD=root \
-  -e MYSQL_USER=ota_tuf \
-  -e MYSQL_PASSWORD=ota_tuf \
-  mariadb:10.1 \
-  --character-set-server=utf8 --collation-server=utf8_unicode_ci \
-  --max_connections=1000
+       --name ota_tuf-mariadb \
+       -p $MYSQL_PORT:3306 \
+       -v $(pwd)/ota_tuf_entrypoint.d:/docker-entrypoint-initdb.d \
+       -e MYSQL_ROOT_PASSWORD=root \
+       -e MYSQL_USER=ota_tuf \
+       -e MYSQL_PASSWORD=ota_tuf \
+       mariadb:10.1 \
+       --character-set-server=utf8 --collation-server=utf8_unicode_ci \
+       --max_connections=1000
 
 function mysqladmin_alive {
     docker run \
