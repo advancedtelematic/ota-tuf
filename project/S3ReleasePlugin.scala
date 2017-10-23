@@ -28,9 +28,8 @@ object S3ReleasePlugin extends AutoPlugin {
   import sbt.complete.DefaultParsers._
 
   val s3ReleaseSettings = Seq (
-    s3Region := readEnv("AWS_REGION"),
-    s3AccessKey := readEnv("AWS_ACCESS_KEY"),
-    s3SecretKey := readEnv("AWS_SECRET_KEY"),
+    s3AccessKey := readEnv("AWS_ACCESS_KEY_ID"),
+    s3SecretKey := readEnv("AWS_SECRET_ACCESS_KEY"),
     s3Bucket := readEnv("AWS_BUCKET_ID"),
     s3Region := readEnv("AWS_REGION", Option(Regions.EU_CENTRAL_1.getName)),
     s3UploadTask := {
