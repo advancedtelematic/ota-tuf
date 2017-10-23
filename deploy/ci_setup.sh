@@ -22,7 +22,7 @@ MYSQL_PORT=${MYSQL_PORT-3306}
 
 VAULT_TOKEN=f8c637c5-b762-e6a7-7974-bf45d3061106
 
-docker run -d \
+sudo docker run -d \
        --cap-add IPC_LOCK \
        --name tuf-vault \
        -e VAULT_DEV_ROOT_TOKEN_ID=$VAULT_TOKEN \
@@ -31,7 +31,7 @@ docker run -d \
 
 function docker_vault() {
     id=$(docker ps | grep tuf-vault | awk {'print $1'})
-    docker exec \
+    sudo docker exec \
            -e VAULT_TOKEN=$VAULT_TOKEN \
            -e VAULT_ADDR='http://0.0.0.0:8200' $id vault $*
 }
