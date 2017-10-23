@@ -6,7 +6,7 @@ import java.time.Instant
 
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
-import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ETag, RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RoleType, SignedPayload, TargetName, TargetVersion, TufKey}
 import com.advancedtelematic.libtuf.data.TufCodecs._
@@ -68,7 +68,7 @@ class TufRepoSpec extends CliSpec {
     repo.authConfig().get shouldBe a[AuthConfig]
   }
 
-  test("export zip file") {
+  test("can export zip file") {
     val repo = initRepo()
     repo.initFromZip(credentialsZip, KeyName("default-key"))
     // overwrite with different auth values:
@@ -195,6 +195,9 @@ class TufRepoSpec extends CliSpec {
   }
 
   test("pushes targets to reposerver") {
+    import com.advancedtelematic.libtuf.data.ClientDataType.RoleTypeToMetaPathOp
+    import scala.collection.JavaConverters._
+
     val repo = initRepo()
 
     val reposerverClient = new FakeUserReposerverClient
@@ -202,6 +205,7 @@ class TufRepoSpec extends CliSpec {
     val (_, pubTargets, _) = rotate(repo, reposerverClient).futureValue
 
     repo.signTargets(KeyName(s"targets${repo.name.value}")).get
+    Files.write(repo.repoPath.resolve("roles").resolve(RoleType.TARGETS.toETagPath), Seq("etag").asJava)
 
     val payload = repo.pushTargets(reposerverClient).futureValue
 
@@ -218,5 +222,17 @@ class TufRepoSpec extends CliSpec {
     val pushedKey = repo.pushTargetsKey(reposerverClient, KeyName(s"targets${repo.name.value}")).futureValue
 
     pushedKey shouldBe pubTargets
+  }
+
+  test("save targets") {
+    val repo = initRepo()
+
+    val rootName = KeyName("root")
+    repo.genKeys(rootName, EdKeyType, 256).get
+
+    val path = repo.signTargets(rootName).get
+    val signedTargetRole = parseFile(path.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).valueOr(throw _)
+
+    repo.saveTargets(signedTargetRole, ETag("etag")) shouldBe 'success
   }
 }

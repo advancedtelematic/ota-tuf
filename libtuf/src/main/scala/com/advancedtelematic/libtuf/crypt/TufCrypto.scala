@@ -8,7 +8,7 @@ import java.security.{Signature => _, _}
 
 import org.bouncycastle.jce.ECNamedCurveTable
 import org.bouncycastle.jce.spec.ECParameterSpec
-import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, EdKeyType, EdTufKey, EdTufPrivateKey, KeyId, KeyType, RSATufKey, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, TufKey, TufPrivateKey, ValidKeyId, ValidSignature}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, EdKeyType, EdTufKey, EdTufPrivateKey, KeyId, KeyType, RSATufKey, RSATufPrivateKey, RoleType, RsaKeyType, Signature, SignatureMethod, SignedPayload, TufKey, TufPrivateKey, ValidKeyId, ValidSignature}
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
 import org.bouncycastle.util.encoders.{Base64, Hex}
@@ -18,9 +18,13 @@ import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import java.security.KeyFactory
 
+import cats.data.Validated.{Invalid, Valid}
+import cats.data.{NonEmptyList, ValidatedNel}
+import cats.implicits._
 import io.circe.{Encoder, Json}
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, VersionedRole}
 
 import scala.util.control.NoStackTrace
 import scala.util.Try
@@ -44,6 +48,8 @@ trait TufCrypto[T <: KeyType] {
 }
 
 object TufCrypto {
+  import SignedPayloadSignatureOps._
+
   case class SignatureMethodMismatch(fromKey: SignatureMethod, fromSig: SignatureMethod)
       extends Exception(s"SignatureMethod mismatch, The key is for $fromKey but the signature is for $fromSig")
       with NoStackTrace
@@ -131,6 +137,49 @@ object TufCrypto {
 
   def generateKeyPair[T <: KeyType](keyType: T, keySize: Int): (TufKey, TufPrivateKey) =
     keyType.crypto.generateKeyPair(keySize)
+
+  def verifySignatures[T : Encoder](signedPayload: SignedPayload[T], publicRootKeys: Seq[TufKey]):
+  ValidatedNel[String, List[ClientSignature]] = {
+    import cats.implicits._
+
+    val sigsByKeyId = signedPayload.signatures.map(s => s.keyid -> s).toMap
+
+    publicRootKeys.par.map { key =>
+      sigsByKeyId.get(key.id) match {
+        case Some(sig) =>
+          if (isValid(sig, key.keyval, signedPayload.signed))
+            Valid(sig)
+          else
+            Invalid(NonEmptyList.of(s"Invalid signature for key ${sig.keyid}"))
+        case None =>
+          Invalid(NonEmptyList.of(s"payload not signed with key ${key.id}"))
+      }
+    }.toList.sequenceU
+  }
+
+  def payloadSignatureIsValid[T <: VersionedRole : Encoder](rootRole: RootRole, signedPayload: SignedPayload[T]): ValidatedNel[String, SignedPayload[T]] = {
+    val publicKeys = rootRole.keys.filterKeys(keyId => rootRole.roles(signedPayload.signed.roleType).keyids.contains(keyId))
+
+    val sigsByKeyId = signedPayload.signatures.map(s => s.keyid -> s).toMap
+
+    val validSignatureCount: ValidatedNel[String, List[KeyId]] =
+      sigsByKeyId.par.map { case (keyId, sig) =>
+        publicKeys.get(keyId)
+          .toRight(s"No public key available for key ${sig.keyid}")
+          .ensure(s"Invalid signature for key ${sig.keyid}") { key =>
+            signedPayload.isValidFor(key)
+          }
+          .map(_.id)
+          .toValidatedNel
+      }.toList.sequenceU
+
+    val threshold = rootRole.roles(RoleType.TARGETS).threshold
+
+    validSignatureCount.ensure(NonEmptyList.of(s"Valid signature count must be >= threshold ($threshold)")) { validSignatures =>
+      validSignatures.size >= threshold && threshold > 0
+    }.map(_ => signedPayload)
+  }
+
 }
 
 protected [crypt] class EdCrypto extends TufCrypto[EdKeyType.type] {

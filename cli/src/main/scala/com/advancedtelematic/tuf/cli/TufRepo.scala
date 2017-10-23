@@ -8,8 +8,8 @@ import java.util.zip.{ZipEntry, ZipFile, ZipOutputStream}
 
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RoleKeys, RoleTypeToMetaPathOp, RootRole, TargetCustom, TargetsRole, VersionedRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey, TufPrivateKey, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, ETag, RoleKeys, RoleTypeToMetaPathOp, RootRole, TargetCustom, TargetsRole, VersionedRole}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey, TufPrivateKey, ValidTargetFilename}
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -17,15 +17,19 @@ import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
 import TryToFuture._
+import cats.data.Validated.{Invalid, Valid}
+import cats.data.{NonEmptyList, ValidatedNel}
 import eu.timepit.refined.refineV
 import eu.timepit.refined.api.Refined
 import io.circe.{Decoder, Encoder, Json}
 import io.circe.jawn.{parse, parseFile}
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
+
+import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.io.Source
-import scala.util.{Failure, Try}
+import scala.util.{Failure, Success, Try}
 
 class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionContext) {
 
@@ -111,12 +115,36 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     } yield path
   }
 
-  def pushTargets(reposerverClient: UserReposerverClient): Future[SignedPayload[TargetsRole]] = {
+  def verifyTargets(targets: SignedPayload[TargetsRole], rootName: KeyName): ValidatedNel[String, SignedPayload[TargetsRole]] =
+    storage.readPublicKey(rootName).flatMap { publicRootKey =>
+      readUnsignedRole[RootRole](RoleType.ROOT)
+    } match {
+      case Success(rootRole) =>
+        TufCrypto.payloadSignatureIsValid(rootRole, targets)
+      case Failure(t) =>
+        Invalid(NonEmptyList.of(t.getMessage))
+    }
+
+  def saveTargets(targets: SignedPayload[TargetsRole], etag: ETag): Try[Unit] =
+    writeSignedRole(targets).flatMap { _ =>
+      writeEtag(etag)
+    }
+
+  def pullTargets(reposerverClient: UserReposerverClient, rootName: KeyName): Future[Unit] =
+    reposerverClient.targets().flatMap { case (targets, etag) =>
+      verifyTargets(targets, rootName) match {
+        case Valid(_) => saveTargets(targets, etag).toFuture
+        case Invalid(s) => Future.failed(new Exception(s"Error pulling targets: ${s.toList.mkString(", ")}"))
+      }
+    }
+
+  def pushTargets(reposerverClient: UserReposerverClient): Future[SignedPayload[TargetsRole]] =
     readSignedRole[TargetsRole](RoleType.TARGETS).toFuture.flatMap { targets =>
       log.info(s"pushing ${targets.asJson.spaces2}")
-      reposerverClient.pushTargets(targets).map(_ => targets)
+      val etag = readEtag[TargetsRole](RoleType.TARGETS)
+      log.info(s"etag: $etag")
+      reposerverClient.pushTargets(targets, etag.toOption).map(_ => targets)
     }
-  }
 
   def signTargets(targetsKey: KeyName): Try[Path] =
     for {
@@ -142,6 +170,17 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
   private def readSignedRole[T <: VersionedRole](roleType: RoleType)(implicit ev: Decoder[SignedPayload[T]]): Try[SignedPayload[T]] = {
     val path = rolesPath.resolve(roleType.toMetaPath.value)
     parseFile(path.toFile).flatMap(_.as[SignedPayload[T]]).toTry
+  }
+
+  private def readEtag[T <: VersionedRole](roleType: RoleType): Try[ETag] =
+    Try {
+      val lines = Source.fromFile(rolesPath.resolve(roleType.toETagPath).toFile).getLines().toTraversable
+      assert(lines.tail.isEmpty)
+      ETag(lines.head)
+    }
+
+  private def writeEtag(etag: ETag): Try[Unit] = Try {
+    Files.write(rolesPath.resolve(RoleType.TARGETS.toETagPath), Seq(etag.value).asJava)
   }
 
   private def writeUnsignedRole[T <: VersionedRole : Encoder](role: T): Try[Path] =

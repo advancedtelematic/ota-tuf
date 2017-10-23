@@ -3,20 +3,22 @@ package com.advancedtelematic.libtuf.http
 import io.circe.{Decoder, Encoder, Json}
 import cats.syntax.either._
 import com.advancedtelematic.libats.data.ErrorRepresentation
-import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
+import com.advancedtelematic.libtuf.http.SHttpjServiceClient.{HttpResponse, HttpjClientError}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
-import scalaj.http.{HttpRequest, HttpResponse}
+import scalaj.http.{HttpRequest, HttpResponse => ScalaJHttpResponse}
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
 
 object SHttpjServiceClient {
   case class HttpjClientError(msg: String) extends Exception(s"remote_service_error: $msg")
+
+  case class HttpResponse[T](body: T, response: ScalaJHttpResponse[Array[Byte]])
 }
 
-abstract class SHttpjServiceClient(client: scalaj.http.HttpRequest ⇒ Future[scalaj.http.HttpResponse[Array[Byte]]])
+abstract class SHttpjServiceClient(client: scalaj.http.HttpRequest ⇒ Future[ScalaJHttpResponse[Array[Byte]]])
                                   (implicit ec: ExecutionContext) {
 
   private val log = LoggerFactory.getLogger(this.getClass)
@@ -32,10 +34,10 @@ abstract class SHttpjServiceClient(client: scalaj.http.HttpRequest ⇒ Future[sc
       .header("Content-Type", "application/json")
       .method(request.method)
 
-    execHttp(req)(errorHandler)
+    execHttp(req)(errorHandler).map(_.body)
   }
 
-  private def tryErrorParsing(response: HttpResponse[Array[Byte]]): Try[String] = {
+  private def tryErrorParsing(response: ScalaJHttpResponse[Array[Byte]]): Try[String] = {
     tryParseResponse[ErrorRepresentation](response)
       .recoverWith { case _ ⇒
         tryParseResponse[Json](response).flatMap { json ⇒
@@ -53,19 +55,19 @@ abstract class SHttpjServiceClient(client: scalaj.http.HttpRequest ⇒ Future[sc
       }
   }
 
-  def tryParseResponse[T : ClassTag : Decoder](response: HttpResponse[Array[Byte]]): Try[T] =
+  def tryParseResponse[T : ClassTag : Decoder](response: ScalaJHttpResponse[Array[Byte]]): Try[T] =
     if(implicitly[ClassTag[T]].runtimeClass.equals(classOf[Unit]))
       Success(()).asInstanceOf[Try[T]]
     else
       io.circe.parser.parse(new String(response.body)).flatMap(_.as[T]).toTry
 
   protected def execHttp[T : ClassTag : Decoder](request: HttpRequest)
-                           (errorHandler: PartialFunction[Int, Future[T]] = defaultErrorHandler()): Future[T] = {
+                (errorHandler: PartialFunction[Int, Future[T]] = defaultErrorHandler()): Future[HttpResponse[T]] =
     client(request).flatMap { resp ⇒
-      if(resp.isSuccess)
-        Future.fromTry(tryParseResponse[T](resp))
-      else if(errorHandler.isDefinedAt(resp.code))
-        errorHandler(resp.code)
+      if (resp.isSuccess)
+        Future.fromTry(tryParseResponse[T](resp).map(parsed => HttpResponse(parsed, resp)))
+      else if (errorHandler.isDefinedAt(resp.code))
+        errorHandler(resp.code).map(HttpResponse(_, resp))
       else
         Future.fromTry {
           tryErrorParsing(resp).flatMap { errorRepr ⇒
@@ -74,5 +76,5 @@ abstract class SHttpjServiceClient(client: scalaj.http.HttpRequest ⇒ Future[sc
           }
         }
     }
-  }
+
 }
