@@ -5,6 +5,9 @@ set -u
 docker rm --force ota_tuf-mariadb || true
 docker rm --force tuf-vault || true
 
+# Some jobs don't behave, nuke them all
+docker ps -q | xargs docker rm --force || true
+
 mkdir ota_tuf_entrypoint.d/ || true
 
 echo "
