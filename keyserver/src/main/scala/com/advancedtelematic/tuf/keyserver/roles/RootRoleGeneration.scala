@@ -11,6 +11,7 @@ import slick.jdbc.MySQLProfile.api._
 import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNel
+import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 
 import scala.async.Async._
@@ -40,9 +41,8 @@ class RootRoleGeneration(vaultClient: VaultClient)
   }
 
   def findOrGenerate(repoId: RepoId): Future[SignedPayload[RootRole]] = {
-    signedRootRoleRepo.find(repoId).flatMap {
-      case Some(signedPayload) => FastFuture.successful(signedPayload)
-      case None => forceGenerate(repoId)
+    signedRootRoleRepo.find(repoId).recoverWith {
+      case SignedRootRoleRepository.MissingSignedRole => forceGenerate(repoId)
     }
   }
 

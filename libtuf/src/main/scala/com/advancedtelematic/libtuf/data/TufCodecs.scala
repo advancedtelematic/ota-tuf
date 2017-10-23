@@ -16,7 +16,11 @@ object TufCodecs {
   import com.advancedtelematic.libats.codecs.CirceCodecs._
 
   implicit val signatureMethodEncoder: Encoder[SignatureMethod] = Encoder.enumEncoder(SignatureMethod)
-  implicit val signatureMethodDecoder: Decoder[SignatureMethod] = Decoder.enumDecoder(SignatureMethod)
+
+  implicit val signatureMethodLenientDecoder: Decoder[SignatureMethod] = Decoder.decodeString.flatMap {
+    case "rsassa-pss" => Decoder.const(SignatureMethod.RSASSA_PSS_SHA256)
+    case _ => Decoder.enumDecoder(SignatureMethod)
+  }
 
   implicit val signatureEncoder: Encoder[Signature] = deriveEncoder
   implicit val signatureDecoder: Decoder[Signature] = deriveDecoder

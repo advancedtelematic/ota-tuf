@@ -79,7 +79,7 @@ object TufCrypto {
 
   def isValid(signature: Signature, publicKey: PublicKey, data: Array[Byte]): Boolean = {
     val signer = signature.method match {
-      case SignatureMethod.RSASSA_PSS ⇒ rsaCrypto.signer
+      case SignatureMethod.RSASSA_PSS_SHA256 ⇒ rsaCrypto.signer
       case SignatureMethod.ED25519 ⇒ edCrypto.signer
       case other ⇒ throw new IllegalArgumentException(s"Unsupported signature method: $other")
     }
@@ -262,7 +262,7 @@ protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
   override def signer: security.Signature =
     java.security.Signature.getInstance("SHA256withRSAandMGF1", "BC") // RSASSA-PSS
 
-  override val signatureMethod: SignatureMethod = SignatureMethod.RSASSA_PSS
+  override val signatureMethod: SignatureMethod = SignatureMethod.RSASSA_PSS_SHA256
 
   override def convert(publicKey: PublicKey): RSATufKey = RSATufKey(publicKey)
 }

@@ -88,7 +88,7 @@ with SignedRootRoleSupport {
 
       val signed = await(rootGeneration.findOrGenerate(repoId))
 
-      await(signedRootRoleRepo.find(repoId)).map(_.asJson) should contain(signed.asJson)
+      await(signedRootRoleRepo.find(repoId)).asJson shouldBe signed.asJson
     }.futureValue
   }
 }

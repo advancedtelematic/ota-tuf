@@ -186,9 +186,14 @@ trait SignedRootRoleSupport extends DatabaseSupport {
   lazy val signedRootRoleRepo = new SignedRootRoleRepository()
 }
 
+object SignedRootRoleRepository {
+  val MissingSignedRole = MissingEntity[SignedPayload[RootRole]]
+}
+
 protected[db] class SignedRootRoleRepository()(implicit db: Database, ec: ExecutionContext) {
   import Schema.signedPayloadRootRoleMapper
   import Schema.signedRootRoles
+  import SignedRootRoleRepository.MissingSignedRole
 
   def persist(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = {
     val expires = signedPayload.signed.expires
@@ -241,13 +246,13 @@ protected[db] class SignedRootRoleRepository()(implicit db: Database, ec: Execut
       .map(_.getOrElse(0) + 1)
   }
 
-  def find(repoId: RepoId): Future[Option[SignedPayload[RootRole]]] =
+  def find(repoId: RepoId): Future[SignedPayload[RootRole]] =
     db.run {
       signedRootRoles
         .filter(_.expiresAt > Instant.now())
         .filter(_.repoId === repoId)
         .map(_.signedPayload)
         .result
-        .headOption
+        .failIfNotSingle(MissingSignedRole)
     }
 }

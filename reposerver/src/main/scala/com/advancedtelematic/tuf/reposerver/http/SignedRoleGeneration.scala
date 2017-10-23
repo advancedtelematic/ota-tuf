@@ -96,7 +96,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
           val nextExpires = Instant.now.plus(1, ChronoUnit.DAYS)
           val newRole = updateRoleFn(versionedRole, nextExpires, nextVersion)
 
-          signRole(repoId, roleType, newRole).flatMap(signedRoleRepo.persist)
+          signRole(repoId, roleType, newRole).flatMap(sr => signedRoleRepo.persist(sr))
         } else {
           FastFuture.successful(role)
         }
