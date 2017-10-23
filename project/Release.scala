@@ -5,14 +5,12 @@ import sbtrelease._
 import sbtrelease.ReleaseStateTransformations.{setReleaseVersion => _, _}
 import sbt.Keys._
 import sbt._
-import com.typesafe.sbt.SbtNativePackager.Docker
 
 import sbtrelease.ReleasePlugin.autoImport._
 
 object Release {
 
   def settings(toPublish: Project*) = {
-
     val publishSteps = toPublish.map(p => ReleaseStep(releaseStepTask(publish in p), enableCrossBuild = true))
 
     val prepareSteps: Seq[ReleaseStep] = Seq(
@@ -23,7 +21,12 @@ object Release {
       releaseStepCommand("reposerver/docker:publish")
     )
 
-    val allSteps = prepareSteps ++ dockerPublishSteps ++ publishSteps
+    val cliS3Release: Seq[ReleaseStep] = Seq(
+      releaseStepCommand("cli/universal:packageZipTarball"),
+      releaseStepCommand("cli/s3release")
+    )
+
+    val allSteps = prepareSteps ++ dockerPublishSteps ++ cliS3Release ++ publishSteps
 
     Seq(
       releaseIgnoreUntrackedFiles := true,
