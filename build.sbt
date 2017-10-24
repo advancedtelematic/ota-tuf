@@ -105,6 +105,7 @@ lazy val cli = (project in file("cli"))
   .settings(
     topLevelDirectory := Some("garage-sign"),
     executableScriptName := "garage-sign",
+    mappings in Universal += (file("cli/LICENSE") -> "docs/LICENSE"),
     s3Bucket := "ats-tuf-cli-releases"
   )
   .dependsOn(libtuf)
