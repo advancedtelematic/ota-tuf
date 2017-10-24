@@ -23,7 +23,7 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{RSATufPrivateKey, TufPrivateKey}
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
+import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport, RoleRepositorySupport}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKeyNotFound
 import eu.timepit.refined.api.Refined
 import org.scalatest.time.{Millis, Seconds, Span}
@@ -35,6 +35,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
   with ResourceSpec
   with KeyGenRequestSupport
   with KeyRepositorySupport
+  with RoleRepositorySupport
   with RootGenerationSpecSupport
   with PatienceConfiguration
   with Inspectors {
@@ -390,12 +391,12 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       responseAs[RootRole]
     }
 
-    val rootKeyId = rootRole.roles(RoleType.ROOT).keyids.head
     val signedPayload = SignedPayload(Seq.empty, rootRole)
 
     Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
-      responseAs[JsonErrors].head should  include(s"payload not signed with key $rootKeyId")
+      responseAs[JsonErrors].errors.toList should contain("Only 0 signatures present from previous root, need at least 1")
+      responseAs[JsonErrors].errors.toList should contain("Only 0 signatures present from new root, need at least 1")
     }
   }
 
@@ -424,6 +425,70 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       status shouldBe StatusCodes.OK
       responseAs[RootRole]
     }
+
+    val keyPair = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val newKey = keyPair._1
+
+    val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
+    val newKeys = (oldRootRole.keys - rootKeyId) + (newKey.id -> newKey)
+    val newRoles = (oldRootRole.roles - RoleType.ROOT) + (RoleType.ROOT -> RoleKeys(Seq(newKey.id), 1))
+    val rootRole = oldRootRole.copy(keys = newKeys, roles = newRoles)
+
+    val newSignature = signWithKeyPair(keyPair, rootRole)
+    val oldsignedPayload = clientSignPayload(rootKeyId, rootRole, rootRole)
+    val signedPayload = oldsignedPayload.copy(signatures = newSignature +: oldsignedPayload.signatures)
+
+    Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val resp = responseAs[RootRole]
+
+      rootRole.copy(version = rootRole.version + 1, expires = resp.expires) shouldBe resp
+    }
+  }
+
+  test("POST updates threshold when signtaure is valid") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId).futureValue
+
+    val oldRootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[RootRole]
+    }
+
+    val keyPair1 = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val keyPair2 = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val newKey1 = keyPair1._1
+    val newKey2 = keyPair2._1
+
+    val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
+    val newKeys = (oldRootRole.keys - rootKeyId) + (newKey1.id -> newKey1, newKey2.id -> newKey2)
+    val newRoles = (oldRootRole.roles - RoleType.ROOT) + (RoleType.ROOT -> RoleKeys(Seq(newKey1.id, newKey2.id), 2))
+    val rootRole = oldRootRole.copy(keys = newKeys, roles = newRoles)
+
+    val newSignature1 = signWithKeyPair(keyPair1, rootRole)
+    val newSignature2 = signWithKeyPair(keyPair2, rootRole)
+    val oldsignedPayload = clientSignPayload(rootKeyId, rootRole, rootRole)
+    val signedPayload = oldsignedPayload.copy(signatures = List(newSignature1, newSignature2) ++ oldsignedPayload.signatures)
+
+    Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    roleRepo.find(repoId, RoleType.ROOT).futureValue.threshold shouldBe 2
+  }
+
+  test("POST returns 400 when not signed with new") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId).futureValue
+
+    val oldRootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[RootRole]
+    }
     val (newKey, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
 
     val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
@@ -434,14 +499,32 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     val signedPayload = clientSignPayload(rootKeyId, rootRole, rootRole)
 
     Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
-      status shouldBe StatusCodes.NoContent
+      status shouldBe StatusCodes.BadRequest
+      responseAs[JsonErrors].errors.toList should contain("Only 0 signatures present from new root, need at least 1")
     }
+  }
 
-    Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+  test("POST returns 400 when not signed with old") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId).futureValue
+
+    val oldRootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      val resp = responseAs[RootRole]
+      responseAs[RootRole]
+    }
+    val keyPair = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val newKey = keyPair._1
 
-      rootRole.copy(version = rootRole.version + 1) shouldBe resp
+    val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
+    val newKeys = (oldRootRole.keys - rootKeyId) + (newKey.id -> newKey)
+    val newRoles = (oldRootRole.roles - RoleType.ROOT) + (RoleType.ROOT -> RoleKeys(Seq(newKey.id), 1))
+    val rootRole = oldRootRole.copy(keys = newKeys, roles = newRoles)
+
+    val signedPayload = SignedPayload(List(signWithKeyPair(keyPair, rootRole)), rootRole)
+
+    Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+      responseAs[JsonErrors].head should include (s"Only 0 signatures present from previous root, need at least 1")
     }
   }
 
@@ -501,6 +584,11 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       status shouldBe StatusCodes.OK
       responseAs[SignedPayload[RootRole]].signed shouldBe newRootRole
     }
+  }
+
+  def signWithKeyPair(keyPair: (TufKey, TufPrivateKey), role: RootRole): ClientSignature = {
+    val signature = TufCrypto.signPayload(keyPair._2, role)
+    ClientSignature(keyPair._1.id, signature.method, signature.sig)
   }
 
   def clientSignPayload[T : Encoder](rootKeyId: KeyId, role: RootRole, payloadToSign: T): SignedPayload[RootRole] = {
