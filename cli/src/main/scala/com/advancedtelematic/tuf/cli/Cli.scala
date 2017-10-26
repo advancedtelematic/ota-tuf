@@ -273,7 +273,7 @@ object Cli extends App with VersionInfo {
       }
 
     cmd("verify-root")
-      .text("verifies signatures for a signed root.jsonjson file")
+      .text("verifies signatures for a signed root.json file")
       .hidden()
       .action { (_, c) => c.copy(command = VerifyRoot) }
       .children(
