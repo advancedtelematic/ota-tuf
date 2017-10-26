@@ -103,22 +103,27 @@ protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: Ex
   import Schema.signedRoles
   import SignedRoleRepository.SignedRoleNotFound
 
-  def persist(signedRole: SignedRole): Future[SignedRole] =
-    db.run(persistAction(signedRole))
+  def persist(signedRole: SignedRole, forceVersion: Boolean = false): Future[SignedRole] =
+    db.run(persistAction(signedRole, forceVersion))
 
-  protected [db] def persistAction(signedRole: SignedRole): DBIO[SignedRole] = {
+  protected [db] def persistAction(signedRole: SignedRole, forceVersion: Boolean): DBIO[SignedRole] = {
     signedRoles
       .filter(_.repoId === signedRole.repoId)
       .filter(_.roleType === signedRole.roleType)
       .result
       .headOption
-      .flatMap(ensureVersionBumpIsValid(signedRole))
+      .flatMap { old =>
+        if(!forceVersion)
+          ensureVersionBumpIsValid(signedRole)(old)
+        else
+          DBIO.successful(())
+      }
       .flatMap(_ => signedRoles.insertOrUpdate(signedRole))
       .map(_ => signedRole)
   }
 
   def persistAll(signedRoles: List[SignedRole]): Future[Seq[SignedRole]] = db.run {
-    DBIO.sequence(signedRoles.map(persistAction)).transactionally
+    DBIO.sequence(signedRoles.map(sr => persistAction(sr, forceVersion = false))).transactionally
   }
 
   def update(signedRole: SignedRole): Future[Int] =
@@ -151,7 +156,7 @@ protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: Ex
     }
 
   def storeAll(targetItemRepo: TargetItemRepository)(signedRoles: List[SignedRole], items: Seq[TargetItem]): Future[Unit] = db.run {
-    DBIO.sequence(signedRoles.map(persistAction))
+    DBIO.sequence(signedRoles.map(sr => persistAction(sr, forceVersion = false)))
       .andThen(DBIO.sequence(items.map(targetItemRepo.persistAction)))
       .map(_ => ())
       .transactionally

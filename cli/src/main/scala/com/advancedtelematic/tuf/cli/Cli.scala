@@ -15,7 +15,6 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import cats.syntax.option._
 import eu.timepit.refined.api.Refined
 import TryToFuture._
-import cats.data.Validated.{Invalid, Valid}
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.client.UserReposerverHttpClient
@@ -36,6 +35,7 @@ case object PullTargets extends Command
 case object PushTargets extends Command
 case object PushTargetsKey extends Command
 case object Export extends Command
+case object VerifyRoot extends Command
 
 case class Config(command: Command,
                   home: Path = Paths.get("tuf"),
@@ -55,6 +55,7 @@ case class Config(command: Command,
                   hardwareIds: List[HardwareIdentifier] = List.empty,
                   targetUri: URI = URI.create(""),
                   keySize: Int = 2048,
+                  inputPath: Path = Paths.get("empty"),
                   exportPath: Option[Path] = None)
 
 object Cli extends App with VersionInfo {
@@ -270,6 +271,14 @@ object Cli extends App with VersionInfo {
       .action { (_, c) =>
         c.copy(command = GetTargets)
       }
+
+    cmd("verify-root")
+      .text("verifies signatures for a signed root.json file")
+      .hidden()
+      .action { (_, c) => c.copy(command = VerifyRoot) }
+      .children(
+        opt[Path]('i', "in").action { (arg, c) => c.copy(inputPath = arg) }
+      )
   }
 
   val default = Config(command = Help)
@@ -353,6 +362,9 @@ object Cli extends App with VersionInfo {
 
       case Export =>
         tufRepo.export(config.targetsKey, config.exportPath.get).toFuture
+
+      case VerifyRoot =>
+        CliUtil.verifyRootFile(config.inputPath)
 
       case Help =>
         parser.showUsage()
