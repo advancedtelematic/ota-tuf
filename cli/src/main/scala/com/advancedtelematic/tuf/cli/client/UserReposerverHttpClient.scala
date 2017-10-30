@@ -2,9 +2,12 @@ package com.advancedtelematic.tuf.cli.client
 
 import java.net.URI
 
+import com.advancedtelematic.libtuf.data.ClientDataType.{ETag, TargetsRole}
+import com.advancedtelematic.libtuf.data.TufDataType.SignedPayload
 import com.advancedtelematic.libtuf.reposerver.{UserReposerverClient, UserReposerverHttpClient => UserReposerverHttpClientClass}
 import com.advancedtelematic.tuf.cli.TufRepo
 import com.advancedtelematic.tuf.cli.TryToFuture._
+
 import scala.concurrent.{ExecutionContext, Future}
 import org.slf4j.LoggerFactory
 
@@ -29,33 +32,25 @@ object UserReposerverHttpClient {
     val host = authPlusUri.getHost
 
     "^(.+?)-.+?\\.(.+)$".r.findFirstMatchIn(host) match {
-      case Some(m) =>
+      case Some(m) if List("production", "staging", "qa").contains(m) =>
         val env = m.group(1)
         val rest = m.group(2)
 
-        new URI(authPlusUri.getScheme,
-          authPlusUri.getRawUserInfo,
-          s"$env-tuf-reposerver-pub.$rest",
-          authPlusUri.getPath,
-          authPlusUri.getFragment
-        )
-      case None =>
+        new URI(authPlusUri.getScheme, s"$env-tuf-reposerver-pub.$rest", null, null)
+      case _ =>
         val url =
-          new URI(authPlusUri.getScheme,
-            authPlusUri.getRawUserInfo,
-            host.replace("auth-plus", "tuf-reposerver-pub"),
-            authPlusUri.getPath,
-            authPlusUri.getFragment)
+          new URI(authPlusUri.getScheme, host.replace("auth-plus", "production-tuf-reposerver-pub"), null, null)
 
-        log.warn("Could not determine reposerver url from authplus url, using $url")
+        log.warn(s"Could not determine reposerver url from authplus url, using $url")
 
         url
     }
   }
 
-  def forRepo(repo: TufRepo)
+  def forRepo(repo: TufRepo, reposerverUrl: Option[URI] = None)
              (implicit ec: ExecutionContext): Future[UserReposerverClient] = for {
     authConfig <- repo.authConfig().toFuture
     token <- AuthPlusClient.tokenFor(authConfig)
-  } yield UserReposerverHttpClient(toTufUri(authConfig.server), token.value)
+    reposerver = reposerverUrl.getOrElse(toTufUri(authConfig.server))
+  } yield UserReposerverHttpClient(reposerver, token.value)
 }

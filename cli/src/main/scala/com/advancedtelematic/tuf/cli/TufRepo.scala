@@ -131,9 +131,10 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     }
 
   def pullTargets(reposerverClient: UserReposerverClient, rootName: KeyName): Future[Unit] =
-    reposerverClient.targets().flatMap { case (targets, etag) =>
+    reposerverClient.targets().flatMap { case reposerverClient.TargetsResponse(targets, etag) =>
       verifyTargets(targets, rootName) match {
-        case Valid(_) => saveTargets(targets, etag).toFuture
+        case Valid(_) if etag.isDefined => saveTargets(targets, etag.get).toFuture
+        case Valid(_) => Future.failed(new Exception(s"Error pulling targets: Did not receive valid etag from reposerver"))
         case Invalid(s) => Future.failed(new Exception(s"Error pulling targets: ${s.toList.mkString(", ")}"))
       }
     }

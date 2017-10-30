@@ -56,7 +56,8 @@ case class Config(command: Command,
                   targetUri: URI = URI.create(""),
                   keySize: Int = 2048,
                   inputPath: Path = Paths.get("empty"),
-                  exportPath: Option[Path] = None)
+                  exportPath: Option[Path] = None,
+                  reposerverUrl: Option[URI] = None)
 
 object Cli extends App with VersionInfo {
   import CliReads._
@@ -80,6 +81,10 @@ object Cli extends App with VersionInfo {
 
     opt[RepoName]("repo").abbr("r").required().action { (name, c) =>
       c.copy(repoName = name)
+    }
+
+    opt[URI]("reposerver").optional().action { (arg, c) =>
+      c.copy(reposerverUrl = arg.some)
     }
 
     cmd("init")
@@ -297,7 +302,7 @@ object Cli extends App with VersionInfo {
 
     lazy val tufRepo = new TufRepo(config.repoName, repoPath)
 
-    lazy val repoServer = UserReposerverHttpClient.forRepo(tufRepo)
+    lazy val repoServer = UserReposerverHttpClient.forRepo(tufRepo, config.reposerverUrl)
 
     val f: Future[_] = config.command match {
       case GenKeys =>
@@ -320,7 +325,7 @@ object Cli extends App with VersionInfo {
       case GetTargets =>
         repoServer
           .flatMap(_.targets())
-          .map { case (targets,_) => log.info(targets.asJson.spaces2) }
+          .map { targetsResponse => log.info(targetsResponse.targets.asJson.spaces2) }
 
       case InitTargets =>
         tufRepo

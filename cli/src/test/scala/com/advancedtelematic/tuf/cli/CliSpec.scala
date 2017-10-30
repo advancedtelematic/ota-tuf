@@ -62,7 +62,7 @@ class FakeUserReposerverClient extends UserReposerverClient {
       Future.failed(new RuntimeException("[test] invalid signatures for root role"))
   }
 
-  override def targets(): Future[(SignedPayload[TargetsRole], ETag)] =
+  override def targets(): Future[TargetsResponse] =
     throw new NotImplementedError("[test] targets not implemented for fake repo server")
 
   def pushTargets(targetsRole: SignedPayload[TargetsRole], etag: Option[ETag]): Future[Unit] =
