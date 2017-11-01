@@ -15,13 +15,15 @@ import scala.reflect.ClassTag
 import scalaj.http.{Http, HttpRequest}
 
 trait UserReposerverClient {
+  case class TargetsResponse(targets: SignedPayload[TargetsRole], etag: Option[ETag])
+
   def root(): Future[SignedPayload[RootRole]]
 
   def deleteKey(keyId: KeyId): Future[TufPrivateKey]
 
   def pushSignedRoot(signedRoot: SignedPayload[RootRole]): Future[Unit]
 
-  def targets(): Future[(SignedPayload[TargetsRole], ETag)]
+  def targets(): Future[TargetsResponse]
 
   def pushTargets(targetsRole: SignedPayload[TargetsRole], etag: Option[ETag]): Future[Unit]
 
@@ -54,12 +56,11 @@ class UserReposerverHttpClient(reposerverUri: URI,
     execJsonHttp[Unit, SignedPayload[RootRole]](req, signedRoot)()
   }
 
-  def targets(): Future[(SignedPayload[TargetsRole], ETag)] = {
+  def targets(): Future[TargetsResponse] = {
     val req = Http(apiUri("targets.json")).method("GET")
-
     execHttp[SignedPayload[TargetsRole]](req)().map { case HttpResponse(payload, response) =>
-      assume(response.headers("ETag").length == 1)
-      (payload, ETag(response.headers("ETag").head))
+      val etag = response.header("ETag").map(ETag.apply)
+      TargetsResponse(payload, etag)
     }
   }
 
