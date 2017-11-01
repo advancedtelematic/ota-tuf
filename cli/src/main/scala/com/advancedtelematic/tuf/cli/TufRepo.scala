@@ -7,9 +7,10 @@ import java.time.{Instant, Period}
 import java.util.zip.{ZipEntry, ZipFile, ZipOutputStream}
 
 import cats.syntax.either._
+import cats.syntax.option._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, ETag, RoleKeys, RoleTypeToMetaPathOp, RootRole, TargetCustom, TargetsRole, VersionedRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey, TufPrivateKey, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey, TufPrivateKey, ValidTargetFilename}
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -19,13 +20,14 @@ import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
 import TryToFuture._
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.{NonEmptyList, ValidatedNel}
+import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import eu.timepit.refined.refineV
 import eu.timepit.refined.api.Refined
 import io.circe.{Decoder, Encoder, Json}
 import io.circe.jawn.{parse, parseFile}
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
-
+import cats.syntax.validated._
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.io.Source
@@ -77,35 +79,32 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     either.toTry
   }
 
-  def init(credentialsPath: Path, keyName: KeyName): Try[Unit] = {
-
-    Try(Files.createDirectories(repoPath.resolve("keys"))).flatMap { _ =>
-
-      Try(credentialsPath.getFileName.toString).flatMap { name =>
-        if (name.endsWith(".json")) {
-          initFromAuthJson(credentialsPath.toFile)
-        } else if (name.endsWith(".zip")) {
-          initFromZip(credentialsPath, keyName)
-        } else {
-          Failure(new Exception("unknown file extension"))
-        }
+  def init(credentialsPath: Path, keyName: KeyName): Try[Unit] =
+    Try {
+      Files.createDirectories(repoPath.resolve("keys"))
+      credentialsPath.getFileName.toString
+    }.flatMap { name =>
+      if (name.endsWith(".json")) {
+        initFromAuthJson(credentialsPath.toFile)
+      } else if (name.endsWith(".zip")) {
+        initFromZip(credentialsPath, keyName)
+      } else {
+        Failure(new Exception("unknown file extension"))
       }
     }
-  }
 
   def initTargets(version: Int, expires: Instant): Try[Path] = {
     val emptyTargets = TargetsRole(expires, Map.empty, version)
     writeUnsignedRole(emptyTargets)
   }
 
-  import cats.syntax.option._
-
-  def addTarget(name: TargetName, version: TargetVersion, length: Int, checksum: Refined[String, ValidChecksum], hardwareIds: List[HardwareIdentifier], url: URI): Try[Path] = {
+  def addTarget(name: TargetName, version: TargetVersion, length: Int, checksum: Refined[String, ValidChecksum],
+                hardwareIds: List[HardwareIdentifier], url: URI, format: TargetFormat): Try[Path] = {
     for {
       targetsRole <- readUnsignedRole[TargetsRole](RoleType.TARGETS)
       targetFilename <- refineV[ValidTargetFilename](s"${name.value}-${version.value}").leftMap(s => new IllegalArgumentException(s)).toTry
       newTargetRole = {
-        val custom = TargetCustom(name, version, hardwareIds, TargetFormat.BINARY.some, url.some)
+        val custom = TargetCustom(name, version, hardwareIds, format.some, url.some)
         val clientHashes = Map(HashMethod.SHA256 -> checksum)
         val newTarget = ClientTargetItem(clientHashes, length, custom.asJson.some)
 
@@ -115,14 +114,12 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     } yield path
   }
 
-  def verifyTargets(targets: SignedPayload[TargetsRole], rootName: KeyName): ValidatedNel[String, SignedPayload[TargetsRole]] =
-    storage.readPublicKey(rootName).flatMap { publicRootKey =>
-      readUnsignedRole[RootRole](RoleType.ROOT)
-    } match {
+  def verifyTargets(targets: SignedPayload[TargetsRole]): ValidatedNel[String, SignedPayload[TargetsRole]] =
+    readSignedRole[RootRole](RoleType.ROOT) match {
       case Success(rootRole) =>
-        TufCrypto.payloadSignatureIsValid(rootRole, targets)
+        TufCrypto.payloadSignatureIsValid(rootRole.signed, targets)
       case Failure(t) =>
-        Invalid(NonEmptyList.of(t.getMessage))
+        t.getMessage.invalidNel
     }
 
   def saveTargets(targets: SignedPayload[TargetsRole], etag: ETag): Try[Unit] =
@@ -130,9 +127,9 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       writeEtag(etag)
     }
 
-  def pullTargets(reposerverClient: UserReposerverClient, rootName: KeyName): Future[Unit] =
+  def pullTargets(reposerverClient: UserReposerverClient): Future[Unit] =
     reposerverClient.targets().flatMap { case reposerverClient.TargetsResponse(targets, etag) =>
-      verifyTargets(targets, rootName) match {
+      verifyTargets(targets) match {
         case Valid(_) if etag.isDefined => saveTargets(targets, etag.get).toFuture
         case Valid(_) => Future.failed(new Exception(s"Error pulling targets: Did not receive valid etag from reposerver"))
         case Invalid(s) => Future.failed(new Exception(s"Error pulling targets: ${s.toList.mkString(", ")}"))
@@ -173,12 +170,11 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     parseFile(path.toFile).flatMap(_.as[SignedPayload[T]]).toTry
   }
 
-  private def readEtag[T <: VersionedRole](roleType: RoleType): Try[ETag] =
-    Try {
-      val lines = Source.fromFile(rolesPath.resolve(roleType.toETagPath).toFile).getLines().toTraversable
-      assert(lines.tail.isEmpty)
-      ETag(lines.head)
-    }
+  private def readEtag[T <: VersionedRole](roleType: RoleType): Try[ETag] = Try {
+    val lines = Source.fromFile(rolesPath.resolve(roleType.toETagPath).toFile).getLines().toTraversable
+    assert(lines.tail.isEmpty)
+    ETag(lines.head)
+  }
 
   private def writeEtag(etag: ETag): Try[Unit] = Try {
     Files.write(rolesPath.resolve(RoleType.TARGETS.toETagPath), Seq(etag.value).asJava)

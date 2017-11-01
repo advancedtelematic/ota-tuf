@@ -3,12 +3,13 @@ package com.advancedtelematic.tuf.cli
 import java.nio.file.Path
 import java.time.Instant
 
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, KeyType, RsaKeyType}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, KeyType, RsaKeyType, TargetFormat}
 import eu.timepit.refined
 import eu.timepit.refined.api.{Refined, Validate}
 import scopt.Read
 import shapeless._
 import cats.syntax.either._
+import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.tuf.cli.DataType.AuthConfig
 
 
@@ -38,4 +39,6 @@ object CliReads {
   implicit val pathRead: Read[Path] = Read.fileRead.map(_.toPath)
 
   implicit val instantRead: Read[Instant] = Read.stringRead.map(Instant.parse)
+
+  implicit val targetFormatRead: Read[TargetFormat] = Read.stringRead.map(_.toUpperCase).map(TargetFormat.withName)
 }
