@@ -32,11 +32,13 @@ object UserReposerverHttpClient {
     val host = authPlusUri.getHost
 
     "^(.+?)-.+?\\.(.+)$".r.findFirstMatchIn(host) match {
-      case Some(m) if List("production", "staging", "qa").contains(m) =>
+      case Some(m) if List("production", "staging", "qa").contains(m.group(1)) =>
         val env = m.group(1)
         val rest = m.group(2)
 
         new URI(authPlusUri.getScheme, s"$env-tuf-reposerver-pub.$rest", null, null)
+      case Some(_) if host.contains("staging") =>
+        new URI(authPlusUri.getScheme, host.replace("auth-plus", "tuf-reposerver-pub"), null, null)
       case _ =>
         val url =
           new URI(authPlusUri.getScheme, host.replace("auth-plus", "production-tuf-reposerver-pub"), null, null)
