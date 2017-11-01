@@ -8,7 +8,7 @@ import java.time.temporal.ChronoUnit
 
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, HardwareIdentifier, KeyId, KeyType, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, HardwareIdentifier, KeyId, KeyType, TargetFormat, TargetName, TargetVersion}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.slf4j.LoggerFactory
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -16,6 +16,7 @@ import cats.syntax.option._
 import eu.timepit.refined.api.Refined
 import TryToFuture._
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
+import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.client.UserReposerverHttpClient
 
@@ -50,6 +51,7 @@ case class Config(command: Command,
                   expires: Instant = Instant.now().plus(1, ChronoUnit.DAYS),
                   length: Int = -1,
                   targetName: Option[TargetName] = None,
+                  targetFormat: TargetFormat = TargetFormat.BINARY,
                   targetVersion: Option[TargetVersion] = None,
                   checksum: Option[Refined[String, ValidChecksum]] = None,
                   hardwareIds: List[HardwareIdentifier] = List.empty,
@@ -208,6 +210,12 @@ object Cli extends App with VersionInfo {
               .action { (arg, c) =>
                 c.copy(targetVersion = arg.some)
               },
+            opt[TargetFormat]("format")
+              .optional()
+              .text("target format [ostree|binary]")
+              .action { (arg, c) =>
+                c.copy(targetFormat = arg)
+              },
             opt[Refined[String, ValidChecksum]]("sha256")
               .required()
               .action { (arg, c) =>
@@ -238,13 +246,7 @@ object Cli extends App with VersionInfo {
         cmd("pull")
           .action { (_, c) =>
             c.copy(command = PullTargets)
-          }.children(
-            opt[KeyName]("root-key")
-              .action{ (arg, c) =>
-                c.copy(rootKey = arg)
-              }
-              .required()
-          ),
+          },
         cmd("push").action { (_, c) =>
           c.copy(command = PushTargets)
         }
@@ -340,7 +342,8 @@ object Cli extends App with VersionInfo {
                      config.length,
                      config.checksum.get,
                      config.hardwareIds,
-                     config.targetUri)
+                     config.targetUri,
+            config.targetFormat)
           .map(p => log.info(s"added target to $p"))
           .toFuture
 
@@ -352,7 +355,7 @@ object Cli extends App with VersionInfo {
 
       case PullTargets =>
         repoServer
-          .flatMap { tufRepo.pullTargets(_, config.rootKey) }
+          .flatMap(tufRepo.pullTargets)
           .map(_ => log.info("Pulled targets"))
 
       case PushTargets =>

@@ -8,7 +8,7 @@ import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ETag, RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RoleType, SignedPayload, TargetName, TargetVersion, TufKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.cli.CliCodecs.authConfigDecoder
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
@@ -173,12 +173,23 @@ class TufRepoSpec extends CliSpec {
   test("adds a target to an existing targets") {
     val repo = initRepo()
 
-    val path = repo.addTarget(TargetName("fake-one"), TargetVersion("1.2.3"), 100, Refined.unsafeApply("03aa3f5e2779b625a455651b54866447f995a2970d164581b4073044435359ed"), List.empty, new URI("https://ats.com")).get
+    val path = repo.addTarget(TargetName("fake-one"), TargetVersion("1.2.3"), 100, Refined.unsafeApply("03aa3f5e2779b625a455651b54866447f995a2970d164581b4073044435359ed"), List.empty, new URI("https://ats.com"), TargetFormat.BINARY).get
     val role = parseFile(path.toFile).flatMap(_.as[TargetsRole]).valueOr(throw _)
 
     role.targets.keys.map(_.value) should contain("fake-one-1.2.3")
     role.targets.values.head.customParsed[TargetCustom].flatMap(_.uri) should contain(new URI("https://ats.com"))
   }
+
+  test("adds a target to an existing targets with specified format") {
+    val repo = initRepo()
+
+    val path = repo.addTarget(TargetName("fake-ostree"), TargetVersion("1.2.3"), 100, Refined.unsafeApply("03aa3f5e2779b625a455651b54866447f995a2970d164581b4073044435359ed"), List.empty, new URI("https://ats.com"), TargetFormat.OSTREE).get
+    val role = parseFile(path.toFile).flatMap(_.as[TargetsRole]).valueOr(throw _)
+
+    val format = role.targets.get(Refined.unsafeApply("fake-ostree-1.2.3")).flatMap(_.customParsed[TargetCustom]).flatMap(_.targetFormat)
+    format should contain(TargetFormat.OSTREE)
+  }
+
 
   test("signs targets") {
     val repo = initRepo()
