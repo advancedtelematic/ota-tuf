@@ -15,12 +15,10 @@ class CliKeyStorage(repo: Path) {
 
   private lazy val log = LoggerFactory.getLogger(this.getClass)
 
-  implicit class KeyNamePath(v: KeyName) {
-    def publicKeyName: String = v.value + ".pub"
-    def publicKeyPath: Path = repo.resolve("keys").resolve(publicKeyName)
+  implicit private class KeyNamePath(v: KeyName) {
+    def publicKeyPath: Path = repo.resolve("keys").resolve(v.publicKeyName)
 
-    def privateKeyName: String = v.value + ".sec"
-    def privateKeyPath: Path = repo.resolve("keys").resolve(privateKeyName)
+    def privateKeyPath: Path = repo.resolve("keys").resolve(v.privateKeyName)
   }
 
   private def writePublic(keyName: KeyName, tufKey: TufKey): Try[Unit] = Try {
