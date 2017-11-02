@@ -101,11 +101,6 @@ object Cli extends App with VersionInfo {
           .required()
           .action { (path, c) =>
             c.copy(credentialsPath = path)
-          },
-        opt[KeyName]("target-key-name")
-          .text("Target key name to look for in credentials.zip")
-          .action { (name, c) =>
-            c.copy(targetsKey = name)
           }
       )
 
@@ -311,7 +306,10 @@ object Cli extends App with VersionInfo {
         tufRepo.genKeys(config.rootKey, config.keyType, config.keySize).toFuture
 
       case InitRepo =>
-        tufRepo.init(config.credentialsPath, config.targetsKey).toFuture
+        tufRepo
+          .init(config.credentialsPath)
+          .map(_ => log.info(s"Finished init for ${config.repoName.value} using ${config.credentialsPath}"))
+          .toFuture
 
       case Rotate =>
         repoServer
