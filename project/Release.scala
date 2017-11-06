@@ -23,7 +23,8 @@ object Release {
 
     val cliS3Release: Seq[ReleaseStep] = Seq(
       releaseStepCommand("cli/universal:packageZipTarball"),
-      releaseStepCommand("cli/s3release")
+      releaseStepCommand("cli/s3release"),
+      releaseStepCommand("cli/s3depsRelease")
     )
 
     val allSteps = prepareSteps ++ dockerPublishSteps ++ cliS3Release ++ publishSteps
