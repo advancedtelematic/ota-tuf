@@ -147,6 +147,23 @@ class TufRepoSpec extends CliSpec {
 
     rootRole.roles(RoleType.ROOT).keyids should contain(pub.id)
     rootRole.roles(RoleType.TARGETS).keyids should contain(pubT.id)
+
+    rootRole.keys.keys should contain(pub.id)
+     rootRole.keys.keys should contain(pubT.id)
+  }
+
+  test("new root role does not contain old targets keys") {
+    val repo = initRepo()
+
+    val reposerverClient = new FakeUserReposerverClient
+
+    val oldTargetsKeyId = reposerverClient.root().map(_.signed.roles(RoleType.TARGETS).keyids.head).futureValue
+    val (_, pubT, signedPayload) = rotate(repo, reposerverClient).futureValue
+
+    val rootRole = signedPayload.signed
+
+    rootRole.keys.keys should contain(pubT.id)
+    rootRole.keys.keys shouldNot contain(oldTargetsKeyId)
   }
 
   test("new root role has proper version bump") {
