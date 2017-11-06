@@ -217,10 +217,11 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       (newTargetsPubKey, _) <- keyStorage.readKeyPair(newTargetsName).toFuture
       oldRootRole <- repoClient.root().map(_.signed)
       oldRootPubKeyId = oldKeyId.getOrElse(oldRootRole.roles(RoleType.ROOT).keyids.last)
+      oldTargetsKeyIds = oldRootRole.roles(RoleType.TARGETS).keyids
       oldRootPubKey = oldRootRole.keys(oldRootPubKeyId)
       oldRootPrivKey <- deleteOrReadKey(repoClient, oldRootName, oldRootPubKeyId)
       _ <- keyStorage.writeKeys(oldRootName, oldRootPubKey, oldRootPrivKey).toFuture
-      newKeySet = oldRootRole.keys ++ Map(newRootPubKey.id -> newRootPubKey, newTargetsPubKey.id -> newTargetsPubKey)
+      newKeySet = (oldRootRole.keys -- (oldTargetsKeyIds :+ oldRootPubKeyId)) ++ Map(newRootPubKey.id -> newRootPubKey, newTargetsPubKey.id -> newTargetsPubKey)
       newRootRoleKeys = RoleKeys(Seq(newRootPubKey.id), threshold = 1)
       newTargetsRoleKeys = RoleKeys(Seq(newTargetsPubKey.id), threshold = 1)
       newRootRoleMap = oldRootRole.roles ++ Map(RoleType.ROOT -> newRootRoleKeys, RoleType.TARGETS -> newTargetsRoleKeys)
