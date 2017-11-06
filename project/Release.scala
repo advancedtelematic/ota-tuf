@@ -22,6 +22,7 @@ object Release {
     )
 
     val cliS3Release: Seq[ReleaseStep] = Seq(
+      releaseStepCommand("cli/updateClassifiers"),
       releaseStepCommand("cli/universal:packageZipTarball"),
       releaseStepCommand("cli/s3release"),
       releaseStepCommand("cli/s3depsRelease")
