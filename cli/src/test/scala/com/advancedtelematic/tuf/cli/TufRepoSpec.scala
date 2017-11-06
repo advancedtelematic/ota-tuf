@@ -138,6 +138,19 @@ class TufRepoSpec extends CliSpec {
     signedPayload.isValidFor(oldRootPub)
   }
 
+  test("pulls targets.json during rotate") {
+    val repo = initRepo()
+
+    rotate(repo).futureValue
+
+    val targetsPath = repo.repoPath.resolve("roles/targets.json")
+    val signedTargets = parseFile(targetsPath.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).valueOr(throw _)
+
+    repo.readUnsignedRole[TargetsRole](RoleType.TARGETS).get shouldBe signedTargets.signed
+
+    repo.repoPath.resolve("roles/targets.json.etag").toFile.exists() shouldBe true
+  }
+
   test("new root role contains new root id") {
     val repo = initRepo()
 
@@ -230,6 +243,20 @@ class TufRepoSpec extends CliSpec {
     format should contain(TargetFormat.OSTREE)
   }
 
+  test("bumps version when signing targets role") {
+    val repo = initRepo()
+
+    val targetsKeyName = KeyName("somekey")
+    repo.genKeys(targetsKeyName, EdKeyType, 256).get
+
+    repo.signTargets(targetsKeyName).get
+
+    val payload = repo.readSignedRole[TargetsRole](RoleType.TARGETS).get
+    payload.signed.version shouldBe 12
+
+    val unsignedPayload = repo.readUnsignedRole[TargetsRole](RoleType.TARGETS).get
+    unsignedPayload.version shouldBe 12
+  }
 
   test("signs targets") {
     val repo = initRepo()
@@ -275,15 +302,18 @@ class TufRepoSpec extends CliSpec {
     pushedKey shouldBe pubTargets
   }
 
-  test("save targets") {
+
+  test("save targets.json and etags to file when pulling") {
     val repo = initRepo()
 
-    val rootName = KeyName("root")
-    repo.genKeys(rootName, EdKeyType, 256).get
+    val reposerverClient = new FakeUserReposerverClient
 
-    val path = repo.signTargets(rootName).get
-    val signedTargetRole = parseFile(path.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).valueOr(throw _)
+    val rootRole = reposerverClient.root().futureValue
 
-    repo.saveTargets(signedTargetRole, ETag("etag")) shouldBe 'success
+    repo.pullTargets(reposerverClient, rootRole.signed).futureValue
+
+    repo.readSignedRole[TargetsRole](RoleType.TARGETS).get.signed shouldBe a[TargetsRole]
+
+    Files.readAllLines(repo.repoPath.resolve("roles/targets.json.etag")).get(0) shouldNot be(empty)
   }
 }

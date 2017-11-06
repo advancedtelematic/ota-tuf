@@ -8,7 +8,7 @@ import java.time.temporal.ChronoUnit
 
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, HardwareIdentifier, KeyId, KeyType, TargetFormat, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, HardwareIdentifier, KeyId, KeyType, RoleType, TargetFormat, TargetName, TargetVersion}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.slf4j.LoggerFactory
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -16,6 +16,7 @@ import cats.syntax.option._
 import eu.timepit.refined.api.Refined
 import TryToFuture._
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.client.UserReposerverHttpClient
@@ -85,7 +86,7 @@ object Cli extends App with VersionInfo {
       c.copy(repoName = name)
     }
 
-    opt[URI]("reposerver").optional().action { (arg, c) =>
+    opt[URI]("reposerver").action { (arg, c) =>
       c.copy(reposerverUrl = arg.some)
     }
 
@@ -352,8 +353,8 @@ object Cli extends App with VersionInfo {
           .toFuture
 
       case PullTargets =>
-        repoServer
-          .flatMap(tufRepo.pullTargets)
+        repoServer.zip(tufRepo.readUnsignedRole[RootRole](RoleType.ROOT).toFuture)
+          .flatMap { case (r, rootRole) => tufRepo.pullTargets(r, rootRole) }
           .map(_ => log.info("Pulled targets"))
 
       case PushTargets =>

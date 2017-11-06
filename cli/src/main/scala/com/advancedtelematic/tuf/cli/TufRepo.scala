@@ -4,7 +4,7 @@ import java.io._
 import java.net.URI
 import java.nio.file.{Files, Path}
 import java.time.{Instant, Period}
-import java.util.zip.{ZipEntry, ZipFile, ZipInputStream, ZipOutputStream}
+import java.util.zip.{ZipEntry, ZipFile, ZipOutputStream}
 
 import scala.collection.JavaConversions._
 import cats.syntax.either._
@@ -20,7 +20,6 @@ import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
 import TryToFuture._
 import cats.data.Validated.{Invalid, Valid}
-import cats.data.{NonEmptyList, ValidatedNel}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import eu.timepit.refined.refineV
 import eu.timepit.refined.api.Refined
@@ -28,12 +27,24 @@ import io.circe.{Decoder, Encoder, Json}
 import io.circe.jawn.{parse, parseFile}
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
-import cats.syntax.validated._
+import com.advancedtelematic.tuf.cli.TufRepo.{EtagsNotFound, TargetsPullError, UnknownInitFile}
 
-import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.io.Source
-import scala.util.{Failure, Success, Try}
+import scala.util.control.NoStackTrace
+import scala.util.{Failure, Try}
+
+object TufRepo {
+  case object EtagsNotFound extends Exception(
+    "Could not find targets etags file. You need this to push a new targets file. Etags can be obtained using the pull command"
+  ) with NoStackTrace
+
+  case class UnknownInitFile(path: Path) extends Exception(
+    s"unknown file extension for repo init: $path"
+  )
+
+  case class TargetsPullError(msg: String) extends Exception(msg) with NoStackTrace
+}
 
 class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionContext) {
   import CliCodecs._
@@ -84,7 +95,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       src ← Try(new ZipFile(path.toFile))
       _ <- writeAuthFile(src)
       _ <- writeTargetKeys(src).recover { case ex =>
-        log.warn(s"Could not read/write target keys from credentials zip file: ${ex.getMessage}")
+        log.warn(s"Could not read/write target keys from credentials zip file: ${ex.getMessage}. Continuing.")
       }
       _ = Try(src.close())
     } yield ()
@@ -100,7 +111,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       } else if (name.endsWith(".zip")) {
         initFromZip(credentialsPath)
       } else {
-        Failure(new Exception("unknown file extension"))
+        Failure(UnknownInitFile(credentialsPath))
       }
     }
 
@@ -125,42 +136,39 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     } yield path
   }
 
-  def verifyTargets(targets: SignedPayload[TargetsRole]): ValidatedNel[String, SignedPayload[TargetsRole]] =
-    readSignedRole[RootRole](RoleType.ROOT) match {
-      case Success(rootRole) =>
-        TufCrypto.payloadSignatureIsValid(rootRole.signed, targets)
-      case Failure(t) =>
-        t.getMessage.invalidNel
-    }
+  private def writeTargets(targets: SignedPayload[TargetsRole], etag: ETag): Try[Unit] =
+    writeSignedRole(targets).flatMap(_ => writeEtag(etag))
 
-  def saveTargets(targets: SignedPayload[TargetsRole], etag: ETag): Try[Unit] =
-    writeSignedRole(targets).flatMap { _ =>
-      writeEtag(etag)
-    }
+  def pullTargets(reposerverClient: UserReposerverClient, rootRole: RootRole): Future[SignedPayload[TargetsRole]] =
+    reposerverClient.targets().flatMap {
+      case reposerverClient.TargetsResponse(targets, etag) =>
+        val roleValidation = TufCrypto.payloadSignatureIsValid(rootRole, targets)
 
-  def pullTargets(reposerverClient: UserReposerverClient): Future[Unit] =
-    reposerverClient.targets().flatMap { case reposerverClient.TargetsResponse(targets, etag) =>
-      verifyTargets(targets) match {
-        case Valid(_) if etag.isDefined => saveTargets(targets, etag.get).toFuture
-        case Valid(_) => Future.failed(new Exception(s"Error pulling targets: Did not receive valid etag from reposerver"))
-        case Invalid(s) => Future.failed(new Exception(s"Error pulling targets: ${s.toList.mkString(", ")}"))
-      }
+        roleValidation match {
+          case Valid(_) if etag.isDefined => writeTargets(targets, etag.get).map(_ => targets).toFuture
+          case Valid(_) => Future.failed(TargetsPullError("Did not receive valid etag from reposerver"))
+          case Invalid(s) => Future.failed(TargetsPullError(s.toList.mkString(", ")))
+        }
     }
 
   def pushTargets(reposerverClient: UserReposerverClient): Future[SignedPayload[TargetsRole]] =
     readSignedRole[TargetsRole](RoleType.TARGETS).toFuture.flatMap { targets =>
-      log.info(s"pushing ${targets.asJson.spaces2}")
-      val etag = readEtag[TargetsRole](RoleType.TARGETS)
-      log.info(s"etag: $etag")
-      reposerverClient.pushTargets(targets, etag.toOption).map(_ => targets)
+      log.debug(s"pushing ${targets.asJson.spaces2}")
+
+      for {
+        etag <- readEtag[TargetsRole](RoleType.TARGETS).toFuture
+        _ <- reposerverClient.pushTargets(targets, etag.some)
+      } yield targets
     }
 
   def signTargets(targetsKey: KeyName): Try[Path] =
     for {
       (pub, priv) <- keyStorage.readKeyPair(targetsKey)
       unsigned <- readUnsignedRole[TargetsRole](RoleType.TARGETS) // TODO: Why do we need both?
-      sig = TufCrypto.signPayload(priv, unsigned).toClient(pub.id)
-      signedRole = SignedPayload(Seq(sig), unsigned)
+      newUnsigned = unsigned.copy(version = unsigned.version + 1)
+      sig = TufCrypto.signPayload(priv, newUnsigned).toClient(pub.id)
+      signedRole = SignedPayload(Seq(sig), newUnsigned)
+      _ <- writeUnsignedRole(signedRole.signed)
       path <- writeSignedRole(signedRole)
     } yield path
 
@@ -171,24 +179,26 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     }
   }
 
-  private def readUnsignedRole[T <: VersionedRole : Decoder](roleType: RoleType): Try[T] = {
+  def readUnsignedRole[T <: VersionedRole : Decoder](roleType: RoleType): Try[T] = {
     val path = rolesPath.resolve("unsigned").resolve(roleType.toMetaPath.value)
     parseFile(path.toFile).flatMap(_.as[T]).toTry
   }
 
-  private def readSignedRole[T <: VersionedRole](roleType: RoleType)(implicit ev: Decoder[SignedPayload[T]]): Try[SignedPayload[T]] = {
+  def readSignedRole[T <: VersionedRole](roleType: RoleType)(implicit ev: Decoder[SignedPayload[T]]): Try[SignedPayload[T]] = {
     val path = rolesPath.resolve(roleType.toMetaPath.value)
     parseFile(path.toFile).flatMap(_.as[SignedPayload[T]]).toTry
   }
 
   private def readEtag[T <: VersionedRole](roleType: RoleType): Try[ETag] = Try {
-    val lines = Source.fromFile(rolesPath.resolve(roleType.toETagPath).toFile).getLines().toTraversable
+    val lines = Files.readAllLines(rolesPath.resolve(roleType.toETagPath))
     assert(lines.tail.isEmpty)
     ETag(lines.head)
+  }.recoverWith {
+    case _: FileNotFoundException => Failure(EtagsNotFound)
   }
 
   private def writeEtag(etag: ETag): Try[Unit] = Try {
-    Files.write(rolesPath.resolve(RoleType.TARGETS.toETagPath), Seq(etag.value).asJava)
+    Files.write(rolesPath.resolve(RoleType.TARGETS.toETagPath), etag.value.getBytes)
   }
 
   private def writeUnsignedRole[T <: VersionedRole : Encoder](role: T): Try[Path] =
@@ -216,6 +226,8 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       (newRootPubKey, newRootPrivKey) <- keyStorage.readKeyPair(newRootName).toFuture
       (newTargetsPubKey, _) <- keyStorage.readKeyPair(newTargetsName).toFuture
       oldRootRole <- repoClient.root().map(_.signed)
+      oldTargets <- pullTargets(repoClient, oldRootRole)
+      _ <- writeUnsignedRole(oldTargets.signed).toFuture
       oldRootPubKeyId = oldKeyId.getOrElse(oldRootRole.roles(RoleType.ROOT).keyids.last)
       oldTargetsKeyIds = oldRootRole.roles(RoleType.TARGETS).keyids
       oldRootPubKey = oldRootRole.keys(oldRootPubKeyId)
@@ -272,9 +284,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       }
     }
 
-    def copyKeyPair(dest: ZipOutputStream): Try[Unit] = Try {
-      val (pubKey, privKey) = keyStorage.readKeyPair(targetKey).get
-
+    def copyKeyPair(pubKey: TufKey, privKey: TufPrivateKey, dest: ZipOutputStream): Try[Unit] = Try {
       dest.putNextEntry(new ZipEntry(zipTargetKeyName.publicKeyName))
       dest.write(pubKey.asJson.spaces2.getBytes())
 
@@ -286,8 +296,9 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       val sourceZip = new ZipFile(repoPath.resolve("credentials.zip").toFile)
 
       val t = for {
+        (pubKey, privKey) <- keyStorage.readKeyPair(targetKey)
         _ ← copyEntries(sourceZip, zipExportStream)
-        _ ← copyKeyPair(zipExportStream)
+        _ ← copyKeyPair(pubKey, privKey, zipExportStream)
       } yield ()
 
       Try(sourceZip.close())

@@ -12,8 +12,10 @@ import scalaj.http.{HttpRequest, HttpResponse => ScalaJHttpResponse}
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
 
+import scala.util.control.NoStackTrace
+
 object SHttpjServiceClient {
-  case class HttpjClientError(msg: String) extends Exception(s"remote_service_error: $msg")
+  case class HttpjClientError(msg: String) extends Exception(s"remote_service_error: $msg") with NoStackTrace
 
   case class HttpResponse[T](body: T, response: ScalaJHttpResponse[Array[Byte]])
 }
