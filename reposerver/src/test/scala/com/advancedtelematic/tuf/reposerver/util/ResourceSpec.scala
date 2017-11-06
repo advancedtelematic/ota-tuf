@@ -15,7 +15,7 @@ import com.advancedtelematic.libats.test.DatabaseSpec
 import scala.concurrent.Future
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model._
-import akka.http.scaladsl.server.{Directive1, Directives}
+import akka.http.scaladsl.server.{Directive1, Directives, Route}
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 
@@ -34,6 +34,8 @@ import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
 import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStoreEngine, TargetStore}
+
+import scala.concurrent.Promise
 
 object FakeKeyserverClient extends KeyserverClient {
 
@@ -170,6 +172,16 @@ trait FakeHttpClientSpec {
   }
 
   val fakeHttpClient = new FakeHttpClient
+}
+
+trait HttpClientSpecSupport {
+  self: ResourceSpec =>
+
+  def testHttpClient(req: akka.http.scaladsl.model.HttpRequest): Future[akka.http.scaladsl.model.HttpResponse] = {
+    val p = Promise[akka.http.scaladsl.model.HttpResponse]()
+    req ~> Route.seal(routes) ~> check { p.success(response) }
+    p.future
+  }
 }
 
 

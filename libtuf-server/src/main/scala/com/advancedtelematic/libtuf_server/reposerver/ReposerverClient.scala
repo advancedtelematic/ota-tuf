@@ -40,6 +40,7 @@ object ReposerverClient {
 
   val RepoConflict   = RawError(ErrorCode("repo_conflict"), StatusCodes.Conflict, "repo already exists")
   val OfflineKey = RawError(ErrorCode("offline_key"), StatusCodes.PreconditionFailed, "repo is using offline signing, can't add targets online")
+  val UserRepoNotFound = RawError(ErrorCode("user_repo_not_found"), StatusCodes.NotFound, "the repo does not exist yet")
 }
 
 
@@ -100,6 +101,8 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
     execHttpWithNamespace[Unit](namespace, req) {
       case status if status == StatusCodes.PreconditionFailed =>
         Future.failed(OfflineKey)
+      case status if status == StatusCodes.NotFound =>
+        Future.failed(UserRepoNotFound)
     }
   }
 
