@@ -4,7 +4,7 @@ import java.io.{ByteArrayOutputStream, FileOutputStream, InputStream}
 import java.nio.file.{Files, Path}
 import java.util.zip.{ZipEntry, ZipFile, ZipOutputStream}
 
-import com.advancedtelematic.libtuf.data.TufDataType.{TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{RoleType, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.repo.TufRepo.UnknownInitFile
 import io.circe.jawn._
@@ -12,12 +12,14 @@ import io.circe.syntax._
 import io.circe.{Decoder, Json}
 import org.slf4j.LoggerFactory
 import cats.implicits._
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 
 import scala.collection.JavaConversions._
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-
+import com.advancedtelematic.libtuf.data.ClientDataType.RoleTypeToMetaPathOp
 import scala.concurrent.ExecutionContext
 import com.advancedtelematic.tuf.cli.CliCodecs._
 
@@ -140,9 +142,18 @@ protected object ZipRepoInitialization {
       _ <- tufRepo.keyStorage.writeKeys(zipTargetKeyName, pubKey, privKey)
     } yield ()
 
+    def writeRoot(src: ZipFile): Try[Unit] = for {
+      rootIs <- Try(src.getInputStream(src.getEntry(RoleType.ROOT.toMetaPath.value)))
+      rootRole <- readJsonFrom[SignedPayload[RootRole]](rootIs)
+      _ <- tufRepo.writeSignedRole(rootRole)
+    } yield ()
+
     for {
       src ← Try(new ZipFile(initFilePath.toFile))
       _ <- writeAuthFile(src)
+      _ <- writeRoot(src).recover { case ex =>
+        _log.warn(s"Could not read/write root.json from credentials zip file: ${ex.getMessage}. Continuing.")
+      }
       _ <- writeTargetKeys(src).recover { case ex =>
         _log.warn(s"Could not read/write target keys from credentials zip file: ${ex.getMessage}. Continuing.")
       }

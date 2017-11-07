@@ -145,7 +145,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
   private def writeUnsignedRole[T <: VersionedRole : Encoder](role: T): Try[Path] =
     writeRole(rolesPath.resolve("unsigned"), role.roleType, role)
 
-  private def writeSignedRole[T <: VersionedRole : Encoder](signedPayload: SignedPayload[T]): Try[Path] =
+  def writeSignedRole[T <: VersionedRole : Encoder](signedPayload: SignedPayload[T]): Try[Path] =
     writeRole(rolesPath, signedPayload.signed.roleType, signedPayload)
 
   private def writeRole[T: Encoder](path: Path, roleType: RoleType, payload: T): Try[Path] = Try {

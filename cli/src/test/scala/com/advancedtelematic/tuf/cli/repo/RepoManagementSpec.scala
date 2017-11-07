@@ -1,13 +1,16 @@
 package com.advancedtelematic.tuf.cli.repo
 
 import java.nio.file.{Files, Path, Paths}
+
 import io.circe.jawn._
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, RoleType, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.{CliSpec, RandomNames}
 import cats.syntax.either._
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.tuf.cli.CliCodecs.authConfigDecoder
 import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 
 import scala.util.{Success, Try}
 
@@ -53,6 +56,14 @@ class RepoManagementSpec extends CliSpec {
     parseFile(repo.repoPath.resolve("keys/targets.sec").toFile).flatMap(_.as[TufPrivateKey]).valueOr(throw _) shouldBe a[EdTufPrivateKey]
   }
 
+  test("reads targets root.json from credentials.zip if present") {
+    val repoT = RepoManagement.initialize(randomName, randomRepoPath, credentialsZip)
+    repoT shouldBe a[Success[_]]
+
+    val repo = repoT.get
+
+    repo.readSignedRole[RootRole](RoleType.ROOT).get.signed shouldBe a[RootRole]
+  }
 
   test("can export zip file") {
     val repo = RepoManagement.initialize(randomName, randomRepoPath, credentialsZip).get

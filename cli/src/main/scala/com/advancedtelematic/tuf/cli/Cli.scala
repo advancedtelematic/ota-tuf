@@ -321,7 +321,7 @@ object Cli extends App with VersionInfo {
                                config.targetsKey,
                                config.oldKeyId)
           }
-          .map(newRoot => log.info(newRoot.asJson.spaces2))
+          .map(_ => log.info(s"root.json rotated, saved to $repoPath"))
 
       case GetTargets =>
         repoServer
@@ -353,8 +353,8 @@ object Cli extends App with VersionInfo {
           .toFuture
 
       case PullTargets =>
-        repoServer.zip(tufRepo.readUnsignedRole[RootRole](RoleType.ROOT).toFuture)
-          .flatMap { case (r, rootRole) => tufRepo.pullTargets(r, rootRole) }
+        repoServer.zip(tufRepo.readSignedRole[RootRole](RoleType.ROOT).toFuture)
+          .flatMap { case (r, rootRole) => tufRepo.pullTargets(r, rootRole.signed) }
           .map(_ => log.info("Pulled targets"))
 
       case PushTargets =>
