@@ -1,8 +1,10 @@
 package com.advancedtelematic.tuf.cli
 
-import java.nio.file.{Files}
+import java.nio.file.Files
+
 import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.KeyName
+import com.advancedtelematic.tuf.cli.repo.CliKeyStorage
 
 class CliKeyStorageSpec extends CliSpec {
   val tempDir = Files.createTempDirectory("tuf-keys")

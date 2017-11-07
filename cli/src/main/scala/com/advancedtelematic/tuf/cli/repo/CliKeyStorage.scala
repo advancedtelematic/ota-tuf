@@ -1,11 +1,12 @@
-package com.advancedtelematic.tuf.cli
+package com.advancedtelematic.tuf.cli.repo
 
 import java.nio.file.{Files, Path}
 
+import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.KeyName
 import org.slf4j.LoggerFactory
-import cats.syntax.either._
+
 import scala.util.Try
 
 class CliKeyStorage(repo: Path) {

@@ -1,36 +1,35 @@
-package com.advancedtelematic.tuf.cli
+package com.advancedtelematic.tuf.cli.repo
 
 import java.io._
 import java.net.URI
 import java.nio.file.{Files, Path}
 import java.time.{Instant, Period}
-import java.util.zip.{ZipEntry, ZipFile, ZipOutputStream}
 
-import scala.collection.JavaConversions._
+import cats.data.Validated.{Invalid, Valid}
 import cats.syntax.either._
 import cats.syntax.option._
-import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, ETag, RoleKeys, RoleTypeToMetaPathOp, RootRole, TargetCustom, TargetsRole, VersionedRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey, TufPrivateKey, ValidTargetFilename}
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
-import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, ETag, RoleKeys, RoleTypeToMetaPathOp, RootRole, TargetCustom, TargetsRole, VersionedRole}
+import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
+import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetName, TargetVersion, TufKey, TufPrivateKey, ValidTargetFilename}
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
-import TryToFuture._
-import cats.data.Validated.{Invalid, Valid}
-import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import eu.timepit.refined.refineV
+import com.advancedtelematic.tuf.cli.repo.TufRepo.{EtagsNotFound, TargetsPullError}
+import com.advancedtelematic.tuf.cli.CliCodecs
 import eu.timepit.refined.api.Refined
-import io.circe.{Decoder, Encoder, Json}
-import io.circe.jawn.{parse, parseFile}
+import eu.timepit.refined.refineV
+import io.circe.jawn.parseFile
 import io.circe.syntax._
+import io.circe.{Decoder, Encoder}
 import org.slf4j.LoggerFactory
-import com.advancedtelematic.tuf.cli.TufRepo.{EtagsNotFound, TargetsPullError, UnknownInitFile}
 
+import com.advancedtelematic.tuf.cli.TryToFuture._
+import scala.collection.JavaConversions._
 import scala.concurrent.{ExecutionContext, Future}
-import scala.io.Source
 import scala.util.control.NoStackTrace
 import scala.util.{Failure, Try}
 
@@ -49,71 +48,13 @@ object TufRepo {
 class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionContext) {
   import CliCodecs._
 
-  lazy val keyStorage = new CliKeyStorage(repoPath)
+  protected[repo] lazy val keyStorage = new CliKeyStorage(repoPath)
 
   private lazy val log = LoggerFactory.getLogger(this.getClass)
 
   private lazy val rolesPath = repoPath.resolve("roles")
 
   private val DEFAULT_EXPIRE_TIME = Period.ofDays(365)
-
-  val zipTargetKeyName = KeyName("targets")
-
-  private def readJsonFrom[T](is: InputStream)(implicit decoder: Decoder[T]): Try[T] = {
-    parse(Source.fromInputStream(is).mkString).flatMap(_.as[T](decoder)).toTry
-  }
-
-  def initFromAuthJson(authJson: File): Try[Unit] =
-    for {
-      json <- parseFile(authJson).toTry
-      authConfig <- json.as[AuthConfig](authConfigDecoder.prepare(_.downField("oauth2"))).toTry
-      _ <- Try(Files.write(repoPath.resolve("auth.json"), authConfig.asJson.noSpaces.getBytes))
-    } yield ()
-
-  def initFromZip(path: Path): Try[Unit] = {
-    // copy whole ZIP file into repo
-    Files.copy(path, repoPath.resolve("credentials.zip"))
-
-    def writeAuthFile(src: ZipFile): Try[Unit] = for {
-      is <- Try(src.getInputStream(src.getEntry("treehub.json")))
-      decoder = authConfigDecoder.prepare(_.downField("oauth2"))
-      authConfig ← readJsonFrom[AuthConfig](is)(decoder)
-      _ ← Try(Files.write(repoPath.resolve("auth.json"), authConfig.asJson.noSpaces.getBytes))
-    } yield ()
-
-    def writeTargetKeys(src: ZipFile): Try[Unit] = for {
-      pubKeyIs <- Try(src.getInputStream(src.getEntry(zipTargetKeyName.publicKeyName)))
-      pubKey <- readJsonFrom[TufKey](pubKeyIs)
-
-      privateKeyIs <- Try(src.getInputStream(src.getEntry(zipTargetKeyName.privateKeyName)))
-      privKey <- readJsonFrom[TufPrivateKey](privateKeyIs)
-
-      _ <- keyStorage.writeKeys(zipTargetKeyName, pubKey, privKey)
-    } yield ()
-
-    for {
-      src ← Try(new ZipFile(path.toFile))
-      _ <- writeAuthFile(src)
-      _ <- writeTargetKeys(src).recover { case ex =>
-        log.warn(s"Could not read/write target keys from credentials zip file: ${ex.getMessage}. Continuing.")
-      }
-      _ = Try(src.close())
-    } yield ()
-  }
-
-  def init(credentialsPath: Path): Try[Unit] =
-    Try {
-      Files.createDirectories(repoPath.resolve("keys"))
-      credentialsPath.getFileName.toString
-    }.flatMap { name =>
-      if (name.endsWith(".json")) {
-        initFromAuthJson(credentialsPath.toFile)
-      } else if (name.endsWith(".zip")) {
-        initFromZip(credentialsPath)
-      } else {
-        Failure(UnknownInitFile(credentialsPath))
-      }
-    }
 
   def initTargets(version: Int, expires: Instant): Try[Path] = {
     val emptyTargets = TargetsRole(expires, Map.empty, version)
@@ -256,55 +197,4 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     parseFile(repoPath.resolve("auth.json").toFile)
       .flatMap(_.as[AuthConfig])
       .toTry
-
-  private def toByteArray(is: InputStream): Array[Byte] = {
-    val baos = new ByteArrayOutputStream()
-    Stream.continually(is.read).takeWhile(_ != -1).foreach(baos.write)
-    baos.toByteArray
-  }
-
-  def export(targetKey: KeyName, exportPath: Path): Try[Unit] = {
-    def copyEntries(src: ZipFile, dest: ZipOutputStream): Try[Unit] = Try {
-      src.entries().foreach { zipEntry =>
-        val is = src.getInputStream(zipEntry)
-
-        if (zipEntry.getName == "treehub.json") {
-          dest.putNextEntry(new ZipEntry("treehub.json"))
-          readJsonFrom[Json](is).map { oldTreehubJson =>
-            val newTreehubJson = oldTreehubJson.deepMerge(Json.obj("oauth2" -> authConfig().get.asJson))
-            dest.write(newTreehubJson.spaces2.getBytes)
-          }.get
-        } else if (zipEntry.getName != zipTargetKeyName.publicKeyName && zipEntry.getName != zipTargetKeyName.privateKeyName) {
-          // copy other files over
-          dest.putNextEntry(zipEntry)
-          dest.write(toByteArray(is))
-        }
-
-        dest.closeEntry()
-      }
-    }
-
-    def copyKeyPair(pubKey: TufKey, privKey: TufPrivateKey, dest: ZipOutputStream): Try[Unit] = Try {
-      dest.putNextEntry(new ZipEntry(zipTargetKeyName.publicKeyName))
-      dest.write(pubKey.asJson.spaces2.getBytes())
-
-      dest.putNextEntry(new ZipEntry(zipTargetKeyName.privateKeyName))
-      dest.write(privKey.asJson.spaces2.getBytes())
-    }
-
-    Try(new ZipOutputStream(new FileOutputStream(exportPath.toFile))).flatMap { zipExportStream ⇒
-      val sourceZip = new ZipFile(repoPath.resolve("credentials.zip").toFile)
-
-      val t = for {
-        (pubKey, privKey) <- keyStorage.readKeyPair(targetKey)
-        _ ← copyEntries(sourceZip, zipExportStream)
-        _ ← copyKeyPair(pubKey, privKey, zipExportStream)
-      } yield ()
-
-      Try(sourceZip.close())
-      Try(zipExportStream.close())
-
-      t
-    }
-  }
 }

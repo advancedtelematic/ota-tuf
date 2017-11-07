@@ -1,30 +1,25 @@
 package com.advancedtelematic.tuf.cli
 
 import java.net.URI
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.Files
 import java.time.Instant
 
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
-import com.advancedtelematic.libtuf.data.ClientDataType.{ETag, RootRole, TargetCustom, TargetsRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey, TufPrivateKey}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.tuf.cli.CliCodecs.authConfigDecoder
-import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
+import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
+import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, TufRepo}
 import io.circe.jawn._
 import eu.timepit.refined.api.Refined
 
 import scala.concurrent.Future
-import scala.util.{Success, Try}
 
 class TufRepoSpec extends CliSpec {
 
   import scala.concurrent.ExecutionContext.Implicits.global
-
-  lazy val treehubCredentials: Path = Paths.get(this.getClass.getResource("/treehub.json").toURI)
-  lazy val credentialsZip: Path = Paths.get(this.getClass.getResource("/credentials.zip").toURI)
-  lazy val credentialsZipNoTargets: Path = Paths.get(this.getClass.getResource("/credentials_notargets.zip").toURI)
 
   def initRepo(): TufRepo = {
     val repo = new TufRepo(RepoName(RandomNames() + "-repo"), Files.createTempDirectory("tuf-repo"))
@@ -51,64 +46,6 @@ class TufRepoSpec extends CliSpec {
     repo.genKeys(KeyName("newkey"), EdKeyType, 256)
 
     Files.exists(repo.repoPath.resolve("keys").resolve("newkey.pub")) shouldBe true
-  }
-
-  test("can read auth config for an initialized repo") {
-    val repo = initRepo()
-
-    val res = repo.init(treehubCredentials)
-
-    res shouldBe a[Success[_]]
-
-    repo.authConfig().get shouldBe a[AuthConfig]
-  }
-
-  test("can initialize repo from ZIP file") {
-    val repo = initRepo()
-
-    val res = repo.init(credentialsZip)
-    res shouldBe a[Success[_]]
-  }
-
-  test("can initialize repo from ZIP file without targets keys") {
-    val repo = initRepo()
-
-    val res = repo.init(credentialsZipNoTargets)
-    res shouldBe a[Success[_]]
-
-    repo.repoPath.resolve("keys/targets.pub").toFile.exists() shouldBe false
-  }
-
-  test("reads targets keys from credentials.zip if present") {
-    val repo = initRepo()
-
-    val res = repo.init(credentialsZip)
-    res shouldBe a[Success[_]]
-
-    repo.authConfig().get shouldBe a[AuthConfig]
-    parseFile(repo.repoPath.resolve("keys/targets.pub").toFile).flatMap(_.as[TufKey]).valueOr(throw _) shouldBe a[EdTufKey]
-    parseFile(repo.repoPath.resolve("keys/targets.sec").toFile).flatMap(_.as[TufPrivateKey]).valueOr(throw _) shouldBe a[EdTufPrivateKey]
-  }
-
-
-  test("can export zip file") {
-    val repo = initRepo()
-    repo.initFromZip(credentialsZip)
-    // overwrite with different auth values:
-    repo.init(treehubCredentials)
-    repo.genKeys(KeyName("default-key"), EdKeyType, 256)
-
-    RandomNames.apply()
-    val tempFilename = s"/tmp/tuf-repo-spec-export-${RandomNames()}.zip"
-    val tempPath = Paths.get(tempFilename)
-    repo.export(KeyName("default-key"), tempPath) shouldBe Try(())
-
-    // test the exported zip file by creating another repo from it:
-    val repoFromExported = initRepo()
-    repoFromExported.initFromZip(tempPath)
-    val credJson = parseFile(repoFromExported.repoPath.resolve("auth.json").toFile)
-    val oauth2Val = credJson.right.get.as[AuthConfig](authConfigDecoder)
-    oauth2Val.right.get.client_id shouldBe "fake-client-id"
   }
 
   test("root after rotate contains new key ids") {
@@ -191,9 +128,10 @@ class TufRepoSpec extends CliSpec {
 
   test("rotate key is signed by both root keys") {
     val repo = initRepo()
+    val keyStorage = new CliKeyStorage(repo.repoPath)
 
     val (newPubKey, _, signedPayload) = rotate(repo).futureValue
-    val oldPubKey = repo.keyStorage.readPublicKey(KeyName(s"oldroot${repo.name.value}")).get
+    val oldPubKey = keyStorage.readPublicKey(KeyName(s"oldroot${repo.name.value}")).get
 
     signedPayload.isValidFor(newPubKey) shouldBe true
     signedPayload.isValidFor(oldPubKey) shouldBe true
@@ -201,10 +139,11 @@ class TufRepoSpec extends CliSpec {
 
   test("saves deleted root when rotating") {
     val repo = initRepo()
+    val keyStorage = new CliKeyStorage(repo.repoPath)
 
     rotate(repo).futureValue
 
-    val oldPrivateKey = repo.keyStorage.readPrivateKey(KeyName(s"oldroot${repo.name.value}")).get
+    val oldPrivateKey = keyStorage.readPrivateKey(KeyName(s"oldroot${repo.name.value}")).get
 
     oldPrivateKey shouldBe a[EdTufPrivateKey]
   }
