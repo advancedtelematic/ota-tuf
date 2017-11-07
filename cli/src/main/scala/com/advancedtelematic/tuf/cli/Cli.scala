@@ -8,7 +8,7 @@ import java.time.temporal.ChronoUnit
 
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, HardwareIdentifier, KeyId, KeyType, RoleType, TargetFormat, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, HardwareIdentifier, KeyId, KeyType, TargetFormat, TargetName, TargetVersion}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.slf4j.LoggerFactory
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -24,6 +24,7 @@ import com.advancedtelematic.tuf.cli.repo.{RepoManagement, TufRepo}
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
+import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 
 sealed trait Command
 case object Help extends Command
@@ -353,7 +354,7 @@ object Cli extends App with VersionInfo {
           .toFuture
 
       case PullTargets =>
-        repoServer.zip(tufRepo.readSignedRole[RootRole](RoleType.ROOT).toFuture)
+        repoServer.zip(tufRepo.readSignedRole[RootRole].toFuture)
           .flatMap { case (r, rootRole) => tufRepo.pullTargets(r, rootRole.signed) }
           .map(_ => log.info("Pulled targets"))
 

@@ -8,7 +8,7 @@ import akka.stream.ActorMaterializer
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.RawError
-import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType._

@@ -6,14 +6,15 @@ import java.time.Instant
 
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
-import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{TufRole, RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, TufRepo}
 import io.circe.jawn._
 import eu.timepit.refined.api.Refined
+import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 
 import scala.concurrent.Future
 import io.circe.syntax._
@@ -81,11 +82,11 @@ class TufRepoSpec extends CliSpec {
 
     val client = new FakeUserReposerverClient()
 
-    val signedTargets = repo.readUnsignedRole[TargetsRole](RoleType.TARGETS).get
+    val signedTargets = repo.readUnsignedRole[TargetsRole].get
 
     rotate(repo, client).futureValue
 
-    repo.readUnsignedRole[TargetsRole](RoleType.TARGETS).get.asJson shouldBe signedTargets.asJson
+    repo.readUnsignedRole[TargetsRole].get.asJson shouldBe signedTargets.asJson
   }
 
   test("pulls targets.json from reposerver during rotate") {
@@ -99,7 +100,7 @@ class TufRepoSpec extends CliSpec {
 
     rotate(repo, client).futureValue
 
-    repo.readUnsignedRole[TargetsRole](RoleType.TARGETS).get.asJson shouldBe signedTargets.targets.signed.asJson
+    repo.readUnsignedRole[TargetsRole].get.asJson shouldBe signedTargets.targets.signed.asJson
 
     repo.repoPath.resolve("roles/targets.json.etag").toFile.exists() shouldBe true
   }
@@ -206,10 +207,10 @@ class TufRepoSpec extends CliSpec {
 
     repo.signTargets(targetsKeyName).get
 
-    val payload = repo.readSignedRole[TargetsRole](RoleType.TARGETS).get
+    val payload = repo.readSignedRole[TargetsRole].get
     payload.signed.version shouldBe 12
 
-    val unsignedPayload = repo.readUnsignedRole[TargetsRole](RoleType.TARGETS).get
+    val unsignedPayload = repo.readUnsignedRole[TargetsRole].get
     unsignedPayload.version shouldBe 12
   }
 
@@ -228,7 +229,6 @@ class TufRepoSpec extends CliSpec {
   }
 
   test("pushes targets to reposerver") {
-    import com.advancedtelematic.libtuf.data.ClientDataType.RoleTypeToMetaPathOp
     import scala.collection.JavaConverters._
 
     val repo = initRepo()
@@ -238,7 +238,7 @@ class TufRepoSpec extends CliSpec {
     val (_, pubTargets, _) = rotate(repo, reposerverClient).futureValue
 
     repo.signTargets(KeyName(s"targets${repo.name.value}")).get
-    Files.write(repo.repoPath.resolve("roles").resolve(RoleType.TARGETS.toETagPath), Seq("etag").asJava)
+    Files.write(repo.repoPath.resolve("roles").resolve(TufRole.targetsTufRole.toETagPath), Seq("etag").asJava)
 
     val payload = repo.pushTargets(reposerverClient).futureValue
 
@@ -267,7 +267,7 @@ class TufRepoSpec extends CliSpec {
 
     repo.pullTargets(reposerverClient, rootRole.signed).futureValue
 
-    repo.readUnsignedRole[TargetsRole](RoleType.TARGETS).get shouldBe a[TargetsRole]
+    repo.readUnsignedRole[TargetsRole].get shouldBe a[TargetsRole]
 
     Files.readAllLines(repo.repoPath.resolve("roles/targets.json.etag")).get(0) shouldNot be(empty)
   }

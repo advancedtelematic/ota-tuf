@@ -8,7 +8,7 @@ import java.security.{Signature => _, _}
 
 import org.bouncycastle.jce.ECNamedCurveTable
 import org.bouncycastle.jce.spec.ECParameterSpec
-import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, EdKeyType, EdTufKey, EdTufPrivateKey, KeyId, KeyType, RSATufKey, RSATufPrivateKey, RoleType, RsaKeyType, Signature, SignatureMethod, SignedPayload, TufKey, TufPrivateKey, ValidKeyId, ValidSignature}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, EdKeyType, EdTufKey, EdTufPrivateKey, KeyId, KeyType, RSATufKey, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, SignedPayload, TufKey, TufPrivateKey, ValidKeyId, ValidSignature}
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
 import org.bouncycastle.util.encoders.{Base64, Hex}
@@ -18,13 +18,13 @@ import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import java.security.KeyFactory
 
-import cats.data.Validated.{Invalid, Valid}
+import cats.data.Validated.Valid
 import cats.data.{NonEmptyList, ValidatedNel}
 import cats.implicits._
 import io.circe.{Encoder, Json}
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
-import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, VersionedRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{TufRole, RootRole}
 
 import scala.util.control.NoStackTrace
 import scala.util.Try
@@ -155,8 +155,10 @@ object TufCrypto {
     }.toList.sequenceU
   }
 
-  def payloadSignatureIsValid[T <: VersionedRole : Encoder](rootRole: RootRole, signedPayload: SignedPayload[T]): ValidatedNel[String, SignedPayload[T]] = {
-    val publicKeys = rootRole.keys.filterKeys(keyId => rootRole.roles(signedPayload.signed.roleType).keyids.contains(keyId))
+  def payloadSignatureIsValid[T : TufRole : Encoder](rootRole: RootRole, signedPayload: SignedPayload[T]): ValidatedNel[String, SignedPayload[T]] = {
+    val signedPayloadRoleType = implicitly[TufRole[T]].roleType
+
+    val publicKeys = rootRole.keys.filterKeys(keyId => rootRole.roles(signedPayloadRoleType).keyids.contains(keyId))
 
     val sigsByKeyId = signedPayload.signatures.map(s => s.keyid -> s).toMap
 
@@ -171,7 +173,7 @@ object TufCrypto {
           .toValidatedNel
       }.toList.sequenceU
 
-    val threshold = rootRole.roles(signedPayload.signed.roleType).threshold
+    val threshold = rootRole.roles(signedPayloadRoleType).threshold
 
     validSignatureCount.ensure(NonEmptyList.of(s"Valid signature count must be >= threshold ($threshold)")) { validSignatures =>
       validSignatures.size >= threshold && threshold > 0

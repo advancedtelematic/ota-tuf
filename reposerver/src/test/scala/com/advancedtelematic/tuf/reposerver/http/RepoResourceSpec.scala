@@ -13,7 +13,7 @@ import cats.syntax.show.toShowOps
 import cats.syntax.option._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientHashes, ClientTargetItem, RoleTypeToMetaPathOp, RootRole, SnapshotRole, TargetCustom, TargetsRole, TimestampRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientHashes, ClientTargetItem, RootRole, SnapshotRole, TargetCustom, TargetsRole, TimestampRole}
 import com.advancedtelematic.libtuf_server.data.Messages.{PackageStorageUsage, TufTargetAdded}
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, _}
 import io.circe.syntax._
@@ -41,6 +41,7 @@ import scala.concurrent.Future
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 import eu.timepit.refined.api.Refined
+import com.advancedtelematic.libtuf.data.ClientDataType.RoleTypeOps
 
 import scala.concurrent.ExecutionContext.Implicits
 

@@ -36,7 +36,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
 
       val targetVersion = await(nextVersion(repoId, RoleType.TARGETS))
       val targetRole = await(targetRoleGeneration.generate(repoId, expireAt, targetVersion))
-      val signedTarget = await(signRole(repoId, RoleType.TARGETS, targetRole))
+      val signedTarget = await(signRole(repoId, targetRole))
 
       val dependent = await(regenerateSignedDependent(repoId, signedTarget, expireAt))
 
@@ -51,11 +51,11 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
 
     val snapshotVersion = await(nextVersion(repoId, RoleType.SNAPSHOT))
     val snapshotRole = genSnapshotRole(signedRoot, targetRole, expireAt, snapshotVersion)
-    val signedSnapshot = await(signRole(repoId, RoleType.SNAPSHOT, snapshotRole))
+    val signedSnapshot = await(signRole(repoId, snapshotRole))
 
     val timestampVersion = await(nextVersion(repoId, RoleType.TIMESTAMP))
     val timestampRole = genTimestampRole(signedSnapshot, expireAt, timestampVersion)
-    val signedTimestamp = await(signRole(repoId, RoleType.TIMESTAMP, timestampRole))
+    val signedTimestamp = await(signRole(repoId, timestampRole))
 
     List(signedSnapshot, signedTimestamp)
   }
@@ -63,9 +63,9 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
   def addToTarget(targetItem: TargetItem): Future[SignedPayload[Json]] =
     targetRoleGeneration.addTargetItem(targetItem).flatMap(_ ⇒ regenerateSignedRoles(targetItem.repoId))
 
-  def signRole[T <: VersionedRole : Decoder : Encoder](repoId: RepoId, roleType: RoleType, role: T): Future[SignedRole] = {
-    keyserverClient.sign(repoId, roleType, role).map { signedRole =>
-      SignedRole.withChecksum(repoId, roleType, signedRole, role.version, role.expires)
+  def signRole[T <: VersionedRole : TufRole : Decoder : Encoder](repoId: RepoId, role: T): Future[SignedRole] = {
+    keyserverClient.sign(repoId, role.roleType, role).map { signedRole =>
+      SignedRole.withChecksum(repoId, role.roleType, signedRole, role.version, role.expires)
     }
   }
 
@@ -80,7 +80,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
       .recoverWith { case SignedRoleNotFound => generateAndCacheRole(repoId, roleType) }
   }
 
-  private def findFreshRole[T <: VersionedRole : Decoder : Encoder](repoId: RepoId, roleType: RoleType, updateRoleFn: (T, Instant, Int) => T): Future[SignedRole] = {
+  private def findFreshRole[T <: VersionedRole : TufRole : Decoder : Encoder](repoId: RepoId, roleType: RoleType, updateRoleFn: (T, Instant, Int) => T): Future[SignedRole] = {
     signedRoleRepo.find(repoId, roleType).flatMap { role =>
       val futureRole =
         if (role.expireAt.isBefore(Instant.now.plus(1, ChronoUnit.HOURS))) {
@@ -89,7 +89,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
           val nextExpires = Instant.now.plus(1, ChronoUnit.DAYS)
           val newRole = updateRoleFn(versionedRole, nextExpires, nextVersion)
 
-          signRole(repoId, roleType, newRole).flatMap(sr => signedRoleRepo.persist(sr))
+          signRole(repoId, newRole).flatMap(sr => signedRoleRepo.persist(sr))
         } else {
           FastFuture.successful(role)
         }

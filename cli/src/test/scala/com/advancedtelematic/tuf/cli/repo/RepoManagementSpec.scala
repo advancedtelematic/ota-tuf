@@ -12,6 +12,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.tuf.cli.CliCodecs.authConfigDecoder
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import io.circe.syntax._
 
 import scala.util.{Success, Try}
 
@@ -63,7 +64,7 @@ class RepoManagementSpec extends CliSpec {
 
     val repo = repoT.get
 
-    repo.readSignedRole[RootRole](RoleType.ROOT).get.signed shouldBe a[RootRole]
+    repo.readSignedRole[RootRole].get.signed shouldBe a[RootRole]
   }
 
   test("creates base credentials.zip if one does not exist") {
@@ -93,8 +94,7 @@ class RepoManagementSpec extends CliSpec {
     RepoManagement.export(repo, KeyName("targets"), tempPath) shouldBe a[Success[_]]
     val repoFromExported = RepoManagement.initialize(randomName, randomRepoPath, tempPath).get
 
-    import io.circe.syntax._
-    repoFromExported.readSignedRole[RootRole](RoleType.ROOT).get.asJson shouldBe rootRole.asJson
+    repoFromExported.readSignedRole[RootRole].get.asJson shouldBe rootRole.asJson
   }
 
   test("can export zip file") {
