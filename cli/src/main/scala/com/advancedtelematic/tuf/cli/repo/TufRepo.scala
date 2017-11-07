@@ -78,7 +78,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
   }
 
   private def writeTargets(targets: SignedPayload[TargetsRole], etag: ETag): Try[Unit] =
-    writeSignedRole(targets).flatMap(_ => writeEtag(etag))
+    writeUnsignedRole(targets.signed).flatMap(_ => writeEtag(etag))
 
   def pullTargets(reposerverClient: UserReposerverClient, rootRole: RootRole): Future[SignedPayload[TargetsRole]] =
     reposerverClient.targets().flatMap {
@@ -167,8 +167,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       (newRootPubKey, newRootPrivKey) <- keyStorage.readKeyPair(newRootName).toFuture
       (newTargetsPubKey, _) <- keyStorage.readKeyPair(newTargetsName).toFuture
       oldRootRole <- repoClient.root().map(_.signed)
-      oldTargets <- pullTargets(repoClient, oldRootRole)
-      _ <- writeUnsignedRole(oldTargets.signed).toFuture
+      _ <- pullTargets(repoClient, oldRootRole)
       oldRootPubKeyId = oldKeyId.getOrElse(oldRootRole.roles(RoleType.ROOT).keyids.last)
       oldTargetsKeyIds = oldRootRole.roles(RoleType.TARGETS).keyids
       oldRootPubKey = oldRootRole.keys(oldRootPubKeyId)

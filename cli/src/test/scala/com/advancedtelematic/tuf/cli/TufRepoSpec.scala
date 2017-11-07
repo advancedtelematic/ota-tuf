@@ -16,6 +16,7 @@ import io.circe.jawn._
 import eu.timepit.refined.api.Refined
 
 import scala.concurrent.Future
+import io.circe.syntax._
 
 class TufRepoSpec extends CliSpec {
 
@@ -78,12 +79,13 @@ class TufRepoSpec extends CliSpec {
   test("pulls targets.json during rotate") {
     val repo = initRepo()
 
-    rotate(repo).futureValue
+    val client = new FakeUserReposerverClient()
 
-    val targetsPath = repo.repoPath.resolve("roles/targets.json")
-    val signedTargets = parseFile(targetsPath.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).valueOr(throw _)
+    val signedTargets = client.targets().futureValue
 
-    repo.readUnsignedRole[TargetsRole](RoleType.TARGETS).get shouldBe signedTargets.signed
+    rotate(repo, client).futureValue
+
+    repo.readUnsignedRole[TargetsRole](RoleType.TARGETS).get.asJson shouldBe signedTargets.targets.signed.asJson
 
     repo.repoPath.resolve("roles/targets.json.etag").toFile.exists() shouldBe true
   }
@@ -242,7 +244,7 @@ class TufRepoSpec extends CliSpec {
   }
 
 
-  test("save targets.json and etags to file when pulling") {
+  test("saves targets.json and etags to file when pulling") {
     val repo = initRepo()
 
     val reposerverClient = new FakeUserReposerverClient
@@ -251,7 +253,7 @@ class TufRepoSpec extends CliSpec {
 
     repo.pullTargets(reposerverClient, rootRole.signed).futureValue
 
-    repo.readSignedRole[TargetsRole](RoleType.TARGETS).get.signed shouldBe a[TargetsRole]
+    repo.readUnsignedRole[TargetsRole](RoleType.TARGETS).get shouldBe a[TargetsRole]
 
     Files.readAllLines(repo.repoPath.resolve("roles/targets.json.etag")).get(0) shouldNot be(empty)
   }
