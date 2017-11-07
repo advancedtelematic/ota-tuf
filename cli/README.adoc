@@ -10,50 +10,34 @@ Download the archive file, unpack and run:
     cd garage-sign/
     bin/garage-sign --help
 
-== buchtel use case
+== Offline sign use case (aka PRO-3669)
 
-1. Initialize a local ota-plus cache using credentials.zip downloaded from ATS Garage or treehub.json inside of it:
+1. User rotates root keys offline, see <<Rotate Root Keys>>
 
-    garage-sign init --repo buchtel --credentials treehub.json
-+
-or
-+
-    garage-sign init --repo buchtel --credentials credentials.zip
+2. Pull targets
 
-2. Generate a new Targets signing key with:
+    garage-sign targets pull --repo buchtel
 
-    garage-sign gen-keys --repo buchtel --name buchtel-targets --type ec
+3. Add a target
 
-3. Push the Targets public key to the remote TUF repository with:
+   garage-sign targets add --repo sm \
+   --format binary \
+   --length 5877 \
+   --name dashboards \
+   --version 0.0.2 \
+   --sha256 a0d3e88637d93e20e37b8eaf85fe8e8ac8ac5018337e881a452c85f8b64df0a4 \
+   --hardwareids hwid01 \
+   --url http://localhost/dashboards.json
 
-   garage-sign push-targets-key --repo buchtel --name buchtel-targets
+4. Sign new targets.json
 
-4. Initialize the targets.json metadata with:
+   garage-sign targets sign --repo buchtel --key-name <targets key used to rotate> 
 
-  garage-sign targets init --repo buchtel --expires '2018-10-28T13:31:26.713Z' --version 2
+5. Push new targets.json
 
-5. Add new targets with:
+   garage-sign targets push --repo buchtel
 
-    garage-sign targets add \
-    --repo buchtel \
-    --name ${TARGET_NAME}
-    --version ${TARGET_VERSION} \
-    --length ${TARGET_LENGTH} \
-    --url ${TARGET_URL} \
-    --sha256 ${TARGET_HASH}
-
-6. Sign the targets.json metadata with:
-
-    garage-sign targets sign \
-    --repo buchtel
-    --key buchtel-targets
-
-7. Push the targets.json metadata with:
-
-    garage-sign targets push --repo buchtel
-
-
-== Rotate root keys
+== Rotate Root Keys
 
 This is not compatible with the above use case as uploading a new
 target item with an offline root key is not supported. After rotating
