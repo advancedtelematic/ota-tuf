@@ -4,7 +4,6 @@ import java.io.{ByteArrayOutputStream, FileOutputStream, InputStream}
 import java.nio.file.{Files, Path}
 import java.util.zip.{ZipEntry, ZipFile, ZipOutputStream}
 
-import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.{TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.repo.TufRepo.UnknownInitFile
@@ -12,11 +11,13 @@ import io.circe.jawn._
 import io.circe.syntax._
 import io.circe.{Decoder, Json}
 import org.slf4j.LoggerFactory
+import cats.implicits._
 
 import scala.collection.JavaConversions._
 import scala.io.Source
-import scala.util.{Failure, Try}
+import scala.util.{Failure, Success, Try}
 import com.advancedtelematic.libtuf.data.TufCodecs._
+
 import scala.concurrent.ExecutionContext
 import com.advancedtelematic.tuf.cli.CliCodecs._
 
@@ -37,24 +38,32 @@ object RepoManagement {
   }
 
   def export(repo: TufRepo, targetKey: KeyName, exportPath: Path): Try[Unit] = {
-    def copyEntries(src: ZipFile, dest: ZipOutputStream): Try[Unit] = Try {
-      src.entries().foreach { zipEntry =>
+    def copyEntries(src: ZipFile, dest: ZipOutputStream): Try[Unit] = {
+      val entries = src.entries().map { zipEntry =>
         val is = src.getInputStream(zipEntry)
 
-        if (zipEntry.getName == "treehub.json") {
-          dest.putNextEntry(new ZipEntry("treehub.json"))
-          readJsonFrom[Json](is).map { oldTreehubJson =>
-            val newTreehubJson = oldTreehubJson.deepMerge(Json.obj("oauth2" -> repo.authConfig().get.asJson))
-            dest.write(newTreehubJson.spaces2.getBytes)
-          }.get
-        } else if (zipEntry.getName != zipTargetKeyName.publicKeyName && zipEntry.getName != zipTargetKeyName.privateKeyName) {
-          // copy other files over
-          dest.putNextEntry(zipEntry)
-          dest.write(toByteArray(is))
-        }
+        val copyTry =
+          if (zipEntry.getName == "treehub.json") {
+            for {
+              _ <- Try(dest.putNextEntry(new ZipEntry("treehub.json")))
+              oldTreehubJson <- repo.authConfig().map(_.asJson)
+              newTreehubJson = oldTreehubJson.deepMerge(Json.obj("oauth2" -> oldTreehubJson.asJson))
+              _ <- Try(dest.write(newTreehubJson.spaces2.getBytes))
+            } yield ()
+          } else if (zipEntry.getName != zipTargetKeyName.publicKeyName && zipEntry.getName != zipTargetKeyName.privateKeyName) {
+            // copy other files over
+            Try {
+              dest.putNextEntry(zipEntry)
+              dest.write(toByteArray(is))
+            }
+          } else {
+            Success(())
+          }
 
-        dest.closeEntry()
+        copyTry.flatMap { _ => Try(dest.closeEntry()) }
       }
+
+      entries.toList.sequenceU.map(_ => ())
     }
 
     def copyKeyPair(pubKey: TufKey, privKey: TufPrivateKey, dest: ZipOutputStream): Try[Unit] = Try {

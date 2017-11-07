@@ -62,9 +62,7 @@ class RepoManagementSpec extends CliSpec {
 
     repo.genKeys(KeyName("default-key"), EdKeyType, 256)
 
-    RandomNames.apply()
-    val tempFilename = s"/tmp/tuf-repo-spec-export-${RandomNames()}.zip"
-    val tempPath = Paths.get(tempFilename)
+    val tempPath = Paths.get(s"/tmp/tuf-repo-spec-export-${RandomNames()}.zip")
 
     RepoManagement.export(repo, KeyName("default-key"), tempPath) shouldBe Try(())
 
