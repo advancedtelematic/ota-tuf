@@ -2,11 +2,9 @@ package com.advancedtelematic.tuf.cli.client
 
 import java.net.URI
 
-import com.advancedtelematic.libtuf.data.ClientDataType.{ETag, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.SignedPayload
 import com.advancedtelematic.libtuf.reposerver.{UserReposerverClient, UserReposerverHttpClient => UserReposerverHttpClientClass}
-import com.advancedtelematic.tuf.cli.TufRepo
 import com.advancedtelematic.tuf.cli.TryToFuture._
+import com.advancedtelematic.tuf.cli.repo.TufRepo
 
 import scala.concurrent.{ExecutionContext, Future}
 import org.slf4j.LoggerFactory

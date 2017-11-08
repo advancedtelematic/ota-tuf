@@ -29,7 +29,7 @@ abstract class CliSpec extends FunSuite with Matchers with ScalaFutures {
 class FakeUserReposerverClient extends UserReposerverClient {
   private val (oldPublicKey, oldPrivateKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
 
-  private var (targetsPubKey, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
+  private var (targetsPubKey, targetsPrivKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
 
   private var unsignedTargets = TargetsRole(Instant.now.plus(1, ChronoUnit.DAYS), Map.empty, 1)
 
@@ -62,8 +62,10 @@ class FakeUserReposerverClient extends UserReposerverClient {
       Future.failed(new RuntimeException("[test] invalid signatures for root role"))
   }
 
-  override def targets(): Future[TargetsResponse] =
-    throw new NotImplementedError("[test] targets not implemented for fake repo server")
+  override def targets(): Future[TargetsResponse] = Future.successful {
+    val sig = TufCrypto.signPayload(targetsPrivKey, unsignedTargets).toClient(targetsPubKey.id)
+    TargetsResponse(SignedPayload(Seq(sig), unsignedTargets), Option(ETag("[test] fake tag")))
+  }
 
   def pushTargets(targetsRole: SignedPayload[TargetsRole], etag: Option[ETag]): Future[Unit] =
     Try(etag.get).flatMap { _ =>

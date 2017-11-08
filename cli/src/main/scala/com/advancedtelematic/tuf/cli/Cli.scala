@@ -8,7 +8,7 @@ import java.time.temporal.ChronoUnit
 
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, HardwareIdentifier, KeyId, KeyType, TargetFormat, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, HardwareIdentifier, KeyId, KeyType, RoleType, TargetFormat, TargetName, TargetVersion}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.slf4j.LoggerFactory
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -16,9 +16,11 @@ import cats.syntax.option._
 import eu.timepit.refined.api.Refined
 import TryToFuture._
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.client.UserReposerverHttpClient
+import com.advancedtelematic.tuf.cli.repo.{RepoManagement, TufRepo}
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -58,7 +60,7 @@ case class Config(command: Command,
                   targetUri: URI = URI.create(""),
                   keySize: Int = 2048,
                   inputPath: Path = Paths.get("empty"),
-                  exportPath: Option[Path] = None,
+                  exportPath: Path = Paths.get(""),
                   reposerverUrl: Option[URI] = None)
 
 object Cli extends App with VersionInfo {
@@ -85,7 +87,7 @@ object Cli extends App with VersionInfo {
       c.copy(repoName = name)
     }
 
-    opt[URI]("reposerver").optional().action { (arg, c) =>
+    opt[URI]("reposerver").action { (arg, c) =>
       c.copy(reposerverUrl = arg.some)
     }
 
@@ -263,7 +265,7 @@ object Cli extends App with VersionInfo {
           .text("name of ZIP file to export to")
           .required()
           .action { (arg, c) =>
-            c.copy(exportPath = Some(arg))
+            c.copy(exportPath = arg)
           }
       )
 
@@ -306,8 +308,7 @@ object Cli extends App with VersionInfo {
         tufRepo.genKeys(config.rootKey, config.keyType, config.keySize).toFuture
 
       case InitRepo =>
-        tufRepo
-          .init(config.credentialsPath)
+        RepoManagement.initialize(config.repoName, repoPath, config.credentialsPath)
           .map(_ => log.info(s"Finished init for ${config.repoName.value} using ${config.credentialsPath}"))
           .toFuture
 
@@ -320,7 +321,7 @@ object Cli extends App with VersionInfo {
                                config.targetsKey,
                                config.oldKeyId)
           }
-          .map(newRoot => log.info(newRoot.asJson.spaces2))
+          .map(_ => log.info(s"root.json rotated, saved to $repoPath"))
 
       case GetTargets =>
         repoServer
@@ -352,8 +353,8 @@ object Cli extends App with VersionInfo {
           .toFuture
 
       case PullTargets =>
-        repoServer
-          .flatMap(tufRepo.pullTargets)
+        repoServer.zip(tufRepo.readSignedRole[RootRole](RoleType.ROOT).toFuture)
+          .flatMap { case (r, rootRole) => tufRepo.pullTargets(r, rootRole.signed) }
           .map(_ => log.info("Pulled targets"))
 
       case PushTargets =>
@@ -367,7 +368,7 @@ object Cli extends App with VersionInfo {
           .map(key => log.info(s"Pushed key ${key.id} to server"))
 
       case Export =>
-        tufRepo.export(config.targetsKey, config.exportPath.get).toFuture
+        RepoManagement.export(tufRepo, config.targetsKey, config.exportPath).toFuture
 
       case VerifyRoot =>
         CliUtil.verifyRootFile(config.inputPath)

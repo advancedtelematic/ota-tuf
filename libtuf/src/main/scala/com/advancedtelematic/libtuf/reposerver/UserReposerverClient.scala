@@ -66,7 +66,7 @@ class UserReposerverHttpClient(reposerverUri: URI,
 
   def pushTargets(role: SignedPayload[TargetsRole], etag: Option[ETag]): Future[Unit] = {
     val put = Http(apiUri("targets")).method("PUT")
-    val req = etag.map(e => put.header("If-None-Match", e.value)).getOrElse(put)
+    val req = etag.map(e => put.header("If-Match", e.value)).getOrElse(put)
     execJsonHttp[Unit, SignedPayload[TargetsRole]](req, role)()
   }
 
