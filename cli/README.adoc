@@ -2,7 +2,7 @@
 
 == Obtaining the binary
 
-Binaries are compiled for each push to `master` and stored in http://teamcity.prod01.internal.advancedtelematic.com:8111/viewType.html?buildTypeId=ota_tuf_BuildCliTools[teamcity].
+Binaries are compiled for each push to `master` and stored in https://ats-tuf-cli-releases.s3-eu-central-1.amazonaws.com/index.html[s3].
 
 Download the archive file, unpack and run:
 
@@ -12,7 +12,9 @@ Download the archive file, unpack and run:
 
 == Offline sign use case (aka PRO-3669)
 
-1. User rotates root keys offline, see <<Rotate Root Keys>>
+1. User rotates root keys offline, see <<Rotate Root Keys>>. This
+usually does not happen on the same machine where the targets are
+pulled/pushed.
 
 2. Pull targets
 
@@ -20,7 +22,7 @@ Download the archive file, unpack and run:
 
 3. Add a target
 
-   garage-sign targets add --repo sm \
+   garage-sign targets add --repo buchtel \
    --format binary \
    --length 5877 \
    --name dashboards \
@@ -39,12 +41,8 @@ Download the archive file, unpack and run:
 
 == Rotate Root Keys
 
-This is not compatible with the above use case as uploading a new
-target item with an offline root key is not supported. After rotating
-root keys to offline storage root.json and it's key mapping need to be
-maintained offline by the user.
-
-1. Initialize a local ota-plus cache using credentials.zip downloaded from ATS Garage or treehub.json inside of it:
+1. Initialize a local ota-plus cache using credentials.zip downloaded
+from ATS Garage or treehub.json inside of it:
 
     garage-sign init --repo buchtel --credentials treehub.json
 +
@@ -80,3 +78,28 @@ or
         └── root.json
 
     cat tuf/buchtel/root.json
+
+5. It is recommended that at this point you sign `targets.json` with
+the new keys and upload it to reposerver, otherwise clients will get
+an error when trying to validate the old `targets.json`, retrieved by
+the server, with the new `root.json`.
+
+    cat tuf/buchtel/roles/unsigned/targets.json
+
+    # verify unsigned targets.json, this should have been pulled
+    # during `rotate`.
+
+    garage-sign targets sign --repo buchtel --key-name targets
+
+    garage-sign targets push --repo buchtel
+
+
+== Exporting credentials
+
+After <<Rotate Root Keys>>, you will need the new `root.json` and keys
+to sign targets using `targets-sign`. If the user signing the new
+targets is not the same as the user rotating the root keys, you'll
+need to export the new credentials:
+
+    garage-sign  export-credentials --repo buchtel --target-key-name targets --to creds_export.zip
+

@@ -76,10 +76,24 @@ class TufRepoSpec extends CliSpec {
     signedPayload.isValidFor(oldRootPub)
   }
 
-  test("pulls targets.json during rotate") {
+  test("does not overwrite existing unsigned targets.json during rotate") {
     val repo = initRepo()
 
     val client = new FakeUserReposerverClient()
+
+    val signedTargets = repo.readUnsignedRole[TargetsRole](RoleType.TARGETS).get
+
+    rotate(repo, client).futureValue
+
+    repo.readUnsignedRole[TargetsRole](RoleType.TARGETS).get.asJson shouldBe signedTargets.asJson
+  }
+
+  test("pulls targets.json from reposerver during rotate") {
+    val repo = initRepo()
+
+    val client = new FakeUserReposerverClient()
+
+    Files.delete(repo.repoPath.resolve("roles/unsigned/targets.json"))
 
     val signedTargets = client.targets().futureValue
 

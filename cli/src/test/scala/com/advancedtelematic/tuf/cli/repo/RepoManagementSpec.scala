@@ -1,6 +1,7 @@
 package com.advancedtelematic.tuf.cli.repo
 
 import java.nio.file.{Files, Path, Paths}
+import java.time.Instant
 
 import io.circe.jawn._
 import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, RoleType, SignedPayload, TufKey, TufPrivateKey}
@@ -65,6 +66,37 @@ class RepoManagementSpec extends CliSpec {
     repo.readSignedRole[RootRole](RoleType.ROOT).get.signed shouldBe a[RootRole]
   }
 
+  test("creates base credentials.zip if one does not exist") {
+    val repo = RepoManagement.initialize(randomName, randomRepoPath, treehubCredentials).get
+    val tempPath = Files.createTempFile("cli-export", ".zip")
+
+    repo.genKeys(KeyName("targets"), EdKeyType, 256).get
+
+    RepoManagement.export(repo, KeyName("targets"), tempPath) shouldBe a[Success[_]]
+
+    val repoFromExported = RepoManagement.initialize(randomName, randomRepoPath, tempPath).get
+
+    repoFromExported.repoPath.toFile.exists() shouldBe true
+  }
+
+  test("export includes root.json") {
+    val repo = RepoManagement.initialize(randomName, randomRepoPath, treehubCredentials).get
+    val tempPath = Files.createTempFile("tuf-repo-spec-export", ".zip")
+
+    repo.genKeys(KeyName("targets"), EdKeyType, 256).get
+
+    val rootRole = SignedPayload(Seq.empty,
+      RootRole(Map.empty, Map.empty, 2, expires = Instant.now()))
+
+    repo.writeSignedRole(rootRole).get
+
+    RepoManagement.export(repo, KeyName("targets"), tempPath) shouldBe a[Success[_]]
+    val repoFromExported = RepoManagement.initialize(randomName, randomRepoPath, tempPath).get
+
+    import io.circe.syntax._
+    repoFromExported.readSignedRole[RootRole](RoleType.ROOT).get.asJson shouldBe rootRole.asJson
+  }
+
   test("can export zip file") {
     val repo = RepoManagement.initialize(randomName, randomRepoPath, credentialsZip).get
 
@@ -73,7 +105,7 @@ class RepoManagementSpec extends CliSpec {
 
     repo.genKeys(KeyName("default-key"), EdKeyType, 256)
 
-    val tempPath = Paths.get(s"/tmp/tuf-repo-spec-export-${RandomNames()}.zip")
+    val tempPath = Files.createTempFile("tuf-repo-spec-export", ".zip")
 
     RepoManagement.export(repo, KeyName("default-key"), tempPath) shouldBe Try(())
 

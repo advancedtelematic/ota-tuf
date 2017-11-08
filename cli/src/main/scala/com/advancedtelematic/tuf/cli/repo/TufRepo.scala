@@ -80,6 +80,16 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
   private def writeTargets(targets: SignedPayload[TargetsRole], etag: ETag): Try[Unit] =
     writeUnsignedRole(targets.signed).flatMap(_ => writeEtag(etag))
 
+  private def ensureTargetsPulled(reposerverClient: UserReposerverClient, rootRole: RootRole): Future[Unit] = {
+    Future.fromTry {
+      readUnsignedRole[TargetsRole](RoleType.TARGETS).map(_ => ())
+    }.recoverWith {
+      case _ =>
+        log.warn("unsigned targets not available locally, pulling targets from server")
+        pullTargets(reposerverClient, rootRole).map(_ => ())
+    }
+  }
+
   def pullTargets(reposerverClient: UserReposerverClient, rootRole: RootRole): Future[SignedPayload[TargetsRole]] =
     reposerverClient.targets().flatMap {
       case reposerverClient.TargetsResponse(targets, etag) =>
@@ -167,7 +177,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       (newRootPubKey, newRootPrivKey) <- keyStorage.readKeyPair(newRootName).toFuture
       (newTargetsPubKey, _) <- keyStorage.readKeyPair(newTargetsName).toFuture
       oldRootRole <- repoClient.root().map(_.signed)
-      _ <- pullTargets(repoClient, oldRootRole)
+      _ <- ensureTargetsPulled(repoClient, oldRootRole)
       oldRootPubKeyId = oldKeyId.getOrElse(oldRootRole.roles(RoleType.ROOT).keyids.last)
       oldTargetsKeyIds = oldRootRole.roles(RoleType.TARGETS).keyids
       oldRootPubKey = oldRootRole.keys(oldRootPubKeyId)
