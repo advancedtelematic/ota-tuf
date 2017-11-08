@@ -3,9 +3,9 @@ package com.advancedtelematic.tuf.reposerver.http
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
-import cats.data.{NonEmptyList, ValidatedNel}
-import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole, VersionedRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, RoleType, SignedPayload, TargetFilename}
+import cats.data.ValidatedNel
+import com.advancedtelematic.libtuf.data.ClientDataType.{TufRole, TargetCustom, TargetsRole}
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, SignedPayload, TargetFilename}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, StorageMethod, TargetItem}
 import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import io.circe.Encoder
@@ -15,6 +15,7 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.http.HttpCodecs._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
+import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
@@ -60,7 +61,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
     items.map(_.toValidatedNel).toList.sequenceU
   }
 
-  private def payloadSignatureIsValid[T <: VersionedRole : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Future[ValidatedNel[String, SignedPayload[T]]] = async {
+  private def payloadSignatureIsValid[T : TufRole : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Future[ValidatedNel[String, SignedPayload[T]]] = async {
     val rootRole = await(keyserverClient.fetchRootRole(repoId)).signed
 
     TufCrypto.payloadSignatureIsValid(rootRole, signedPayload)

@@ -14,6 +14,7 @@ import cats.syntax.either._
 import com.advancedtelematic.libats.data.DataType.HashMethod.HashMethod
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
 
+
 object ClientDataType {
   type ClientHashes = Map[HashMethod, Refined[String, ValidChecksum]]
 
@@ -43,26 +44,40 @@ object ClientDataType {
       str => s"$str is not a valid meta path, it needs to end in .json",
       ValidMetaPath())
 
-  implicit class RoleTypeToMetaPathOp(value: RoleType) {
-    def toMetaPath: MetaPath =
-      (value.show + ".json").refineTry[ValidMetaPath].get
+  case class MetaItem(hashes: ClientHashes, length: Long, version: Int)
 
-    def toETagPath: String =
-      toMetaPath.value + ".etag"
+  implicit class TufRoleOps[T](value: T) {
+    def roleType(implicit ev: TufRole[T]) = ev.roleType
+
+    def toMetaPath(implicit ev: TufRole[T]): MetaPath = ev.toMetaPath
   }
 
-  case class MetaItem(hashes: ClientHashes, length: Long, version: Int)
+  implicit class RoleTypeOps(value: RoleType) {
+    def toMetaPath: MetaPath = (value.show + ".json").refineTry[ValidMetaPath].get
+  }
+
+  trait TufRole[T] {
+    def roleType: RoleType
+
+    def toMetaPath: MetaPath = roleType.toMetaPath
+
+    def toETagPath: String = toMetaPath.value + ".etag"
+  }
 
   sealed trait VersionedRole {
     val version: Int
     val expires: Instant
+  }
 
-    def roleType: RoleType = this match {
-      case _: TargetsRole => RoleType.TARGETS
-      case _: SnapshotRole => RoleType.SNAPSHOT
-      case _: TimestampRole => RoleType.TIMESTAMP
-      case _: RootRole => RoleType.ROOT
+  object TufRole {
+    private def apply[T <: VersionedRole](r: RoleType) = new TufRole[T] {
+      override def roleType = r
     }
+
+    implicit val targetsTufRole = apply[TargetsRole](RoleType.TARGETS)
+    implicit val snapshotTufRole = apply[SnapshotRole](RoleType.SNAPSHOT)
+    implicit val timestampTufRole = apply[TimestampRole](RoleType.TIMESTAMP)
+    implicit val rootTufRole = apply[RootRole](RoleType.ROOT)
   }
 
   case class RootRole(keys: Map[KeyId, TufKey],

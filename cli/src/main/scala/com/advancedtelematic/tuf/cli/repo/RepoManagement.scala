@@ -4,7 +4,7 @@ import java.io._
 import java.nio.file.{Files, Path}
 import java.util.zip.{ZipEntry, ZipFile, ZipOutputStream}
 
-import com.advancedtelematic.libtuf.data.TufDataType.{RoleType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.repo.TufRepo.UnknownInitFile
 import io.circe.jawn._
@@ -12,14 +12,15 @@ import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Json}
 import org.slf4j.LoggerFactory
 import cats.implicits._
-import com.advancedtelematic.libtuf.data.ClientDataType.{RoleTypeToMetaPathOp, RootRole, VersionedRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 
 import scala.collection.JavaConversions._
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
+import com.advancedtelematic.libtuf.data.ClientDataType.TufRoleOps
 
 import scala.concurrent.ExecutionContext
 import com.advancedtelematic.tuf.cli.CliCodecs._
@@ -87,9 +88,9 @@ object RepoManagement {
       dest.closeEntry()
     }
 
-    def copyRole[T <: VersionedRole : Encoder : Decoder](repo: TufRepo, roleType: RoleType, dest: ZipOutputStream): Try[Unit] = {
-      repo.readSignedRole[T](roleType).map { role =>
-        dest.putNextEntry(new ZipEntry(roleType.toMetaPath.value))
+    def copyRole[T : TufRole : Encoder : Decoder](repo: TufRepo, dest: ZipOutputStream): Try[Unit] = {
+      repo.readSignedRole[T].map { role =>
+        dest.putNextEntry(new ZipEntry(role.signed.toMetaPath.value))
         dest.write(role.asJson.spaces2.getBytes)
         dest.closeEntry()
       }
@@ -117,7 +118,7 @@ object RepoManagement {
           _ <- copyAuth(sourceZip, zipExportStream)
           _ ← copyEntries(sourceZip, zipExportStream)
           _ ← copyKeyPair(pubKey, privKey, zipExportStream)
-          _ <- copyRole[RootRole](repo, RoleType.ROOT, zipExportStream).recover {
+          _ <- copyRole[RootRole](repo, zipExportStream).recover {
             case ex =>
               _log.warn(s"Could not copy RootRole: ${ex.getMessage}")
           }
@@ -178,7 +179,7 @@ protected object ZipRepoInitialization {
     } yield ()
 
     def writeRoot(src: ZipFile): Try[Unit] = for {
-      rootIs <- Try(src.getInputStream(src.getEntry(RoleType.ROOT.toMetaPath.value)))
+      rootIs <- Try(src.getInputStream(src.getEntry(TufRole.rootTufRole.toMetaPath.value)))
       rootRole <- readJsonFrom[SignedPayload[RootRole]](rootIs)
       _ <- tufRepo.writeSignedRole(rootRole)
     } yield ()
