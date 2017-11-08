@@ -8,9 +8,9 @@ import akka.stream.ActorMaterializer
 import cats.syntax.show.toShowOps
 import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.RawError
-import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, RsaKeyType, SignedPayload, TufKey, TufPrivateKey, TufKeyPair}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType._
 import io.circe.{Decoder, Encoder, Json}
 
@@ -38,6 +38,8 @@ trait KeyserverClient {
   def updateRoot(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit]
 
   def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey]
+
+  def fetchTargetKeyPairs(repoId: RepoId): Future[Seq[TufKeyPair]]
 }
 
 object KeyserverHttpClient extends ServiceHttpClientSupport {
@@ -100,5 +102,10 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
   override def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey] = {
     val req = HttpRequest(HttpMethods.DELETE, uri = apiUri(Path("root") / repoId.show / "private_keys" / keyId.value))
     execHttp[TufPrivateKey](req)()
+  }
+
+  override def fetchTargetKeyPairs(repoId: RepoId): Future[Seq[TufKeyPair]] = {
+    val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("root") / repoId.show / "keys" / "targets" / "pairs"))
+    execHttp[Seq[TufKeyPair]](req)()
   }
 }

@@ -95,8 +95,8 @@ class KeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database, val e
     require(threshold > 0, "threshold must be greater than 0")
 
     (0 until threshold).map { _ =>
-      val (publicKey, privateKey) = TufCrypto.generateKeyPair(keyType, keySize)
-      (Key(publicKey.id, roleId, keyType, publicKey.keyval), privateKey)
+      val pair = TufCrypto.generateKeyPair(keyType, keySize)
+      (Key(pair.pubkey.id, roleId, keyType, pair.pubkey.keyval), pair.privkey)
     }
   }
 

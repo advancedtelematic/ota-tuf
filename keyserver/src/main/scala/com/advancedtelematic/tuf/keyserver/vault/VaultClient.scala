@@ -9,20 +9,19 @@ import akka.http.scaladsl.model.HttpMethods._
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.unmarshalling.{FromEntityUnmarshaller, Unmarshaller}
 import akka.stream.Materializer
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RSATufPrivateKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RSATufPrivateKey,  TufKeyPair, TufPrivateKey}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.{VaultKey, VaultKeyNotFound}
 import io.circe.{Decoder, Encoder, HCursor}
-
 import scala.concurrent.Future
+import scala.reflect.ClassTag
 import scala.util.control.NoStackTrace
+import scala.util.Try
 import io.circe.generic.semiauto._
 import io.circe.syntax._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufCodecs
 import cats.syntax.functor._
-
-import scala.reflect.ClassTag
 
 trait VaultClient {
   def createKey(key: VaultKey): Future[Unit]
@@ -36,9 +35,13 @@ trait VaultClient {
 
 object VaultClient {
   import com.advancedtelematic.libats.codecs.CirceCodecs._
-  import com.advancedtelematic.libtuf.data.TufCodecs._
+  import TufCodecs._
 
-  case class VaultKey(id: KeyId, keyType: KeyType, publicKey: String, privateKey: TufPrivateKey)
+  case class VaultKey(id: KeyId, keyType: KeyType, publicKey: String, privateKey: TufPrivateKey) {
+
+    def toTufKeyPair: Try[TufKeyPair] = keyType.crypto.toKeyPair(publicKey, privateKey)
+
+  }
 
   case object VaultKeyNotFound extends Exception("vault key not found") with NoStackTrace
 
@@ -96,8 +99,7 @@ class VaultHttpClient(vaultHost: Uri, token: String, mount: Path)(implicit syste
     execute[Unit](req)
   }
 
-  private def execute[T](request: HttpRequest)
-                        (implicit ct: ClassTag[T], um: FromEntityUnmarshaller[T]): Future[T] = {
+  private def execute[T](request: HttpRequest)(implicit um: FromEntityUnmarshaller[T]): Future[T] = {
     val authRequest = request.addHeader(RawHeader("X-Vault-Token", token))
 
     _http.singleRequest(authRequest).flatMap {

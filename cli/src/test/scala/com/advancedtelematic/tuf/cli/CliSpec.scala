@@ -9,7 +9,7 @@ import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{ETag, RoleKeys, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.{ClientDataType, TufDataType}
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, KeyId, RoleType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKeyPair, KeyId, RoleType, SignedPayload, TufKey, TufPrivateKey}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
@@ -28,9 +28,10 @@ abstract class CliSpec extends FunSuite with Matchers with ScalaFutures {
 }
 
 class FakeUserReposerverClient extends UserReposerverClient {
-  private val (oldPublicKey, oldPrivateKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
+  private val EdTufKeyPair(oldPublicKey, oldPrivateKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
 
-  private var (targetsPubKey, targetsPrivKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
+  private var targetsPair = TufCrypto.generateKeyPair(EdKeyType, 256)
+  var targetsPubKey = targetsPair.pubkey
 
   private var unsignedTargets = TargetsRole(Instant.now.plus(1, ChronoUnit.DAYS), Map.empty, 1)
 
@@ -64,7 +65,7 @@ class FakeUserReposerverClient extends UserReposerverClient {
   }
 
   override def targets(): Future[TargetsResponse] = Future.successful {
-    val sig = TufCrypto.signPayload(targetsPrivKey, unsignedTargets).toClient(targetsPubKey.id)
+    val sig = TufCrypto.signPayload(targetsPair.privkey, unsignedTargets).toClient(targetsPubKey.id)
     TargetsResponse(SignedPayload(Seq(sig), unsignedTargets), Option(ETag("[test] fake tag")))
   }
 

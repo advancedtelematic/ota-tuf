@@ -12,9 +12,8 @@ import cats.syntax.show._
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufDataType._
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId}
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
 import io.circe.{Decoder, Encoder, Json}
 import org.scalatest.Inspectors
 import org.scalatest.concurrent.PatienceConfiguration
@@ -24,6 +23,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.{RSATufPrivateKey, TufPriva
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
+import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport, RoleRepositorySupport}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKeyNotFound
 import eu.timepit.refined.api.Refined
@@ -427,7 +427,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       responseAs[RootRole]
     }
 
-    val (newPubKey, newPrivKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val EdTufKeyPair(newPubKey, newPrivKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
 
     val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
     val rootRole = oldRootRole.withRoleKeys(RoleType.ROOT, newPubKey)
@@ -457,8 +457,8 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       responseAs[RootRole]
     }
 
-    val (newPubKey, newPrivKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
-    val (newPubKey2, newPrivKey2) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val EdTufKeyPair(newPubKey, newPrivKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val EdTufKeyPair(newPubKey2, newPrivKey2) = TufCrypto.generateKeyPair(EdKeyType, 256)
 
     val newRootKeys = List(newPubKey, newPubKey2).map(k => k.id -> k).toMap
     val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
@@ -487,7 +487,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       status shouldBe StatusCodes.OK
       responseAs[RootRole]
     }
-    val (newKey, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val EdTufKeyPair(newKey, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
 
     val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
     val newKeys = (oldRootRole.keys - rootKeyId) + (newKey.id -> newKey)
@@ -510,7 +510,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       status shouldBe StatusCodes.OK
       responseAs[RootRole]
     }
-    val (newPubKey, newPrivKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val EdTufKeyPair(newPubKey, newPrivKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
 
     val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
     val rootRole = oldRootRole.withRoleKeys(RoleType.ROOT, newPubKey)
@@ -561,7 +561,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     val repoId = RepoId.generate()
     generateRootRole(repoId).futureValue
 
-    val (publicKey, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val publicKey = TufCrypto.generateKeyPair(EdKeyType, 256).pubkey
 
     val newRootRole = Put(apiUri(s"root/${repoId.show}/keys/targets"), publicKey) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -578,6 +578,23 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseAs[SignedPayload[RootRole]].signed shouldBe newRootRole
+    }
+  }
+
+  test("GET target key pairs") {
+    val keyGenerationOp = new KeyGenerationOp(fakeVault)
+
+    val repoId = RepoId.generate()
+
+    // generate target key pair
+    val targetKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
+      repoId, KeyGenRequestStatus.REQUESTED, RoleType.TARGETS, 2048, RsaKeyType)
+    keyGenRepo.persist(targetKeyGenRequest).futureValue
+    val publicKeys = keyGenerationOp.processGenerationRequest(targetKeyGenRequest).futureValue
+
+    Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[Seq[TufKeyPair]].map(_.pubkey).toSet shouldBe publicKeys.map(_.toTufKey).toSet
     }
   }
 

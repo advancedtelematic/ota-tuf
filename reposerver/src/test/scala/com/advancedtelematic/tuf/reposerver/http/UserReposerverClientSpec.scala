@@ -6,7 +6,7 @@ import java.time.Instant
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{ETag, RootRole, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, RepoId, RoleType, SignedPayload, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKeyPair, RepoId, RoleType, SignedPayload, TufPrivateKey}
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 import org.scalatest.time.{Seconds, Span}
@@ -77,7 +77,7 @@ class UserReposerverClientSpec extends TufReposerverSpec
   }
 
   test("pushes a target key") {
-    val (newKey, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val newKey = TufCrypto.generateKeyPair(EdKeyType, 256).pubkey
 
     val f = for {
       _ <- client.pushTargetsKey(newKey)

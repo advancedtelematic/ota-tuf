@@ -87,12 +87,14 @@ object TufDataType {
   case object RsaKeyType extends KeyType {
     type Pub = RSATufKey
     type Priv = RSATufPrivateKey
+    type Pair = RSATufKeyPair
 
     val crypto = TufCrypto.rsaCrypto
   }
   case object EdKeyType extends KeyType {
     type Pub = EdTufKey
     type Priv = EdTufPrivateKey
+    type Pair = EdTufKeyPair
 
     val crypto = TufCrypto.edCrypto
   }
@@ -119,4 +121,11 @@ object TufDataType {
   case class EdTufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey {
     override def keytype: KeyType = EdKeyType
   }
+
+  sealed trait TufKeyPair {
+    val pubkey: TufKey
+    val privkey: TufPrivateKey
+  }
+  case class RSATufKeyPair(override val pubkey: RSATufKey, override val privkey: RSATufPrivateKey) extends TufKeyPair
+  case class EdTufKeyPair(override val pubkey: EdTufKey, override val privkey: EdTufPrivateKey) extends TufKeyPair
 }
