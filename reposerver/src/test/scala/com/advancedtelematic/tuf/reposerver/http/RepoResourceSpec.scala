@@ -55,7 +55,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
   val testFile = {
     val checksum = Sha256Digest.digest("hi".getBytes)
-    RequestTargetItem(Uri.Empty, checksum, targetFormat = None, name = None, version = None, hardwareIds = Seq.empty, length = "hi".getBytes.length)
+    RequestTargetItem(Uri("https://ats.com/testfile"), checksum, targetFormat = None, name = None, version = None, hardwareIds = Seq.empty, length = "hi".getBytes.length)
   }
 
   override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
@@ -105,6 +105,25 @@ class RepoResourceSpec extends TufReposerverSpec
 
       val targetsRole = signed.as[TargetsRole].valueOr(throw _)
       targetsRole.targets("myfile".refineTry[ValidTargetFilename].get).hashes(HashMethod.SHA256) shouldBe testFile.checksum.hash
+    }
+  }
+
+  test("POSTing a file adds uri to custom field") {
+    val urlTestFile = testFile.copy(
+      uri = Uri("https://ats.com/urlTestFile"),
+      name = TargetName("myfilewithuri").some,
+      version = TargetVersion("0.1.0").some
+    )
+
+    Post(apiUri(s"repo/${repoId.show}/targets/myfilewithuri"), urlTestFile) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+
+      val signed = responseAs[SignedPayload[Json]].signed
+
+      val targetsRole = signed.as[TargetsRole].valueOr(throw _)
+      val item = targetsRole.targets("myfilewithuri".refineTry[ValidTargetFilename].get)
+
+      item.customParsed[TargetCustom].flatMap(_.uri).map(_.toString) should contain(urlTestFile.uri.toString())
     }
   }
 
@@ -503,7 +522,7 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
-  test("accept name/version, hardwareIds, targetFormat") {
+  test("accept name/version, hardwareIds, targetFormat, uri") {
     val repoId = addTargetToRepo()
     val targetfileName: TargetFilename = Refined.unsafeApply("target/with/desc")
 
@@ -520,6 +539,8 @@ class RepoResourceSpec extends TufReposerverSpec
       custom.map(_.version) should contain(TargetVersion("someversion"))
       custom.map(_.hardwareIds.map(_.value)) should contain(Seq("1", "2", "3"))
       custom.flatMap(_.targetFormat) should contain(TargetFormat.BINARY)
+
+      custom.flatMap(_.uri).map(_.toString).get should startWith(storageRoot.toString)
     }
   }
 
