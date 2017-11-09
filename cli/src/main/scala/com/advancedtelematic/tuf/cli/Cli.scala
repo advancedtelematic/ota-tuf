@@ -25,6 +25,7 @@ import com.advancedtelematic.tuf.cli.repo.{RepoManagement, TufRepo}
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
+import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.EtagNotValid
 
 sealed trait Command
 case object Help extends Command
@@ -245,9 +246,12 @@ object Cli extends App with VersionInfo {
           .action { (_, c) =>
             c.copy(command = PullTargets)
           },
-        cmd("push").action { (_, c) =>
-          c.copy(command = PushTargets)
-        }
+        cmd("push")
+          .text("""push latest targets.json to server This will fail with exit code 2 if the latest `pull`
+                  |was too long ago and did not pull the latest targets.json on the server.""".stripMargin)
+          .action { (_, c) =>
+            c.copy(command = PushTargets)
+          }
       )
 
     cmd("export-credentials")
@@ -317,10 +321,10 @@ object Cli extends App with VersionInfo {
         repoServer
           .flatMap { client =>
             tufRepo.rotateRoot(client,
-                               config.rootKey,
-                               config.oldRootKey,
-                               config.targetsKey,
-                               config.oldKeyId)
+              config.rootKey,
+              config.oldRootKey,
+              config.targetsKey,
+              config.oldKeyId)
           }
           .map(_ => log.info(s"root.json rotated, saved to $repoPath"))
 
@@ -338,11 +342,11 @@ object Cli extends App with VersionInfo {
       case AddTarget =>
         tufRepo
           .addTarget(config.targetName.get,
-                     config.targetVersion.get,
-                     config.length,
-                     config.checksum.get,
-                     config.hardwareIds,
-                     config.targetUri,
+            config.targetVersion.get,
+            config.length,
+            config.checksum.get,
+            config.hardwareIds,
+            config.targetUri,
             config.targetFormat)
           .map(p => log.info(s"added target to $p"))
           .toFuture
@@ -361,7 +365,11 @@ object Cli extends App with VersionInfo {
       case PushTargets =>
         repoServer
           .flatMap(tufRepo.pushTargets)
-          .map(_ => log.info("Pushed targets"))
+          .recover {
+            case ex @ EtagNotValid =>
+              log.error("Could not push targets", ex)
+              sys.exit(2)
+          }.map(_ => log.info("Pushed targets"))
 
       case PushTargetsKey =>
         repoServer

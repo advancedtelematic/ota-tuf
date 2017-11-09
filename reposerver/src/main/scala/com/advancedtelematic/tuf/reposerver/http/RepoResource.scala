@@ -8,7 +8,7 @@ import akka.http.scaladsl.model.{HttpResponse, StatusCodes, Uri}
 import akka.http.scaladsl.server._
 import cats.data.Validated.{Invalid, Valid}
 import com.advancedtelematic.libats.data.RefinedUtils._
-import com.advancedtelematic.libats.http.Errors.MissingEntity
+import com.advancedtelematic.libats.http.Errors.{MissingEntity, RawError}
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf_server.data.Messages.TufTargetAdded
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId}
@@ -36,6 +36,7 @@ import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
+
 import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
@@ -160,7 +161,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
           }
         }
       case None =>
-        complete(StatusCodes.PreconditionRequired)
+        failWith(Errors.EtagNotFound)
     }
 
   private def modifyRepoRoutes(repoId: RepoId) =

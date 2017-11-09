@@ -16,6 +16,7 @@ import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{FunSuite, Matchers}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
+import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.TargetsResponse
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}

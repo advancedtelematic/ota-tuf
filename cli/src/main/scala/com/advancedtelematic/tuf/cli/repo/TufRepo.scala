@@ -11,7 +11,7 @@ import cats.syntax.option._
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, ETag, MetaPath, TufRole, TufRoleOps, RoleKeys, RootRole, TargetCustom, TargetsRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, ETag, MetaPath, RoleKeys, RootRole, TargetCustom, TargetsRole, TufRole, TufRoleOps}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetName, TargetVersion, TufKey, TufPrivateKey, ValidTargetFilename}
@@ -27,6 +27,7 @@ import io.circe.{Decoder, Encoder}
 import org.slf4j.LoggerFactory
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
+import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.TargetsResponse
 
 import scala.collection.JavaConversions._
 import scala.concurrent.{ExecutionContext, Future}
@@ -92,7 +93,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
 
   def pullTargets(reposerverClient: UserReposerverClient, rootRole: RootRole): Future[SignedPayload[TargetsRole]] =
     reposerverClient.targets().flatMap {
-      case reposerverClient.TargetsResponse(targets, etag) =>
+      case TargetsResponse(targets, etag) =>
         val roleValidation = TufCrypto.payloadSignatureIsValid(rootRole, targets)
 
         roleValidation match {
