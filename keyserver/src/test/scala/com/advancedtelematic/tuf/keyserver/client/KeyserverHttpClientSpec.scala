@@ -4,7 +4,7 @@ import java.security.interfaces.RSAPublicKey
 
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, KeyId, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, KeyId, RSATufKey, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverHttpClient
@@ -160,6 +160,19 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
         case rsaPubKey : RSAPublicKey =>
           rsaPubKey.getModulus().bitLength() should be >= 2048
       }
+    }
+  }
+
+  test("uploading an RSA key with a keyval of a different type fails") {
+    val repoId = RepoId.generate()
+    val f = createAndProcessRoot(repoId)
+
+    whenReady(f) { _ =>
+      val (edPublicKey, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
+      val rsa = RSATufKey(edPublicKey.keyval)
+      val error = client.addTargetKey(repoId, rsa).failed.futureValue
+
+      error.getMessage should include("Key is not an RSAPublicKey")
     }
   }
 }
