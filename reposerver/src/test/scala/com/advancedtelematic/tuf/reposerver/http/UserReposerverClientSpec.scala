@@ -5,12 +5,13 @@ import java.time.Instant
 
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ETag, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, RepoId, RoleType, SignedPayload, TufPrivateKey}
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 import org.scalatest.time.{Seconds, Span}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.EtagNotValid
 import com.advancedtelematic.libtuf.reposerver.UserReposerverHttpClient
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
@@ -61,6 +62,18 @@ class UserReposerverClientSpec extends TufReposerverSpec
     } yield oldKey
 
     f.futureValue shouldBe a[TufPrivateKey]
+  }
+
+  test("returns specific exception when etag is not valid") {
+    val targets = TargetsRole(Instant.now, Map.empty, 20)
+    val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets).futureValue
+    client.pushTargets(signedTargets, Option(ETag("\"invalid\""))).failed.futureValue shouldBe EtagNotValid
+  }
+
+  test("returns specific exception when no etag is present at all") {
+    val targets = TargetsRole(Instant.now, Map.empty, 20)
+    val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets).futureValue
+    client.pushTargets(signedTargets, None).failed.futureValue shouldBe EtagNotValid
   }
 
   test("pushes a target key") {

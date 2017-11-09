@@ -8,15 +8,21 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpResponse
+import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{EtagNotValid, TargetsResponse}
 import io.circe.Decoder
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
+import scala.util.control.NoStackTrace
 import scalaj.http.{Http, HttpRequest}
 
-trait UserReposerverClient {
+object UserReposerverClient {
   case class TargetsResponse(targets: SignedPayload[TargetsRole], etag: Option[ETag])
 
+  case object EtagNotValid extends Exception("could not overwrite targets, trying to update an older version of role. Did you run `targets pull` ?") with NoStackTrace
+}
+
+trait UserReposerverClient {
   def root(): Future[SignedPayload[RootRole]]
 
   def deleteKey(keyId: KeyId): Future[TufPrivateKey]
@@ -58,16 +64,21 @@ class UserReposerverHttpClient(reposerverUri: URI,
 
   def targets(): Future[TargetsResponse] = {
     val req = Http(apiUri("targets.json")).method("GET")
-    execHttp[SignedPayload[TargetsRole]](req)().map { case HttpResponse(payload, response) =>
-      val etag = response.header("ETag").map(ETag.apply)
-      TargetsResponse(payload, etag)
+    execHttp[SignedPayload[TargetsRole]](req)().map {
+      case HttpResponse(payload, response) =>
+        val etag = response.header("ETag").map(ETag.apply)
+        TargetsResponse(payload, etag)
     }
   }
 
   def pushTargets(role: SignedPayload[TargetsRole], etag: Option[ETag]): Future[Unit] = {
     val put = Http(apiUri("targets")).method("PUT")
     val req = etag.map(e => put.header("If-Match", e.value)).getOrElse(put)
-    execJsonHttp[Unit, SignedPayload[TargetsRole]](req, role)()
+
+    execJsonHttp[Unit, SignedPayload[TargetsRole]](req, role) {
+      case 412 | 428 =>
+        Future.failed(EtagNotValid)
+    }
   }
 
   override def pushTargetsKey(key: TufKey): Future[TufKey] = {
