@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.target_store
 
+import java.net.URI
 import java.time.Instant
 
 import cats.implicits._
@@ -62,7 +63,8 @@ class TargetStore(roleKeyStore: KeyserverClient,
     for {
       storeResult <- engine.store(repoId, targetFile, fileData)
       _ <- publishUploadMessages(repoId)
-    } yield TargetItem(repoId, targetFile, storeResult.uri, storeResult.checksum, storeResult.size, Some(custom))
+      tcustom = custom.copy(uri = Option(new URI(storeResult.uri.toString())))
+    } yield TargetItem(repoId, targetFile, storeResult.uri, storeResult.checksum, storeResult.size, Option(tcustom))
   }
 
   def storeFromUri(repoId: RepoId, targetFile: TargetFilename, fileUri: Uri, custom: TargetCustom): Future[TargetItem] = {

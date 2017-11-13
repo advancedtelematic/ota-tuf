@@ -202,7 +202,8 @@ trait ResourceSpec extends TufReposerverSpec
     override def apply(repoId: RepoId): Directive1[Namespace] = defaultNamespaceExtractor
   }
 
-  val localStorage = new LocalTargetStoreEngine(Files.createTempDirectory("target-storage").toFile)
+  val storageRoot = Files.createTempDirectory("target-storage").toFile
+  val localStorage = new LocalTargetStoreEngine(storageRoot)
   lazy val targetStore = new TargetStore(fakeKeyserverClient, localStorage, fakeHttpClient, messageBusPublisher)
 
   val memoryMessageBus = new MemoryMessageBus

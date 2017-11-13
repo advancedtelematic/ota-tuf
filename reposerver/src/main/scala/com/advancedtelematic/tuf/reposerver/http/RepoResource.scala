@@ -1,5 +1,7 @@
 package com.advancedtelematic.tuf.reposerver.http
 
+import java.net.URI
+
 import akka.http.scaladsl.unmarshalling._
 import PredefinedFromStringUnmarshallers.CsvSeq
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
@@ -97,7 +99,8 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       val custom = for {
         name <- clientItem.name
         version <- clientItem.version
-      } yield TargetCustom(name, version, clientItem.hardwareIds, clientItem.targetFormat)
+        uri = new URI(clientItem.uri.toString())
+      } yield TargetCustom(name, version, clientItem.hardwareIds, clientItem.targetFormat, uri = Option(uri))
 
       addTargetItem(namespace, TargetItem(repoId, filename, clientItem.uri, clientItem.checksum, clientItem.length, custom))
     }
