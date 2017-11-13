@@ -113,11 +113,11 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       } yield targets
     }
 
-  def signTargets(targetsKey: KeyName): Try[Path] =
+  def signTargets(targetsKey: KeyName, version: Option[Int] = None): Try[Path] =
     for {
       (pub, priv) <- keyStorage.readKeyPair(targetsKey)
       unsigned <- readUnsignedRole[TargetsRole]
-      newUnsigned = unsigned.copy(version = unsigned.version + 1)
+      newUnsigned = unsigned.copy(version = version.getOrElse(unsigned.version + 1))
       sig = TufCrypto.signPayload(priv, newUnsigned).toClient(pub.id)
       signedRole = SignedPayload(Seq(sig), newUnsigned)
       _ <- writeUnsignedRole(signedRole.signed)

@@ -214,6 +214,18 @@ class TufRepoSpec extends CliSpec {
     unsignedPayload.version shouldBe 12
   }
 
+  test("sets version when specified") {
+    val repo = initRepo()
+
+    val targetsKeyName = KeyName("somekey")
+    repo.genKeys(targetsKeyName, EdKeyType, 256).get
+
+    repo.signTargets(targetsKeyName, Option(21)).get
+
+    val payload = repo.readSignedRole[TargetsRole].get
+    payload.signed.version shouldBe 21
+  }
+
   test("signs targets") {
     val repo = initRepo()
 
