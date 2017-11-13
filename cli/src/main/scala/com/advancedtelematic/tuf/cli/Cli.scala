@@ -51,7 +51,7 @@ case class Config(command: Command,
                   oldRootKey: KeyName = KeyName("default-key"),
                   targetsKey: KeyName = KeyName("default-key"),
                   oldKeyId: Option[KeyId] = None,
-                  version: Int = 1,
+                  version: Option[Int] = None,
                   expires: Instant = Instant.now().plus(1, ChronoUnit.DAYS),
                   length: Int = -1,
                   targetName: Option[TargetName] = None,
@@ -182,7 +182,7 @@ object Cli extends App with VersionInfo {
           }
           .children(
             opt[Int]("version")
-              .action((version, c) => c.copy(version = version))
+              .action((version, c) => c.copy(version = version.some))
               .required(),
             opt[Instant]("expires")
               .action((expires, c) => c.copy(expires = expires))
@@ -240,7 +240,10 @@ object Cli extends App with VersionInfo {
               .action { (arg, c) =>
                 c.copy(targetsKey = arg)
               }
-              .required()
+              .required(),
+            opt[Int]("version")
+              .text("Ignore unsigned role version and use <version> instead")
+              .action { (arg, c) => c.copy(version = arg.some) }
           ),
         cmd("pull")
           .action { (_, c) =>
@@ -335,7 +338,7 @@ object Cli extends App with VersionInfo {
 
       case InitTargets =>
         tufRepo
-          .initTargets(config.version, config.expires)
+          .initTargets(config.version.get, config.expires)
           .map(p => log.info(s"Wrote empty targets to $p"))
           .toFuture
 
@@ -353,7 +356,7 @@ object Cli extends App with VersionInfo {
 
       case SignTargets =>
         tufRepo
-          .signTargets(config.targetsKey)
+          .signTargets(config.targetsKey, config.version)
           .map(p => log.info(s"signed targets.json to $p"))
           .toFuture
 
