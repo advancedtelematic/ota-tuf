@@ -73,7 +73,7 @@
     "docker": {
       "image": "advancedtelematic/tuf-reposerver:${DOCKER_TAG}",
       "parameters": [{"key": "log-driver", "value": "syslog"},
-                     {"key": "log-opt", "value": "tag=${REPOSERVER_SERVICE_NAME-pub}"}],
+                     {"key": "log-opt", "value": "tag=${REPOSERVER_SERVICE_NAME_PUB}"}],
       "forcePullImage": true,
       "network": "BRIDGE",
       "portMappings": [{
@@ -101,7 +101,7 @@
     "KAFKA_HOST": "${KAFKA_HOST}",
     "KAFKA_TOPIC_SUFFIX": "${KAFKA_TOPIC_SUFFIX}",
     "SERVICE_IMAGE": "advancedtelematic/tuf-reposerver:${DOCKER_TAG}",
-    "SERVICE_NAME": "${REPOSERVER_SERVICE_NAME}-pub",
+    "SERVICE_NAME": "${REPOSERVER_SERVICE_NAME_PUB}",
     "SERVICE_SCOPE": "public",
     "SERVICE_TYPE": "http",
     "SERVICE_HEALTH_CHECK": "curl --show-error --silent %<host>s:%<port>s/health",
