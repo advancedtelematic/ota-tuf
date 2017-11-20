@@ -8,7 +8,7 @@ import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKey
 import com.advancedtelematic.libtuf.crypt.TufCrypto._
 import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, RsaKeyType, Signature}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKeyPair, RSATufKeyPair, RsaKeyType, Signature}
 import org.bouncycastle.util.encoders.Base64
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}
@@ -25,7 +25,7 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
 
   override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(3, Seconds))
 
-  val (publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
+  val RSATufKeyPair(publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
 
   val dbKey = Key(publicKey.id, RoleId.generate(), RsaKeyType, publicKey.keyval)
 
@@ -57,7 +57,7 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
   test("generates valid ed25519 signatures")  {
     val payload = TestPayload()
 
-    val (publicKey, privateKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val EdTufKeyPair(publicKey, privateKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
     val dbKey = Key(publicKey.id, RoleId.generate(), EdKeyType, publicKey.keyval)
     fakeVault.createKey(VaultKey(dbKey.id, dbKey.keyType, dbKey.publicKey.toPem, privateKey)).futureValue
 

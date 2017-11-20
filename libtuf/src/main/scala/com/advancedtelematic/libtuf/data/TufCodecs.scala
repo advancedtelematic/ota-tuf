@@ -46,20 +46,20 @@ object TufCodecs {
 
   implicit val tufKeyEncoder: Encoder[TufKey] = Encoder.instance {
     case key @ RSATufKey(_) ⇒
-      Json.obj("keyval" →
-        Json.obj("public" -> RsaKeyType.crypto.encode(key)), "keytype" → RsaKeyType.asJson)
+      Json.obj("keyval" → Json.obj("public" -> RsaKeyType.crypto.encode(key)),
+               "keytype" → RsaKeyType.asJson)
     case key @ EdTufKey(_) ⇒
-      Json.obj("keyval" →
-        Json.obj("public" -> EdKeyType.crypto.encode(key)), "keytype" → EdKeyType.asJson)
+      Json.obj("keyval" → Json.obj("public" -> EdKeyType.crypto.encode(key)),
+               "keytype" → EdKeyType.asJson)
   }
 
   implicit val tufPrivateKeyEncoder: Encoder[TufPrivateKey] = Encoder.instance {
     case key @ RSATufPrivateKey(_) ⇒
-      Json.obj("keyval" →
-        Json.obj("private" -> RsaKeyType.crypto.encode(key)), "keytype" → RsaKeyType.asJson)
+      Json.obj("keyval" → Json.obj("private" -> RsaKeyType.crypto.encode(key)),
+               "keytype" → RsaKeyType.asJson)
     case key @ EdTufPrivateKey(_) ⇒
-      Json.obj("keyval" →
-        Json.obj("private" -> EdKeyType.crypto.encode(key)), "keytype" → EdKeyType.asJson)
+      Json.obj("keyval" → Json.obj("private" -> EdKeyType.crypto.encode(key)),
+               "keytype" → EdKeyType.asJson)
   }
 
   private def tufKeyDecoder[T](field: String, decodeFn: (KeyType, String) ⇒ Try[T]): Decoder[T] = Decoder.instance { cursor ⇒
@@ -73,4 +73,26 @@ object TufCodecs {
   implicit val tufKeyDecoder: Decoder[TufKey] = tufKeyDecoder("public", TufCrypto.parsePublic)
 
   implicit val tufPrivateKeyDecoder: Decoder[TufPrivateKey] = tufKeyDecoder("private", TufCrypto.parsePrivate)
+
+  implicit val tufKeyPairEncoder: Encoder[TufKeyPair] = Encoder.instance {
+    case RSATufKeyPair(pub, priv) =>
+      Json.obj("keytype" -> RsaKeyType.asJson,
+               "keyval" -> Json.obj("public" -> RsaKeyType.crypto.encode(pub),
+                                    "private" -> RsaKeyType.crypto.encode(priv)))
+    case EdTufKeyPair(pub, priv) =>
+      Json.obj("keytype" -> EdKeyType.asJson,
+               "keyval" -> Json.obj("public" -> EdKeyType.crypto.encode(pub),
+                                    "private" -> EdKeyType.crypto.encode(priv)))
+  }
+
+  implicit val tufKeyPairDecoder: Decoder[TufKeyPair] = Decoder.instance { cursor =>
+    for {
+      keyType <- cursor.downField("keytype").as[KeyType]
+      keyVal = cursor.downField("keyval")
+      pubkeyStr <- keyVal.downField("public").as[String]
+      privkeyStr <- keyVal.downField("private").as[String]
+      pair <- Either.fromTry(keyType.crypto.parseKeyPair(pubkeyStr, privkeyStr))
+                  .leftMap(ex => DecodingFailure(ex.getMessage, cursor.history))
+    } yield pair
+  }
 }

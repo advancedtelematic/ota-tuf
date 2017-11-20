@@ -4,27 +4,24 @@ import java.io._
 import java.nio.file.{Files, Path}
 import java.util.zip.{ZipEntry, ZipFile, ZipOutputStream}
 
+import cats.implicits._
+import com.advancedtelematic.libtuf.data.ClientDataType.TufRoleOps
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole}
+import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
+import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.repo.TufRepo.UnknownInitFile
+import com.advancedtelematic.tuf.cli.CliCodecs._
 import io.circe.jawn._
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Json}
 import org.slf4j.LoggerFactory
-import cats.implicits._
-import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole}
-import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
-
 import scala.collection.JavaConversions._
+import scala.concurrent.ExecutionContext
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
-import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.TufRoleOps
-
-import scala.concurrent.ExecutionContext
-import com.advancedtelematic.tuf.cli.CliCodecs._
-
 
 object RepoManagement {
   private val zipTargetKeyName = KeyName("targets")

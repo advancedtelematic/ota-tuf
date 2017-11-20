@@ -445,19 +445,19 @@ class RepoResourceSpec extends TufReposerverSpec
 
   test("getting role after adding a target on user repo returns user role") {
     withNamespace("targetns02") { implicit ns =>
-      val newRepoId = Post(apiUri(s"user_repo")).namespaced ~> routes ~> check {
+      val newRepoId = Post(apiUri("user_repo")).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.OK
         responseAs[RepoId]
       }
 
-      Post(apiUri(s"user_repo/targets/myfile"), testFile).namespaced ~> routes ~> check {
+      Post(apiUri("user_repo/targets/myfile"), testFile).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.OK
 
         val signedPayload = responseAs[SignedPayload[Json]]
         signaturesShouldBeValid(newRepoId, RoleType.TARGETS, signedPayload)
       }
 
-      Get(apiUri(s"user_repo/root.json"), testFile).namespaced ~> routes ~> check {
+      Get(apiUri("user_repo/root.json"), testFile).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.OK
 
         val signedPayload = responseAs[SignedPayload[RootRole]]
@@ -468,11 +468,11 @@ class RepoResourceSpec extends TufReposerverSpec
 
   test("fails if repo for user already exists") {
     withNamespace("targetns03") { implicit ns =>
-      Post(apiUri(s"user_repo")).namespaced ~> routes ~> check {
+      Post(apiUri("user_repo")).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.OK
       }
 
-      Post(apiUri(s"user_repo")).namespaced ~> routes ~> check {
+      Post(apiUri("user_repo")).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.Conflict
       }
     }
@@ -764,7 +764,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), targets, 2)
 
-    val (pub, sec) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val EdTufKeyPair(pub, sec) = TufCrypto.generateKeyPair(EdKeyType, 256)
     val signature = TufCrypto.signPayload(sec, targetsRole).toClient(pub.id)
     val signedPayload = SignedPayload(List(signature), targetsRole)
 
@@ -775,9 +775,8 @@ class RepoResourceSpec extends TufReposerverSpec
   }
 
   test("adding a target public key delegates to keyserver") {
-    val repoId = RepoId.generate()
-    fakeKeyserverClient.createRoot(repoId).futureValue // Does not use `addTargetToRepo` to avoid caching
-    val (pub, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val repoId = addTargetToRepo()
+    val pub = TufCrypto.generateKeyPair(EdKeyType, 256).pubkey
 
     Put(apiUri(s"repo/${repoId.show}/keys/targets"), pub) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent

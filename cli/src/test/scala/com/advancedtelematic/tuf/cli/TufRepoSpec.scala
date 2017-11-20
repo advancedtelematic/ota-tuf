@@ -6,9 +6,9 @@ import java.time.Instant
 
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
-import com.advancedtelematic.libtuf.data.ClientDataType.{TufRole, RootRole, TargetCustom, TargetsRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole, TufRole}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufPrivateKey, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKeyPair, EdTufPrivateKey, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, TufRepo}
@@ -34,8 +34,8 @@ class TufRepoSpec extends CliSpec {
     val newRootName = KeyName(s"newroot${repo.name.value}")
     val newTargetsName = KeyName(s"targets${repo.name.value}")
 
-    val (pub, _) = repo.genKeys(newRootName, EdKeyType, 256).get
-    val (pubT, _) = repo.genKeys(newTargetsName, EdKeyType, 256).get
+    val pub = repo.genKeys(newRootName, EdKeyType, 256).get.pubkey
+    val pubT = repo.genKeys(newTargetsName, EdKeyType, 256).get.pubkey
 
     repo.rotateRoot(reposerverClient, newRootName, oldRootName, newTargetsName, None).map { s =>
       (pub, pubT, s)
@@ -116,7 +116,7 @@ class TufRepoSpec extends CliSpec {
     rootRole.roles(RoleType.TARGETS).keyids should contain(pubT.id)
 
     rootRole.keys.keys should contain(pub.id)
-     rootRole.keys.keys should contain(pubT.id)
+    rootRole.keys.keys should contain(pubT.id)
   }
 
   test("new root role does not contain old targets keys") {
@@ -230,7 +230,7 @@ class TufRepoSpec extends CliSpec {
     val repo = initRepo()
 
     val targetsKeyName = KeyName("somekey")
-    val (pub, _) = repo.genKeys(targetsKeyName, EdKeyType, 256).get
+    val pub = repo.genKeys(targetsKeyName, EdKeyType, 256).get.pubkey
 
     val path = repo.signTargets(targetsKeyName).get
     val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).valueOr(throw _)

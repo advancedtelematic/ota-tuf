@@ -8,12 +8,13 @@ import cats.data.Validated.{Invalid, Valid}
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import slick.jdbc.MySQLProfile.api._
-import com.advancedtelematic.tuf.keyserver.roles.{RootRoleGeneration, RootRoleKeyEdit}
+import com.advancedtelematic.tuf.keyserver.roles.{RootRoleGeneration, RootRoleKeyEdit, TargetKeyAccess}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
+
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType._
@@ -29,6 +30,7 @@ class RootRoleResource(vaultClient: VaultClient)
   val rootRoleGeneration = new RootRoleGeneration(vaultClient)
   val rootRoleKeyEdit = new RootRoleKeyEdit(vaultClient)
   val roleSigning = new RoleSigning(vaultClient)
+  val targetRole = new TargetKeyAccess(vaultClient)
 
   val route =
     pathPrefix("root" / RepoId.Path) { repoId =>
@@ -84,14 +86,21 @@ class RootRoleResource(vaultClient: VaultClient)
             }
           complete(f)
         }
-    } ~
-    (put & path("keys" / "targets")) {
-      entity(as[TufKey]) { tufKey =>
-        val f = rootRoleKeyEdit.addPublicKey(repoId, RoleType.TARGETS, tufKey)
-        complete(f)
+      } ~
+      pathPrefix("keys" / "targets") {
+        (put & pathEnd) {
+          entity(as[TufKey]) { tufKey =>
+            val f = rootRoleKeyEdit.addPublicKey(repoId, RoleType.TARGETS, tufKey)
+            complete(f)
+          }
+        } ~
+        path("pairs") {
+          (get & pathEnd) {
+            complete(targetRole.keyPairs(repoId))
+          }
+        }
       }
     }
-  }
 }
 
 object ClientRootGenRequest {

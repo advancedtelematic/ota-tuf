@@ -24,7 +24,7 @@ class ReposerverHttpClientSpec extends TufReposerverSpec
     val ns = Namespace(RepoId.generate.toString)
     client.createRoot(ns).futureValue shouldBe a[RepoId]
     client.addTarget(ns, "filename", Uri("http://example.com"),
-                     Sha256Digest.digest("hi".getBytes), 42, BINARY).futureValue shouldBe ()
+                     Sha256Digest.digest("hi".getBytes), 42, BINARY).futureValue shouldBe(())
   }
 
   test("can't add target to nonexistant repo") {

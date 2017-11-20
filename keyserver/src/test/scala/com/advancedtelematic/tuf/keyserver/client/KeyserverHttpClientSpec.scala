@@ -4,10 +4,12 @@ import java.security.interfaces.RSAPublicKey
 
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, KeyId, RSATufKey, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufKeyPair, EdTufPrivateKey, KeyId, RSATufKey, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverHttpClient
+import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 import com.advancedtelematic.tuf.util.{HttpClientSpecSupport, ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
 import eu.timepit.refined.refineV
@@ -15,6 +17,7 @@ import io.circe.Json
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Millis, Seconds, Span}
 
+import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
 
 class KeyserverHttpClientSpec extends TufKeyserverSpec
@@ -55,7 +58,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
     val f = createAndProcessRoot(repoId)
 
     whenReady(f) { _ =>
-      val (publicKey, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
+      val publicKey = TufCrypto.generateKeyPair(EdKeyType, 256).pubkey
 
       val rootRoleF = for {
         _ <- client.addTargetKey(repoId, publicKey)
@@ -168,11 +171,27 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
     val f = createAndProcessRoot(repoId)
 
     whenReady(f) { _ =>
-      val (edPublicKey, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
+      val edPublicKey = TufCrypto.generateKeyPair(EdKeyType, 256).pubkey
       val rsa = RSATufKey(edPublicKey.keyval)
       val error = client.addTargetKey(repoId, rsa).failed.futureValue
 
       error.getMessage should include("Key is not an RSAPublicKey")
     }
+  }
+
+  test("fetching target key pairs") {
+    val keyGenerationOp = new KeyGenerationOp(fakeVault)
+
+    val repoId = RepoId.generate()
+    val keyGenRequest = KeyGenRequest(KeyGenId.generate(),
+      repoId, KeyGenRequestStatus.REQUESTED, RoleType.TARGETS, 2048, RsaKeyType)
+
+    async {
+      await(keyGenRepo.persist(keyGenRequest))
+      val generatedKeys = await(keyGenerationOp.processGenerationRequest(keyGenRequest))
+      val pairs = await(client.fetchTargetKeyPairs(repoId))
+      pairs.map(_.pubkey.keyval) shouldBe generatedKeys.map(_.publicKey)
+    }.futureValue
+
   }
 }

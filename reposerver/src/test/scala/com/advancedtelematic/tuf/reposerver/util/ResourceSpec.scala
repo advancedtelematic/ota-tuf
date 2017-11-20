@@ -49,7 +49,7 @@ object FakeKeyserverClient extends KeyserverClient {
   def publicKey(repoId: RepoId, roleType: RoleType): PublicKey = keys.get(repoId)(roleType).getPublic
 
   private lazy val preGeneratedKeys = RoleType.ALL.map { role =>
-    val (publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
+    val RSATufKeyPair(publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
     role -> new KeyPair(publicKey.keyval, privateKey.keyval)
   }.toMap
 
@@ -149,6 +149,12 @@ object FakeKeyserverClient extends KeyserverClient {
     })
 
     RSATufPrivateKey(keyPair.getPrivate)
+  }
+
+  override def fetchTargetKeyPairs(repoId: RepoId): Future[Seq[TufKeyPair]] =  FastFuture.successful {
+    val keyPair = keys.asScala.getOrElse(repoId, throw RoleKeyNotFound).getOrElse(RoleType.TARGETS, throw RoleKeyNotFound)
+
+    Seq(RSATufKeyPair(RSATufKey(keyPair.getPublic), RSATufPrivateKey(keyPair.getPrivate)))
   }
 }
 

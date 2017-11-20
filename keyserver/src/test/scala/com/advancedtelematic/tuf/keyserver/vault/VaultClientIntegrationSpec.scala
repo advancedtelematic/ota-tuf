@@ -8,8 +8,8 @@ import akka.http.scaladsl.model.{HttpMethods, HttpRequest, StatusCodes, Uri}
 import akka.stream.ActorMaterializer
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.crypt.TufCrypto._
-import com.advancedtelematic.libtuf.data.TufCodecs.tufKeyEncoder
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, RsaKeyType}
+import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, RSATufKeyPair, RsaKeyType}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.{VaultKey, VaultKeyNotFound}
 import com.advancedtelematic.tuf.util.TufKeyserverSpec
 import io.circe.Json
@@ -30,7 +30,7 @@ class VaultClientIntegrationSpec extends TufKeyserverSpec
   lazy val vault = VaultClient(vaultAddr, vaultToken, vaultMount)
 
   test("creates/finds a key") {
-    val (publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
+    val RSATufKeyPair(publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
 
     vault.createKey(VaultKey(publicKey.id, RsaKeyType,publicKey.keyval.toPem,privateKey)).futureValue
 
@@ -38,7 +38,7 @@ class VaultClientIntegrationSpec extends TufKeyserverSpec
   }
 
   test("deletes a key") {
-    val (publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
+    val RSATufKeyPair(publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
 
     vault.createKey(VaultKey(publicKey.id, RsaKeyType, publicKey.keyval.toPem,privateKey)).futureValue
 
@@ -52,21 +52,21 @@ class VaultClientIntegrationSpec extends TufKeyserverSpec
   }
 
   test("can store ed25519 key") {
-    val (publicKey, privateKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val pair = TufCrypto.generateKeyPair(EdKeyType, 256)
 
-    vault.createKey(VaultKey(publicKey.id, EdKeyType, publicKey.asJson.noSpaces, privateKey)).futureValue
+    vault.createKey(VaultKey(pair.pubkey.id, EdKeyType, pair.pubkey.asJson.noSpaces, pair.privkey)).futureValue
 
-    vault.findKey(publicKey.id).map(_.privateKey).futureValue.keyval.getEncoded shouldBe privateKey.keyval.getEncoded
+    vault.findKey(pair.pubkey.id).map(_.privateKey).futureValue.keyval.getEncoded shouldBe pair.privkey.keyval.getEncoded
   }
 
   test("can decode a legacy key") {
-    val (publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
+    val pair = TufCrypto.generateKeyPair(RsaKeyType, 2048)
 
-    val vaultKey = VaultKey(publicKey.id, EdKeyType, publicKey.asJson.noSpaces, privateKey)
+    val vaultKey = VaultKey(pair.pubkey.id, EdKeyType, pair.pubkey.asJson.noSpaces, pair.privkey)
 
-    val legacyJson = vaultKey.asJson.deepMerge(Json.obj("privateKey" → privateKey.keyval.toPem.asJson))
+    val legacyJson = vaultKey.asJson.deepMerge(Json.obj("privateKey" → pair.privkey.keyval.toPem.asJson))
 
-    val req = HttpRequest(HttpMethods.POST, vaultAddr.withPath((Uri.Path.Empty / "v1" ++ Slash(vaultMount)) / publicKey.id.value))
+    val req = HttpRequest(HttpMethods.POST, vaultAddr.withPath((Uri.Path.Empty / "v1" ++ Slash(vaultMount)) / pair.pubkey.id.value))
       .withEntity(legacyJson.noSpaces)
       .withHeaders(RawHeader("X-Vault-Token", vaultToken))
 
@@ -74,6 +74,6 @@ class VaultClientIntegrationSpec extends TufKeyserverSpec
 
     _http.singleRequest(req).futureValue.status shouldBe StatusCodes.NoContent
 
-    vault.findKey(publicKey.id).map(_.privateKey).futureValue shouldBe privateKey
+    vault.findKey(pair.pubkey.id).map(_.privateKey).futureValue shouldBe pair.privkey
   }
 }

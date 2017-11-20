@@ -3,7 +3,7 @@ package com.advancedtelematic.tuf.cli.repo
 import java.nio.file.{Files, Path}
 
 import cats.syntax.either._
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, TufKey, TufKeyPair, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.KeyName
 import org.slf4j.LoggerFactory
 
@@ -30,16 +30,23 @@ class CliKeyStorage(repo: Path) {
     Files.write(keyName.privateKeyPath, tufKey.asJson.spaces2.getBytes)
   }
 
-  def writeKeys(name: KeyName, pub: TufKey, priv: TufPrivateKey): Try[Unit] = for {
-    _ <- Try(Files.createDirectories(repo.resolve("keys")))
-    _ <- writePublic(name, pub)
-    _ <- writePrivate(name, priv)
-    _ = log.info(s"Saved keys to $repo/{${repo.relativize(name.privateKeyPath)}, ${repo.relativize(name.publicKeyPath)}}")
-  } yield ()
+  def writeKeys(name: KeyName, pair: TufKeyPair): Try[Unit] =
+    writeKeys(name, pair.pubkey, pair.privkey)
 
-  def genKeys(name: KeyName, keyType: KeyType, keySize: Int): Try[(TufKey, TufPrivateKey)] = {
-    val (pub, priv) = keyType.crypto.generateKeyPair(keySize)
-    writeKeys(name, pub, priv).map(_ => pub -> priv)
+  def writeKeys(name: KeyName, pub: TufKey, priv: TufPrivateKey): Try[Unit] = {
+    assert(pub.keytype == priv.keytype)
+
+    for {
+      _ <- Try(Files.createDirectories(repo.resolve("keys")))
+      _ <- writePublic(name, pub)
+      _ <- writePrivate(name, priv)
+      _ = log.info(s"Saved keys to $repo/{${repo.relativize(name.privateKeyPath)}, ${repo.relativize(name.publicKeyPath)}}")
+    } yield ()
+  }
+
+  def genKeys(name: KeyName, keyType: KeyType, keySize: Int): Try[TufKeyPair] = {
+    val pair = keyType.crypto.generateKeyPair(keySize)
+    writeKeys(name, pair).map(_ => pair)
   }
 
   def readPrivateKey(keyName: KeyName): Try[TufPrivateKey] =
