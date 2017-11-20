@@ -203,6 +203,7 @@ class RepoResourceSpec extends TufReposerverSpec
     Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       signaturesShouldBeValid(newRepoId, RoleType.ROOT, responseAs[SignedPayload[RootRole]])
+      header("x-ats-tuf-repo-id").get.value() shouldBe newRepoId.uuid.toString
     }
   }
 

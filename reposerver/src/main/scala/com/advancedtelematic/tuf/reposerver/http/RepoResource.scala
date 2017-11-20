@@ -5,7 +5,7 @@ import java.net.URI
 import akka.http.scaladsl.unmarshalling._
 import PredefinedFromStringUnmarshallers.CsvSeq
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
-import akka.http.scaladsl.model.headers.{ETag, EntityTag, `If-Match`}
+import akka.http.scaladsl.model.headers.{ETag, EntityTag, RawHeader, `If-Match`}
 import akka.http.scaladsl.model.{HttpResponse, StatusCodes, Uri}
 import akka.http.scaladsl.server._
 import cats.data.Validated.{Invalid, Valid}
@@ -131,7 +131,9 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   private def findRole(repoId: RepoId, roleType: RoleType): Route = {
     onSuccess(signedRoleGeneration.findRole(repoId, roleType)) { signedRole =>
       conditional(EntityTag(signedRole.checksum.hash.value)) {
-        complete(signedRole.content)
+        respondWithHeader(RawHeader("x-ats-tuf-repo-id", repoId.uuid.toString)) {
+          complete(signedRole.content)
+        }
       }
     }
   }
