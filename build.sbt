@@ -55,7 +55,8 @@ lazy val commonSettings = Seq(
   resolvers += "version99 Empty loggers" at "http://version99.qos.ch",
   libatsVersion := "0.1.1-1-gf9dc44c",
   buildInfoOptions += BuildInfoOption.ToMap,
-  buildInfoOptions += BuildInfoOption.BuildTime) ++
+  buildInfoOptions += BuildInfoOption.BuildTime,
+  dependencyCheckAssemblyAnalyzerEnabled := Some(false)) ++
   Seq(inConfig(ItTest)(Defaults.testTasks): _*) ++
   Seq(inConfig(UnitTest)(Defaults.testTasks): _*) ++
   (testOptions in UnitTest := Seq(Tests.Filter(unitFilter))) ++
