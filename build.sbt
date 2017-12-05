@@ -22,8 +22,8 @@ lazy val commonDeps = libraryDependencies ++= {
 }
 
 lazy val serverDependencies = libraryDependencies ++= {
-  lazy val akkaV = "2.4.17"
-  lazy val akkaHttpV = "10.0.3"
+  lazy val akkaV = "2.5.7"
+  lazy val akkaHttpV = "10.0.10"
   lazy val libatsV = libatsVersion.value
   lazy val slickV = "3.2.0"
 
@@ -53,7 +53,7 @@ lazy val commonSettings = Seq(
   resolvers += "ATS Releases" at "http://nexus.advancedtelematic.com:8081/content/repositories/releases",
   resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content/repositories/snapshots",
   resolvers += "version99 Empty loggers" at "http://version99.qos.ch",
-  libatsVersion := "0.1.0-5-g6b585f0",
+  libatsVersion := "0.1.1-1-gf9dc44c",
   buildInfoOptions += BuildInfoOption.ToMap,
   buildInfoOptions += BuildInfoOption.BuildTime) ++
   Seq(inConfig(ItTest)(Defaults.testTasks): _*) ++
