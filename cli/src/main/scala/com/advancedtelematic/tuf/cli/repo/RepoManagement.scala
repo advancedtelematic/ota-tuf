@@ -2,7 +2,7 @@ package com.advancedtelematic.tuf.cli.repo
 
 import java.io._
 import java.nio.file.{Files, Path}
-import java.util.zip.{ZipEntry, ZipFile, ZipOutputStream}
+import java.util.zip.{ZipEntry, ZipException, ZipFile, ZipOutputStream}
 
 import cats.implicits._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRoleOps
@@ -18,6 +18,7 @@ import io.circe.jawn._
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Json}
 import org.slf4j.LoggerFactory
+
 import scala.collection.JavaConversions._
 import scala.concurrent.ExecutionContext
 import scala.io.Source
@@ -56,20 +57,16 @@ object RepoManagement {
       val entries = src.entries().map { zipEntry =>
         val is = src.getInputStream(zipEntry)
 
-        val copyTry =
-          if (
-            zipEntry.getName != "treehub.json" &&
-              zipEntry.getName != zipTargetKeyName.publicKeyName &&
-              zipEntry.getName != zipTargetKeyName.privateKeyName) {
-            Try {
-              dest.putNextEntry(zipEntry)
-              dest.write(toByteArray(is))
-            }
-          } else {
-            Success(())
+        if (zipEntry.getName != zipTargetKeyName.publicKeyName &&
+          zipEntry.getName != zipTargetKeyName.privateKeyName) {
+          // ignoring any errors here
+          Try {
+            dest.putNextEntry(zipEntry)
+            dest.write(toByteArray(is))
           }
+        }
 
-        copyTry.flatMap { _ => Try(dest.closeEntry()) }
+        Try(dest.closeEntry())
       }
 
       entries.toList.sequenceU.map(_ => ())
@@ -113,12 +110,12 @@ object RepoManagement {
         val t = for {
           (pubKey, privKey) <- repo.keyStorage.readKeyPair(targetKey)
           _ <- copyAuth(sourceZip, zipExportStream)
-          _ ← copyEntries(sourceZip, zipExportStream)
           _ ← copyKeyPair(pubKey, privKey, zipExportStream)
           _ <- copyRole[RootRole](repo, zipExportStream).recover {
             case ex =>
               _log.warn(s"Could not copy RootRole: ${ex.getMessage}")
           }
+          _ ← copyEntries(sourceZip, zipExportStream)
         } yield ()
 
         Try(sourceZip.close())
