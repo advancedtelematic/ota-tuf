@@ -9,8 +9,10 @@ import org.scalatest.prop.Whenever
 import org.scalatest.{BeforeAndAfterAll, Inspectors}
 import cats.syntax.show._
 import com.advancedtelematic.libats.auth.NamespaceDirectives
+import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
+import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
 import scala.concurrent.ExecutionContext
@@ -18,7 +20,7 @@ import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 
 class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
-  with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration {
+  with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration with RepoNamespaceRepositorySupport {
 
   implicit val ec = ExecutionContext.global
 
@@ -36,7 +38,13 @@ class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
   test("reject when repo does not belong to namespace") {
     val repoId = RepoId.generate()
 
-    Post(s"/repo/${repoId.show}/targets/myfile", testFile) ~> Route.seal(routes) ~> check {
+    withNamespace("rejectit") { implicit ns =>
+      Post(s"/repo/${repoId.show}").namespaced ~> Route.seal(routes) ~> check {
+        status shouldBe StatusCodes.OK
+      }
+    }
+
+    Get(s"/repo/${repoId.show}/root.json") ~> Route.seal(routes) ~> check {
       status shouldBe StatusCodes.Forbidden
     }
   }

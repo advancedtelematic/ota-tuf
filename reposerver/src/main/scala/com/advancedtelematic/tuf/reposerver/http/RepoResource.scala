@@ -34,6 +34,7 @@ import com.advancedtelematic.libats.http.UUIDKeyPath._
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.Settings
 import com.advancedtelematic.libtuf_server.data.Marshalling._
+import com.advancedtelematic.tuf.reposerver.http.Errors.NoRepoForNamespace
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
 import io.circe.syntax._
@@ -74,7 +75,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   private def UserRepoId(namespace: Namespace): Directive1[RepoId] = Directive.Empty.tflatMap { _ =>
     onComplete(repoNamespaceRepo.findFor(namespace)).flatMap {
       case Success(repoId) => provide(repoId)
-      case Failure(_: MissingEntity[_]) => failWith(MissingEntity[Namespace]())
+      case Failure(_: MissingEntity[_]) => failWith(NoRepoForNamespace(namespace))
       case Failure(ex) => failWith(ex)
     }
   }
