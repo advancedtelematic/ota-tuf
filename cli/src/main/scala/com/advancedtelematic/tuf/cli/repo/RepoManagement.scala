@@ -2,7 +2,7 @@ package com.advancedtelematic.tuf.cli.repo
 
 import java.io._
 import java.nio.file.{Files, Path}
-import java.util.zip.{ZipEntry, ZipException, ZipFile, ZipOutputStream}
+import java.util.zip.{ZipEntry, ZipFile, ZipOutputStream}
 
 import cats.implicits._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRoleOps
@@ -12,7 +12,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
-import com.advancedtelematic.tuf.cli.repo.TufRepo.UnknownInitFile
+import com.advancedtelematic.tuf.cli.repo.TufRepo.{RepoAlreadyInitialized, UnknownInitFile}
 import com.advancedtelematic.tuf.cli.CliCodecs._
 import io.circe.jawn._
 import io.circe.syntax._
@@ -29,17 +29,24 @@ object RepoManagement {
 
   private lazy val _log = LoggerFactory.getLogger(this.getClass)
 
-  def initialize(repoName: RepoName, repoPath: Path, initFilePath: Path)(implicit ec: ExecutionContext): Try[TufRepo] = Try {
-    Files.createDirectories(repoPath.resolve("keys"))
-    initFilePath.getFileName.toString
-  }.flatMap { name =>
-    if (name.endsWith(".json")) {
-      JsonRepoInitialization.init(repoName, repoPath, initFilePath)
-    } else if (name.endsWith(".zip")) {
-      ZipRepoInitialization.init(repoName, repoPath, zipTargetKeyName, initFilePath)
-    } else {
-      Failure(UnknownInitFile(initFilePath))
+  def initialize(repoName: RepoName, repoPath: Path, initFilePath: Path)(implicit ec: ExecutionContext): Try[TufRepo] =
+    ensureRepoNotExists(repoPath).map { _ =>
+      Files.createDirectories(repoPath.resolve("keys"))
+      initFilePath.getFileName.toString
+    }.flatMap { name =>
+      if (name.endsWith(".json"))
+        JsonRepoInitialization.init(repoName, repoPath, initFilePath)
+      else if (name.endsWith(".zip"))
+        ZipRepoInitialization.init(repoName, repoPath, zipTargetKeyName, initFilePath)
+      else
+        Failure(UnknownInitFile(initFilePath))
     }
+
+  private def ensureRepoNotExists(repoPath: Path): Try[Unit] = {
+    if(Files.exists(repoPath.resolve("keys")))
+      Failure(RepoAlreadyInitialized(repoPath))
+    else
+      Success(())
   }
 
   def export(repo: TufRepo, targetKey: KeyName, exportPath: Path): Try[Unit] = {
