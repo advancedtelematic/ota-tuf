@@ -43,6 +43,8 @@ object TufRepo {
     s"unknown file extension for repo init: $path"
   )
 
+  case class RepoAlreadyInitialized(path: Path) extends Exception(s"Repository at $path was already initialized") with NoStackTrace
+
   case class TargetsPullError(msg: String) extends Exception(msg) with NoStackTrace
 }
 

@@ -12,9 +12,10 @@ import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.tuf.cli.CliCodecs.authConfigDecoder
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.tuf.cli.repo.TufRepo.RepoAlreadyInitialized
 import io.circe.syntax._
 
-import scala.util.{Success, Try}
+import scala.util.{Failure, Success, Try}
 
 class RepoManagementSpec extends CliSpec {
 
@@ -34,6 +35,16 @@ class RepoManagementSpec extends CliSpec {
     repoT shouldBe a[Success[_]]
 
     repoT.get.authConfig().get shouldBe a[AuthConfig]
+  }
+
+  test("throws error for already initialized repos") {
+    val path = randomRepoPath
+
+    val repoT = RepoManagement.initialize(randomName, path, credentialsZip)
+    repoT shouldBe a[Success[_]]
+
+    val repoF = RepoManagement.initialize(randomName, path, credentialsZip)
+    repoF shouldBe Failure(RepoAlreadyInitialized(path))
   }
 
   test("can initialize repo from ZIP file") {
@@ -99,20 +110,15 @@ class RepoManagementSpec extends CliSpec {
 
   test("can export zip file") {
     val repo = RepoManagement.initialize(randomName, randomRepoPath, credentialsZip).get
-
-    // overwrite with different auth values:
-    RepoManagement.initialize(repo.name, repo.repoPath, treehubCredentials)
-
     repo.genKeys(KeyName("default-key"), EdKeyType, 256)
 
     val tempPath = Files.createTempFile("tuf-repo-spec-export", ".zip")
-
     RepoManagement.export(repo, KeyName("default-key"), tempPath) shouldBe Try(())
 
     // test the exported zip file by creating another repo from it:
     val repoFromExported = RepoManagement.initialize(randomName, randomRepoPath, tempPath).get
     val credJson = parseFile(repoFromExported.repoPath.resolve("auth.json").toFile)
     val oauth2Val = credJson.right.get.as[AuthConfig]
-    oauth2Val.right.get.client_id shouldBe "fake-client-id"
+    oauth2Val.right.get.client_id shouldBe "8f505046-bf38-4e17-a0bc-8a289bbd1403"
   }
 }
