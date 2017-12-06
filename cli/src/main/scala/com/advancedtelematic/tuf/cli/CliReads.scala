@@ -10,8 +10,7 @@ import scopt.Read
 import shapeless._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.tuf.cli.DataType.AuthConfig
-
+import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, RepoConfig}
 
 object CliCodecs {
   import io.circe.generic.semiauto._
@@ -19,6 +18,9 @@ object CliCodecs {
 
   implicit val authConfigDecoder = deriveDecoder[AuthConfig]
   implicit val authConfigEncoder = deriveEncoder[AuthConfig]
+
+  implicit val repoConfigEncoder = deriveEncoder[RepoConfig]
+  implicit val repoConfigDecoder = deriveDecoder[RepoConfig]
 }
 
 object CliReads {

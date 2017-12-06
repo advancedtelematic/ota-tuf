@@ -63,7 +63,8 @@ case class Config(command: Command,
                   keySize: Int = 2048,
                   inputPath: Path = Paths.get("empty"),
                   exportPath: Path = Paths.get(""),
-                  reposerverUrl: Option[URI] = None)
+                  reposerverUrl: Option[URI] = None,
+                  useAuth: Boolean = true)
 
 object Cli extends App with VersionInfo {
   import CliReads._
@@ -89,8 +90,9 @@ object Cli extends App with VersionInfo {
       c.copy(repoName = name)
     }
 
-    opt[URI]("reposerver").action { (arg, c) =>
-      c.copy(reposerverUrl = arg.some)
+    opt[String]("reposerver").action { (_, c) =>
+      log.warn("--reposerver: This option has no effect when not used with command <init>")
+      c
     }
 
     cmd("init")
@@ -99,6 +101,12 @@ object Cli extends App with VersionInfo {
       }
       .text("Initialize an empty repository")
       .children(
+        opt[URI]("reposerver").action { (arg, c) =>
+          c.copy(reposerverUrl = arg.some)
+        },
+        opt[Unit]("no-auth").action { (arg, c) =>
+          c.copy(useAuth = false)
+        },
         opt[Path]("credentials")
           .abbr("c")
           .text("path to credentials file, treehub.json or credentials.zip")
@@ -172,7 +180,7 @@ object Cli extends App with VersionInfo {
       )
 
     cmd("targets")
-      .action { (_, c) =>
+      .action { (_,c) =>
         c.copy(command = InitTargets)
       }
       .children(
@@ -309,14 +317,14 @@ object Cli extends App with VersionInfo {
 
     lazy val tufRepo = new TufRepo(config.repoName, repoPath)
 
-    lazy val repoServer = UserReposerverHttpClient.forRepo(tufRepo, config.reposerverUrl)
+    lazy val repoServer = UserReposerverHttpClient.forRepo(tufRepo)
 
     val f: Future[_] = config.command match {
       case GenKeys =>
         tufRepo.genKeys(config.rootKey, config.keyType, config.keySize).toFuture
 
       case InitRepo =>
-        RepoManagement.initialize(config.repoName, repoPath, config.credentialsPath)
+        RepoManagement.initialize(config.repoName, repoPath, config.credentialsPath, config.reposerverUrl, useAuth = config.useAuth)
           .map(_ => log.info(s"Finished init for ${config.repoName.value} using ${config.credentialsPath}"))
           .toFuture
 

@@ -29,7 +29,7 @@ class UserReposerverClientSpec extends TufReposerverSpec
 
   val repoId = RepoId.generate()
 
-  val client = new UserReposerverHttpClient(URI.create("http://localhost"), testClient, "")
+  val client = new UserReposerverHttpClient(URI.create("http://localhost"), testClient, token = None)
 
   override def beforeAll(): Unit = {
     super.beforeAll()

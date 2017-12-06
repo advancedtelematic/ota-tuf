@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.cli
 
+import java.io.InputStream
 import java.nio.file.Path
 
 import cats.data.Validated.{Invalid, Valid}
@@ -14,12 +15,20 @@ import cats.syntax.either._
 import io.circe.jawn.parseFile
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
+import io.circe.Decoder
+
+import scala.io.Source
+import scala.util.Try
 
 object CliUtil {
 
   private val _log = LoggerFactory.getLogger(this.getClass)
 
   case class InvalidPayload(msg: String) extends Throwable(msg) with NoStackTrace
+
+  def readJsonFrom[T](is: InputStream)(implicit decoder: Decoder[T]): Try[T] = {
+    io.circe.parser.parse(Source.fromInputStream(is).mkString).flatMap(_.as[T](decoder)).toTry
+  }
 
   def verifyRootFile(rootPath: Path): Future[SignedPayload[RootRole]] = {
     val validatedPayload =

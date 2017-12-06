@@ -16,9 +16,9 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetName, TargetVersion, TufKey, TufKeyPair, TufPrivateKey, ValidTargetFilename}
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
-import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
+import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoConfig, RepoName}
 import com.advancedtelematic.tuf.cli.repo.TufRepo.{EtagsNotFound, TargetsPullError}
-import com.advancedtelematic.tuf.cli.CliCodecs
+import com.advancedtelematic.tuf.cli.{CliCodecs, CliUtil}
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.refineV
 import io.circe.jawn.parseFile
@@ -31,21 +31,38 @@ import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.TargetsRespo
 
 import scala.collection.JavaConversions._
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util
 import scala.util.control.NoStackTrace
-import scala.util.{Failure, Try}
+import scala.util.{Failure, Success, Try}
 
 object TufRepo {
+  import CliCodecs._
+
   case object EtagsNotFound extends Exception(
     "Could not find targets etags file. You need this to push a new targets file. Etags can be obtained using the pull command"
   ) with NoStackTrace
 
   case class UnknownInitFile(path: Path) extends Exception(
     s"unknown file extension for repo init: $path"
-  )
+  ) with NoStackTrace
+
+  case class MissingCredentialsZipFile(filename: String) extends Exception(
+    s"Missing file from credentials.zip: $filename"
+  ) with NoStackTrace
 
   case class RepoAlreadyInitialized(path: Path) extends Exception(s"Repository at $path was already initialized") with NoStackTrace
 
   case class TargetsPullError(msg: String) extends Exception(msg) with NoStackTrace
+
+  protected [repo] def readConfigFile(repoPath: Path): Try[RepoConfig] =
+    Try { new FileInputStream(repoPath.resolve("config.json").toFile) }
+      .flatMap { is => CliUtil.readJsonFrom[RepoConfig](is) }
+
+  protected [repo] def writeConfigFile(repoPath: Path, repoUri: URI, authConfig: Option[AuthConfig]): Try[RepoConfig] = Try {
+    val repoConfig = RepoConfig(repoUri, authConfig)
+    Files.write(repoPath.resolve("config.json"), repoConfig.asJson.spaces2.getBytes)
+    repoConfig
+  }
 }
 
 class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionContext) {
@@ -205,8 +222,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     keyStorage.readPublicKey(keyName).toFuture.flatMap(reposerver.pushTargetsKey)
   }
 
-  def authConfig(): Try[AuthConfig] =
-    parseFile(repoPath.resolve("auth.json").toFile)
-      .flatMap(_.as[AuthConfig])
-      .toTry
+  def authConfig: Try[Option[AuthConfig]] = TufRepo.readConfigFile(repoPath).map(_.auth)
+
+  def repoServerUri: Try[URI] = TufRepo.readConfigFile(repoPath).map(_.reposerver)
 }
