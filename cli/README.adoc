@@ -33,7 +33,7 @@ pulled/pushed.
 
 4. Sign new targets.json
 
-   garage-sign targets sign --repo buchtel --key-name <targets key used to rotate> 
+   garage-sign targets sign --repo buchtel --key-name <targets key used to rotate>
 
 5. Push new targets.json
 
@@ -44,7 +44,7 @@ pulled/pushed.
 1. Initialize a local ota-plus cache using credentials.zip downloaded
 from ATS Garage or treehub.json inside of it:
 
-    garage-sign init --repo buchtel --credentials treehub.json
+    garage-sign init --repo buchtel --credentials treehub.json --reposerver <reposerver uri>
 +
 or
 +
@@ -102,4 +102,3 @@ targets is not the same as the user rotating the root keys, you'll
 need to export the new credentials:
 
     garage-sign  export-credentials --repo buchtel --target-key-name targets --to creds_export.zip
-

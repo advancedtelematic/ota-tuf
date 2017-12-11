@@ -27,7 +27,6 @@ vault, see above.
 
     sbt it:test
 
-
 ## Teamcity jobs
 
 In the `deploy` directory there are some scripts you can use to setup

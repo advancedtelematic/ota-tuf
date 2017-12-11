@@ -38,11 +38,16 @@ trait UserReposerverClient {
 
 class UserReposerverHttpClient(reposerverUri: URI,
                                httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]],
-                               token: String)(implicit ec: ExecutionContext)
+                               token: Option[String])(implicit ec: ExecutionContext)
   extends SHttpjServiceClient(httpClient) with UserReposerverClient {
 
   override protected def execHttp[T : ClassTag : Decoder](request: HttpRequest)(errorHandler: PartialFunction[Int, Future[T]]) =
-    super.execHttp(request.header("Authorization", s"Bearer $token"))(errorHandler)
+    token match {
+      case Some(t) =>
+        super.execHttp(request.header("Authorization", s"Bearer $t"))(errorHandler)
+      case None =>
+        super.execHttp(request)(errorHandler)
+    }
 
   private def apiUri(path: String): String =
     URI.create(reposerverUri.toString + "/api/v1/user_repo/" + path).toString

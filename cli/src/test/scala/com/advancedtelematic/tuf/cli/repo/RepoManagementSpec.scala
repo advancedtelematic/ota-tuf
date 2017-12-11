@@ -1,18 +1,18 @@
 package com.advancedtelematic.tuf.cli.repo
 
+import java.net.URI
 import java.nio.file.{Files, Path, Paths}
 import java.time.Instant
 
 import io.circe.jawn._
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, RoleType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.{CliSpec, RandomNames}
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.tuf.cli.CliCodecs.authConfigDecoder
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.tuf.cli.repo.TufRepo.RepoAlreadyInitialized
+import com.advancedtelematic.tuf.cli.repo.TufRepo.{MissingCredentialsZipFile, RepoAlreadyInitialized}
 import io.circe.syntax._
 
 import scala.util.{Failure, Success, Try}
@@ -22,19 +22,32 @@ class RepoManagementSpec extends CliSpec {
   lazy val treehubCredentials: Path = Paths.get(this.getClass.getResource("/treehub.json").toURI)
   lazy val credentialsZip: Path = Paths.get(this.getClass.getResource("/credentials.zip").toURI)
   lazy val credentialsZipNoTargets: Path = Paths.get(this.getClass.getResource("/credentials_notargets.zip").toURI)
+  lazy val credentialsZipNoTufRepo: Path = Paths.get(this.getClass.getResource("/credentials_no_tufrepo.zip").toURI)
 
   import scala.concurrent.ExecutionContext.Implicits.global
+
+  val fakeRepoUri = Some(new URI("https://test-reposerver"))
 
   def randomName = RepoName(RandomNames() + "-repo")
 
   def randomRepoPath = Files.createTempDirectory("tuf-repo")
 
   test("can read auth config for an initialized repo") {
-    val repoT = RepoManagement.initialize(randomName, randomRepoPath, treehubCredentials)
+    val repoT = RepoManagement.initialize(randomName, randomRepoPath, treehubCredentials, fakeRepoUri)
 
     repoT shouldBe a[Success[_]]
 
-    repoT.get.authConfig().get shouldBe a[AuthConfig]
+    repoT.get.authConfig.get.get shouldBe a[AuthConfig]
+  }
+
+  test("throws error when repo is initialized with json file but no uri") {
+    val repoT = RepoManagement.initialize(randomName, randomRepoPath, treehubCredentials, repoUri = None)
+    repoT.failed.get shouldBe a[IllegalArgumentException]
+  }
+
+  test("credentials.zip without tufrepo.url throws proper error") {
+    val repoT = RepoManagement.initialize(randomName, randomRepoPath, credentialsZipNoTufRepo)
+    repoT.failed.get shouldBe MissingCredentialsZipFile("tufrepo.url")
   }
 
   test("throws error for already initialized repos") {
@@ -52,6 +65,12 @@ class RepoManagementSpec extends CliSpec {
     repoT shouldBe a[Success[_]]
   }
 
+  test("can initialize repo from ZIP file specifying custom repo") {
+    val repoT = RepoManagement.initialize(randomName, randomRepoPath, credentialsZip, repoUri = Some(new URI("https://ats.com")))
+    repoT shouldBe a[Success[_]]
+    repoT.flatMap(_.repoServerUri).get.toString shouldBe "https://ats.com"
+  }
+
   test("can initialize repo from ZIP file without targets keys") {
     val repoT = RepoManagement.initialize(randomName, randomRepoPath, credentialsZipNoTargets)
     repoT shouldBe a[Success[_]]
@@ -64,7 +83,7 @@ class RepoManagementSpec extends CliSpec {
 
     val repo = repoT.get
 
-    repo.authConfig().get shouldBe a[AuthConfig]
+    repo.authConfig.get.get shouldBe a[AuthConfig]
     parseFile(repo.repoPath.resolve("keys/targets.pub").toFile).flatMap(_.as[TufKey]).valueOr(throw _) shouldBe a[EdTufKey]
     parseFile(repo.repoPath.resolve("keys/targets.sec").toFile).flatMap(_.as[TufPrivateKey]).valueOr(throw _) shouldBe a[EdTufPrivateKey]
   }
@@ -79,7 +98,7 @@ class RepoManagementSpec extends CliSpec {
   }
 
   test("creates base credentials.zip if one does not exist") {
-    val repo = RepoManagement.initialize(randomName, randomRepoPath, treehubCredentials).get
+    val repo = RepoManagement.initialize(randomName, randomRepoPath, treehubCredentials, fakeRepoUri).get
     val tempPath = Files.createTempFile("cli-export", ".zip")
 
     repo.genKeys(KeyName("targets"), EdKeyType, 256).get
@@ -92,7 +111,7 @@ class RepoManagementSpec extends CliSpec {
   }
 
   test("export includes root.json") {
-    val repo = RepoManagement.initialize(randomName, randomRepoPath, treehubCredentials).get
+    val repo = RepoManagement.initialize(randomName, randomRepoPath, treehubCredentials, fakeRepoUri).get
     val tempPath = Files.createTempFile("tuf-repo-spec-export", ".zip")
 
     repo.genKeys(KeyName("targets"), EdKeyType, 256).get
@@ -117,8 +136,18 @@ class RepoManagementSpec extends CliSpec {
 
     // test the exported zip file by creating another repo from it:
     val repoFromExported = RepoManagement.initialize(randomName, randomRepoPath, tempPath).get
-    val credJson = parseFile(repoFromExported.repoPath.resolve("auth.json").toFile)
-    val oauth2Val = credJson.right.get.as[AuthConfig]
-    oauth2Val.right.get.client_id shouldBe "8f505046-bf38-4e17-a0bc-8a289bbd1403"
+    repoFromExported.authConfig.get.map(_.client_id).get shouldBe "8f505046-bf38-4e17-a0bc-8a289bbd1403"
+  }
+
+  test("export uses configured tuf url, not what came in the original file") {
+    val repo = RepoManagement.initialize(randomName, randomRepoPath, credentialsZip, repoUri = Some(new URI("https://someotherrepo.com"))).get
+    repo.genKeys(KeyName("default-key"), EdKeyType, 256)
+
+    val tempPath = Files.createTempFile("tuf-repo-spec-export", ".zip")
+    RepoManagement.export(repo, KeyName("default-key"), tempPath) shouldBe Try(())
+
+    // test the exported zip file by creating another repo from it:
+    val repoFromExported = RepoManagement.initialize(randomName, randomRepoPath, tempPath).get
+    repoFromExported.repoServerUri.get.toString shouldBe "https://someotherrepo.com"
   }
 }

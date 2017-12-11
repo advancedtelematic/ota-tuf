@@ -12,5 +12,7 @@ object DataType {
 
   case class AuthConfig(server: URI, client_id: String, client_secret: String)
 
+  case class RepoConfig(reposerver: URI, auth: Option[AuthConfig])
+
   case class AuthPlusToken(value: String) extends AnyVal
 }
