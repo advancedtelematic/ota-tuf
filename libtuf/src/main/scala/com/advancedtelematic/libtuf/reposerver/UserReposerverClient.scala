@@ -71,7 +71,7 @@ class UserReposerverHttpClient(reposerverUri: URI,
     val req = Http(apiUri("targets.json")).method("GET")
     execHttp[SignedPayload[TargetsRole]](req)().map {
       case HttpResponse(payload, response) =>
-        val etag = response.header("ETag").map(ETag.apply)
+        val etag = response.header("ETag").map(_.replace("W/", "")).map(ETag.apply)
         TargetsResponse(payload, etag)
     }
   }
