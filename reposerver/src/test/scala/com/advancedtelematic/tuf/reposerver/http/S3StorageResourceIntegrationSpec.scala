@@ -10,7 +10,7 @@ import org.scalatest.{BeforeAndAfterAll, Inspectors}
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.prop.Whenever
 import RepoId._
-import cats.syntax.show.toShowOps
+import cats.syntax.show._
 import com.advancedtelematic.tuf.reposerver.Settings
 
 class S3StorageResourceIntegrationSpec extends TufReposerverSpec

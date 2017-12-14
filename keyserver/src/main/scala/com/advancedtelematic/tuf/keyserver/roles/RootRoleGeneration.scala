@@ -6,7 +6,6 @@ import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.tuf.keyserver.http.{Errors, RoleSigning}
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import slick.jdbc.MySQLProfile.api._
 import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
@@ -17,6 +16,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.tuf.keyserver.db._
+import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 
 class RootRoleGeneration(vaultClient: VaultClient)
                         (implicit val db: Database, val ec: ExecutionContext)

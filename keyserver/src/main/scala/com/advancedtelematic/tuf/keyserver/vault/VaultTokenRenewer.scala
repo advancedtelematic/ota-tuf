@@ -3,6 +3,7 @@ package com.advancedtelematic.tuf.keyserver.vault
 import akka.Done
 import akka.actor.{Actor, ActorLogging, Props, Status}
 import com.advancedtelematic.tuf.keyserver.vault.VaultTokenRenewer.{Renew, Renewed}
+
 import scala.concurrent.duration._
 import akka.pattern.{Backoff, BackoffSupervisor, pipe}
 

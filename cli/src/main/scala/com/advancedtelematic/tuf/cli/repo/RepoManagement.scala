@@ -73,7 +73,7 @@ object RepoManagement {
         Try(dest.closeEntry())
       }
 
-      entries.toList.sequenceU.map(_ => ())
+      entries.toList.sequence_
     }
 
     def copyKeyPair(pubKey: TufKey, privKey: TufPrivateKey, dest: ZipOutputStream): Try[Unit] = Try {

@@ -1,16 +1,16 @@
 package com.advancedtelematic.tuf.keyserver.roles
 
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, RoleType, SignedPayload, TufKey, TufKeyPair, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, RoleType, SignedPayload, TufKey, TufKeyPair}
 import com.advancedtelematic.tuf.keyserver.db.{KeyRepositorySupport, RoleRepositorySupport}
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKeyNotFound
 
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.tuf.keyserver.db.KeyRepository.KeyNotFound
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.Key
+import com.advancedtelematic.tuf.keyserver.vault.VaultClient
+import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultResourceNotFound
 import slick.jdbc.MySQLProfile.api._
 
 class RootRoleKeyEdit(vaultClient: VaultClient)
@@ -39,7 +39,7 @@ class RootRoleKeyEdit(vaultClient: VaultClient)
     } yield keyPair
 
     f.recoverWith {
-      case VaultKeyNotFound => Future.failed(KeyNotFound)
+      case VaultResourceNotFound => Future.failed(KeyNotFound)
     }
   }
 

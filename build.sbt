@@ -22,8 +22,8 @@ lazy val commonDeps = libraryDependencies ++= {
 }
 
 lazy val serverDependencies = libraryDependencies ++= {
-  lazy val akkaV = "2.5.7"
-  lazy val akkaHttpV = "10.0.10"
+  lazy val akkaV = "2.5.9"
+  lazy val akkaHttpV = "10.0.11"
   lazy val libatsV = libatsVersion.value
   lazy val slickV = "3.2.0"
 
@@ -48,12 +48,12 @@ lazy val commonSettings = Seq(
   organization := "com.advancedtelematic",
   scalaVersion := "2.11.11",
   crossScalaVersions := Seq("2.11.11", "2.12.2"),
-  scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8", "-Xexperimental"),
+  scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8", "-Xexperimental", "-Ypartial-unification"),
   scalacOptions in (Compile, console) ~= (_.filterNot(_ == "-Ywarn-unused-import")),
   resolvers += "ATS Releases" at "http://nexus.advancedtelematic.com:8081/content/repositories/releases",
   resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content/repositories/snapshots",
   resolvers += "version99 Empty loggers" at "http://version99.qos.ch",
-  libatsVersion := "0.1.1-1-gf9dc44c",
+  libatsVersion := "0.1.1-9-gf372cc9",
   buildInfoOptions += BuildInfoOption.ToMap,
   buildInfoOptions += BuildInfoOption.BuildTime,
   dependencyCheckAssemblyAnalyzerEnabled := Some(false)) ++

@@ -25,7 +25,7 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.keyserver.daemon.{DefaultKeyGenerationOp, KeyGenerationOp}
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport, RoleRepositorySupport}
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKeyNotFound
+import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultResourceNotFound
 import eu.timepit.refined.api.Refined
 import org.scalatest.time.{Millis, Seconds, Span}
 import io.circe.generic.semiauto._
@@ -82,7 +82,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
   test("POST creates roles with ED25519 keys if requested") {
     val repoId = RepoId.generate()
 
-    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(keyType = EdKeyType)) ~> routes ~> check {
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(keyType = Ec25519KeyType)) ~> routes ~> check {
       status shouldBe StatusCodes.Accepted
     }
 
@@ -99,7 +99,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       rootRole.keys should have size RoleType.ALL.size
 
       forAll(rootRole.keys.values) { key ⇒
-        key shouldBe a[EdTufKey]
+        key shouldBe a[Ec25519TufKey]
       }
     }
   }
@@ -297,7 +297,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       status shouldBe StatusCodes.NoContent
     }
 
-    fakeVault.findKey(rootKeyId).failed.futureValue shouldBe VaultKeyNotFound
+    fakeVault.findKey(rootKeyId).failed.futureValue shouldBe VaultResourceNotFound
   }
 
   test("DELETE on private_key wipes non root private key") {
@@ -314,7 +314,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       status shouldBe StatusCodes.NoContent
     }
 
-    fakeVault.findKey(keyId).failed.futureValue shouldBe VaultKeyNotFound
+    fakeVault.findKey(keyId).failed.futureValue shouldBe VaultResourceNotFound
   }
 
   test("wiping private key still allows download of root.json") {
@@ -470,7 +470,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       responseAs[RootRole]
     }
 
-    val EdTufKeyPair(newPubKey, newPrivKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val Ec25519TufKeyPair(newPubKey, newPrivKey) = TufCrypto.generateKeyPair(Ec25519KeyType, 256)
 
     val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
     val rootRole = oldRootRole.withRoleKeys(RoleType.ROOT, newPubKey)
@@ -500,8 +500,8 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       responseAs[RootRole]
     }
 
-    val EdTufKeyPair(newPubKey, newPrivKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
-    val EdTufKeyPair(newPubKey2, newPrivKey2) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val Ec25519TufKeyPair(newPubKey, newPrivKey) = TufCrypto.generateKeyPair(Ec25519KeyType, 256)
+    val Ec25519TufKeyPair(newPubKey2, newPrivKey2) = TufCrypto.generateKeyPair(Ec25519KeyType, 256)
 
     val newRootKeys = List(newPubKey, newPubKey2).map(k => k.id -> k).toMap
     val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
@@ -530,7 +530,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       status shouldBe StatusCodes.OK
       responseAs[RootRole]
     }
-    val EdTufKeyPair(newKey, _) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val Ec25519TufKeyPair(newKey, _) = TufCrypto.generateKeyPair(Ec25519KeyType, 256)
 
     val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
     val newKeys = (oldRootRole.keys - rootKeyId) + (newKey.id -> newKey)
@@ -553,7 +553,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       status shouldBe StatusCodes.OK
       responseAs[RootRole]
     }
-    val EdTufKeyPair(newPubKey, newPrivKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val Ec25519TufKeyPair(newPubKey, newPrivKey) = TufCrypto.generateKeyPair(Ec25519KeyType, 256)
 
     val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
     val rootRole = oldRootRole.withRoleKeys(RoleType.ROOT, newPubKey)
@@ -568,7 +568,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
   test("POST  offline signedreturns 204 when signature is a valid ed25519 signature") {
     val repoId = RepoId.generate()
-    generateRootRole(repoId, keyType = EdKeyType).futureValue
+    generateRootRole(repoId, keyType = Ec25519KeyType).futureValue
 
     val rootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -585,7 +585,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
   test("POST offline signed returns 400 when signature is not a valid ed25519 signature") {
     val repoId = RepoId.generate()
-    generateRootRole(repoId, keyType = EdKeyType).futureValue
+    generateRootRole(repoId, keyType = Ec25519KeyType).futureValue
 
     val rootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -604,7 +604,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     val repoId = RepoId.generate()
     generateRootRole(repoId).futureValue
 
-    val publicKey = TufCrypto.generateKeyPair(EdKeyType, 256).pubkey
+    val publicKey = TufCrypto.generateKeyPair(Ec25519KeyType, 256).pubkey
 
     val newRootRole = Put(apiUri(s"root/${repoId.show}/keys/targets"), publicKey) ~> routes ~> check {
       status shouldBe StatusCodes.OK

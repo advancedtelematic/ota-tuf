@@ -8,7 +8,7 @@ import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.data.TufDataType.KeyId
 import com.advancedtelematic.tuf.keyserver.Settings
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient.{VaultKey, VaultKeyNotFound}
+import com.advancedtelematic.tuf.keyserver.vault.VaultClient.{VaultKey, VaultResourceNotFound}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{FunSuite, Matchers}
@@ -28,7 +28,7 @@ class FakeVault extends VaultClient {
   override def findKey(keyId: KeyId): Future[VaultKey] =
     Option(keys.get(keyId)) match {
       case Some(k) => Future.successful(k)
-      case None => Future.failed(VaultKeyNotFound)
+      case None => Future.failed(VaultResourceNotFound)
     }
 
   override def deleteKey(keyId: KeyId): Future[Unit] =

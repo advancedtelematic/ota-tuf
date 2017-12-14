@@ -8,7 +8,7 @@ import eu.timepit.refined._
 import com.advancedtelematic.libats.data.DataType.{Namespace, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, RepoId, RoleType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ec25519KeyType, RepoId, RoleType, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 import org.scalatest.time.{Seconds, Span}
@@ -68,13 +68,9 @@ class UserReposerverClientSpec extends TufReposerverSpec
   }
 
   test("moves key offline") {
-    val f = for {
-      signedRoot <- client.root()
-      keyPair <- client.fetchKeyPair(signedRoot.signed.roles(RoleType.ROOT).keyids.head)
-      _ <- client.deleteKey(signedRoot.signed.roles(RoleType.ROOT).keyids.head)
-    } yield keyPair
-
-    val keyPair = f.futureValue
+    val signedRoot = client.root().futureValue
+    val keyPair = client.fetchKeyPair(signedRoot.signed.roles(RoleType.ROOT).keyids.head).futureValue
+    client.deleteKey(signedRoot.signed.roles(RoleType.ROOT).keyids.head).futureValue
 
     keyPair.privkey shouldBe a[TufPrivateKey]
     keyPair.pubkey shouldBe a[TufKey]
@@ -111,7 +107,7 @@ class UserReposerverClientSpec extends TufReposerverSpec
   }
 
   test("pushes a target key") {
-    val newKey = TufCrypto.generateKeyPair(EdKeyType, 256).pubkey
+    val newKey = TufCrypto.generateKeyPair(Ec25519KeyType, 256).pubkey
 
     val f = for {
       _ <- client.pushTargetsKey(newKey)

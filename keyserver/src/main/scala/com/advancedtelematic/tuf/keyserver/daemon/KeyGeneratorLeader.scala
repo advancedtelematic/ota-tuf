@@ -3,12 +3,10 @@ package com.advancedtelematic.tuf.keyserver.daemon
 import akka.actor.Status.{Failure, Success}
 import akka.actor.{Actor, ActorLogging, Props, Status, SupervisorStrategy}
 import akka.routing.RoundRobinPool
-import cats.syntax.show.toShowOps
+import cats.syntax.show._
 import com.advancedtelematic.tuf.keyserver.daemon.KeyGeneratorLeader.Tick
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.libtuf.data.TufDataType._
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKey
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.crypt.TufCrypto._
@@ -19,6 +17,8 @@ import akka.pattern.pipe
 import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp.KeyGenerationOp
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport, RoleRepositorySupport}
+import com.advancedtelematic.tuf.keyserver.vault.VaultClient
+import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKey
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.{ExecutionContext, Future}

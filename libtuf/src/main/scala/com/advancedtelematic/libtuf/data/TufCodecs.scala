@@ -4,7 +4,7 @@ import cats.syntax.either._
 import io.circe.syntax._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.TufDataType._
+import com.advancedtelematic.libtuf.data.TufDataType.{EcPrime256KeyType, _}
 import io.circe._
 import cats.syntax.functor._
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
@@ -32,34 +32,44 @@ object TufCodecs {
   implicit def signedPayloadDecoder[T : Encoder : Decoder]: Decoder[SignedPayload[T]] = deriveDecoder
 
   implicit val rsaKeyTypeEncoder: Encoder[RsaKeyType.type] = Encoder[String].contramap(_ ⇒ "RSA")
-  implicit val rsaKeyTypeDecoder: Decoder[RsaKeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "RSA", RsaKeyType, "RsaKeyType"))
+  implicit val rsaKeyTypeDecoder: Decoder[RsaKeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "RSA", RsaKeyType, s"Unknown KeyType: $str"))
 
-  implicit val edKeyTypeEncoder: Encoder[EdKeyType.type] = Encoder[String].contramap(_ ⇒ "ED25519")
-  implicit val edKeyTypeDecoder: Decoder[EdKeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "ED25519", EdKeyType, "EdcKeyType"))
+  implicit val ec25519KeyTypeEncoder: Encoder[Ec25519KeyType.type] = Encoder[String].contramap(_ ⇒ "ED25519")
+  implicit val ec25519KeyTypeDecoder: Decoder[Ec25519KeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "ED25519", Ec25519KeyType, s"Unknown KeyType: $str"))
 
-  implicit val keyTypeDecoder: Decoder[KeyType] = List[Decoder[KeyType]](rsaKeyTypeDecoder.widen, edKeyTypeDecoder.widen).reduceLeft(_ or _)
+  implicit val ecPrime256KeyTypeEncoder: Encoder[EcPrime256KeyType.type] = Encoder[String].contramap(_ ⇒ "ECPRIME256V1")
+  implicit val ecPrime256KeyTypeDecoder: Decoder[EcPrime256KeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "ECPRIME256V1", EcPrime256KeyType, s"Unknown KeyType: $str"))
+
+  implicit val keyTypeDecoder: Decoder[KeyType] = List[Decoder[KeyType]](rsaKeyTypeDecoder.widen, ec25519KeyTypeDecoder.widen, ecPrime256KeyTypeDecoder.widen).reduceLeft(_ or _)
 
   implicit val keyTypeEncoder: Encoder[KeyType] = Encoder.instance {
     case RsaKeyType ⇒ RsaKeyType.asJson
-    case EdKeyType ⇒ EdKeyType.asJson
+    case Ec25519KeyType ⇒ Ec25519KeyType.asJson
+    case EcPrime256KeyType ⇒ EcPrime256KeyType.asJson
   }
 
   implicit val tufKeyEncoder: Encoder[TufKey] = Encoder.instance {
     case key @ RSATufKey(_) ⇒
       Json.obj("keyval" → Json.obj("public" -> RsaKeyType.crypto.encode(key)),
                "keytype" → RsaKeyType.asJson)
-    case key @ EdTufKey(_) ⇒
-      Json.obj("keyval" → Json.obj("public" -> EdKeyType.crypto.encode(key)),
-               "keytype" → EdKeyType.asJson)
+    case key @ Ec25519TufKey(_) ⇒
+      Json.obj("keyval" → Json.obj("public" -> Ec25519KeyType.crypto.encode(key)),
+               "keytype" → Ec25519KeyType.asJson)
+    case key @ EcPrime256TufKey(_) ⇒
+      Json.obj("keyval" → Json.obj("public" -> EcPrime256KeyType.crypto.encode(key)),
+        "keytype" → EcPrime256KeyType.asJson)
   }
 
   implicit val tufPrivateKeyEncoder: Encoder[TufPrivateKey] = Encoder.instance {
     case key @ RSATufPrivateKey(_) ⇒
       Json.obj("keyval" → Json.obj("private" -> RsaKeyType.crypto.encode(key)),
                "keytype" → RsaKeyType.asJson)
-    case key @ EdTufPrivateKey(_) ⇒
-      Json.obj("keyval" → Json.obj("private" -> EdKeyType.crypto.encode(key)),
-               "keytype" → EdKeyType.asJson)
+    case key @ Ec25519TufPrivateKey(_) ⇒
+      Json.obj("keyval" → Json.obj("private" -> Ec25519KeyType.crypto.encode(key)),
+               "keytype" → Ec25519KeyType.asJson)
+    case key @ EcPrime256TufPrivateKey(_) ⇒
+      Json.obj("keyval" → Json.obj("private" -> EcPrime256KeyType.crypto.encode(key)),
+        "keytype" → EcPrime256KeyType.asJson)
   }
 
   private def tufKeyDecoder[T](field: String, decodeFn: (KeyType, String) ⇒ Try[T]): Decoder[T] = Decoder.instance { cursor ⇒
@@ -79,10 +89,14 @@ object TufCodecs {
       Json.obj("keytype" -> RsaKeyType.asJson,
                "keyval" -> Json.obj("public" -> RsaKeyType.crypto.encode(pub),
                                     "private" -> RsaKeyType.crypto.encode(priv)))
-    case EdTufKeyPair(pub, priv) =>
-      Json.obj("keytype" -> EdKeyType.asJson,
-               "keyval" -> Json.obj("public" -> EdKeyType.crypto.encode(pub),
-                                    "private" -> EdKeyType.crypto.encode(priv)))
+    case Ec25519TufKeyPair(pub, priv) =>
+      Json.obj("keytype" -> Ec25519KeyType.asJson,
+               "keyval" -> Json.obj("public" -> Ec25519KeyType.crypto.encode(pub),
+                                    "private" -> Ec25519KeyType.crypto.encode(priv)))
+    case EcPrime256TufKeyPair(pub, priv) =>
+      Json.obj("keytype" -> EcPrime256KeyType.asJson,
+        "keyval" -> Json.obj("public" -> EcPrime256KeyType.crypto.encode(pub),
+        "private" -> EcPrime256KeyType.crypto.encode(priv)))
   }
 
   implicit val tufKeyPairDecoder: Decoder[TufKeyPair] = Decoder.instance { cursor =>
