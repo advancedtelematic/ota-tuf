@@ -10,6 +10,8 @@ object DataType {
 
   case class RepoName(value: String) extends AnyVal
 
+  case class TreehubConfig(oauth2: Option[AuthConfig], no_auth: Boolean)
+
   case class AuthConfig(server: URI, client_id: String, client_secret: String)
 
   case class RepoConfig(reposerver: URI, auth: Option[AuthConfig])

@@ -44,7 +44,7 @@ case object VerifyRoot extends Command
 
 case class Config(command: Command,
                   home: Path = Paths.get("tuf"),
-                  credentialsPath: Path = Paths.get("treehub.json"),
+                  credentialsPath: Path = Paths.get("credentials.zip"),
                   repoName: RepoName = RepoName("default-repo"),
                   rootKey: KeyName = KeyName("default-key"),
                   keyType: KeyType = EdKeyType,
@@ -63,8 +63,7 @@ case class Config(command: Command,
                   keySize: Int = 2048,
                   inputPath: Path = Paths.get("empty"),
                   exportPath: Path = Paths.get(""),
-                  reposerverUrl: Option[URI] = None,
-                  useAuth: Boolean = true)
+                  reposerverUrl: Option[URI] = None)
 
 object Cli extends App with VersionInfo {
   import CliReads._
@@ -104,12 +103,13 @@ object Cli extends App with VersionInfo {
         opt[URI]("reposerver").action { (arg, c) =>
           c.copy(reposerverUrl = arg.some)
         },
-        opt[Unit]("no-auth").action { (arg, c) =>
-          c.copy(useAuth = false)
+        opt[Unit]("no-auth").action { (_, c) =>
+          log.warn("--no-auth option has no effect, use `\"no_auth\": true` in credentials.zip")
+          c
         },
         opt[Path]("credentials")
           .abbr("c")
-          .text("path to credentials file, treehub.json or credentials.zip")
+          .text("path to credentials file, credentials.zip")
           .required()
           .action { (path, c) =>
             c.copy(credentialsPath = path)
@@ -266,7 +266,7 @@ object Cli extends App with VersionInfo {
       )
 
     cmd("export-credentials")
-      .text("Copy existing credentials.zip with treehub.json updated from repo")
+      .text("Export settings and keys to credentials.zip")
       .action { (_, c) =>
         c.copy(command = Export)
       }
@@ -324,7 +324,7 @@ object Cli extends App with VersionInfo {
         tufRepo.genKeys(config.rootKey, config.keyType, config.keySize).toFuture
 
       case InitRepo =>
-        RepoManagement.initialize(config.repoName, repoPath, config.credentialsPath, config.reposerverUrl, useAuth = config.useAuth)
+        RepoManagement.initialize(config.repoName, repoPath, config.credentialsPath, config.reposerverUrl)
           .map(_ => log.info(s"Finished init for ${config.repoName.value} using ${config.credentialsPath}"))
           .toFuture
 

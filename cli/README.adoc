@@ -42,9 +42,9 @@ pulled/pushed.
 == Rotate Root Keys
 
 1. Initialize a local ota-plus cache using credentials.zip downloaded
-from ATS Garage or treehub.json inside of it:
+from ATS Garage:
 
-    garage-sign init --repo buchtel --credentials treehub.json --reposerver <reposerver uri>
+    garage-sign init --repo buchtel --credentials credentials.zip --reposerver <reposerver uri>
 +
 or
 +

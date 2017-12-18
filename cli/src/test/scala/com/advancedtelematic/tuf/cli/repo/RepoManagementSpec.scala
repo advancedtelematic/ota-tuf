@@ -19,10 +19,10 @@ import scala.util.{Failure, Success, Try}
 
 class RepoManagementSpec extends CliSpec {
 
-  lazy val treehubCredentials: Path = Paths.get(this.getClass.getResource("/treehub.json").toURI)
   lazy val credentialsZip: Path = Paths.get(this.getClass.getResource("/credentials.zip").toURI)
-  lazy val credentialsZipNoTargets: Path = Paths.get(this.getClass.getResource("/credentials_notargets.zip").toURI)
+  lazy val credentialsZipNoTargets: Path = Paths.get(this.getClass.getResource("/credentials_no_targets.zip").toURI)
   lazy val credentialsZipNoTufRepo: Path = Paths.get(this.getClass.getResource("/credentials_no_tufrepo.zip").toURI)
+  lazy val credentialsZipNoAuth: Path = Paths.get(this.getClass.getResource("/credentials_no_auth.zip").toURI)
 
   import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -31,19 +31,6 @@ class RepoManagementSpec extends CliSpec {
   def randomName = RepoName(RandomNames() + "-repo")
 
   def randomRepoPath = Files.createTempDirectory("tuf-repo")
-
-  test("can read auth config for an initialized repo") {
-    val repoT = RepoManagement.initialize(randomName, randomRepoPath, treehubCredentials, fakeRepoUri)
-
-    repoT shouldBe a[Success[_]]
-
-    repoT.get.authConfig.get.get shouldBe a[AuthConfig]
-  }
-
-  test("throws error when repo is initialized with json file but no uri") {
-    val repoT = RepoManagement.initialize(randomName, randomRepoPath, treehubCredentials, repoUri = None)
-    repoT.failed.get shouldBe a[IllegalArgumentException]
-  }
 
   test("credentials.zip without tufrepo.url throws proper error") {
     val repoT = RepoManagement.initialize(randomName, randomRepoPath, credentialsZipNoTufRepo)
@@ -97,21 +84,9 @@ class RepoManagementSpec extends CliSpec {
     repo.readSignedRole[RootRole].get.signed shouldBe a[RootRole]
   }
 
-  test("creates base credentials.zip if one does not exist") {
-    val repo = RepoManagement.initialize(randomName, randomRepoPath, treehubCredentials, fakeRepoUri).get
-    val tempPath = Files.createTempFile("cli-export", ".zip")
-
-    repo.genKeys(KeyName("targets"), EdKeyType, 256).get
-
-    RepoManagement.export(repo, KeyName("targets"), tempPath) shouldBe a[Success[_]]
-
-    val repoFromExported = RepoManagement.initialize(randomName, randomRepoPath, tempPath).get
-
-    repoFromExported.repoPath.toFile.exists() shouldBe true
-  }
 
   test("export includes root.json") {
-    val repo = RepoManagement.initialize(randomName, randomRepoPath, treehubCredentials, fakeRepoUri).get
+    val repo = RepoManagement.initialize(randomName, randomRepoPath, credentialsZip).get
     val tempPath = Files.createTempFile("tuf-repo-spec-export", ".zip")
 
     repo.genKeys(KeyName("targets"), EdKeyType, 256).get
@@ -149,5 +124,37 @@ class RepoManagementSpec extends CliSpec {
     // test the exported zip file by creating another repo from it:
     val repoFromExported = RepoManagement.initialize(randomName, randomRepoPath, tempPath).get
     repoFromExported.repoServerUri.get.toString shouldBe "https://someotherrepo.com"
+  }
+
+  test("creates base credentials.zip if one does not exist") {
+    val repo = RepoManagement.initialize(randomName, randomRepoPath, credentialsZip).get
+    val tempPath = Files.createTempFile("cli-export", ".zip")
+
+    Files.delete(repo.repoPath.resolve("credentials.zip"))
+
+    repo.genKeys(KeyName("targets"), EdKeyType, 256).get
+
+    RepoManagement.export(repo, KeyName("targets"), tempPath) shouldBe a[Success[_]]
+
+    val repoFromExported = RepoManagement.initialize(randomName, randomRepoPath, tempPath).get
+
+    repoFromExported.repoPath.toFile.exists() shouldBe true
+  }
+
+  test("can read auth config for an initialized repo") {
+    val repoT = RepoManagement.initialize(randomName, randomRepoPath, credentialsZip)
+
+    repoT shouldBe a[Success[_]]
+
+    repoT.get.authConfig.get.get shouldBe a[AuthConfig]
+  }
+
+
+  test("skips auth when no_auth: true") {
+    val repoT = RepoManagement.initialize(randomName, randomRepoPath, credentialsZipNoAuth)
+
+    repoT shouldBe a[Success[_]]
+
+    repoT.get.authConfig.get shouldBe None
   }
 }
