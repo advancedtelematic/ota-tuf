@@ -12,9 +12,11 @@ import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKey
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.crypt.TufCrypto._
+
 import scala.async.Async._
 import scala.concurrent.duration._
 import akka.pattern.pipe
+import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp.KeyGenerationOp
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport, RoleRepositorySupport}
 import org.slf4j.LoggerFactory
@@ -25,10 +27,15 @@ import scala.concurrent.{ExecutionContext, Future}
 object KeyGeneratorLeader {
   case object Tick
 
-  def props(vaultClient: VaultClient)(implicit db: Database): Props = Props(new KeyGeneratorLeader(vaultClient))
+  def props(vaultClient: VaultClient)(implicit db: Database, ec: ExecutionContext): Props = {
+    Props(new KeyGeneratorLeader(DefaultKeyGenerationOp(vaultClient)))
+  }
+
+  def props(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(implicit db: Database): Props =
+    Props(new KeyGeneratorLeader(keyGenerationOp))
 }
 
-class KeyGeneratorLeader(vaultClient: VaultClient)(implicit val db: Database) extends Actor with ActorLogging with KeyGenRequestSupport {
+class KeyGeneratorLeader(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(implicit val db: Database) extends Actor with ActorLogging with KeyGenRequestSupport {
 
   implicit val ec = context.dispatcher
 
@@ -41,7 +48,7 @@ class KeyGeneratorLeader(vaultClient: VaultClient)(implicit val db: Database) ex
   private val router = {
     val routerProps = RoundRobinPool(WORKER_COUNT)
       .withSupervisorStrategy(SupervisorStrategy.defaultStrategy)
-      .props(KeyGeneratorWorker.props(vaultClient))
+      .props(KeyGeneratorWorker.props(keyGenerationOp))
 
      context.system.actorOf(routerProps)
    }
@@ -83,9 +90,18 @@ class KeyGeneratorLeader(vaultClient: VaultClient)(implicit val db: Database) ex
   }
 }
 
+object KeyGenerationOp {
+  type KeyGenerationOp = KeyGenRequest => Future[Seq[Key]]
+}
 
-class KeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database, val ec: ExecutionContext)
-  extends KeyGenRequestSupport
+object DefaultKeyGenerationOp {
+  def apply(vaultClient: VaultClient)(implicit db: Database,  ec: ExecutionContext): DefaultKeyGenerationOp =
+    new DefaultKeyGenerationOp(vaultClient)
+}
+
+class DefaultKeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database, val ec: ExecutionContext)
+  extends KeyGenerationOp
+    with KeyGenRequestSupport
     with KeyRepositorySupport
     with RoleRepositorySupport {
 
@@ -107,7 +123,7 @@ class KeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database, val e
     }.map(_ => ())
   }
 
-  def processGenerationRequest(kgr: KeyGenRequest): Future[Seq[Key]] =
+  def apply(kgr: KeyGenRequest): Future[Seq[Key]] =
     async {
       val role = Role(RoleId.generate(), kgr.repoId, kgr.roleType, kgr.threshold)
 
@@ -123,10 +139,12 @@ class KeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database, val e
 }
 
 object KeyGeneratorWorker {
-  def props(vaultClient: VaultClient)(implicit db: Database): Props = Props(new KeyGeneratorWorker(vaultClient))
+  def props(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(implicit db: Database): Props = {
+    Props(new KeyGeneratorWorker(keyGenerationOp))
+  }
 }
 
-class KeyGeneratorWorker(vaultClient: VaultClient)(implicit val db: Database) extends Actor
+class KeyGeneratorWorker(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(implicit val db: Database) extends Actor
   with ActorLogging
   with KeyGenRequestSupport
   with KeyRepositorySupport
@@ -134,13 +152,11 @@ class KeyGeneratorWorker(vaultClient: VaultClient)(implicit val db: Database) ex
 
   implicit val ec = context.dispatcher
 
-  val keyGenerationOp = new KeyGenerationOp(vaultClient)
-
   override def receive: Receive = {
     case kgr: KeyGenRequest =>
       log.info(s"Received key gen request for {}", kgr.id.show)
 
-      keyGenerationOp.processGenerationRequest(kgr)
+      keyGenerationOp(kgr)
         .map(Success)
         .recoverWith {
           case ex =>

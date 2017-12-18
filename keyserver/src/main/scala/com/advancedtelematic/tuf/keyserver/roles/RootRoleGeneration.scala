@@ -26,14 +26,13 @@ class RootRoleGeneration(vaultClient: VaultClient)
     with SignedRootRoleSupport {
 
   private val DEFAULT_ROLES = RoleType.ALL
-  private val DEFAULT_RSA_KEY_SIZE = 2048
   private val DEFAULT_ROLE_EXPIRE = Duration.ofDays(365)
 
   val roleSigning = new RoleSigning(vaultClient)
 
   def createDefaultGenRequest(repoId: RepoId, threshold: Int, keyType: KeyType): Future[Seq[KeyGenId]] = {
     val reqs = DEFAULT_ROLES.map { roleType =>
-      KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, roleType, DEFAULT_RSA_KEY_SIZE, keyType,
+      KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, roleType, keyType.crypto.defaultKeySize, keyType,
         threshold)
     }
 
