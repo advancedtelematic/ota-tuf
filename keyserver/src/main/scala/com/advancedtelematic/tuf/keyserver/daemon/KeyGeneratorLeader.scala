@@ -27,9 +27,9 @@ import scala.concurrent.{ExecutionContext, Future}
 object KeyGeneratorLeader {
   case object Tick
 
-  def props(vaultClient: VaultClient)(implicit db: Database, ec: ExecutionContext): Props = {
+  def props(vaultClient: VaultClient)(implicit db: Database, ec: ExecutionContext): Props =
     Props(new KeyGeneratorLeader(DefaultKeyGenerationOp(vaultClient)))
-  }
+
 
   def props(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(implicit db: Database): Props =
     Props(new KeyGeneratorLeader(keyGenerationOp))

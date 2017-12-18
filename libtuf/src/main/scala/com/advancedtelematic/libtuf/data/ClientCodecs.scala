@@ -57,7 +57,7 @@ object ClientCodecs {
     def validateRoleType: Decoder[T] = {
       decoder.validate({ c =>
         val _type = c.downField("_type").as[String].valueOr(throw _).toLowerCase.capitalize
-        _type.capitalize == tr.typeStr
+        _type == tr.typeStr
       },
         s"Invalid type for role: ${tr.roleType}"
       )

@@ -19,7 +19,7 @@ class CliKeyStorage(repo: Path) {
 
   private lazy val log = LoggerFactory.getLogger(this.getClass)
 
-  private lazy val SECRET_KEYS_PERMISSIONS = util.EnumSet.of(OWNER_READ, OWNER_WRITE)
+  private lazy val SECRET_KEY_PERMISSIONS = util.EnumSet.of(OWNER_READ, OWNER_WRITE)
 
   implicit private class KeyNamePath(v: KeyName) {
     def publicKeyPath: Path = repo.resolve("keys").resolve(v.publicKeyName)
@@ -32,7 +32,7 @@ class CliKeyStorage(repo: Path) {
   }
 
   private def writePrivate(keyName: KeyName, tufKey: TufPrivateKey): Try[Unit] = Try {
-    try Files.createFile(keyName.privateKeyPath, PosixFilePermissions.asFileAttribute(SECRET_KEYS_PERMISSIONS))
+    try Files.createFile(keyName.privateKeyPath, PosixFilePermissions.asFileAttribute(SECRET_KEY_PERMISSIONS))
     catch { case _: FileAlreadyExistsException => () }
 
     Files.write(keyName.privateKeyPath, tufKey.asJson.spaces2.getBytes)
@@ -42,7 +42,8 @@ class CliKeyStorage(repo: Path) {
     writeKeys(name, pair.pubkey, pair.privkey)
 
   private def ensureKeysDirCreated(): Try[Unit] = Try {
-    Files.createDirectories(repo.resolve("keys"))
+    val perms = PosixFilePermissions.asFileAttribute(SECRET_KEY_PERMISSIONS + OWNER_EXECUTE)
+    Files.createDirectories(repo.resolve("keys"), perms)
   }
 
   def writeKeys(name: KeyName, pub: TufKey, priv: TufPrivateKey): Try[Unit] = {

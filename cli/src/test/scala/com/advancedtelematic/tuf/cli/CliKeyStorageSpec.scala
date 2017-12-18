@@ -30,6 +30,15 @@ class CliKeyStorageSpec extends CliSpec {
     val perms = Files.getPosixFilePermissions(tempDir.resolve("keys").resolve(keyName.value + ".sec"))
     perms.asScala shouldBe Set(OWNER_READ, OWNER_WRITE)
   }
+
+  test("creates key directory with limited permissions") {
+    val keyName = KeyName("test-key-02")
+    subject.genKeys(keyName, EdKeyType, 256)
+
+    val perms = Files.getPosixFilePermissions(tempDir.resolve("keys"))
+    perms.asScala shouldBe Set(OWNER_READ, OWNER_WRITE, OWNER_EXECUTE)
+  }
+
 }
 
 
