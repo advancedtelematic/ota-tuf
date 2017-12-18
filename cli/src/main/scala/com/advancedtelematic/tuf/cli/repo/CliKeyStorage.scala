@@ -1,7 +1,10 @@
 package com.advancedtelematic.tuf.cli.repo
 
-import java.nio.file.{Files, Path}
-
+import java.nio.file.attribute.{PosixFilePermission, PosixFilePermissions}
+import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
+import java.util
+import PosixFilePermission._
+import scala.collection.JavaConversions._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, TufKey, TufKeyPair, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.KeyName
@@ -16,6 +19,8 @@ class CliKeyStorage(repo: Path) {
 
   private lazy val log = LoggerFactory.getLogger(this.getClass)
 
+  private lazy val SECRET_KEYS_PERMISSIONS = util.EnumSet.of(OWNER_READ, OWNER_WRITE)
+
   implicit private class KeyNamePath(v: KeyName) {
     def publicKeyPath: Path = repo.resolve("keys").resolve(v.publicKeyName)
 
@@ -27,17 +32,24 @@ class CliKeyStorage(repo: Path) {
   }
 
   private def writePrivate(keyName: KeyName, tufKey: TufPrivateKey): Try[Unit] = Try {
+    try Files.createFile(keyName.privateKeyPath, PosixFilePermissions.asFileAttribute(SECRET_KEYS_PERMISSIONS))
+    catch { case _: FileAlreadyExistsException => () }
+
     Files.write(keyName.privateKeyPath, tufKey.asJson.spaces2.getBytes)
   }
 
   def writeKeys(name: KeyName, pair: TufKeyPair): Try[Unit] =
     writeKeys(name, pair.pubkey, pair.privkey)
 
+  private def ensureKeysDirCreated(): Try[Unit] = Try {
+    Files.createDirectories(repo.resolve("keys"))
+  }
+
   def writeKeys(name: KeyName, pub: TufKey, priv: TufPrivateKey): Try[Unit] = {
     assert(pub.keytype == priv.keytype)
 
     for {
-      _ <- Try(Files.createDirectories(repo.resolve("keys")))
+      _ <- ensureKeysDirCreated()
       _ <- writePublic(name, pub)
       _ <- writePrivate(name, priv)
       _ = log.info(s"Saved keys to $repo/{${repo.relativize(name.privateKeyPath)}, ${repo.relativize(name.publicKeyPath)}}")
@@ -52,8 +64,9 @@ class CliKeyStorage(repo: Path) {
   def readPrivateKey(keyName: KeyName): Try[TufPrivateKey] =
     parseFile(keyName.privateKeyPath.toFile).flatMap(_.as[TufPrivateKey]).toTry
 
-  def readPublicKey(keyName: KeyName): Try[TufKey] =
+  def readPublicKey(keyName: KeyName): Try[TufKey] = {
     parseFile(keyName.publicKeyPath.toFile).flatMap(_.as[TufKey]).toTry
+  }
 
   def readKeyPair(keyName: KeyName): Try[(TufKey, TufPrivateKey)] = for {
     pub <- readPublicKey(keyName)

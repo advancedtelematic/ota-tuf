@@ -34,14 +34,12 @@ object RepoManagement {
 
   def initialize(repoName: RepoName, repoPath: Path, initFilePath: Path, repoUri: Option[URI] = None)
                 (implicit ec: ExecutionContext): Try[TufRepo] =
-    ensureRepoNotExists(repoPath).map { _ =>
-      Files.createDirectories(repoPath.resolve("keys"))
-    }.flatMap { _ =>
+    ensureRepoNotExists(repoPath).flatMap { _ =>
       ZipRepoInitialization.init(repoName, repoPath, zipTargetKeyName, initFilePath, repoUri)
     }
 
   private def ensureRepoNotExists(repoPath: Path): Try[Unit] = {
-    if(Files.exists(repoPath.resolve("keys")))
+    if(Files.exists(repoPath.resolve("config.json")))
       Failure(RepoAlreadyInitialized(repoPath))
     else
       Success(())
@@ -124,7 +122,7 @@ object RepoManagement {
           (pubKey, privKey) <- repo.keyStorage.readKeyPair(targetKey)
           _ <- copyAuth(sourceZip, zipExportStream)
           _ <- writeTufUrl(repo, zipExportStream)
-          _ ← copyKeyPair(pubKey, privKey, zipExportStream)
+          _ <- copyKeyPair(pubKey, privKey, zipExportStream)
           _ <- copyRole[RootRole](repo, zipExportStream).recover {
             case ex =>
               _log.warn(s"Could not copy RootRole: ${ex.getMessage}")
@@ -145,23 +143,6 @@ object RepoManagement {
     val baos = new ByteArrayOutputStream()
     Stream.continually(is.read).takeWhile(_ != -1).foreach(baos.write)
     baos.toByteArray
-  }
-}
-
-protected object JsonRepoInitialization {
-  import com.advancedtelematic.tuf.cli.CliCodecs._
-
-  def init(repoName: RepoName, repoPath: Path, initFilePath: Path, repoUri: URI, useAuth: Boolean)
-          (implicit ec: ExecutionContext): Try[TufRepo] = {
-    if (useAuth)
-      for {
-        json <- parseFile(initFilePath.toFile).toTry
-        authConfig <- json.as[AuthConfig](authConfigDecoder.prepare(_.downField("oauth2"))).toTry
-        _ <- TufRepo.writeConfigFile(repoPath, repoUri, authConfig.some)
-      } yield new TufRepo(repoName, repoPath)
-    else
-      TufRepo.writeConfigFile(repoPath, repoUri, authConfig = None)
-        .map(_ => new TufRepo(repoName, repoPath))
   }
 }
 
