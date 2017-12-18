@@ -12,8 +12,8 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{SignedPayload, TufKey, TufPrivateKey}
-import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
-import com.advancedtelematic.tuf.cli.repo.TufRepo.{MissingCredentialsZipFile, RepoAlreadyInitialized, UnknownInitFile}
+import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName, TreehubConfig}
+import com.advancedtelematic.tuf.cli.repo.TufRepo.{MissingCredentialsZipFile, RepoAlreadyInitialized, TreehubConfigError}
 import com.advancedtelematic.tuf.cli.CliCodecs._
 import com.advancedtelematic.libats.codecs.CirceUri._
 import com.advancedtelematic.tuf.cli.CliUtil
@@ -32,20 +32,12 @@ object RepoManagement {
 
   private lazy val _log = LoggerFactory.getLogger(this.getClass)
 
-  def initialize(repoName: RepoName, repoPath: Path, initFilePath: Path, repoUri: Option[URI] = None, useAuth: Boolean = true)
+  def initialize(repoName: RepoName, repoPath: Path, initFilePath: Path, repoUri: Option[URI] = None)
                 (implicit ec: ExecutionContext): Try[TufRepo] =
     ensureRepoNotExists(repoPath).map { _ =>
       Files.createDirectories(repoPath.resolve("keys"))
-      initFilePath.getFileName.toString
-    }.flatMap { name =>
-      if (name.endsWith(".json") && repoUri.isEmpty)
-        throw new IllegalArgumentException("reposerver must be specified when initializing a repo with treehub.json")
-      else if (name.endsWith(".json"))
-        JsonRepoInitialization.init(repoName, repoPath, initFilePath, repoUri.get, useAuth)
-      else if (name.endsWith(".zip"))
-        ZipRepoInitialization.init(repoName, repoPath, zipTargetKeyName, initFilePath, repoUri, useAuth)
-      else
-        Failure(UnknownInitFile(initFilePath))
+    }.flatMap { _ =>
+      ZipRepoInitialization.init(repoName, repoPath, zipTargetKeyName, initFilePath, repoUri)
     }
 
   private def ensureRepoNotExists(repoPath: Path): Try[Unit] = {
@@ -178,17 +170,19 @@ protected object ZipRepoInitialization {
 
   private lazy val _log = LoggerFactory.getLogger(this.getClass)
 
-  def init(repoName: RepoName, repoPath: Path, zipTargetKeyName: KeyName, initFilePath: Path, repoUri: Option[URI], useAuth: Boolean)
+  def init(repoName: RepoName, repoPath: Path, zipTargetKeyName: KeyName, initFilePath: Path, repoUri: Option[URI])
           (implicit ec: ExecutionContext): Try[TufRepo] = {
     val tufRepo = new TufRepo(repoName, repoPath)
 
     // copy whole ZIP file into repo
     Files.copy(initFilePath, repoPath.resolve("credentials.zip"))
 
-    def readAuth(src: ZipFile): Try[AuthConfig] = for {
+    def readAuth(src: ZipFile): Try[Option[AuthConfig]] = for {
       is <- Try(src.getInputStream(src.getEntry("treehub.json")))
-      decoder = authConfigDecoder.prepare(_.downField("oauth2"))
-      authConfig ← CliUtil.readJsonFrom[AuthConfig](is)(decoder)
+      treehubConfig <- CliUtil.readJsonFrom[TreehubConfig](is)
+      authConfig <-
+        if(treehubConfig.no_auth) Success(None)
+        else Either.fromOption(treehubConfig.oauth2, TreehubConfigError("auth required with no_auth: false")).toTry.map(_.some)
     } yield authConfig
 
     def readRepoUri(src: ZipFile): Try[URI] = for {
@@ -215,7 +209,7 @@ protected object ZipRepoInitialization {
 
     for {
       src ← Try(new ZipFile(initFilePath.toFile))
-      auth <- if(useAuth) readAuth(src).map(_.some) else Success(None)
+      auth <- readAuth(src)
       reposerver <- if(repoUri.isDefined) Success(repoUri.get) else readRepoUri(src)
       _ <- TufRepo.writeConfigFile(repoPath, reposerver, auth)
       _ <- writeRoot(src).recover { case ex =>

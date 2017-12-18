@@ -10,7 +10,8 @@ import scopt.Read
 import shapeless._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, RepoConfig}
+import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, RepoConfig, TreehubConfig}
+import io.circe.Decoder
 
 object CliCodecs {
   import io.circe.generic.semiauto._
@@ -18,6 +19,15 @@ object CliCodecs {
 
   implicit val authConfigDecoder = deriveDecoder[AuthConfig]
   implicit val authConfigEncoder = deriveEncoder[AuthConfig]
+
+  implicit val treehubConfigDecoder = Decoder.instance { d =>
+    for {
+      noAuth <- d.downField("no_auth").as[Option[Boolean]]
+      oauth <- d.downField("oauth2").as[Option[AuthConfig]]
+    } yield TreehubConfig(oauth, noAuth.getOrElse(false))
+  }
+
+  implicit val treehubConfigEncoder = deriveEncoder[TreehubConfig]
 
   implicit val repoConfigEncoder = deriveEncoder[RepoConfig]
   implicit val repoConfigDecoder = deriveDecoder[RepoConfig]

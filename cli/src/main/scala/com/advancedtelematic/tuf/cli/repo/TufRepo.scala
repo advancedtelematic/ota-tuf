@@ -42,9 +42,7 @@ object TufRepo {
     "Could not find targets etags file. You need this to push a new targets file. Etags can be obtained using the pull command"
   ) with NoStackTrace
 
-  case class UnknownInitFile(path: Path) extends Exception(
-    s"unknown file extension for repo init: $path"
-  ) with NoStackTrace
+  case class TreehubConfigError(msg: String) extends Exception(msg) with NoStackTrace
 
   case class MissingCredentialsZipFile(filename: String) extends Exception(
     s"Missing file from credentials.zip: $filename"
