@@ -4,7 +4,9 @@ import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufDataType.{RoleType, TargetFormat, TargetName, TargetVersion}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
+import io.circe._
+import ClientDataType.TufRole._
+import cats.syntax.either._
 
 object ClientCodecs {
   import TufCodecs._
@@ -20,14 +22,8 @@ object ClientCodecs {
   implicit val roleKeyEncoder: Encoder[RoleKeys] = deriveEncoder
   implicit val roleKeyDecoder: Decoder[RoleKeys] = deriveDecoder
 
-  implicit val rootRoleEncoder: Encoder[RootRole] = deriveEncoder
-  implicit val rootRoleDecoder: Decoder[RootRole] = deriveDecoder
-
   implicit val targetCustomDecoder: Decoder[TargetCustom] = deriveDecoder
   implicit val targetCustomEncoder: Encoder[TargetCustom] = deriveEncoder
-
-  implicit val targetsRoleEncoder: Encoder[TargetsRole] = deriveEncoder
-  implicit val targetsRoleDecoder: Decoder[TargetsRole] = deriveDecoder
 
   implicit val targetNameEncoder: Encoder[TargetName] = anyValStringEncoder
   implicit val targetNameDecoder: Decoder[TargetName] = anyValStringDecoder
@@ -41,9 +37,30 @@ object ClientCodecs {
   implicit val metaItemEncoder: Encoder[MetaItem] = deriveEncoder
   implicit val metaItemDecoder: Decoder[MetaItem] = deriveDecoder
 
-  implicit val snapshotRoleEncoder: Encoder[SnapshotRole] = deriveEncoder
-  implicit val snapshotRoleDecoder: Decoder[SnapshotRole] = deriveDecoder
+  implicit val rootRoleEncoder: Encoder[RootRole] = deriveEncoder[RootRole].encodeRoleType
+  implicit val rootRoleDecoder: Decoder[RootRole] = deriveDecoder[RootRole].validateRoleType
 
-  implicit val timestampRoleEncoder: Encoder[TimestampRole] = deriveEncoder
-  implicit val timestampRoleDecoder: Decoder[TimestampRole] = deriveDecoder
+  implicit val targetsRoleEncoder: Encoder[TargetsRole] = deriveEncoder[TargetsRole].encodeRoleType
+  implicit val targetsRoleDecoder: Decoder[TargetsRole] = deriveDecoder[TargetsRole].validateRoleType
+
+  implicit val snapshotRoleEncoder: Encoder[SnapshotRole] = deriveEncoder[SnapshotRole].encodeRoleType
+  implicit val snapshotRoleDecoder: Decoder[SnapshotRole] = deriveDecoder[SnapshotRole].validateRoleType
+
+  implicit val timestampRoleEncoder: Encoder[TimestampRole] = deriveEncoder[TimestampRole].encodeRoleType
+  implicit val timestampRoleDecoder: Decoder[TimestampRole] = deriveDecoder[TimestampRole].validateRoleType
+
+  implicit private class EncodeRoleTypeOp[T](encoder: Encoder[T])(implicit tr: TufRole[T]) {
+    def encodeRoleType: Encoder[T] = encoder.mapJson(_.deepMerge(Json.obj("_type" -> Json.fromString(tr.typeStr))))
+  }
+
+  implicit private class ValidateRoleOp[T](decoder: Decoder[T])(implicit tr: TufRole[T]) {
+    def validateRoleType: Decoder[T] = {
+      decoder.validate({ c =>
+        val _type = c.downField("_type").as[String].valueOr(throw _).toLowerCase.capitalize
+        _type.capitalize == tr.typeStr
+      },
+        s"Invalid type for role: ${tr.roleType}"
+      )
+    }
+  }
 }
