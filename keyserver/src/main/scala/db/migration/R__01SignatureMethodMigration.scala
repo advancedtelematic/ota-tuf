@@ -37,7 +37,7 @@ class KeyserverSignatureMethodMigration(implicit
     val query = sql"SELECT repo_id, signed_payload from signed_root_roles".as[Row]
 
     val replaceFn = (row: Row) => {
-      signedRootRoleRepo.find(row.repoId).flatMap { old =>
+      signedRootRoleRepo.findLatestValid(row.repoId).flatMap { old =>
         signedRootRoleRepo.persist(row.repoId, old)
       }
     }

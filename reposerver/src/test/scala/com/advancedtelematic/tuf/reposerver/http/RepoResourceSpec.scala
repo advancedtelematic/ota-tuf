@@ -809,6 +809,33 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
+  test("fake keyserver client saves instants with same precision as json codecs") {
+    val newRepoId = RepoId.generate()
+    fakeKeyserverClient.createRoot(newRepoId).futureValue
+    val raw = fakeKeyserverClient.fetchRootRole(newRepoId).futureValue.signed
+    val rawJson = fakeKeyserverClient.fetchRootRole(newRepoId).futureValue.signed.asJson.as[RootRole].valueOr(throw _)
+
+    raw.expires shouldBe rawJson.expires
+  }
+
+  test("delegates getting specific version of root.json to keysever") {
+    val newRepoId = RepoId.generate()
+
+    Post(apiUri(s"repo/${newRepoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    val newRoot = Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]]
+    }
+
+    Get(apiUri(s"repo/${newRepoId.show}/1.root.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed shouldBe newRoot.signed
+    }
+  }
+
   def signaturesShouldBeValid[T : Encoder](repoId: RepoId, roleType: RoleType, signedPayload: SignedPayload[T]): Assertion = {
     val signature = signedPayload.signatures.head
     val signed = signedPayload.signed

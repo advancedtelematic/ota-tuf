@@ -3,6 +3,7 @@ package com.advancedtelematic.tuf.reposerver.util
 import java.nio.file.Files
 import java.security.{KeyPair, PublicKey}
 import java.time.Instant
+import java.time.temporal.{ChronoField, ChronoUnit}
 import java.util.NoSuchElementException
 import java.util.concurrent.ConcurrentHashMap
 
@@ -63,7 +64,8 @@ object FakeKeyserverClient extends KeyserverClient {
       keyPair.getPublic.id -> RSATufKey(keyPair.getPublic)
     }
 
-    RootRole(clientKeys, roles, expires = Instant.now.plusSeconds(3600), version = 1)
+    // expires truncated to seconds since circe codecs will code it that way, we cannot save it with more precision than that
+    RootRole(clientKeys, roles, expires = Instant.now.plusSeconds(3600).truncatedTo(ChronoUnit.SECONDS), version = 1)
   }
 
   private def generateKeys(repoId: RepoId): List[KeyPair] = {
@@ -156,6 +158,9 @@ object FakeKeyserverClient extends KeyserverClient {
 
     Seq(RSATufKeyPair(RSATufKey(keyPair.getPublic), RSATufPrivateKey(keyPair.getPrivate)))
   }
+
+  override def fetchRootRole(repoId: RepoId, version: Int): Future[SignedPayload[RootRole]] =
+    fetchRootRole(repoId).filter(_.signed.version == version)
 }
 
 trait LongHttpRequest {

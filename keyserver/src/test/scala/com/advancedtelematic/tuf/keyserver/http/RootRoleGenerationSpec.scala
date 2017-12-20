@@ -89,7 +89,7 @@ with SignedRootRoleSupport {
 
       val signed = await(rootGeneration.findOrGenerate(repoId))
 
-      await(signedRootRoleRepo.find(repoId)).asJson shouldBe signed.asJson
+      await(signedRootRoleRepo.findLatestValid(repoId)).asJson shouldBe signed.asJson
     }.futureValue
   }
 }

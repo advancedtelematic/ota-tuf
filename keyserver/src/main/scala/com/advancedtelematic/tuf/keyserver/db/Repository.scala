@@ -187,19 +187,20 @@ trait SignedRootRoleSupport extends DatabaseSupport {
 }
 
 object SignedRootRoleRepository {
-  val MissingSignedRole = MissingEntity[SignedPayload[RootRole]]
+  val MissingSignedRole = MissingEntity[RootRole]
+  val RootRoleExists = EntityAlreadyExists[RootRole]
 }
 
 protected[db] class SignedRootRoleRepository()(implicit db: Database, ec: ExecutionContext) {
   import Schema.signedPayloadRootRoleMapper
   import Schema.signedRootRoles
-  import SignedRootRoleRepository.MissingSignedRole
+  import SignedRootRoleRepository.{MissingSignedRole, RootRoleExists}
 
   def persist(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = {
     val expires = signedPayload.signed.expires
 
-    val io = signedRootRoles
-      .insertOrUpdate((repoId, expires, signedPayload.signed.version, signedPayload))
+    val io = (signedRootRoles += ((repoId, expires, signedPayload.signed.version, signedPayload)))
+      .handleIntegrityErrors(RootRoleExists)
 
     db.run(io).map(_ => ())
   }
@@ -240,19 +241,34 @@ protected[db] class SignedRootRoleRepository()(implicit db: Database, ec: Execut
   def nextVersion(repoId: RepoId): Future[Int] = db.run {
     signedRootRoles
       .filter(_.repoId === repoId)
+      .sortBy(_.version.desc)
       .map(_.version)
       .result
       .headOption
       .map(_.getOrElse(0) + 1)
   }
 
-  def find(repoId: RepoId): Future[SignedPayload[RootRole]] =
+  def findLatestValid(repoId: RepoId): Future[SignedPayload[RootRole]] =
     db.run {
       signedRootRoles
         .filter(_.expiresAt > Instant.now())
         .filter(_.repoId === repoId)
+        .sortBy(_.version.desc)
+        .take(1)
         .map(_.signedPayload)
         .result
         .failIfNotSingle(MissingSignedRole)
     }
+
+  def findByVersion(repoId: RepoId, version: Int): Future[SignedPayload[RootRole]] =
+    db.run {
+      signedRootRoles
+        .filter(_.repoId === repoId)
+        .filter(_.version === version)
+        .sortBy(_.version.desc)
+        .map(_.signedPayload)
+        .result
+        .failIfNotSingle(MissingSignedRole)
+    }
+
 }
