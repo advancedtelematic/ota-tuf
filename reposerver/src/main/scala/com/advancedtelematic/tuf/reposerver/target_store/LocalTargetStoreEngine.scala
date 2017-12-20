@@ -1,8 +1,9 @@
 package com.advancedtelematic.tuf.reposerver.target_store
 
 import java.io.File
-import java.nio.file.Files
-
+import java.nio.file.{FileAlreadyExistsException, Files}
+import java.nio.file.attribute.PosixFilePermission._
+import java.nio.file.attribute.PosixFilePermissions
 import akka.Done
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri
@@ -73,6 +74,9 @@ class LocalTargetStoreEngine(root: File)(implicit val system: ActorSystem, val m
     Files.createDirectories(storePath.getParent)
 
     val uri = Uri(storePath.toAbsolutePath.toString)
+
+    try Files.createFile(storePath, PosixFilePermissions.asFileAttribute(java.util.EnumSet.of(OWNER_READ, OWNER_WRITE)))
+    catch { case _: FileAlreadyExistsException => () }
 
     FileIO.toPath(storePath).mapMaterializedValue {
       _.flatMap { result =>

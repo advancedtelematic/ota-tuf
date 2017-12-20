@@ -8,7 +8,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTuf
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverHttpClient
-import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp
+import com.advancedtelematic.tuf.keyserver.daemon.{DefaultKeyGenerationOp, KeyGenerationOp}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 import com.advancedtelematic.tuf.util.{HttpClientSpecSupport, ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
@@ -180,7 +180,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
   }
 
   test("fetching target key pairs") {
-    val keyGenerationOp = new KeyGenerationOp(fakeVault)
+    val keyGenerationOp = DefaultKeyGenerationOp(fakeVault)
 
     val repoId = RepoId.generate()
     val keyGenRequest = KeyGenRequest(KeyGenId.generate(),
@@ -188,7 +188,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
 
     async {
       await(keyGenRepo.persist(keyGenRequest))
-      val generatedKeys = await(keyGenerationOp.processGenerationRequest(keyGenRequest))
+      val generatedKeys = await(keyGenerationOp(keyGenRequest))
       val pairs = await(client.fetchTargetKeyPairs(repoId))
       pairs.map(_.pubkey.keyval) shouldBe generatedKeys.map(_.publicKey)
     }.futureValue

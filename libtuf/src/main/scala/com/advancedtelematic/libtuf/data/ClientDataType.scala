@@ -59,6 +59,8 @@ object ClientDataType {
   trait TufRole[T] {
     def roleType: RoleType
 
+    def typeStr: String = roleType.toString.toLowerCase.capitalize
+
     def toMetaPath: MetaPath = roleType.toMetaPath
 
     def toETagPath: String = toMetaPath.value + ".etag"
@@ -67,6 +69,7 @@ object ClientDataType {
   sealed trait VersionedRole {
     val version: Int
     val expires: Instant
+    val _type: String
   }
 
   object TufRole {
@@ -84,21 +87,25 @@ object ClientDataType {
                       roles: Map[RoleType, RoleKeys],
                       version: Int,
                       expires: Instant,
-                      consistent_snapshot: Boolean = false,
-                      _type: String = "Root") extends VersionedRole
+                      consistent_snapshot: Boolean = false) extends VersionedRole {
+    override val _type: String = "Root"
+  }
 
   case class TargetsRole(expires: Instant,
                          targets: Map[TargetFilename, ClientTargetItem],
-                         version: Int,
-                         _type: String = "Targets") extends VersionedRole
+                         version: Int) extends VersionedRole {
+    override val _type: String = "Targets"
+  }
 
   case class SnapshotRole(meta: Map[MetaPath, MetaItem],
                           expires: Instant,
-                          version: Int,
-                          _type: String = "Snapshot") extends VersionedRole
+                          version: Int) extends VersionedRole {
+    override val _type: String = "Snapshot"
+  }
 
   case class TimestampRole(meta: Map[MetaPath, MetaItem],
                            expires: Instant,
-                           version: Int,
-                           _type: String = "Timestamp") extends VersionedRole
+                           version: Int) extends VersionedRole {
+    override val _type: String = "Timestamp"
+  }
 }

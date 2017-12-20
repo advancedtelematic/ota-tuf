@@ -30,7 +30,7 @@ class RepoManagementSpec extends CliSpec {
 
   def randomName = RepoName(RandomNames() + "-repo")
 
-  def randomRepoPath = Files.createTempDirectory("tuf-repo")
+  def randomRepoPath = Files.createTempDirectory("tuf-repo").resolve("repo")
 
   test("credentials.zip without tufrepo.url throws proper error") {
     val repoT = RepoManagement.initialize(randomName, randomRepoPath, credentialsZipNoTufRepo)

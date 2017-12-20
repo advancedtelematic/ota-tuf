@@ -23,7 +23,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.{RSATufPrivateKey, TufPriva
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp
+import com.advancedtelematic.tuf.keyserver.daemon.{DefaultKeyGenerationOp, KeyGenerationOp}
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport, RoleRepositorySupport}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKeyNotFound
 import eu.timepit.refined.api.Refined
@@ -582,7 +582,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
   }
 
   test("GET target key pairs") {
-    val keyGenerationOp = new KeyGenerationOp(fakeVault)
+    val keyGenerationOp = DefaultKeyGenerationOp(fakeVault)
 
     val repoId = RepoId.generate()
 
@@ -590,7 +590,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     val targetKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
       repoId, KeyGenRequestStatus.REQUESTED, RoleType.TARGETS, 2048, RsaKeyType)
     keyGenRepo.persist(targetKeyGenRequest).futureValue
-    val publicKeys = keyGenerationOp.processGenerationRequest(targetKeyGenRequest).futureValue
+    val publicKeys = keyGenerationOp(targetKeyGenRequest).futureValue
 
     Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
       status shouldBe StatusCodes.OK

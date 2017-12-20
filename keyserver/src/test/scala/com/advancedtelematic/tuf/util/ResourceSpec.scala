@@ -10,7 +10,7 @@ import scala.concurrent.duration._
 import akka.testkit.TestDuration
 import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
-import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp
+import com.advancedtelematic.tuf.keyserver.daemon.DefaultKeyGenerationOp
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.Key
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 
@@ -34,7 +34,7 @@ trait HttpClientSpecSupport {
 trait RootGenerationSpecSupport {
   self: ResourceSpec with KeyGenRequestSupport =>
 
-  private val keyGenerationOp = new KeyGenerationOp(fakeVault)
+  private val keyGenerationOp = DefaultKeyGenerationOp(fakeVault)
 
   def processKeyGenerationRequest(repoId: RepoId): Future[Seq[Key]] = {
     keyGenRepo.findBy(repoId).flatMap { ids ⇒
@@ -42,7 +42,7 @@ trait RootGenerationSpecSupport {
         ids.map(_.id).map { id =>
           keyGenRepo
             .find(id)
-            .flatMap(keyGenerationOp.processGenerationRequest)
+            .flatMap(keyGenerationOp)
         }
       }.map(_.flatten)
     }

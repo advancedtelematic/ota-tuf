@@ -13,6 +13,7 @@ import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyReposito
 import org.scalatest.time.{Millis, Seconds, Span}
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp.KeyGenerationOp
 
 import scala.concurrent.ExecutionContext
 
@@ -33,7 +34,7 @@ class KeyGeneratorWorkerIntegrationSpec extends TufKeyserverSpec
 
   lazy val vault = VaultClient(vaultAddr, vaultToken, vaultMount)
 
-  val actorRef = system.actorOf(KeyGeneratorWorker.props(vault))
+  val actorRef = system.actorOf(KeyGeneratorWorker.props(DefaultKeyGenerationOp(vault)))
 
   test("adds key to vault") {
     val keyid = KeyGenId.generate()

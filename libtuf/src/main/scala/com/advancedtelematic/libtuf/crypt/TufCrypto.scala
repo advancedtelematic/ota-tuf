@@ -40,6 +40,8 @@ trait TufCrypto[T <: KeyType] {
 
   def generateKeyPair(keySize: Int): TufKeyPair
 
+  def generateKeyPair(): TufKeyPair = generateKeyPair(defaultKeySize)
+
   def toKeyPair(publicKey: String, privateKey: TufPrivateKey): Try[TufKeyPair]
 
   def parseKeyPair(publicKey: String, privateKey: String): Try[TufKeyPair] =
@@ -48,6 +50,10 @@ trait TufCrypto[T <: KeyType] {
   def convert(publicKey: PublicKey): T#Pub
 
   def signer: security.Signature
+
+  def defaultKeySize: Int
+
+  def validKeySize(size: Int): Boolean
 
   val signatureMethod: SignatureMethod
 }
@@ -226,12 +232,15 @@ protected [crypt] class EdCrypto extends TufCrypto[EdKeyType.type] {
   override def toKeyPair(publicKey: String, privateKey: TufPrivateKey): Try[TufKeyPair] =
     parsePublic(publicKey).map(EdTufKeyPair(_, privateKey.asInstanceOf[EdTufPrivateKey]))
 
+  override def validKeySize(size: Int): Boolean = size == 256
+
+  override def defaultKeySize: Int = 256
 }
 
 protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
   import TufCrypto.KeyOps
 
-  override def generateKeyPair(size: Int = 2048): RSATufKeyPair = {
+  override def generateKeyPair(size: Int): RSATufKeyPair = {
     if(size < 2048) {
       throw new IllegalArgumentException("Key size too small, must be >= 2048")
     }
@@ -279,4 +288,8 @@ protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
 
   override def toKeyPair(publicKey: String, privateKey: TufPrivateKey): Try[TufKeyPair] =
     parsePublic(publicKey).map(RSATufKeyPair(_, privateKey.asInstanceOf[RSATufPrivateKey]))
+
+  override def validKeySize(size: Int): Boolean = size >= 2048
+
+  override def defaultKeySize: Int = 2048
 }

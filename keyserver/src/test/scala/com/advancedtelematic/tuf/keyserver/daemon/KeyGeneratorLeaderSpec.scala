@@ -1,13 +1,13 @@
 package com.advancedtelematic.tuf.keyserver.daemon
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Props}
 import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, RsaKeyType}
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest}
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.tuf.util.TufKeyserverSpec
 import com.advancedtelematic.libats.test.DatabaseSpec
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
 import org.scalatest.concurrent.PatienceConfiguration.{Interval, Timeout}
@@ -27,7 +27,16 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
 
   implicit val ec = ExecutionContext.global
 
-  lazy val actorRef = system.actorOf(KeyGeneratorLeader.props(fakeVault))
+  val testKeyGenOp: KeyGenRequest => Future[Seq[Key]] = (kgr: KeyGenRequest) => {
+    val defaultOp = DefaultKeyGenerationOp(fakeVault)
+
+    if(kgr.keySize > 2048)
+      Future.failed(new Exception("test: Key size too big"))
+    else
+      defaultOp(kgr)
+  }
+
+  lazy val actorRef = system.actorOf(KeyGeneratorLeader.props(testKeyGenOp))
 
   override implicit def patienceConfig = PatienceConfig(timeout = Span(30, Seconds), interval = Span(300, Millis))
 
@@ -70,7 +79,7 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
   }
 
   test("recovers when single worker fails") {
-    expectGenerated(KeyGenRequestStatus.ERROR, size = -1)
+    expectGenerated(KeyGenRequestStatus.ERROR, size = Int.MaxValue)
 
     expectGenerated(KeyGenRequestStatus.GENERATED)
 
@@ -80,6 +89,7 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
   def expectGenerated(newStatus: KeyGenRequestStatus, size: Int = 2048): Assertion = {
     val repoId = RepoId.generate()
     val keyGenRequest = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType = RsaKeyType, keySize = size)
+
     keyGenRepo.persist(keyGenRequest).futureValue
     eventually(timeout, interval) {
       keyGenRepo.find(keyGenRequest.id).futureValue.status shouldBe newStatus

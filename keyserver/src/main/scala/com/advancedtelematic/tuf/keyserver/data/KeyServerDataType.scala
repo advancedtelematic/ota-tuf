@@ -26,7 +26,9 @@ object KeyServerDataType {
                            keySize: Int,
                            keyType: KeyType,
                            threshold: Int = 1,
-                           description: String = "")
+                           description: String = "") {
+    require(keyType.crypto.validKeySize(keySize), s"Invalid keysize ($keySize) for $keyType")
+  }
 
   case class Key(id: KeyId, roleId: RoleId, keyType: KeyType, publicKey: PublicKey) {
     def toTufKey: TufKey = keyType.crypto.convert(publicKey)

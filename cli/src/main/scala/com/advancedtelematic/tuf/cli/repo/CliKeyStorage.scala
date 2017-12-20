@@ -1,7 +1,11 @@
 package com.advancedtelematic.tuf.cli.repo
 
-import java.nio.file.{Files, Path}
-
+import java.nio.file.attribute.{PosixFilePermission, PosixFilePermissions}
+import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
+import java.util
+import PosixFilePermission._
+import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, TufKey, TufKeyPair, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.KeyName
@@ -16,10 +20,14 @@ class CliKeyStorage(repo: Path) {
 
   private lazy val log = LoggerFactory.getLogger(this.getClass)
 
-  implicit private class KeyNamePath(v: KeyName) {
-    def publicKeyPath: Path = repo.resolve("keys").resolve(v.publicKeyName)
+  private lazy val SECRET_KEY_PERMISSIONS = util.EnumSet.of(OWNER_READ, OWNER_WRITE)
 
-    def privateKeyPath: Path = repo.resolve("keys").resolve(v.privateKeyName)
+  private val keysPath: Path = repo.resolve("keys")
+
+  implicit private class KeyNamePath(v: KeyName) {
+    def publicKeyPath: Path = keysPath.resolve(v.publicKeyName)
+
+    def privateKeyPath: Path = keysPath.resolve(v.privateKeyName)
   }
 
   private def writePublic(keyName: KeyName, tufKey: TufKey): Try[Unit] = Try {
@@ -27,17 +35,29 @@ class CliKeyStorage(repo: Path) {
   }
 
   private def writePrivate(keyName: KeyName, tufKey: TufPrivateKey): Try[Unit] = Try {
+    try Files.createFile(keyName.privateKeyPath, PosixFilePermissions.asFileAttribute(SECRET_KEY_PERMISSIONS))
+    catch { case _: FileAlreadyExistsException => () }
+
     Files.write(keyName.privateKeyPath, tufKey.asJson.spaces2.getBytes)
   }
 
   def writeKeys(name: KeyName, pair: TufKeyPair): Try[Unit] =
     writeKeys(name, pair.pubkey, pair.privkey)
 
+  private def ensureKeysDirCreated(): Try[Unit] = Try {
+    val perms = PosixFilePermissions.asFileAttribute(SECRET_KEY_PERMISSIONS + OWNER_EXECUTE)
+    Files.createDirectories(keysPath, perms)
+
+    val currentPerms = Files.getPosixFilePermissions(keysPath)
+    if(currentPerms.asScala != Set(OWNER_READ, OWNER_WRITE, OWNER_EXECUTE))
+      log.warn(s"Permissions for $keysPath are too open")
+  }
+
   def writeKeys(name: KeyName, pub: TufKey, priv: TufPrivateKey): Try[Unit] = {
     assert(pub.keytype == priv.keytype)
 
     for {
-      _ <- Try(Files.createDirectories(repo.resolve("keys")))
+      _ <- ensureKeysDirCreated()
       _ <- writePublic(name, pub)
       _ <- writePrivate(name, priv)
       _ = log.info(s"Saved keys to $repo/{${repo.relativize(name.privateKeyPath)}, ${repo.relativize(name.publicKeyPath)}}")
@@ -52,8 +72,9 @@ class CliKeyStorage(repo: Path) {
   def readPrivateKey(keyName: KeyName): Try[TufPrivateKey] =
     parseFile(keyName.privateKeyPath.toFile).flatMap(_.as[TufPrivateKey]).toTry
 
-  def readPublicKey(keyName: KeyName): Try[TufKey] =
+  def readPublicKey(keyName: KeyName): Try[TufKey] = {
     parseFile(keyName.publicKeyPath.toFile).flatMap(_.as[TufKey]).toTry
+  }
 
   def readKeyPair(keyName: KeyName): Try[(TufKey, TufPrivateKey)] = for {
     pub <- readPublicKey(keyName)

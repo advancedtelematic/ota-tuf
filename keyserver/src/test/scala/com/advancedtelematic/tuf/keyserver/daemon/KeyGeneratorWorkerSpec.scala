@@ -1,8 +1,8 @@
 package com.advancedtelematic.tuf.keyserver.daemon
 
 import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, KeyType, RepoId, RoleType, RsaKeyType}
-import akka.actor.{ActorSystem, Status}
-import akka.testkit.{ImplicitSender, TestKitBase}
+import akka.actor.{ActorSystem, Props, Status}
+import akka.testkit.{ImplicitSender, TestKitBase, TestProbe}
 import com.advancedtelematic.libtuf.crypt.TufCrypto._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.tuf.util.TufKeyserverSpec
@@ -12,6 +12,7 @@ import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp.KeyGenerationOp
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Milliseconds, Seconds, Span}
 import io.circe.syntax._
@@ -29,7 +30,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
 
   implicit val ec = ExecutionContext.global
 
-  val actorRef = system.actorOf(KeyGeneratorWorker.props(fakeVault))
+  val actorRef = system.actorOf(KeyGeneratorWorker.props(DefaultKeyGenerationOp(fakeVault)))
 
   private val timeout = Span(20, Seconds)
 
@@ -40,7 +41,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
     val keyGenId = KeyGenId.generate()
     val repoId = RepoId.generate()
     val request = KeyGenRequest(keyGenId, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT,
-                                keySize = 2048, keyType = keyType, threshold = threshold)
+                                keySize = keyType.crypto.defaultKeySize, keyType = keyType, threshold = threshold)
     keyGenRepo.persist(request)
   }
 
@@ -99,11 +100,18 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
   test("keys with an error are marked as error") {
     val keyGenId = KeyGenId.generate()
     val repoId = RepoId.generate()
-    val kgr = keyGenRepo.persist(KeyGenRequest(keyGenId, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType = RsaKeyType, keySize = -1)).futureValue
-    actorRef ! kgr
 
-    val exception = expectMsgType[Status.Failure](3.seconds)
-    exception.cause shouldBe a[IllegalArgumentException]
+    val probe = TestProbe()
+
+    val alwaysErrorActor = system.actorOf(Props(new KeyGeneratorWorker(
+      _ => Future.failed(new Exception("test: key gen failed"))
+    )))
+
+    val kgr = keyGenRepo.persist(KeyGenRequest(keyGenId, repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType = RsaKeyType, keySize = 2049)).futureValue
+    alwaysErrorActor.tell(kgr, probe.ref)
+
+    val exception = probe.expectMsgType[Status.Failure](3.seconds)
+    exception.cause.getMessage shouldBe "test: key gen failed"
 
     keyGenRepo.find(keyGenId).futureValue.status shouldBe KeyGenRequestStatus.ERROR
   }

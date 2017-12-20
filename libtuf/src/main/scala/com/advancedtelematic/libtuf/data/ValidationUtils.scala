@@ -1,13 +1,17 @@
 package com.advancedtelematic.libtuf.data
 
+import java.util.Base64
+import java.util.Base64.Decoder
+
 import eu.timepit.refined.api.Validate
+import org.bouncycastle.util.encoders.Hex
+
+import scala.util.Try
 
 object ValidationUtils {
 
-  def validBase64(str: String): Boolean= {
-    val validChars = ('0' to '9') ++ ('a' to 'z') ++ ('A' to 'Z') ++ List('+', '/', '=')
-    str.forall(validChars.contains)
-  }
+  def validBase64(str: String): Boolean =
+    Try(Base64.getDecoder.decode(str)).isSuccess
 
   def validBase64Validation[T](v: T): Validate.Plain[String, T] =
     Validate.fromPredicate(
@@ -20,12 +24,15 @@ object ValidationUtils {
     str.length == length && str.forall(h => ('0' to '9').contains(h) || ('a' to 'f').contains(h))
   }
 
-  def validHexValidation[T](v: T, length: Int): Validate.Plain[String, T] =
+  def validHexValidation[T](v: T, length: Int): Validate.Plain[String, T] = {
+    require(length % 2 == 0)
+
     Validate.fromPredicate(
       hash => validHex(length, hash),
       hash => s"$hash is not a $length hex string",
       v
     )
+  }
 
   def validInBetween[T](min: Long, max: Long, proof: T): Validate.Plain[String, T] =
     Validate.fromPredicate(
