@@ -5,6 +5,7 @@ import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
 import java.util
 import PosixFilePermission._
 import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, TufKey, TufKeyPair, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.KeyName
@@ -21,10 +22,12 @@ class CliKeyStorage(repo: Path) {
 
   private lazy val SECRET_KEY_PERMISSIONS = util.EnumSet.of(OWNER_READ, OWNER_WRITE)
 
-  implicit private class KeyNamePath(v: KeyName) {
-    def publicKeyPath: Path = repo.resolve("keys").resolve(v.publicKeyName)
+  private val keysPath: Path = repo.resolve("keys")
 
-    def privateKeyPath: Path = repo.resolve("keys").resolve(v.privateKeyName)
+  implicit private class KeyNamePath(v: KeyName) {
+    def publicKeyPath: Path = keysPath.resolve(v.publicKeyName)
+
+    def privateKeyPath: Path = keysPath.resolve(v.privateKeyName)
   }
 
   private def writePublic(keyName: KeyName, tufKey: TufKey): Try[Unit] = Try {
@@ -43,7 +46,11 @@ class CliKeyStorage(repo: Path) {
 
   private def ensureKeysDirCreated(): Try[Unit] = Try {
     val perms = PosixFilePermissions.asFileAttribute(SECRET_KEY_PERMISSIONS + OWNER_EXECUTE)
-    Files.createDirectories(repo.resolve("keys"), perms)
+    Files.createDirectories(keysPath, perms)
+
+    val currentPerms = Files.getPosixFilePermissions(keysPath)
+    if(currentPerms.asScala != Set(OWNER_READ, OWNER_WRITE, OWNER_EXECUTE))
+      log.warn(s"Permissions for $keysPath are too open")
   }
 
   def writeKeys(name: KeyName, pub: TufKey, priv: TufPrivateKey): Try[Unit] = {

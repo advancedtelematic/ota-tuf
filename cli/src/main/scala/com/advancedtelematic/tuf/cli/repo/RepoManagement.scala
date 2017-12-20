@@ -155,6 +155,8 @@ protected object ZipRepoInitialization {
           (implicit ec: ExecutionContext): Try[TufRepo] = {
     val tufRepo = new TufRepo(repoName, repoPath)
 
+    tufRepo.initRepoDirs().get
+
     // copy whole ZIP file into repo
     Files.copy(initFilePath, repoPath.resolve("credentials.zip"))
 

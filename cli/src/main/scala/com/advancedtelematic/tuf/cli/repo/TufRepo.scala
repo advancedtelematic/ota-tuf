@@ -2,6 +2,7 @@ package com.advancedtelematic.tuf.cli.repo
 
 import java.io._
 import java.net.URI
+import java.nio.file.attribute.PosixFilePermissions
 import java.nio.file.{Files, Path}
 import java.time.{Instant, Period}
 
@@ -29,7 +30,8 @@ import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.TargetsResponse
 
-import scala.collection.JavaConversions._
+import java.nio.file.attribute.PosixFilePermission._
+import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util
 import scala.util.control.NoStackTrace
@@ -77,6 +79,24 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
   def initTargets(version: Int, expires: Instant): Try[Path] = {
     val emptyTargets = TargetsRole(expires, Map.empty, version)
     writeUnsignedRole(emptyTargets)
+  }
+
+  def initRepoDirs(): Try[Unit] = Try {
+    val perms = PosixFilePermissions.asFileAttribute(java.util.EnumSet.of(OWNER_READ, OWNER_WRITE, OWNER_EXECUTE))
+
+    Files.createDirectory(repoPath, perms)
+    Files.createDirectory(rolesPath, perms)
+    Files.createDirectory(rolesPath.resolve("unsigned"), perms)
+
+    def checkPerms(path: Path): Unit = {
+      val currentPerms = Files.getPosixFilePermissions(path)
+      if(currentPerms.asScala != Set(OWNER_READ, OWNER_WRITE, OWNER_EXECUTE))
+        log.warn(s"Permissions for $path are too open")
+    }
+
+    checkPerms(repoPath)
+    checkPerms(rolesPath)
+    checkPerms(rolesPath.resolve("unsigned"))
   }
 
   def addTarget(name: TargetName, version: TargetVersion, length: Int, checksum: Refined[String, ValidChecksum],
@@ -159,7 +179,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
   }
 
   private def readEtag[T](implicit ev: TufRole[T]): Try[ETag] = Try {
-    val lines = Files.readAllLines(rolesPath.resolve(ev.toETagPath))
+    val lines = Files.readAllLines(rolesPath.resolve(ev.toETagPath)).asScala
     assert(lines.tail.isEmpty)
     ETag(lines.head)
   }.recoverWith {
@@ -177,7 +197,6 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     writeRole(rolesPath, signedPayload.signed.toMetaPath, signedPayload)
 
   private def writeRole[T : Encoder](path: Path, metaPath: MetaPath, payload: T): Try[Path] = Try {
-    Files.createDirectories(path)
     val rolePath = path.resolve(metaPath.value)
     Files.write(rolePath, payload.asJson.spaces2.getBytes)
     rolePath

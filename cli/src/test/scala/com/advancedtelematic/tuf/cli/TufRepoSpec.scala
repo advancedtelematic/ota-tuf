@@ -24,7 +24,8 @@ class TufRepoSpec extends CliSpec {
   import scala.concurrent.ExecutionContext.Implicits.global
 
   def initRepo(): TufRepo = {
-    val repo = new TufRepo(RepoName(RandomNames() + "-repo"), Files.createTempDirectory("tuf-repo"))
+    val repo = new TufRepo(RepoName(RandomNames() + "-repo"), Files.createTempDirectory("tuf-repo").resolve("repo"))
+    repo.initRepoDirs().get
     repo.initTargets(11, Instant.now).get
     repo
   }
@@ -168,7 +169,7 @@ class TufRepoSpec extends CliSpec {
   test("initTargets creates an empty target") {
     val now = Instant.now
 
-    val repo = new TufRepo(RepoName(RandomNames() + "-repo"), Files.createTempDirectory("tuf-repo"))
+    val repo = initRepo()
 
     val path = repo.initTargets(20, now.plusSeconds(1)).get
     val role = parseFile(path.toFile).flatMap(_.as[TargetsRole]).valueOr(throw _)
