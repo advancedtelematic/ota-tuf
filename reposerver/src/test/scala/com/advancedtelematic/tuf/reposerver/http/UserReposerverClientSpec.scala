@@ -13,6 +13,7 @@ import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 import org.scalatest.time.{Seconds, Span}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.EtagNotValid
 import com.advancedtelematic.libtuf.reposerver.UserReposerverHttpClient
 
@@ -69,7 +70,7 @@ class UserReposerverClientSpec extends TufReposerverSpec
     keyPair.privkey shouldBe a[TufPrivateKey]
     keyPair.pubkey shouldBe a[TufKey]
 
-    client.fetchKeyPair(keyPair.pubkey.id).failed.futureValue shouldBe a[Throwable] // TODO: Catch proper exception
+    client.fetchKeyPair(keyPair.pubkey.id).failed.futureValue shouldBe a[HttpjClientError]
   }
 
   test("returns specific exception when etag is not valid") {

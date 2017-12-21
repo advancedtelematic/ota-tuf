@@ -124,7 +124,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
       case Status.Failure(ex) => fail(ex)
     }
 
-    fakeVault.findKey(key.id).futureValue.publicKey should include("BEGIN PUBLIC KEY")
+    fakeVault.findKey(key.id).futureValue.publicKey.asJson.noSpaces should include("BEGIN PUBLIC KEY")
     fakeVault.findKey(key.id).futureValue.privateKey.asJson.noSpaces should include("BEGIN RSA PRIVATE KEY")
   }
 

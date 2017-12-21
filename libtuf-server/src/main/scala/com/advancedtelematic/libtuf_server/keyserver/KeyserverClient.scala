@@ -24,7 +24,7 @@ trait KeyserverClient {
   val RootRoleConflict = RawError(ErrorCode("root_role_conflict"), StatusCodes.Conflict, "root role already exists")
   val RoleKeyNotFound = RawError(ErrorCode("role_key_not_found"), StatusCodes.PreconditionFailed, s"can't sign since role was not found in upstream key store")
   val KeyError = RawError(ErrorCode("key_error"), StatusCodes.BadRequest, "key cannot be processed")
-  val KeyPairNotFound = RawError(ErrorCode("keypair_not_found"), StatusCodes.BadRequest, "keypair not found in keyserver")
+  val KeyPairNotFound = RawError(ErrorCode("keypair_not_found"), StatusCodes.NotFound, "keypair not found in keyserver")
 
   def createRoot(repoId: RepoId, keyType: KeyType = RsaKeyType): Future[Json]
 
@@ -42,8 +42,7 @@ trait KeyserverClient {
 
   def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[Unit]
 
-  // TODO: Fetching only private key for now
-  def fetchKeyPair(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey]
+  def fetchKeyPair(repoId: RepoId, keyId: KeyId): Future[TufKeyPair]
 
   def fetchTargetKeyPairs(repoId: RepoId): Future[Seq[TufKeyPair]]
 }
@@ -124,10 +123,10 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
     }
   }
 
-  override def fetchKeyPair(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey] = {
+  override def fetchKeyPair(repoId: RepoId, keyId: KeyId): Future[TufKeyPair] = {
     val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("root") / repoId.show / "keys" / keyId.value))
 
-    execHttp[TufPrivateKey](req) {
+    execHttp[TufKeyPair](req) {
       case StatusCodes.NotFound =>
         Future.failed(KeyPairNotFound)
     }

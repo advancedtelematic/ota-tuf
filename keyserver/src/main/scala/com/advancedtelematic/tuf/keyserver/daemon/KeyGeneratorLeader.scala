@@ -107,18 +107,18 @@ class DefaultKeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database
 
   private lazy val _log = LoggerFactory.getLogger(this.getClass)
 
-  protected def generateKeys(roleId: RoleId, keyType: KeyType, keySize: Int, threshold: Int): Seq[(Key, TufPrivateKey)] = {
+  protected def generateKeys(roleId: RoleId, keyType: KeyType, keySize: Int, threshold: Int): Seq[(Key, TufKeyPair)] = {
     require(threshold > 0, "threshold must be greater than 0")
 
     (0 until threshold).map { _ =>
       val pair = TufCrypto.generateKeyPair(keyType, keySize)
-      (Key(pair.pubkey.id, roleId, keyType, pair.pubkey.keyval), pair.privkey)
+      (Key(pair.pubkey.id, roleId, keyType, pair.pubkey.keyval), pair)
     }
   }
 
-  protected def saveToVault(keys: Seq[(Key, TufPrivateKey)]): Future[Unit] = {
-    Future.traverse(keys) { case (key, privateKey) =>
-      val vaultKey = VaultKey(key.id, key.keyType, key.publicKey.toPem, privateKey)
+  protected def saveToVault(keys: Seq[(Key, TufKeyPair)]): Future[Unit] = {
+    Future.traverse(keys) { case (key, keyPair) =>
+      val vaultKey = VaultKey(key.id, key.keyType, keyPair.pubkey, keyPair.privkey)
       vaultClient.createKey(vaultKey)
     }.map(_ => ())
   }
