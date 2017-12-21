@@ -143,14 +143,12 @@ object FakeKeyserverClient extends KeyserverClient {
     })
   }
 
-  override def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey] = FastFuture.successful {
-    val keyPair = keys.asScala.get(repoId).flatMap(_.values.find(_.getPublic.id == keyId)).getOrElse(throw RoleKeyNotFound)
+  override def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[Unit] = FastFuture.successful {
+    keys.asScala.get(repoId).flatMap(_.values.find(_.getPublic.id == keyId)).getOrElse(throw RoleKeyNotFound)
 
     keys.computeIfPresent(repoId, (id: RepoId, existingKeys: Map[RoleType, KeyPair]) => {
       existingKeys.filter(_._2.getPublic.id != keyId)
     })
-
-    RSATufPrivateKey(keyPair.getPrivate)
   }
 
   override def fetchTargetKeyPairs(repoId: RepoId): Future[Seq[TufKeyPair]] =  FastFuture.successful {
@@ -161,6 +159,13 @@ object FakeKeyserverClient extends KeyserverClient {
 
   override def fetchRootRole(repoId: RepoId, version: Int): Future[SignedPayload[RootRole]] =
     fetchRootRole(repoId).filter(_.signed.version == version)
+
+  override def fetchKeyPair(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey] = Future.fromTry {
+    Try {
+      val keyPair = keys.asScala.getOrElse(repoId, throw KeyPairNotFound).values.find(_.getPublic.id == keyId)
+      RSATufPrivateKey(keyPair.getOrElse(throw KeyPairNotFound).getPrivate)
+    }
+  }
 }
 
 trait LongHttpRequest {

@@ -8,6 +8,7 @@ import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.headers.{ETag, EntityTag, RawHeader, `If-Match`}
 import akka.http.scaladsl.model.{HttpResponse, StatusCodes, Uri}
 import akka.http.scaladsl.server._
+import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import com.advancedtelematic.libats.data.RefinedUtils._
 import com.advancedtelematic.libats.http.Errors.{MissingEntity, RawError}
@@ -187,8 +188,21 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
             complete(keyserverClient.updateRoot(repoId, signedPayload))
           }
         } ~
-         (path("private_keys" / KeyIdPath) & delete) { keyId =>
-           complete(keyserverClient.deletePrivateKey(repoId, keyId))
+         path("private_keys" / KeyIdPath) { keyId =>
+           delete {
+             complete(keyserverClient.deletePrivateKey(repoId, keyId))
+           } ~
+           get {
+             // TODO: Ugly until upstream is fixed
+             val f = keyserverClient.fetchRootRole(repoId).map { signedRoot ⇒
+               signedRoot.signed.keys(keyId)
+             }.flatMap { tufKey ⇒
+               val ff = keyserverClient.fetchKeyPair(repoId, keyId)
+               ff.flatMap(privKey ⇒ Future.fromTry(tufKey.keytype.crypto.toKeyPair(tufKey, privKey)))
+             }
+
+             complete(f)
+           }
          }
       } ~
       (get & path(IntNumber ~ ".root.json")) { version ⇒

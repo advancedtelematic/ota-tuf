@@ -5,7 +5,7 @@ import java.net.URI
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ETag, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TufKey, TufKeyPair, TufPrivateKey}
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpResponse
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{EtagNotValid, TargetsResponse}
@@ -25,7 +25,9 @@ object UserReposerverClient {
 trait UserReposerverClient {
   def root(): Future[SignedPayload[RootRole]]
 
-  def deleteKey(keyId: KeyId): Future[TufPrivateKey]
+  def fetchKeyPair(keyId: KeyId): Future[TufKeyPair]
+
+  def deleteKey(keyId: KeyId): Future[Unit]
 
   def pushSignedRoot(signedRoot: SignedPayload[RootRole]): Future[Unit]
 
@@ -57,9 +59,14 @@ class UserReposerverHttpClient(reposerverUri: URI,
     execHttp[SignedPayload[RootRole]](req)().map(_.body)
   }
 
-  def deleteKey(keyId: KeyId): Future[TufPrivateKey] = {
+  override def fetchKeyPair(keyId: KeyId): Future[TufKeyPair] = {
+    val req = Http(apiUri("root/private_keys/" + keyId.value))
+    execHttp[TufKeyPair](req)().map(_.body)
+  }
+
+  def deleteKey(keyId: KeyId): Future[Unit] = {
     val req = Http(apiUri("root/private_keys/" + keyId.value)).method("DELETE")
-    execHttp[TufPrivateKey](req)().map(_.body)
+    execHttp[Unit](req)().map(_.body)
   }
 
   def pushSignedRoot(signedRoot: SignedPayload[RootRole]): Future[Unit] = {
