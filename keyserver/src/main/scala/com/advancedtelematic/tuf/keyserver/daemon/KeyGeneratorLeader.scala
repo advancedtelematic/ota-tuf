@@ -133,7 +133,7 @@ class DefaultKeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database
       await(saveToVault(keyPairs))
       await(keyGenRepo.persistGenerated(kgr, keys, role, keyRepo, roleRepo))
 
-      _log.info("Generated keys {}", keys.map(_.id.value))
+      _log.info("Generated keys {}", keys.map(_.id.value).mkString(","))
       keys
     }
 }

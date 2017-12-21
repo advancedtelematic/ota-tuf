@@ -62,6 +62,7 @@ class RootRoleResource(vaultClient: VaultClient)
             val f = rootRoleGeneration
               .findOrGenerate(repoId)
               .flatMap(_ => rootRoleKeyEdit.deletePrivateKey(repoId, keyId))
+              .map(_ ⇒ StatusCodes.NoContent)
 
             complete(f)
           }
@@ -90,16 +91,21 @@ class RootRoleResource(vaultClient: VaultClient)
           complete(f)
         }
       } ~
-      pathPrefix("keys" / "targets") {
-        (put & pathEnd) {
-          entity(as[TufKey]) { tufKey =>
-            val f = rootRoleKeyEdit.addPublicKey(repoId, RoleType.TARGETS, tufKey)
-            complete(f)
-          }
+      pathPrefix("keys") {
+        (path(KeyIdPath) & get) { keyId ⇒
+          complete(rootRoleKeyEdit.findKeyPair(repoId, keyId))
         } ~
-        path("pairs") {
-          (get & pathEnd) {
-            complete(targetRole.keyPairs(repoId))
+        pathPrefix("targets") {
+          (put & pathEnd){
+            entity(as[TufKey]) { tufKey =>
+              val f = rootRoleKeyEdit.addPublicKey(repoId, RoleType.TARGETS, tufKey)
+              complete(f)
+            }
+          } ~
+          path("pairs") {
+            get {
+              complete(targetRole.keyPairs(repoId))
+            }
           }
         }
       }

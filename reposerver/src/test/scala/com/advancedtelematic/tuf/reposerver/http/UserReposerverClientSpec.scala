@@ -3,10 +3,12 @@ package com.advancedtelematic.tuf.reposerver.http
 import java.net.URI
 import java.time.Instant
 
+import com.advancedtelematic.jwk.JwkSet.KeyNotFound
 import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{ETag, RootRole, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKeyPair, RepoId, RoleType, SignedPayload, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufKeyPair, EdTufPrivateKey, RepoId, RoleType, SignedPayload, TufKey, TufKeyPair, TufPrivateKey}
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 import org.scalatest.time.{Seconds, Span}
@@ -29,7 +31,7 @@ class UserReposerverClientSpec extends TufReposerverSpec
 
   val repoId = RepoId.generate()
 
-  val client = new UserReposerverHttpClient(URI.create("http://localhost"), testClient, token = None)
+  val client = new UserReposerverHttpClient(URI.create("http://test-reposerver"), testClient, token = None)
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -58,10 +60,16 @@ class UserReposerverClientSpec extends TufReposerverSpec
   test("moves key offline") {
     val f = for {
       signedRoot <- client.root()
-      oldKey <- client.deleteKey(signedRoot.signed.roles(RoleType.ROOT).keyids.head)
-    } yield oldKey
+      keyPair <- client.fetchKeyPair(signedRoot.signed.roles(RoleType.ROOT).keyids.head)
+      _ <- client.deleteKey(signedRoot.signed.roles(RoleType.ROOT).keyids.head)
+    } yield keyPair
 
-    f.futureValue shouldBe a[TufPrivateKey]
+    val keyPair = f.futureValue
+
+    keyPair.privkey shouldBe a[TufPrivateKey]
+    keyPair.pubkey shouldBe a[TufKey]
+
+    client.fetchKeyPair(keyPair.pubkey.id).failed.futureValue shouldBe a[Throwable] // TODO: Catch proper exception
   }
 
   test("returns specific exception when etag is not valid") {

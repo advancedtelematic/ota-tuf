@@ -40,7 +40,6 @@ object VaultClient {
   case class VaultKey(id: KeyId, keyType: KeyType, publicKey: String, privateKey: TufPrivateKey) {
 
     def toTufKeyPair: Try[TufKeyPair] = keyType.crypto.toKeyPair(publicKey, privateKey)
-
   }
 
   case object VaultKeyNotFound extends Exception("vault key not found") with NoStackTrace

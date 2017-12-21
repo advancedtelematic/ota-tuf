@@ -164,7 +164,9 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
   private def deleteOrReadKey(reposerverClient: UserReposerverClient, keyName: KeyName, keyId: KeyId): Future[TufPrivateKey] = {
     keyStorage.readPrivateKey(keyName).toFuture.recoverWith { case _ =>
       log.info(s"Could not read old private key locally, fetching/deleting from server")
-      reposerverClient.deleteKey(keyId)
+      reposerverClient.fetchKeyPair(keyId).flatMap { privateKey ⇒
+        reposerverClient.deleteKey(keyId).map(_ ⇒ privateKey.privkey)
+      }
     }
   }
 
@@ -227,8 +229,8 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       newExpireTime = oldRootRole.expires.plus(DEFAULT_EXPIRE_TIME)
       newRootRole = oldRootRole.copy(keys = newKeySet, roles = newRootRoleMap, version = oldRootRole.version + 1, newExpireTime)
       newRootSignature = TufCrypto.signPayload(newRootPrivKey, newRootRole).toClient(newRootPubKey.id)
-      newRootClientOldSignature = TufCrypto.signPayload(oldRootPrivKey, newRootRole).toClient(oldRootPubKeyId)
-      newSignedRoot = SignedPayload(Seq(newRootSignature, newRootClientOldSignature), newRootRole)
+      newRootOldSignature = TufCrypto.signPayload(oldRootPrivKey, newRootRole).toClient(oldRootPubKeyId)
+      newSignedRoot = SignedPayload(Seq(newRootSignature, newRootOldSignature), newRootRole)
       _ = log.debug(s"pushing ${newSignedRoot.asJson.spaces2}")
       _ <- repoClient.pushSignedRoot(newSignedRoot)
       _ <- writeSignedRole(newSignedRoot).toFuture
