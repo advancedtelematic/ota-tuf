@@ -31,11 +31,12 @@ class RootRoleKeyEdit(vaultClient: VaultClient)
     _ <- vaultClient.deleteKey(keyId)
   } yield ()
 
-  def findKeyPair(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey] = {
+  def findKeyPair(repoId: RepoId, keyId: KeyId): Future[TufKeyPair] = {
     val f = for {
       _ <- ensureIsRepoKey(repoId, keyId, roleType = None)
       vaultKey ← vaultClient.findKey(keyId)
-    } yield vaultKey.privateKey
+      keyPair ← Future.fromTry(vaultKey.toTufKeyPair)
+    } yield keyPair
 
     f.recoverWith {
       case VaultKeyNotFound => Future.failed(KeyNotFound)

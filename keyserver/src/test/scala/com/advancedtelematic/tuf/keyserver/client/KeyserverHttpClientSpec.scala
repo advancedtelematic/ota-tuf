@@ -31,7 +31,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
 
   override implicit def patienceConfig = PatienceConfig(timeout = Span(20, Seconds), interval = Span(500, Millis))
 
-  val client = new KeyserverHttpClient("http://localhost", testHttpClient)
+  val client = new KeyserverHttpClient("http://test-keyserver", testHttpClient)
 
   def createAndProcessRoot(repoId: RepoId): Future[Unit] = {
     for {
@@ -123,7 +123,8 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
     } yield (keyId, keyPair)
 
     whenReady(f) { case (keyId, keyPair) ⇒
-      keyPair shouldBe a[EdTufPrivateKey] // TODO: SHould be a key pair, after vaultkey refactor
+      keyPair shouldBe a[EdTufKeyPair]
+      keyPair.pubkey.id shouldBe keyId
     }
   }
 

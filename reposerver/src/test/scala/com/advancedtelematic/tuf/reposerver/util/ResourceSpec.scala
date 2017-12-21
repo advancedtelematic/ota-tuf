@@ -160,12 +160,10 @@ object FakeKeyserverClient extends KeyserverClient {
   override def fetchRootRole(repoId: RepoId, version: Int): Future[SignedPayload[RootRole]] =
     fetchRootRole(repoId).filter(_.signed.version == version)
 
-  override def fetchKeyPair(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey] = Future.fromTry {
-    Try {
-      val keyPair = keys.asScala.getOrElse(repoId, throw KeyPairNotFound).values.find(_.getPublic.id == keyId)
-      RSATufPrivateKey(keyPair.getOrElse(throw KeyPairNotFound).getPrivate)
-    }
-  }
+  override def fetchKeyPair(repoId: RepoId, keyId: KeyId): Future[TufKeyPair] = Future.fromTry { Try {
+    val keyPair = keys.asScala.getOrElse(repoId, throw KeyPairNotFound).values.find(_.getPublic.id == keyId).getOrElse(throw KeyPairNotFound)
+    RSATufKeyPair(RSATufKey(keyPair.getPublic), RSATufPrivateKey(keyPair.getPrivate))
+  } }
 }
 
 trait LongHttpRequest {

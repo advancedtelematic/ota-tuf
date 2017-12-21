@@ -33,7 +33,7 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
   implicit val decoder = io.circe.generic.semiauto.deriveDecoder[TestPayload]
 
   lazy val roleSigning = {
-    fakeVault.createKey(VaultKey(dbKey.id, dbKey.keyType, dbKey.publicKey.toPem, privateKey)).futureValue
+    fakeVault.createKey(VaultKey(dbKey.id, dbKey.keyType, publicKey, privateKey)).futureValue
     new RoleSigning(fakeVault)
   }
 
@@ -59,7 +59,7 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
 
     val EdTufKeyPair(publicKey, privateKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
     val dbKey = Key(publicKey.id, RoleId.generate(), EdKeyType, publicKey.keyval)
-    fakeVault.createKey(VaultKey(dbKey.id, dbKey.keyType, dbKey.publicKey.toPem, privateKey)).futureValue
+    fakeVault.createKey(VaultKey(dbKey.id, dbKey.keyType, publicKey, privateKey)).futureValue
 
     val clientSignature = roleSigning.signForClient(payload)(dbKey).futureValue
     val signature = Signature(clientSignature.sig, clientSignature.method)

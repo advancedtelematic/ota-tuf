@@ -163,10 +163,12 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
 
   private def deleteOrReadKey(reposerverClient: UserReposerverClient, keyName: KeyName, keyId: KeyId): Future[TufPrivateKey] = {
     keyStorage.readPrivateKey(keyName).toFuture.recoverWith { case _ =>
-      log.info(s"Could not read old private key locally, fetching/deleting from server")
-      reposerverClient.fetchKeyPair(keyId).flatMap { privateKey ⇒
-        reposerverClient.deleteKey(keyId).map(_ ⇒ privateKey.privkey)
-      }
+      log.info(s"Could not read old private key locally, fetching before deleting from server")
+
+      for {
+        keyPair ← reposerverClient.fetchKeyPair(keyId)
+        _ ← reposerverClient.deleteKey(keyId)
+      } yield keyPair.privkey
     }
   }
 

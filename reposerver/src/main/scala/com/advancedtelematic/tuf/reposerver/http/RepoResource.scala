@@ -193,14 +193,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
              complete(keyserverClient.deletePrivateKey(repoId, keyId))
            } ~
            get {
-             // TODO: Ugly until upstream is fixed
-             val f = keyserverClient.fetchRootRole(repoId).map { signedRoot ⇒
-               signedRoot.signed.keys(keyId)
-             }.flatMap { tufKey ⇒
-               val ff = keyserverClient.fetchKeyPair(repoId, keyId)
-               ff.flatMap(privKey ⇒ Future.fromTry(tufKey.keytype.crypto.toKeyPair(tufKey, privKey)))
-             }
-
+             val f = keyserverClient.fetchKeyPair(repoId, keyId)
              complete(f)
            }
          }

@@ -47,7 +47,7 @@ class KeyGeneratorWorkerIntegrationSpec extends TufKeyserverSpec
       case Status.Success(t: Seq[Key] @unchecked) => t.head
     }
 
-    vault.findKey(key.id).futureValue.publicKey should include("BEGIN PUBLIC KEY")
+    vault.findKey(key.id).futureValue.publicKey.asJson.noSpaces should include("BEGIN PUBLIC KEY")
     vault.findKey(key.id).futureValue.privateKey.asJson.noSpaces should include("BEGIN RSA PRIVATE KEY")
   }
 }
