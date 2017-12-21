@@ -40,9 +40,13 @@ class RootRoleGeneration(vaultClient: VaultClient)
   }
 
   def findOrGenerate(repoId: RepoId): Future[SignedPayload[RootRole]] = {
-    signedRootRoleRepo.find(repoId).recoverWith {
+    signedRootRoleRepo.findLatestValid(repoId).recoverWith {
       case SignedRootRoleRepository.MissingSignedRole => forceGenerate(repoId)
     }
+  }
+
+  def findByVersion(repoId: RepoId, version: Int): Future[SignedPayload[RootRole]] = {
+    signedRootRoleRepo.findByVersion(repoId, version)
   }
 
   def forceGenerate(repoId: RepoId): Future[SignedPayload[RootRole]] =

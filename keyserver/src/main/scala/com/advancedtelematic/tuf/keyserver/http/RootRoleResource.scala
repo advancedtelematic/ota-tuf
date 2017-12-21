@@ -48,10 +48,13 @@ class RootRoleResource(vaultClient: VaultClient)
 
           complete(f)
         } ~
-          get {
-            val f = rootRoleGeneration.findOrGenerate(repoId)
-            complete(f)
-          }
+        get {
+          val f = rootRoleGeneration.findOrGenerate(repoId)
+          complete(f)
+        }
+      } ~
+      path(IntNumber) { version =>
+        complete(rootRoleGeneration.findByVersion(repoId, version))
       } ~
       pathPrefix("private_keys") {
         path(KeyIdPath) { keyId =>

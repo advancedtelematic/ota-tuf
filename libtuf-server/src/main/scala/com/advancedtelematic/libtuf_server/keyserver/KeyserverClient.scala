@@ -31,6 +31,8 @@ trait KeyserverClient {
 
   def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]]
 
+  def fetchRootRole(repoId: RepoId, version: Int): Future[SignedPayload[RootRole]]
+
   def addTargetKey(repoId: RepoId, key: TufKey): Future[Unit]
 
   def fetchUnsignedRoot(repoId: RepoId): Future[RootRole]
@@ -107,5 +109,14 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
   override def fetchTargetKeyPairs(repoId: RepoId): Future[Seq[TufKeyPair]] = {
     val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("root") / repoId.show / "keys" / "targets" / "pairs"))
     execHttp[Seq[TufKeyPair]](req)()
+  }
+
+  override def fetchRootRole(repoId: RepoId, version: Int): Future[SignedPayload[RootRole]] = {
+    val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("root") / repoId.show / version.toString))
+
+    execHttp[SignedPayload[RootRole]](req) {
+      case StatusCodes.NotFound =>
+        Future.failed(RootRoleNotFound)
+    }
   }
 }

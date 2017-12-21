@@ -129,6 +129,12 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
     }
   }
 
+  private def findRootByVersion(repoId: RepoId, version: Int): Route = {
+    respondWithHeader(RawHeader("x-ats-tuf-repo-id", repoId.uuid.toString)) {
+      complete(keyserverClient.fetchRootRole(repoId, version))
+    }
+  }
+
   private def findRole(repoId: RepoId, roleType: RoleType): Route = {
     onSuccess(signedRoleGeneration.findRole(repoId, roleType)) { signedRole =>
       conditional(EntityTag(signedRole.checksum.hash.value)) {
@@ -181,9 +187,12 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
             complete(keyserverClient.updateRoot(repoId, signedPayload))
           }
         } ~
-        (path("private_keys" / KeyIdPath) & delete) { keyId =>
-          complete(keyserverClient.deletePrivateKey(repoId, keyId))
-        }
+         (path("private_keys" / KeyIdPath) & delete) { keyId =>
+           complete(keyserverClient.deletePrivateKey(repoId, keyId))
+         }
+      } ~
+      (get & path(IntNumber ~ ".root.json")) { version ⇒
+        findRootByVersion(repoId, version)
       } ~
       (get & path(JsonRoleTypeMetaPath)) { roleType =>
         findRole(repoId, roleType)

@@ -72,7 +72,7 @@ object Schema {
     def version = column[Int]("version")
     def signedPayload = column[SignedPayload[RootRole]]("signed_payload")
 
-    def pk = primaryKey("pk_signed_root_roles", repoId)
+    def pk = primaryKey("pk_signed_root_roles", (repoId, version))
 
     override def * = (repoId, expiresAt, version, signedPayload)
   }

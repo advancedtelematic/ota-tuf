@@ -90,7 +90,8 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
 
     val f = for {
       _ <- createAndProcessRoot(repoId)
-      signed <- client.fetchRootRole(repoId)
+      unsigned <- client.fetchUnsignedRoot(repoId)
+      signed ← client.sign(repoId, RoleType.ROOT, unsigned)
       updated <- client.updateRoot(repoId, signed)
     } yield updated
 
@@ -193,5 +194,18 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
       pairs.map(_.pubkey.keyval) shouldBe generatedKeys.map(_.publicKey)
     }.futureValue
 
+  }
+
+  test("fetches root role by version") {
+    val repoId = RepoId.generate()
+
+    val f = for {
+      _ <- createAndProcessRoot(repoId)
+      _ <- client.fetchRootRole(repoId)
+      signed <- client.fetchRootRole(repoId, 1)
+    } yield signed
+
+    f.futureValue shouldBe a[SignedPayload[_]]
+    f.futureValue.signed shouldBe a[RootRole]
   }
 }
