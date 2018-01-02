@@ -1,7 +1,7 @@
 package com.advancedtelematic.tuf.keyserver.roles
 
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, RoleType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, RoleType, SignedPayload, TufKey, TufKeyPair, TufPrivateKey}
 import com.advancedtelematic.tuf.keyserver.db.{KeyRepositorySupport, RoleRepositorySupport}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKeyNotFound
@@ -26,18 +26,22 @@ class RootRoleKeyEdit(vaultClient: VaultClient)
     await(rootRoleGeneration.forceGenerate(repoId))
   }
 
-  def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey] = for {
+  def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[Unit] = for {
     _ <- ensureIsRepoKey(repoId, keyId, roleType = None)
-    clientPrivateKey <- findParsedPrivateKey(keyId)
     _ <- vaultClient.deleteKey(keyId)
-  } yield clientPrivateKey
+  } yield ()
 
-  private def findParsedPrivateKey(keyId: KeyId): Future[TufPrivateKey] =
-    vaultClient.findKey(keyId)
-      .map(_.privateKey)
-      .recoverWith {
-        case VaultKeyNotFound => Future.failed(KeyNotFound)
-      }
+  def findKeyPair(repoId: RepoId, keyId: KeyId): Future[TufKeyPair] = {
+    val f = for {
+      _ <- ensureIsRepoKey(repoId, keyId, roleType = None)
+      vaultKey ← vaultClient.findKey(keyId)
+      keyPair ← Future.fromTry(vaultKey.toTufKeyPair)
+    } yield keyPair
+
+    f.recoverWith {
+      case VaultKeyNotFound => Future.failed(KeyNotFound)
+    }
+  }
 
   private def ensureIsRepoKey(repoId: RepoId, keyId: KeyId, roleType: Option[RoleType]): Future[KeyId] = async {
     val repoKeysF = roleType match {

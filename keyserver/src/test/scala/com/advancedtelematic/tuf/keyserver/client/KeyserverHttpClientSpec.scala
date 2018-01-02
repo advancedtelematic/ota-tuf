@@ -31,7 +31,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
 
   override implicit def patienceConfig = PatienceConfig(timeout = Span(20, Seconds), interval = Span(500, Millis))
 
-  val client = new KeyserverHttpClient("http://localhost", testHttpClient)
+  val client = new KeyserverHttpClient("http://test-keyserver", testHttpClient)
 
   def createAndProcessRoot(repoId: RepoId): Future[Unit] = {
     for {
@@ -112,6 +112,22 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
     failure.getMessage shouldBe "key cannot be processed"
   }
 
+  test("fetches a root key pair") {
+    val repoId = RepoId.generate()
+
+    val f = for {
+      _ <- createAndProcessRoot(repoId)
+      root ← client.fetchRootRole(repoId)
+      keyId = root.signed.roles(RoleType.TARGETS).keyids.head
+      keyPair <- client.fetchKeyPair(repoId, keyId)
+    } yield (keyId, keyPair)
+
+    whenReady(f) { case (keyId, keyPair) ⇒
+      keyPair shouldBe a[EdTufKeyPair]
+      keyPair.pubkey.id shouldBe keyId
+    }
+  }
+
   test("deletes a key") {
     val repoId = RepoId.generate()
 
@@ -121,7 +137,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
       deleted <- client.deletePrivateKey(repoId, signed.signed.keys.keys.head)
     } yield deleted
 
-    f.futureValue shouldBe a[EdTufPrivateKey]
+    f.futureValue shouldBe (())
   }
 
   test("can sign json") {

@@ -4,7 +4,7 @@ import java.io.{StringReader, StringWriter}
 import java.security
 import java.security.interfaces.RSAPublicKey
 import java.security.spec.{PKCS8EncodedKeySpec, X509EncodedKeySpec}
-import java.security.{Signature => _, _}
+import java.security.{Signature ⇒ _, _}
 
 import org.bouncycastle.jce.ECNamedCurveTable
 import org.bouncycastle.jce.spec.ECParameterSpec
@@ -27,7 +27,7 @@ import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole}
 
 import scala.util.control.NoStackTrace
-import scala.util.Try
+import scala.util.{Success, Try}
 
 trait TufCrypto[T <: KeyType] {
   def parsePublic(keyVal: String): Try[T#Pub]
@@ -42,10 +42,17 @@ trait TufCrypto[T <: KeyType] {
 
   def generateKeyPair(): TufKeyPair = generateKeyPair(defaultKeySize)
 
-  def toKeyPair(publicKey: String, privateKey: TufPrivateKey): Try[TufKeyPair]
+  def castToKeyPair(publicKey: TufKey, privateKey: TufPrivateKey): Try[TufKeyPair] = Try {
+    toKeyPair(publicKey.asInstanceOf[T#Pub], privateKey.asInstanceOf[T#Priv])
+  }
+
+  def toKeyPair(publicKey: T#Pub, privateKey: T#Priv): TufKeyPair
 
   def parseKeyPair(publicKey: String, privateKey: String): Try[TufKeyPair] =
-    parsePrivate(privateKey).flatMap(toKeyPair(publicKey, _))
+    for {
+      priv ← parsePrivate(privateKey)
+      pub ← parsePublic(publicKey)
+    } yield toKeyPair(pub, priv)
 
   def convert(publicKey: PublicKey): T#Pub
 
@@ -229,8 +236,8 @@ protected [crypt] class EdCrypto extends TufCrypto[EdKeyType.type] {
 
   override val signatureMethod: SignatureMethod = SignatureMethod.ED25519
 
-  override def toKeyPair(publicKey: String, privateKey: TufPrivateKey): Try[TufKeyPair] =
-    parsePublic(publicKey).map(EdTufKeyPair(_, privateKey.asInstanceOf[EdTufPrivateKey]))
+  override def toKeyPair(publicKey: EdTufKey, privateKey: EdTufPrivateKey): TufKeyPair =
+    EdTufKeyPair(publicKey, privateKey)
 
   override def validKeySize(size: Int): Boolean = size == 256
 
@@ -286,8 +293,8 @@ protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
 
   override def convert(publicKey: PublicKey): RSATufKey = RSATufKey(publicKey)
 
-  override def toKeyPair(publicKey: String, privateKey: TufPrivateKey): Try[TufKeyPair] =
-    parsePublic(publicKey).map(RSATufKeyPair(_, privateKey.asInstanceOf[RSATufPrivateKey]))
+  override def toKeyPair(publicKey: RSATufKey, privateKey: RSATufPrivateKey): TufKeyPair =
+    RSATufKeyPair(publicKey, privateKey)
 
   override def validKeySize(size: Int): Boolean = size >= 2048
 

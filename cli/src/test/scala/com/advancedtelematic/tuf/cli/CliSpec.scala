@@ -9,7 +9,7 @@ import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{ETag, RoleKeys, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.{ClientDataType, TufDataType}
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKeyPair, KeyId, RoleType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKeyPair, KeyId, RoleType, SignedPayload, TufKey, TufKeyPair, TufPrivateKey}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
@@ -28,6 +28,8 @@ abstract class CliSpec extends FunSuite with Matchers with ScalaFutures {
 }
 
 class FakeUserReposerverClient extends UserReposerverClient {
+  import scala.concurrent.ExecutionContext.Implicits.global
+
   private val EdTufKeyPair(oldPublicKey, oldPrivateKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
 
   private var targetsPair = TufCrypto.generateKeyPair(EdKeyType, 256)
@@ -49,9 +51,9 @@ class FakeUserReposerverClient extends UserReposerverClient {
     SignedPayload(Seq(sig), unsignedRoot)
   }
 
-  override def deleteKey(keyId: KeyId): Future[TufPrivateKey] = {
+  override def deleteKey(keyId: KeyId): Future[Unit] = {
     if(keyId == oldPublicKey.id)
-      Future.successful(oldPrivateKey)
+      Future.successful(())
     else
       Future.failed(new RuntimeException(s"[test] key not found $keyId"))
   }
@@ -85,4 +87,7 @@ class FakeUserReposerverClient extends UserReposerverClient {
     targetsPubKey = key
     targetsPubKey
   }
+
+  override def fetchKeyPair(keyId: KeyId): Future[TufKeyPair] =
+    Future.successful(EdTufKeyPair(oldPublicKey, oldPrivateKey)).filter(_.pubkey.id == keyId)
 }

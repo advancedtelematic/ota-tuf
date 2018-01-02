@@ -22,8 +22,9 @@ import com.advancedtelematic.libtuf_server.http.{ServiceHttpClient, ServiceHttpC
 trait KeyserverClient {
   val RootRoleNotFound = RawError(ErrorCode("root_role_not_found"), StatusCodes.FailedDependency, "root role was not found in upstream key store")
   val RootRoleConflict = RawError(ErrorCode("root_role_conflict"), StatusCodes.Conflict, "root role already exists")
-  val RoleKeyNotFound = RawError(ErrorCode("role_key_not_found"), StatusCodes.PreconditionFailed, "can't sign since role was not found in upstream key store")
+  val RoleKeyNotFound = RawError(ErrorCode("role_key_not_found"), StatusCodes.PreconditionFailed, s"can't sign since role was not found in upstream key store")
   val KeyError = RawError(ErrorCode("key_error"), StatusCodes.BadRequest, "key cannot be processed")
+  val KeyPairNotFound = RawError(ErrorCode("keypair_not_found"), StatusCodes.NotFound, "keypair not found in keyserver")
 
   def createRoot(repoId: RepoId, keyType: KeyType = RsaKeyType): Future[Json]
 
@@ -39,7 +40,9 @@ trait KeyserverClient {
 
   def updateRoot(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit]
 
-  def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey]
+  def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[Unit]
+
+  def fetchKeyPair(repoId: RepoId, keyId: KeyId): Future[TufKeyPair]
 
   def fetchTargetKeyPairs(repoId: RepoId): Future[Seq[TufKeyPair]]
 }
@@ -101,9 +104,9 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
     }
   }
 
-  override def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[TufPrivateKey] = {
+  override def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[Unit] = {
     val req = HttpRequest(HttpMethods.DELETE, uri = apiUri(Path("root") / repoId.show / "private_keys" / keyId.value))
-    execHttp[TufPrivateKey](req)()
+    execHttp[Unit](req)()
   }
 
   override def fetchTargetKeyPairs(repoId: RepoId): Future[Seq[TufKeyPair]] = {
@@ -117,6 +120,15 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
     execHttp[SignedPayload[RootRole]](req) {
       case StatusCodes.NotFound =>
         Future.failed(RootRoleNotFound)
+    }
+  }
+
+  override def fetchKeyPair(repoId: RepoId, keyId: KeyId): Future[TufKeyPair] = {
+    val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("root") / repoId.show / "keys" / keyId.value))
+
+    execHttp[TufKeyPair](req) {
+      case StatusCodes.NotFound =>
+        Future.failed(KeyPairNotFound)
     }
   }
 }

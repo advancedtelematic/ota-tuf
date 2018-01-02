@@ -32,7 +32,7 @@ class VaultClientIntegrationSpec extends TufKeyserverSpec
   test("creates/finds a key") {
     val RSATufKeyPair(publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
 
-    vault.createKey(VaultKey(publicKey.id, RsaKeyType,publicKey.keyval.toPem,privateKey)).futureValue
+    vault.createKey(VaultKey(publicKey.id, RsaKeyType, publicKey, privateKey)).futureValue
 
     vault.findKey(publicKey.id).map(_.privateKey).futureValue shouldBe privateKey
   }
@@ -40,7 +40,7 @@ class VaultClientIntegrationSpec extends TufKeyserverSpec
   test("deletes a key") {
     val RSATufKeyPair(publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
 
-    vault.createKey(VaultKey(publicKey.id, RsaKeyType, publicKey.keyval.toPem,privateKey)).futureValue
+    vault.createKey(VaultKey(publicKey.id, RsaKeyType, publicKey, privateKey)).futureValue
 
     vault.deleteKey(publicKey.id).futureValue
 
@@ -54,7 +54,7 @@ class VaultClientIntegrationSpec extends TufKeyserverSpec
   test("can store ed25519 key") {
     val pair = TufCrypto.generateKeyPair(EdKeyType, 256)
 
-    vault.createKey(VaultKey(pair.pubkey.id, EdKeyType, pair.pubkey.asJson.noSpaces, pair.privkey)).futureValue
+    vault.createKey(VaultKey(pair.pubkey.id, EdKeyType, pair.pubkey, pair.privkey)).futureValue
 
     vault.findKey(pair.pubkey.id).map(_.privateKey).futureValue.keyval.getEncoded shouldBe pair.privkey.keyval.getEncoded
   }
@@ -62,7 +62,7 @@ class VaultClientIntegrationSpec extends TufKeyserverSpec
   test("can decode a legacy key") {
     val pair = TufCrypto.generateKeyPair(RsaKeyType, 2048)
 
-    val vaultKey = VaultKey(pair.pubkey.id, EdKeyType, pair.pubkey.asJson.noSpaces, pair.privkey)
+    val vaultKey = VaultKey(pair.pubkey.id, EdKeyType, pair.pubkey, pair.privkey)
 
     val legacyJson = vaultKey.asJson.deepMerge(Json.obj("privateKey" → pair.privkey.keyval.toPem.asJson))
 

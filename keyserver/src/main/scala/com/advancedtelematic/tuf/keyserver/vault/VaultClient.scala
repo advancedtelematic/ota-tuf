@@ -9,9 +9,10 @@ import akka.http.scaladsl.model.HttpMethods._
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.unmarshalling.{FromEntityUnmarshaller, Unmarshaller}
 import akka.stream.Materializer
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RSATufPrivateKey,  TufKeyPair, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, KeyId, KeyType, RSATufPrivateKey, TufKey, TufKeyPair, TufPrivateKey}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.{VaultKey, VaultKeyNotFound}
 import io.circe.{Decoder, Encoder, HCursor}
+
 import scala.concurrent.Future
 import scala.reflect.ClassTag
 import scala.util.control.NoStackTrace
@@ -22,6 +23,7 @@ import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufCodecs
 import cats.syntax.functor._
+import org.bouncycastle.util.encoders.{Base64, Hex}
 
 trait VaultClient {
   def createKey(key: VaultKey): Future[Unit]
@@ -37,10 +39,8 @@ object VaultClient {
   import com.advancedtelematic.libats.codecs.CirceCodecs._
   import TufCodecs._
 
-  case class VaultKey(id: KeyId, keyType: KeyType, publicKey: String, privateKey: TufPrivateKey) {
-
-    def toTufKeyPair: Try[TufKeyPair] = keyType.crypto.toKeyPair(publicKey, privateKey)
-
+  case class VaultKey(id: KeyId, keyType: KeyType, publicKey: TufKey, privateKey: TufPrivateKey) {
+    def toTufKeyPair: Try[TufKeyPair] = keyType.crypto.castToKeyPair(publicKey, privateKey)
   }
 
   case object VaultKeyNotFound extends Exception("vault key not found") with NoStackTrace
@@ -52,13 +52,23 @@ object VaultClient {
       TufCrypto.parsePrivatePem(str).map(RSATufPrivateKey)
     }
 
+    private def legacyPublicKeyDecoder(keyType: KeyType) = Decoder[String].emapTry { str ⇒
+      keyType.crypto.parsePublic(str)
+    }
+
+    private def legacyPemPublicKeyDecoder(keyType: KeyType) = Decoder[String].emapTry { str ⇒
+      TufCrypto.parsePublicPem(str).map(keyVal => keyType.crypto.convert(keyVal))
+    }
+
+    private def lenientPublicKeyDecoder(keyType: KeyType): Decoder[TufKey] = TufCodecs.tufKeyDecoder or legacyPublicKeyDecoder(keyType).widen or legacyPemPublicKeyDecoder(keyType).widen
+
     private val lenientPrivateKeyDecoder: Decoder[TufPrivateKey] = TufCodecs.tufPrivateKeyDecoder or legacyPrivateKeyDecoder.widen
 
     implicit val decoder: Decoder[VaultKey] = Decoder.instance { cursor ⇒
       for {
         keyId ← cursor.downField("id").as[KeyId]
         keyType ← cursor.downField("keyType").as[KeyType]
-        publicKey ← cursor.downField("publicKey").as[String]
+        publicKey ← cursor.downField("publicKey").as[TufKey](lenientPublicKeyDecoder(keyType))
         privateKey ← cursor.downField("privateKey").as[TufPrivateKey](lenientPrivateKeyDecoder)
       } yield VaultKey(keyId, keyType, publicKey, privateKey)
     }

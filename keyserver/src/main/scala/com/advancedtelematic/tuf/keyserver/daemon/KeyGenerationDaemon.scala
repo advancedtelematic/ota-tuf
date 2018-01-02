@@ -13,32 +13,31 @@ import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.slick.monitoring.{DatabaseMetrics, DbHealthResource}
 
 object KeyGenerationDaemon extends BootApp
-    with Settings
-    with VersionInfo
-    with BootMigrations
-    with DatabaseConfig
-    with MetricsSupport
-    with DatabaseMetrics {
+  with Settings
+  with VersionInfo
+  with BootMigrations
+  with DatabaseConfig
+  with MetricsSupport
+  with DatabaseMetrics {
 
-    import com.advancedtelematic.libats.http.LogDirectives._
-    import com.advancedtelematic.libats.http.VersionDirectives._
+  import com.advancedtelematic.libats.http.LogDirectives._
+  import com.advancedtelematic.libats.http.VersionDirectives._
 
-    implicit val _db = db
+  implicit val _db = db
 
-    Security.addProvider(new BouncyCastleProvider())
+  Security.addProvider(new BouncyCastleProvider())
 
-    log.info("Starting key gen daemon")
+  log.info("Starting key gen daemon")
 
-    val vaultClient = VaultClient(vaultAddr, vaultToken, vaultMount)
+  val vaultClient = VaultClient(vaultAddr, vaultToken, vaultMount)
 
-    system.actorOf(KeyGeneratorLeader.props(vaultClient), "keygen-leader")
+  system.actorOf(KeyGeneratorLeader.props(vaultClient), "keygen-leader")
 
-    system.actorOf(VaultTokenRenewer.withBackoff(vaultClient, vaultRenewInterval))
+  system.actorOf(VaultTokenRenewer.withBackoff(vaultClient, vaultRenewInterval))
 
-    val routes: Route = (versionHeaders(version) & logResponseMetrics(projectName)) {
-        DbHealthResource(versionMap).route
-    }
+  val routes: Route = (versionHeaders(version) & logResponseMetrics(projectName)) {
+    DbHealthResource(versionMap).route
+  }
 
-    Http().bindAndHandle(routes, host, port)
+  Http().bindAndHandle(routes, host, port)
 }
-

@@ -258,8 +258,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
 
     Delete(apiUri(s"root/${repoId.show}/private_keys/${targetKeyId.value}")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      responseAs[TufPrivateKey].keyval shouldBe a[PrivateKey]
+      status shouldBe StatusCodes.NoContent
     }
 
     Post(apiUri(s"root/${repoId.show}/targets"), Json.Null) ~> routes ~> check {
@@ -295,8 +294,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
 
     Delete(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.value}")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      responseAs[TufPrivateKey].keyval shouldBe a[PrivateKey]
+      status shouldBe StatusCodes.NoContent
     }
 
     fakeVault.findKey(rootKeyId).failed.futureValue shouldBe VaultKeyNotFound
@@ -313,8 +311,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
 
     Delete(apiUri(s"root/${repoId.show}/private_keys/${keyId.value}")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      responseAs[TufPrivateKey] shouldBe a[RSATufPrivateKey]
+      status shouldBe StatusCodes.NoContent
     }
 
     fakeVault.findKey(keyId).failed.futureValue shouldBe VaultKeyNotFound
@@ -330,8 +327,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
 
     Delete(apiUri(s"root/${repoId.show}/private_keys/${rootKeyId.value}")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      responseAs[TufPrivateKey] shouldBe a[RSATufPrivateKey]
+      status shouldBe StatusCodes.NoContent
     }
 
     Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
