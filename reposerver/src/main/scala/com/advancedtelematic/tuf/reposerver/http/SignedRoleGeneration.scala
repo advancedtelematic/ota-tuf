@@ -18,8 +18,6 @@ import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepository.SignedRoleNo
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 import cats.syntax.either._
-import com.advancedtelematic.libats.data.ErrorCode
-import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import org.slf4j.LoggerFactory
 
