@@ -46,10 +46,10 @@ object ClientDataType {
 
   case class MetaItem(hashes: ClientHashes, length: Long, version: Int)
 
-  implicit class TufRoleOps[T](value: T) {
-    def roleType(implicit ev: TufRole[T]) = ev.roleType
+  implicit class TufRoleOps[T](value: T)(implicit ev: TufRole[T]) {
+    def roleType = ev.roleType
 
-    def toMetaPath(implicit ev: TufRole[T]): MetaPath = ev.toMetaPath
+    def toMetaPath: MetaPath = ev.toMetaPath
   }
 
   implicit class RoleTypeOps(value: RoleType) {
@@ -59,7 +59,7 @@ object ClientDataType {
   trait TufRole[T] {
     def roleType: RoleType
 
-    def typeStr: String = roleType.toString.toLowerCase.capitalize
+    def typeStr: String = roleType.show.capitalize
 
     def toMetaPath: MetaPath = roleType.toMetaPath
 

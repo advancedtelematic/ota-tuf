@@ -26,6 +26,7 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.EtagNotValid
+import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
 
 sealed trait Command
 case object Help extends Command
@@ -398,6 +399,6 @@ object Cli extends App with VersionInfo {
         Future.successful(())
     }
 
-    Await.result(f, Duration.Inf)
+    Await.result(f.recover(CliHelp.explainError), Duration.Inf)
   }
 }

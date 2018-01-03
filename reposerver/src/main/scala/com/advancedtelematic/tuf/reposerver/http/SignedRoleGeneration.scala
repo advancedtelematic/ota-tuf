@@ -96,7 +96,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
 
       futureRole.recoverWith {
         case keyserverClient.RoleKeyNotFound =>
-          log.info("Could not update $roleType (for $repoId) because the keys are missing, returning expired version")
+          log.info(s"Could not update $roleType (for $repoId) because the keys are missing, returning expired version")
           FastFuture.successful(role)
       }
     }.recoverWith {
