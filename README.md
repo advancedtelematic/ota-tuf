@@ -1,6 +1,19 @@
 # Ota-tuf
 
+[tuf][1] implementation for over the air updates. This project is part of [ota-community-edition][2].
+
+This project is split into multiple modules:
+
+*  reposerver - Manages tuf metadata for tuf repositories
+*  keyserver - Manages key generation and online role signing for tuf roles
+*  cli - Command line tools to manage a remote tuf repository. See [cli/README](cli/README.adoc)
+*  libtuf/libtuf-server - Dependencies for the other modules
+
 ## Running
+
+`reposerver` and `keyserver` should run as part of
+[ota-community-edition][2]. See [cli/README](cli/README.adoc) for
+information on how to run the CLI tools.
 
 You'll need vault installed (v0.5.2):
 
@@ -11,7 +24,11 @@ You'll need vault installed (v0.5.2):
 
     vault token-create -format json -policy ota-tuf -id="74e0216d-cc15-5ab9-454d-908a04d14787"
     
-There is a script to run these commands and start a vault instance in `deploy/dev-vault.sh`
+There is a script to run these commands and start a vault instance in `deploy/dev-vault.sh` 
+
+You'll need to edit `application.conf` in `keyserver` and `reposerver`
+
+You can then use `sbt keyserver/run` and `sbt reposerver/run`.
 
 ## Running tests
 
@@ -27,11 +44,13 @@ vault, see above.
 
     sbt it:test
 
-## Teamcity jobs
+## Continuous Integration
 
-In the `deploy` directory there are some scripts you can use to setup
-the jobs in Teamcity.
+The `deploy` directory includes scripts required for CI jobs.
 
 ## License
 
 This code is licensed under the [Mozilla Public License 2.0](LICENSE), a copy of which can be found in this repository. All code is copyright [ATS Advanced Telematic Systems GmbH](https://www.advancedtelematic.com), 2016-2018.
+
+[1]: https://theupdateframework.github.io/
+[2]: https://github.com/advancedtelematic/ota-community-edition
