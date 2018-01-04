@@ -3,26 +3,28 @@ package com.advancedtelematic.tuf.reposerver.http
 import java.net.URI
 import java.time.Instant
 
-import com.advancedtelematic.jwk.JwkSet.KeyNotFound
-import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.http.Errors.MissingEntity
+import cats.syntax.either._
+import eu.timepit.refined._
+import com.advancedtelematic.libats.data.DataType.{Namespace, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.ClientDataType.{ETag, RootRole, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufKeyPair, EdTufPrivateKey, RepoId, RoleType, SignedPayload, TufKey, TufKeyPair, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
+import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, RepoId, RoleType, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 import org.scalatest.time.{Seconds, Span}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
-import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.EtagNotValid
+import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.RoleChecksumNotValid
 import com.advancedtelematic.libtuf.reposerver.UserReposerverHttpClient
+import org.scalatest.BeforeAndAfter
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 
 class UserReposerverClientSpec extends TufReposerverSpec
   with ResourceSpec
   with FakeScalajHttpClient
-  with RepoNamespaceRepositorySupport {
+  with RepoNamespaceRepositorySupport
+  with BeforeAndAfter {
 
   override def executor: ExecutionContextExecutor = super.executor
 
@@ -34,11 +36,18 @@ class UserReposerverClientSpec extends TufReposerverSpec
 
   val client = new UserReposerverHttpClient(URI.create("http://test-reposerver"), testClient, token = None)
 
+
   override def beforeAll(): Unit = {
     super.beforeAll()
-    fakeKeyserverClient.createRoot(repoId)
-      .flatMap(_ => repoNamespaceRepo.persist(repoId, Namespace("default")))
-      .futureValue
+    repoNamespaceRepo.persist(repoId, Namespace("default")).futureValue
+  }
+
+  before {
+    fakeKeyserverClient.createRoot(repoId).futureValue
+  }
+
+  after {
+    fakeKeyserverClient.resetKeyServer()
   }
 
   test("fetches a root") {
@@ -73,16 +82,32 @@ class UserReposerverClientSpec extends TufReposerverSpec
     client.fetchKeyPair(keyPair.pubkey.id).failed.futureValue shouldBe a[HttpjClientError]
   }
 
-  test("returns specific exception when etag is not valid") {
+  test("returns specific exception when previous checksum is not valid") {
     val targets = TargetsRole(Instant.now, Map.empty, 20)
     val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets).futureValue
-    client.pushTargets(signedTargets, Option(ETag("\"invalid\""))).failed.futureValue shouldBe EtagNotValid
+    val invalidChecksum = refineV[ValidChecksum]("11c3599621d7edc417c795363767754b431404e8f9fd6fb85f78b2b45423b00b").valueOr(err => throw new Exception(err))
+    client.pushTargets(signedTargets, Option(invalidChecksum)).failed.futureValue shouldBe RoleChecksumNotValid
   }
 
-  test("returns specific exception when no etag is present at all") {
+  test("returns specific exception when no previous checksum is present at all") {
     val targets = TargetsRole(Instant.now, Map.empty, 20)
     val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets).futureValue
-    client.pushTargets(signedTargets, None).failed.futureValue shouldBe EtagNotValid
+    client.pushTargets(signedTargets, None).failed.futureValue shouldBe RoleChecksumNotValid
+  }
+
+  test("can update with proper checksum header") {
+    val targetsResponse = client.targets().futureValue
+
+    val targets = TargetsRole(Instant.now, Map.empty, targetsResponse.targets.signed.version + 1)
+    val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets).futureValue
+
+    client.pushTargets(signedTargets, targetsResponse.checksum).futureValue shouldBe (())
+  }
+
+  test("can pull targets") {
+    val targetsResponse = client.targets().futureValue
+    targetsResponse.targets.signatures shouldNot be(empty)
+    targetsResponse.checksum shouldNot be(empty)
   }
 
   test("pushes a target key") {
@@ -97,4 +122,6 @@ class UserReposerverClientSpec extends TufReposerverSpec
 
     newRoot.roles(RoleType.TARGETS).keyids should contain(newKey.id)
   }
+
+
 }

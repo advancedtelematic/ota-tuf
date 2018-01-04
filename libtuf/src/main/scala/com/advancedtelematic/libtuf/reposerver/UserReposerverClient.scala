@@ -2,13 +2,15 @@ package com.advancedtelematic.libtuf.reposerver
 
 import java.net.URI
 
+import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.{ETag, RootRole, TargetsRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TufKey, TufKeyPair, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TufKey, TufKeyPair}
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpResponse
-import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{EtagNotValid, TargetsResponse}
+import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{RoleChecksumNotValid, TargetsResponse}
+import eu.timepit.refined.api.Refined
 import io.circe.Decoder
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -16,10 +18,14 @@ import scala.reflect.ClassTag
 import scala.util.control.NoStackTrace
 import scalaj.http.{Http, HttpRequest}
 
-object UserReposerverClient {
-  case class TargetsResponse(targets: SignedPayload[TargetsRole], etag: Option[ETag])
 
-  case object EtagNotValid extends Exception("could not overwrite targets, trying to update an older version of role. Did you run `targets pull` ?") with NoStackTrace
+import eu.timepit.refined._
+import cats.syntax.either._
+
+object UserReposerverClient {
+  case class TargetsResponse(targets: SignedPayload[TargetsRole], checksum: Option[Refined[String, ValidChecksum]])
+
+  case object RoleChecksumNotValid extends Exception("could not overwrite targets, trying to update an older version of role. Did you run `targets pull` ?") with NoStackTrace
 }
 
 trait UserReposerverClient {
@@ -33,7 +39,7 @@ trait UserReposerverClient {
 
   def targets(): Future[TargetsResponse]
 
-  def pushTargets(targetsRole: SignedPayload[TargetsRole], etag: Option[ETag]): Future[Unit]
+  def pushTargets(targetsRole: SignedPayload[TargetsRole], previousChecksum: Option[Refined[String, ValidChecksum]]): Future[Unit]
 
   def pushTargetsKey(key: TufKey): Future[TufKey]
 }
@@ -78,18 +84,19 @@ class UserReposerverHttpClient(reposerverUri: URI,
     val req = Http(apiUri("targets.json")).method("GET")
     execHttp[SignedPayload[TargetsRole]](req)().map {
       case HttpResponse(payload, response) =>
-        val etag = response.header("ETag").map(_.replace("W/", "")).map(ETag.apply)
-        TargetsResponse(payload, etag)
+        val checksumO = response.header("x-ats-role-checksum").flatMap { v => refineV[ValidChecksum](v).toOption }
+        TargetsResponse(payload, checksumO)
     }
   }
 
-  def pushTargets(role: SignedPayload[TargetsRole], etag: Option[ETag]): Future[Unit] = {
+  def pushTargets(role: SignedPayload[TargetsRole], previousChecksum: Option[Refined[String, ValidChecksum]]): Future[Unit] = {
     val put = Http(apiUri("targets")).method("PUT")
-    val req = etag.map(e => put.header("If-Match", e.value)).getOrElse(put)
+    val req = previousChecksum.map(e => put.header("x-ats-role-checksum", e.value)).getOrElse(put)
+
 
     execJsonHttp[Unit, SignedPayload[TargetsRole]](req, role) {
-      case 412 | 428 =>
-        Future.failed(EtagNotValid)
+      case 412 | 428 => // TODO: Check error codes instead ?
+        Future.failed(RoleChecksumNotValid)
     }
   }
 
