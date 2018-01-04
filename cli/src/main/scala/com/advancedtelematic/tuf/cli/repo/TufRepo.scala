@@ -52,7 +52,7 @@ object TufRepo {
 
   case class RepoAlreadyInitialized(path: Path) extends Exception(s"Repository at $path was already initialized") with NoStackTrace
 
-  case class TargetsPullError(msg: String) extends Exception(msg) with NoStackTrace
+  case class TargetsPullError(msg: String) extends Exception(s"Could not pull targets from server $msg") with NoStackTrace
 
   protected [repo] def readConfigFile(repoPath: Path): Try[RepoConfig] =
     Try { new FileInputStream(repoPath.resolve("config.json").toFile) }
