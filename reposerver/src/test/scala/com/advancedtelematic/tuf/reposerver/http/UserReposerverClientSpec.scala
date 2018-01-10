@@ -30,7 +30,7 @@ class UserReposerverClientSpec extends TufReposerverSpec
 
   implicit val ec: ExecutionContext = system.dispatcher
 
-  override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(30, Seconds))
+  override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(60, Seconds))
 
   val repoId = RepoId.generate()
 
