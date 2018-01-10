@@ -12,16 +12,13 @@ import cats.syntax.option._
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, MetaPath, RoleKeys, RootRole, TargetCustom, TargetsRole, TufRole, TufRoleOps}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, ETag, MetaPath, RoleKeys, RootRole, TargetCustom, TargetsRole, TufRole, TufRoleOps}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetName, TargetVersion, TufKey, TufKeyPair, TufPrivateKey, ValidTargetFilename}
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
-
 import com.advancedtelematic.tuf.cli.DataType._
-import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
-import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoConfig, RepoName}
-import com.advancedtelematic.tuf.cli.repo.TufRepo.{RoleChecksumNotFound, TargetsPullError}
+import com.advancedtelematic.tuf.cli.repo.TufRepo.{EtagsNotFound, TargetsPullError}
 import com.advancedtelematic.tuf.cli.{CliCodecs, CliUtil}
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.refineV
@@ -43,8 +40,8 @@ import scala.util.{Failure, Success, Try}
 object TufRepo {
   import CliCodecs._
 
-  case object RoleChecksumNotFound extends Exception(
-    "Could not find targets checksum file. You need this to push a new targets file. A Role checksum can be obtained using the pull command"
+  case object EtagsNotFound extends Exception(
+    "Could not find targets etags file. You need this to push a new targets file. Etags can be obtained using the pull command"
   ) with NoStackTrace
 
   case class TreehubConfigError(msg: String) extends Exception(msg) with NoStackTrace
@@ -118,8 +115,8 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     } yield path
   }
 
-  private def writeTargets(targets: SignedPayload[TargetsRole], checksum: Refined[String, ValidChecksum]): Try[Unit] =
-    writeUnsignedRole(targets.signed).flatMap(_ => writeChecksum(checksum))
+  private def writeTargets(targets: SignedPayload[TargetsRole], etag: ETag): Try[Unit] =
+    writeUnsignedRole(targets.signed).flatMap(_ => writeEtag(etag))
 
   private def ensureTargetsPulled(reposerverClient: UserReposerverClient, rootRole: RootRole): Future[Unit] = {
     Future.fromTry {
@@ -133,12 +130,12 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
 
   def pullTargets(reposerverClient: UserReposerverClient, rootRole: RootRole): Future[SignedPayload[TargetsRole]] =
     reposerverClient.targets().flatMap {
-      case TargetsResponse(targets, checksum) =>
+      case TargetsResponse(targets, etag) =>
         val roleValidation = TufCrypto.payloadSignatureIsValid(rootRole, targets)
 
         roleValidation match {
-          case Valid(_) if checksum.isDefined => writeTargets(targets, checksum.get).map(_ => targets).toFuture
-          case Valid(_) => Future.failed(TargetsPullError("Did not receive valid role checksum from reposerver"))
+          case Valid(_) if etag.isDefined => writeTargets(targets, etag.get).map(_ => targets).toFuture
+          case Valid(_) => Future.failed(TargetsPullError("Did not receive valid etag from reposerver"))
           case Invalid(s) => Future.failed(TargetsPullError(s.toList.mkString(", ")))
         }
     }
@@ -148,8 +145,8 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       log.debug(s"pushing ${targets.asJson.spaces2}")
 
       for {
-        checksum <- readChecksum[TargetsRole].toFuture
-        _ <- reposerverClient.pushTargets(targets, checksum.some)
+        etag <- readEtag[TargetsRole].toFuture
+        _ <- reposerverClient.pushTargets(targets, etag.some)
       } yield targets
     }
 
@@ -185,16 +182,16 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     parseFile(path.toFile).flatMap(_.as[SignedPayload[T]]).toTry
   }
 
-  private def readChecksum[T](implicit ev: TufRole[T]): Try[Refined[String, ValidChecksum]] = Try {
-    val lines = Files.readAllLines(rolesPath.resolve(ev.checksumPath)).asScala
+  private def readEtag[T](implicit ev: TufRole[T]): Try[ETag] = Try {
+    val lines = Files.readAllLines(rolesPath.resolve(ev.toETagPath)).asScala
     assert(lines.tail.isEmpty)
-    refineV[ValidChecksum](lines.head).valueOr(err => throw new Exception(err))
+    ETag(lines.head)
   }.recoverWith {
-    case _: FileNotFoundException => Failure(RoleChecksumNotFound)
+    case _: FileNotFoundException => Failure(EtagsNotFound)
   }
 
-  private def writeChecksum(checksum: Refined[String, ValidChecksum]): Try[Unit] = Try {
-    Files.write(rolesPath.resolve(TufRole.targetsTufRole.checksumPath), checksum.value.getBytes)
+  private def writeEtag(etag: ETag): Try[Unit] = Try {
+    Files.write(rolesPath.resolve(TufRole.targetsTufRole.toETagPath), etag.value.getBytes)
   }
 
   private def writeUnsignedRole[T : TufRole : Encoder](role: T): Try[Path] =

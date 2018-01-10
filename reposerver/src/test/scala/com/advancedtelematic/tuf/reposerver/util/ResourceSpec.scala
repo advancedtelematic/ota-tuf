@@ -49,11 +49,6 @@ object FakeKeyserverClient extends KeyserverClient {
 
   def publicKey(repoId: RepoId, roleType: RoleType): PublicKey = keys.get(repoId)(roleType).getPublic
 
-  def resetKeyServer(): Unit = this.synchronized {
-    keys.clear()
-    rootRoles.clear()
-  }
-
   private lazy val preGeneratedKeys = RoleType.ALL.map { role =>
     val RSATufKeyPair(publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
     role -> new KeyPair(publicKey.keyval, privateKey.keyval)
@@ -172,7 +167,7 @@ object FakeKeyserverClient extends KeyserverClient {
 }
 
 trait LongHttpRequest {
-  implicit def default(implicit system: ActorSystem) = RouteTestTimeout(60.seconds.dilated(system))
+  implicit def default(implicit system: ActorSystem) = RouteTestTimeout(30.seconds.dilated(system))
 }
 
 trait FakeHttpClientSpec {

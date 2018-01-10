@@ -5,12 +5,13 @@ import java.net.URI
 import akka.http.scaladsl.unmarshalling._
 import PredefinedFromStringUnmarshallers.CsvSeq
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
-import akka.http.scaladsl.model.headers.{RawHeader}
+import akka.http.scaladsl.model.headers.{ETag, EntityTag, RawHeader, `If-Match`}
 import akka.http.scaladsl.model.{HttpResponse, StatusCodes, Uri}
 import akka.http.scaladsl.server._
+import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import com.advancedtelematic.libats.data.RefinedUtils._
-import com.advancedtelematic.libats.http.Errors.{MissingEntity}
+import com.advancedtelematic.libats.http.Errors.{MissingEntity, RawError}
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf_server.data.Messages.TufTargetAdded
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId}
@@ -26,7 +27,7 @@ import com.advancedtelematic.libats.http.AnyvalMarshallingSupport._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.codecs.CirceCodecs._
-import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace, ValidChecksum}
+import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem._
@@ -36,7 +37,6 @@ import com.advancedtelematic.tuf.reposerver.Settings
 import com.advancedtelematic.libtuf_server.data.Marshalling._
 import com.advancedtelematic.tuf.reposerver.http.Errors.NoRepoForNamespace
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import eu.timepit.refined.api.Refined
 import io.circe.Json
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
@@ -45,7 +45,6 @@ import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 import slick.jdbc.MySQLProfile.api._
-import RoleChecksumHeader._
 
 class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: NamespaceValidation,
                    targetStore: TargetStore, messageBusPublisher: MessageBusPublisher)
@@ -132,14 +131,14 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   }
 
   private def findRootByVersion(repoId: RepoId, version: Int): Route = {
-    respondWithHeader(RawHeader("x-ats-tuf-repo-id", repoId.uuid.toString)) { // TODO: Can be refactored ?
+    respondWithHeader(RawHeader("x-ats-tuf-repo-id", repoId.uuid.toString)) {
       complete(keyserverClient.fetchRootRole(repoId, version))
     }
   }
 
   private def findRole(repoId: RepoId, roleType: RoleType): Route = {
     onSuccess(signedRoleGeneration.findRole(repoId, roleType)) { signedRole =>
-      respondWithCheckSum(signedRole.checksum.hash) {
+      conditional(EntityTag(signedRole.checksum.hash.value)) {
         respondWithHeader(RawHeader("x-ats-tuf-repo-id", repoId.uuid.toString)) {
           complete(signedRole.content)
         }
@@ -159,22 +158,23 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
     complete(f)
   }
 
-  private def updateSignedTarget(repoId: RepoId, signedPayload: SignedPayload[TargetsRole], existentRole: SignedRole) =
-    extractRoleChecksumHeader {
-      case Some(checksum) if existentRole.checksum.hash == checksum =>
-        onSuccess(offlineSignedRoleStorage.store(repoId, signedPayload)) {
-          case Valid(newSignedRole) =>
-            respondWithCheckSum(newSignedRole.checksum.hash) {
-              complete(StatusCodes.NoContent)
-            }
-          case Invalid(errors) =>
-            val obj = Json.obj("errors" -> errors.asJson)
-            complete(StatusCodes.BadRequest -> obj)
-        }
+  private def toEntityTag(signedRole: SignedRole) =
+    EntityTag(signedRole.checksum.hash.value)
+
+  private def updateSignedTarget(repoId: RepoId, signedPayload: SignedPayload[TargetsRole], signedRole: SignedRole) =
+    optionalHeaderValueByType[`If-Match`]() {
       case Some(_) =>
-        failWith(Errors.RoleChecksumMismatch) // TODO: Should be 412?
+        conditional(toEntityTag(signedRole)) {
+          onSuccess(offlineSignedRoleStorage.store(repoId, signedPayload)) {
+            case Valid(newSignedRole) =>
+              complete(HttpResponse(StatusCodes.NoContent).addHeader(ETag(toEntityTag(newSignedRole))))
+            case Invalid(errors) =>
+              val obj = Json.obj("errors" -> errors.asJson)
+              complete(StatusCodes.BadRequest -> obj)
+          }
+        }
       case None =>
-        failWith(Errors.RoleChecksumNotProvided)
+        failWith(Errors.EtagNotFound)
     }
 
   private def modifyRepoRoutes(repoId: RepoId) =

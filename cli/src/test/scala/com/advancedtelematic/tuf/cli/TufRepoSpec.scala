@@ -103,7 +103,7 @@ class TufRepoSpec extends CliSpec {
 
     repo.readUnsignedRole[TargetsRole].get.asJson shouldBe signedTargets.targets.signed.asJson
 
-    repo.repoPath.resolve("roles/targets.json.checksum").toFile.exists() shouldBe true
+    repo.repoPath.resolve("roles/targets.json.etag").toFile.exists() shouldBe true
   }
 
   test("new root role contains new root id") {
@@ -251,7 +251,7 @@ class TufRepoSpec extends CliSpec {
     val (_, pubTargets, _) = rotate(repo, reposerverClient).futureValue
 
     repo.signTargets(KeyName(s"targets${repo.name.value}")).get
-    Files.write(repo.repoPath.resolve("roles").resolve(TufRole.targetsTufRole.checksumPath), Seq("997890bc85c5796408ceb20b0ca75dabe6fe868136e926d24ad0f36aa424f99d").asJava)
+    Files.write(repo.repoPath.resolve("roles").resolve(TufRole.targetsTufRole.toETagPath), Seq("etag").asJava)
 
     val payload = repo.pushTargets(reposerverClient).futureValue
 
@@ -271,7 +271,7 @@ class TufRepoSpec extends CliSpec {
   }
 
 
-  test("saves targets.json and checksum to file when pulling") {
+  test("saves targets.json and etags to file when pulling") {
     val repo = initRepo()
 
     val reposerverClient = new FakeUserReposerverClient
@@ -282,6 +282,6 @@ class TufRepoSpec extends CliSpec {
 
     repo.readUnsignedRole[TargetsRole].get shouldBe a[TargetsRole]
 
-    Files.readAllLines(repo.repoPath.resolve("roles/targets.json.checksum")).get(0) shouldNot be(empty)
+    Files.readAllLines(repo.repoPath.resolve("roles/targets.json.etag")).get(0) shouldNot be(empty)
   }
 }

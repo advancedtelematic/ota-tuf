@@ -9,16 +9,14 @@ import com.advancedtelematic.libats.http.Errors.RawError
 object ErrorCodes {
   val RoleKeysNotFound = ErrorCode("role_keys_not_found")
   val TargetNotFound = ErrorCode("target_not_found")
-  val RoleChecksumNotProvided = ErrorCode("role_checksum_not_provided")
-  val RoleChecksumMismatch = ErrorCode("role_checksum_mismatch")
+  val EtagNotFound = ErrorCode("etag_not_found")
   val NoRepoForNamespace = ErrorCode("no_repo_for_namespace")
 }
 
 object Errors {
   val RoleKeysNotFound = RawError(ErrorCodes.RoleKeysNotFound, StatusCodes.NotFound, "There are no keys for this repoid/roletype")
   val TargetNotFoundError = RawError(ErrorCodes.TargetNotFound, StatusCodes.NotFound, "TargetNotFound")
-  val RoleChecksumNotProvided = RawError(ErrorCodes.RoleChecksumNotProvided, StatusCodes.PreconditionRequired, "A targets role already exists, but no previous checksum was sent")
-  val RoleChecksumMismatch = RawError(ErrorCodes.RoleChecksumMismatch, StatusCodes.PreconditionFailed, "Provided checksum of previous role does not match current checksum")
+  val EtagNotFound = RawError(ErrorCodes.EtagNotFound, StatusCodes.PreconditionRequired, "A targets role already exists, but no etag was sent")
 
   case class NoRepoForNamespace(ns: Namespace)
     extends com.advancedtelematic.libats.http.Errors.Error[Namespace](ErrorCodes.NoRepoForNamespace, StatusCodes.NotFound, s"No repository exists for namespace ${ns.get}")

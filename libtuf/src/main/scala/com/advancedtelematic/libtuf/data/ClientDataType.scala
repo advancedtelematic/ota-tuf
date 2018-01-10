@@ -33,6 +33,8 @@ object ClientDataType {
 
   case class RoleKeys(keyids: Seq[KeyId], threshold: Int)
 
+  case class ETag(value: String) extends AnyVal
+
   case class ValidMetaPath()
   type MetaPath = Refined[String, ValidMetaPath]
 
@@ -61,7 +63,7 @@ object ClientDataType {
 
     def toMetaPath: MetaPath = roleType.toMetaPath
 
-    def checksumPath: String = toMetaPath.value + ".checksum"
+    def toETagPath: String = toMetaPath.value + ".etag"
   }
 
   sealed trait VersionedRole {
