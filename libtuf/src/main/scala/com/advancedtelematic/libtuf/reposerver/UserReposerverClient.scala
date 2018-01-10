@@ -17,10 +17,9 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.util.control.NoStackTrace
 import scalaj.http.{Http, HttpRequest}
-
-
 import eu.timepit.refined._
 import cats.syntax.either._
+import com.advancedtelematic.libats.data.{ErrorCodes, ErrorRepresentation}
 
 object UserReposerverClient {
   case class TargetsResponse(targets: SignedPayload[TargetsRole], checksum: Option[Refined[String, ValidChecksum]])
@@ -49,7 +48,7 @@ class UserReposerverHttpClient(reposerverUri: URI,
                                token: Option[String])(implicit ec: ExecutionContext)
   extends SHttpjServiceClient(httpClient) with UserReposerverClient {
 
-  override protected def execHttp[T : ClassTag : Decoder](request: HttpRequest)(errorHandler: PartialFunction[Int, Future[T]]) =
+  override protected def execHttp[T : ClassTag : Decoder](request: HttpRequest)(errorHandler: PartialFunction[(Int, ErrorRepresentation), Future[T]]) =
     token match {
       case Some(t) =>
         super.execHttp(request.header("Authorization", s"Bearer $t"))(errorHandler)
@@ -93,9 +92,10 @@ class UserReposerverHttpClient(reposerverUri: URI,
     val put = Http(apiUri("targets")).method("PUT")
     val req = previousChecksum.map(e => put.header("x-ats-role-checksum", e.value)).getOrElse(put)
 
-
     execJsonHttp[Unit, SignedPayload[TargetsRole]](req, role) {
-      case 412 | 428 => // TODO: Check error codes instead ?
+      case (412, errorRepr) if errorRepr.code.code == "role_checksum_mismatch" =>
+        Future.failed(RoleChecksumNotValid)
+      case (428, _) =>
         Future.failed(RoleChecksumNotValid)
     }
   }
