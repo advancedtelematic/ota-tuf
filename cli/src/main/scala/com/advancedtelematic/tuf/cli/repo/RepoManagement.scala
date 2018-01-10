@@ -46,11 +46,12 @@ object RepoManagement {
   }
 
   def export(repo: TufRepo, targetKey: KeyName, exportPath: Path): Try[Unit] = {
-    def copyAuth(src: ZipFile, dest: ZipOutputStream): Try[Unit] = {
+    def copyTreehubConfig(src: ZipFile, dest: ZipOutputStream): Try[Unit] = {
       for {
         _ <- Try(dest.putNextEntry(new ZipEntry("treehub.json")))
-        oldTreehubJson <- repo.authConfig.map(_.asJson)
-        newTreehubJson = oldTreehubJson.deepMerge(Json.obj("oauth2" -> oldTreehubJson.asJson))
+        authConfig <- repo.authConfig
+        treehubConfig <- repo.treehubConfig
+        newTreehubJson = treehubConfig.copy(oauth2 = authConfig).asJson
         _ <- Try(dest.write(newTreehubJson.spaces2.getBytes))
         _ <- Try(dest.closeEntry())
       } yield ()
@@ -120,7 +121,7 @@ object RepoManagement {
       ensureSourceZipExists(repo.repoPath).flatMap { sourceZip =>
         val t = for {
           (pubKey, privKey) <- repo.keyStorage.readKeyPair(targetKey)
-          _ <- copyAuth(sourceZip, zipExportStream)
+          _ <- copyTreehubConfig(sourceZip, zipExportStream)
           _ <- writeTufUrl(repo, zipExportStream)
           _ <- copyKeyPair(pubKey, privKey, zipExportStream)
           _ <- copyRole[RootRole](repo, zipExportStream).recover {
@@ -160,13 +161,14 @@ protected object ZipRepoInitialization {
     // copy whole ZIP file into repo
     Files.copy(initFilePath, repoPath.resolve("credentials.zip"))
 
-    def readAuth(src: ZipFile): Try[Option[AuthConfig]] = for {
+    def readTreehubConfig(src: ZipFile): Try[TreehubConfig] = for {
       is <- Try(src.getInputStream(src.getEntry("treehub.json")))
       treehubConfig <- CliUtil.readJsonFrom[TreehubConfig](is)
-      authConfig <-
-        if(treehubConfig.no_auth) Success(None)
-        else Either.fromOption(treehubConfig.oauth2, TreehubConfigError("auth required with no_auth: false")).toTry.map(_.some)
-    } yield authConfig
+    } yield treehubConfig
+
+    def parseAuth(treehubConfig: TreehubConfig): Try[Option[AuthConfig]] =
+      if(treehubConfig.no_auth) Success(None)
+      else Either.fromOption(treehubConfig.oauth2, TreehubConfigError("auth required with no_auth: false")).toTry.map(_.some)
 
     def readRepoUri(src: ZipFile): Try[URI] = for {
       entry <- Try(src.getEntry("tufrepo.url")).filter(_ != null).orElse(Failure(MissingCredentialsZipFile("tufrepo.url")))
@@ -192,9 +194,10 @@ protected object ZipRepoInitialization {
 
     for {
       src ← Try(new ZipFile(initFilePath.toFile))
-      auth <- readAuth(src)
+      treehubConfig <- readTreehubConfig(src)
+      auth <- parseAuth(treehubConfig)
       reposerver <- if(repoUri.isDefined) Success(repoUri.get) else readRepoUri(src)
-      _ <- TufRepo.writeConfigFile(repoPath, reposerver, auth)
+      _ <- TufRepo.writeConfigFiles(repoPath, reposerver, treehubConfig, auth)
       _ <- writeRoot(src).recover { case ex =>
         _log.warn(s"Could not read/write root.json from credentials zip file: ${ex.getMessage}. Continuing.")
       }

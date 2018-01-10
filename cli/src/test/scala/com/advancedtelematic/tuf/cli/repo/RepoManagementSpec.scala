@@ -13,6 +13,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.tuf.cli.repo.TufRepo.{MissingCredentialsZipFile, RepoAlreadyInitialized}
+import io.circe.Json
 import io.circe.syntax._
 
 import scala.util.{Failure, Success, Try}
@@ -112,6 +113,8 @@ class RepoManagementSpec extends CliSpec {
     // test the exported zip file by creating another repo from it:
     val repoFromExported = RepoManagement.initialize(randomName, randomRepoPath, tempPath).get
     repoFromExported.authConfig.get.map(_.client_id).get shouldBe "8f505046-bf38-4e17-a0bc-8a289bbd1403"
+    val server = repoFromExported.treehubConfig.get.ostree.hcursor.downField("server").as[String].valueOr(throw _)
+    server shouldBe "https://treehub-pub.gw.staging.atsgarage.com/api/v3"
   }
 
   test("export uses configured tuf url, not what came in the original file") {

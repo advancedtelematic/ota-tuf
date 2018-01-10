@@ -17,7 +17,7 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetName, TargetVersion, TufKey, TufKeyPair, TufPrivateKey, ValidTargetFilename}
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
-import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoConfig, RepoName}
+import com.advancedtelematic.tuf.cli.DataType._
 import com.advancedtelematic.tuf.cli.repo.TufRepo.{EtagsNotFound, TargetsPullError}
 import com.advancedtelematic.tuf.cli.{CliCodecs, CliUtil}
 import eu.timepit.refined.api.Refined
@@ -29,8 +29,8 @@ import org.slf4j.LoggerFactory
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.TargetsResponse
-
 import java.nio.file.attribute.PosixFilePermission._
+
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util
@@ -58,8 +58,8 @@ object TufRepo {
     Try { new FileInputStream(repoPath.resolve("config.json").toFile) }
       .flatMap { is => CliUtil.readJsonFrom[RepoConfig](is) }
 
-  protected [repo] def writeConfigFile(repoPath: Path, repoUri: URI, authConfig: Option[AuthConfig]): Try[RepoConfig] = Try {
-    val repoConfig = RepoConfig(repoUri, authConfig)
+  protected [repo] def writeConfigFiles(repoPath: Path, repoUri: URI, treehubConfig: TreehubConfig, authConfig: Option[AuthConfig]): Try[RepoConfig] = Try {
+    val repoConfig = RepoConfig(repoUri, authConfig, treehubConfig)
     Files.write(repoPath.resolve("config.json"), repoConfig.asJson.spaces2.getBytes)
     repoConfig
   }
@@ -242,6 +242,8 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
   def pushTargetsKey(reposerver: UserReposerverClient, keyName: KeyName): Future[TufKey] = {
     keyStorage.readPublicKey(keyName).toFuture.flatMap(reposerver.pushTargetsKey)
   }
+
+  def treehubConfig: Try[TreehubConfig] = TufRepo.readConfigFile(repoPath).map(_.treehub)
 
   def authConfig: Try[Option[AuthConfig]] = TufRepo.readConfigFile(repoPath).map(_.auth)
 
