@@ -11,7 +11,7 @@ import shapeless._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, RepoConfig, TreehubConfig}
-import io.circe.Decoder
+import io.circe.{Decoder, Json}
 
 object CliCodecs {
   import io.circe.generic.semiauto._
@@ -24,7 +24,8 @@ object CliCodecs {
     for {
       noAuth <- d.downField("no_auth").as[Option[Boolean]]
       oauth <- d.downField("oauth2").as[Option[AuthConfig]]
-    } yield TreehubConfig(oauth, noAuth.getOrElse(false))
+      ostree <- d.downField("ostree").as[Option[Json]]
+    } yield TreehubConfig(oauth, noAuth.getOrElse(false), ostree.getOrElse(Json.obj()))
   }
 
   implicit val treehubConfigEncoder = deriveEncoder[TreehubConfig]
