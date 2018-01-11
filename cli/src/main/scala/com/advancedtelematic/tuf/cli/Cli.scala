@@ -377,11 +377,7 @@ object Cli extends App with VersionInfo {
       case PushTargets =>
         repoServer
           .flatMap(tufRepo.pushTargets)
-          .recover {
-            case ex @ EtagNotValid =>
-              log.error("Could not push targets", ex)
-              sys.exit(2)
-          }.map(_ => log.info("Pushed targets"))
+          .map(_ => log.info("Pushed targets"))
 
       case PushTargetsKey =>
         repoServer
@@ -399,6 +395,15 @@ object Cli extends App with VersionInfo {
         Future.successful(())
     }
 
-    Await.result(f.recover(CliHelp.explainError), Duration.Inf)
+    try
+      Await.result(f.recoverWith(CliHelp.explainErrorHandler), Duration.Inf)
+    catch {
+      case ex @ EtagNotValid =>
+        log.error("Could not push targets", ex)
+        sys.exit(2)
+      case ex =>
+        log.error("", ex)
+        sys.exit(3)
+    }
   }
 }
