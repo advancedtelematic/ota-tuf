@@ -31,7 +31,7 @@ object CliHelp {
           |
           |  If the targets key is still online on the server, you can try downloading a fresh credentials.zip, otherwise you will need to add this public key manually to this local tuf repository.
           |
-          |- The Server could not return a valid etag when pulling targets.
+          |- The Server could not return a valid checksum when pulling targets.
           |""".stripMargin)
       ex
     case ex => log.error("", ex)

@@ -25,7 +25,7 @@ import com.advancedtelematic.tuf.cli.repo.{RepoManagement, TufRepo}
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
-import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.EtagNotValid
+import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.RoleChecksumNotValid
 import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
 
 sealed trait Command
@@ -399,7 +399,7 @@ object Cli extends App with VersionInfo {
     try
       Await.result(f.recoverWith(CliHelp.explainErrorHandler), Duration.Inf)
     catch {
-      case ex @ EtagNotValid =>
+      case ex @ RoleChecksumNotValid =>
         log.error("Could not push targets", ex)
         sys.exit(2)
       case ex: Throwable =>
