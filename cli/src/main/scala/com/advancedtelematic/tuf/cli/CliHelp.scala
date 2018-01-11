@@ -3,6 +3,8 @@ package com.advancedtelematic.tuf.cli
 import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
 import org.slf4j.LoggerFactory
 
+import scala.concurrent.Future
+
 object CliHelp {
   lazy val log = LoggerFactory.getLogger(this.getClass)
 
@@ -12,7 +14,7 @@ object CliHelp {
       ex
   }
 
-  val explainError: PartialFunction[Throwable, Unit] = showError andThen {
+  private val explainError: PartialFunction[Throwable, Throwable] = showError andThen {
     case ex: TargetsPullError =>
       log.info(
         s"""
@@ -31,7 +33,15 @@ object CliHelp {
           |
           |- The Server could not return a valid etag when pulling targets.
           |""".stripMargin)
-
+      ex
     case ex => log.error("", ex)
+      ex
+  }
+
+  val explainErrorHandler: PartialFunction[Throwable, Future[Unit]] = {
+    case ex if explainError.isDefinedAt(ex) =>
+      Future.failed(explainError(ex))
+    case ex =>
+      Future.failed(ex)
   }
 }
