@@ -91,9 +91,8 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
 
   private def addTargetItem(namespace: Namespace, item: TargetItem): Future[SignedPayload[Json]] =
     for {
-      result <- signedRoleGeneration.addToTarget(item)
-      _ <- messageBusPublisher.publish(
-        TufTargetAdded(namespace, item.filename, item.checksum, item.length, item.custom))
+      result <- signedRoleGeneration.addTargetItem(item)
+      _ <- messageBusPublisher.publish(TufTargetAdded(namespace, item.filename, item.checksum, item.length, item.custom))
     } yield result
 
   private def addTarget(namespace: Namespace, filename: TargetFilename, repoId: RepoId, clientItem: RequestTargetItem): Route =

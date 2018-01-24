@@ -45,6 +45,9 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
   protected [db] def resetAction(repoId: RepoId): DBIO[Unit] =
     targetItems.filter(_.repoId === repoId).delete.map(_ => ())
 
+  protected [db] def createAction(targetItem: TargetItem): DBIO[TargetItem] =
+    (targetItems += targetItem).map(_ => targetItem)
+
   protected [db] def persistAction(targetItem: TargetItem): DBIO[TargetItem] = {
     val findQ = targetItems.filter(_.repoId === targetItem.repoId).filter(_.filename === targetItem.filename)
     val now = Instant.now
@@ -55,7 +58,7 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
         val newTargetItem = targetItem.copy(custom = targetCustom)
         findQ.update(newTargetItem).map(_ => newTargetItem)
       case None =>
-        (targetItems += targetItem.copy(custom = targetItem.custom.map(_.copy(createdAt = now)))).map(_ => targetItem)
+        createAction(targetItem.copy(custom = targetItem.custom.map(_.copy(createdAt = now))))
     }.transactionally
   }
 
@@ -161,7 +164,7 @@ protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: Ex
   def storeAll(targetItemRepo: TargetItemRepository)(repoId: RepoId, signedRoles: List[SignedRole], items: Seq[TargetItem]): Future[Unit] = db.run {
     targetItemRepo.resetAction(repoId)
       .andThen(DBIO.sequence(signedRoles.map(sr => persistAction(sr, forceVersion = false))))
-      .andThen(DBIO.sequence(items.map(targetItemRepo.persistAction)))
+      .andThen(DBIO.sequence(items.map(targetItemRepo.createAction)))
       .map(_ => ())
       .transactionally
   }
