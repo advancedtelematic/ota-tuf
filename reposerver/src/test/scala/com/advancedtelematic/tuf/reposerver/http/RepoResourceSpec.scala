@@ -699,7 +699,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(etagHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
-      responseAs[JsonErrors].head should include("target item error some/file/name: All offline signed target items must contain custom metadata")
+      responseAs[JsonErrors].head should include("target item error some/file/name: new offline signed target items must contain custom metadata")
     }
   }
 

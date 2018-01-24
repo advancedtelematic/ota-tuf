@@ -47,26 +47,36 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
   private def validatedPayloadTargets(repoId: RepoId, payload: SignedPayload[TargetsRole], existingTargets: Seq[TargetItem]): ValidatedNel[String, List[TargetItem]] = {
     def errorMsg(filename: TargetFilename, msg: Any): String = s"target item error ${filename.value}: $msg"
 
-    def validateNewTarget(filename: TargetFilename, item: ClientTargetItem): Either[String, TargetItem] = {
+    def validateNewChecksum(filename: TargetFilename, newItem: ClientTargetItem): Either[String, Checksum] = {
+      newItem.hashes
+        .headOption
+        .map { case (method, hash) => Checksum(method, hash) }
+        .toRight(errorMsg(filename, "Invalid/Missing Checksum"))
+    }
+
+    def validateExistingTarget(filename: TargetFilename, oldItem: TargetItem, newItem: ClientTargetItem): Either[String, TargetItem] =
+      for {
+        newTargetCustom <- newItem.custom match {
+          case Some(customJson) => customJson.as[TargetCustom].leftMap(errorMsg(filename, _)).map(_.some)
+          case None => Right(None)
+        }
+        checksum <- validateNewChecksum(filename, newItem)
+      } yield TargetItem(repoId, filename, oldItem.uri, checksum, newItem.length, newTargetCustom, oldItem.storageMethod)
+
+    def validateNewTarget(filename: TargetFilename, item: ClientTargetItem): Either[String, TargetItem] =
       for {
         json <- item.custom.toRight(errorMsg(filename, "new offline signed target items must contain custom metadata"))
         uri <- json.hcursor.downField("uri").as[Uri].leftMap(errorMsg(filename, _))
         targetCustom <- json.as[TargetCustom].leftMap(errorMsg(filename, _))
         storageMethod = existingTargets.find(_.filename ==  filename).map(_.storageMethod).getOrElse(StorageMethod.Unmanaged)
-        targetItem <-
-          item.hashes
-            .headOption
-            .map { case (method, hash) => Checksum(method, hash) }
-            .map { checksum => TargetItem(repoId, filename, uri, checksum, item.length, Some(targetCustom), storageMethod = storageMethod) }
-            .toRight(errorMsg(filename, "Invalid/Missing Checksum"))
-      } yield targetItem
-    }
+        checksum <- validateNewChecksum(filename, item)
+      } yield TargetItem(repoId, filename, uri, checksum, item.length, Some(targetCustom), storageMethod = storageMethod)
 
     val existingTargetsAsMap = existingTargets.map { ti => ti.filename -> ti }.toMap
 
     val newTargetItems = payload.signed.targets.map { case (filename, item) =>
       existingTargetsAsMap.get(filename) match {
-        case Some(ti) => Right(ti)
+        case Some(ti) => validateExistingTarget(filename, ti, item)
         case None => validateNewTarget(filename, item)
       }
     }
