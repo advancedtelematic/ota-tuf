@@ -523,33 +523,31 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
-  test("accept name/version, hardwareIds, targetFormat, uri") {
+  test("accept name/version, hardwareIds, targetFormat") {
     val repoId = addTargetToRepo()
-    val targetfileName: TargetFilename = Refined.unsafeApply("target/with/desc")
+    val targetFilename: TargetFilename = Refined.unsafeApply("target/with/desc")
 
-    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.value}?name=somename&version=someversion&hardwareIds=1,2,3&targetFormat=binary"), form) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets/${targetFilename.value}?name=somename&version=someversion&hardwareIds=1,2,3&targetFormat=binary"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
     Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
-      val custom = responseAs[SignedPayload[TargetsRole]].signed.targets(targetfileName).customParsed[TargetCustom]
+      val custom = responseAs[SignedPayload[TargetsRole]].signed.targets(targetFilename).customParsed[TargetCustom]
 
       custom.map(_.name) should contain(TargetName("somename"))
       custom.map(_.version) should contain(TargetVersion("someversion"))
       custom.map(_.hardwareIds.map(_.value)) should contain(Seq("1", "2", "3"))
       custom.flatMap(_.targetFormat) should contain(TargetFormat.BINARY)
-
-      custom.flatMap(_.uri).map(_.toString).get should startWith(storageRoot.toString)
     }
   }
 
   test("on updates, updatedAt in target custom is updated, createdAt is unchanged") {
     val repoId = addTargetToRepo()
-    val targetfileName: TargetFilename = Refined.unsafeApply("target/to/update")
+    val targetFilename: TargetFilename = Refined.unsafeApply("target/to/update")
 
-    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.value}?name=somename&version=someversion"), form) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets/${targetFilename.value}?name=somename&version=someversion"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
@@ -557,14 +555,14 @@ class RepoResourceSpec extends TufReposerverSpec
 
     Thread.sleep(1000)
 
-    Put(apiUri(s"repo/${repoId.show}/targets/${targetfileName.value}?name=somename&version=someversion"), form) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets/${targetFilename.value}?name=somename&version=someversion"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
     Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
-      val custom = responseAs[SignedPayload[TargetsRole]].signed.targets(targetfileName).customParsed[TargetCustom]
+      val custom = responseAs[SignedPayload[TargetsRole]].signed.targets(targetFilename).customParsed[TargetCustom]
 
       custom.map(_.createdAt).get.isBefore(now) shouldBe true
       custom.map(_.updatedAt).get.isAfter(now) shouldBe true

@@ -63,8 +63,7 @@ class TargetStore(roleKeyStore: KeyserverClient,
     for {
       storeResult <- engine.store(repoId, targetFile, fileData)
       _ <- publishUploadMessages(repoId)
-      tcustom = custom.copy(uri = Option(new URI(storeResult.uri.toString())))
-    } yield TargetItem(repoId, targetFile, storeResult.uri, storeResult.checksum, storeResult.size, Option(tcustom))
+    } yield TargetItem(repoId, targetFile, storeResult.uri, storeResult.checksum, storeResult.size, Some(custom))
   }
 
   def storeFromUri(repoId: RepoId, targetFile: TargetFilename, fileUri: Uri, custom: TargetCustom): Future[TargetItem] = {

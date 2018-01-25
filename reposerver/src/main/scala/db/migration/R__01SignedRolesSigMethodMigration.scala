@@ -18,11 +18,11 @@ import slick.jdbc.MySQLProfile.api._
 import scala.concurrent.{ExecutionContext, Future}
 
 class RepoServerSignatureMethodMigration(implicit
-                                        val db: Database,
-                                        val mat: Materializer,
-                                        val system: ActorSystem,
-                                        val ec: ExecutionContext
-                                       ) extends SignedRoleRepositorySupport {
+                                         val db: Database,
+                                         val mat: Materializer,
+                                         val system: ActorSystem,
+                                         val ec: ExecutionContext
+                                        ) extends SignedRoleRepositorySupport {
 
   implicit private val getRowResult: GetResult[Row] = GetResult { r =>
     val repoId = SlickUUIDKey.dbMapping[RepoId].getValue(r.rs, 1)
