@@ -95,6 +95,8 @@ object Cli extends App with VersionInfo {
       c
     }
 
+    version("version")
+
     cmd("init")
       .action { (_, c) =>
         c.copy(command = InitRepo)
