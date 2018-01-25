@@ -25,7 +25,7 @@ object Schema {
   class TargetItemTable(tag: Tag) extends Table[TargetItem](tag, "target_items") {
     def repoId = column[RepoId]("repo_id")
     def filename = column[TargetFilename]("filename")
-    def uri = column[Uri]("uri")
+    def uri = column[Option[Uri]]("uri")
     def custom = column[Option[TargetCustom]]("custom")
     def checksum = column[Checksum]("checksum")
     def length = column[Long]("length")

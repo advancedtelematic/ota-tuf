@@ -33,7 +33,7 @@ class StorageMethodFix(implicit
   def fixTargetItemIfNeeded = Flow[TargetItem].mapAsync(3) { item =>
     if(needsFix(item))
       db.run(targetItems.filter(_.repoId === item.repoId).filter(_.filename === item.filename).map(_.storageMethod).update(StorageMethod.Managed))
-        .map { _ => item
+        .map { _ =>
           _log.info(s"Processed item (${item.repoId}, ${item.filename})")
         }
     else {

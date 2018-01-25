@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.data
 
+import java.net.URI
 import java.time.Instant
 
 import akka.http.scaladsl.model.Uri
@@ -21,7 +22,7 @@ object RepositoryDataType {
 
   import StorageMethod._
 
-  case class TargetItem(repoId: RepoId, filename: TargetFilename, uri: Uri, checksum: Checksum, length: Long, custom: Option[TargetCustom] = None, storageMethod: StorageMethod = Managed)
+  case class TargetItem(repoId: RepoId, filename: TargetFilename, uri: Option[Uri], checksum: Checksum, length: Long, custom: Option[TargetCustom] = None, storageMethod: StorageMethod = Managed)
 
   case class SignedRole(repoId: RepoId, roleType: RoleType, content: SignedPayload[Json], checksum: Checksum, length: Long, version: Int, expireAt: Instant)
 
@@ -30,6 +31,14 @@ object RepositoryDataType {
       val hashes = Map(signedRole.checksum.method -> signedRole.checksum.hash)
       signedRole.roleType.toMetaPath -> MetaItem(hashes, signedRole.length, signedRole.version)
     }
+  }
+
+  implicit class JavaUriToAkkaUriConversion(value: URI) {
+    def toUri: Uri = Uri(value.toString)
+  }
+
+  implicit class AkkaUriToJavaUriConversion(value: Uri) {
+    def toURI: URI = URI.create(value.toString)
   }
 
   object SignedRole {

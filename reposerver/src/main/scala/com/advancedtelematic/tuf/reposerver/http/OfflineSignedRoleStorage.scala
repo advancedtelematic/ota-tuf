@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.http
 
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
@@ -66,11 +67,9 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
     def validateNewTarget(filename: TargetFilename, item: ClientTargetItem): Either[String, TargetItem] =
       for {
         json <- item.custom.toRight(errorMsg(filename, "new offline signed target items must contain custom metadata"))
-        uri <- json.hcursor.downField("uri").as[Uri].leftMap(errorMsg(filename, _))
         targetCustom <- json.as[TargetCustom].leftMap(errorMsg(filename, _))
-        storageMethod = existingTargets.find(_.filename ==  filename).map(_.storageMethod).getOrElse(StorageMethod.Unmanaged)
         checksum <- validateNewChecksum(filename, item)
-      } yield TargetItem(repoId, filename, uri, checksum, item.length, Some(targetCustom), storageMethod = storageMethod)
+      } yield TargetItem(repoId, filename, targetCustom.uri.map(_.toUri), checksum, item.length, Some(targetCustom), storageMethod = StorageMethod.Unmanaged)
 
     val existingTargetsAsMap = existingTargets.map { ti => ti.filename -> ti }.toMap
 

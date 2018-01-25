@@ -1,17 +1,15 @@
 package com.advancedtelematic.tuf.reposerver.http
 
-import java.net.URI
-
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
 import akka.http.scaladsl.unmarshalling._
 import PredefinedFromStringUnmarshallers.CsvSeq
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.headers.{ETag, EntityTag, RawHeader, `If-Match`}
 import akka.http.scaladsl.model.{HttpResponse, StatusCodes, Uri}
 import akka.http.scaladsl.server._
-import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import com.advancedtelematic.libats.data.RefinedUtils._
-import com.advancedtelematic.libats.http.Errors.{MissingEntity, RawError}
+import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf_server.data.Messages.TufTargetAdded
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId}
@@ -100,10 +98,9 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       val custom = for {
         name <- clientItem.name
         version <- clientItem.version
-        uri = new URI(clientItem.uri.toString())
-      } yield TargetCustom(name, version, clientItem.hardwareIds, clientItem.targetFormat, uri = Option(uri))
+      } yield TargetCustom(name, version, clientItem.hardwareIds, clientItem.targetFormat, uri = Option(clientItem.uri.toURI))
 
-      addTargetItem(namespace, TargetItem(repoId, filename, clientItem.uri, clientItem.checksum, clientItem.length, custom))
+      addTargetItem(namespace, TargetItem(repoId, filename, Option(clientItem.uri), clientItem.checksum, clientItem.length, custom))
     }
 
   private def addTargetFromContent(namespace: Namespace, filename: TargetFilename, repoId: RepoId): Route = {

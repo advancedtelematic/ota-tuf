@@ -1,6 +1,5 @@
 package com.advancedtelematic.tuf.reposerver.target_store
 
-import java.net.URI
 import java.time.Instant
 
 import cats.implicits._
@@ -23,6 +22,7 @@ import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{Targ
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api.Database
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.StorageMethod._
+import com.advancedtelematic.tuf.reposerver.http.Errors
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
@@ -63,7 +63,7 @@ class TargetStore(roleKeyStore: KeyserverClient,
     for {
       storeResult <- engine.store(repoId, targetFile, fileData)
       _ <- publishUploadMessages(repoId)
-    } yield TargetItem(repoId, targetFile, storeResult.uri, storeResult.checksum, storeResult.size, Some(custom))
+    } yield TargetItem(repoId, targetFile, storeResult.uri.some, storeResult.checksum, storeResult.size, Some(custom))
   }
 
   def storeFromUri(repoId: RepoId, targetFile: TargetFilename, fileUri: Uri, custom: TargetCustom): Future[TargetItem] = {
@@ -80,14 +80,16 @@ class TargetStore(roleKeyStore: KeyserverClient,
       item.storageMethod match {
         case Managed =>
           retrieveFromManaged(repoId, targetFilename)
+        case Unmanaged if item.uri.isDefined =>
+          redirectToUnmanaged(item.uri.get)
         case Unmanaged =>
-          redirectToUnmanaged(item)
+          FastFuture.failed(Errors.NoUriForUnamanagedTarget)
       }
     }
   }
 
-  private def redirectToUnmanaged(item: TargetItem): Future[HttpResponse] = FastFuture.successful {
-    HttpResponse(StatusCodes.Found, List(Location(item.uri)))
+  private def redirectToUnmanaged(uri: Uri): Future[HttpResponse] = FastFuture.successful {
+    HttpResponse(StatusCodes.Found, List(Location(uri)))
   }
 
   private def retrieveFromManaged(repoId: RepoId, targetFilename: TargetFilename): Future[HttpResponse] = {

@@ -29,6 +29,7 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import cats.syntax.either._
 import com.advancedtelematic.libats.data.DataType.HashMethod
+import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
@@ -630,6 +631,24 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
+  test("getting offline target item fails if no custom url was provided when signing target") {
+    val repoId = addTargetToRepo()
+    val targetCustomJson =TargetCustom(TargetName("name"), TargetVersion("version"), Seq.empty, TargetFormat.BINARY.some).asJson
+    val hashes: ClientHashes = Map(HashMethod.SHA256 -> Refined.unsafeApply("8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"))
+    val offlineTargets = Map(offlineTargetFilename -> ClientTargetItem(hashes, 0, targetCustomJson.some))
+
+    val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(etagHeader(repoId)) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/targets/${offlineTargetFilename.value}")) ~> routes ~> check {
+      status shouldBe StatusCodes.ExpectationFailed
+      responseAs[ErrorRepresentation].code shouldBe ErrorCodes.NoUriForUnamanagedTarget
+    }
+  }
+
   test("getting offline target item redirects to custom url") {
     val repoId = addTargetToRepo()
 
@@ -712,18 +731,17 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
-  test("rejects requests with no uri in target custom") {
+  test("accepts requests with no uri in target custom") {
     val repoId = addTargetToRepo()
 
     val targetCustomJson = TargetCustom(TargetName("name"), TargetVersion("version"), Seq.empty, TargetFormat.BINARY.some).asJson
 
     val hashes: ClientHashes = Map(HashMethod.SHA256 -> Refined.unsafeApply("8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"))
     val targets = Map(offlineTargetFilename -> ClientTargetItem(hashes, 0, targetCustomJson.some))
-        val signedPayload = buildSignedTargetsRole(repoId, targets)
+    val signedPayload = buildSignedTargetsRole(repoId, targets)
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(etagHeader(repoId)) ~> routes ~> check {
-      status shouldBe StatusCodes.BadRequest
-      responseAs[JsonErrors].head should include("List(DownField(uri))")
+      status shouldBe StatusCodes.NoContent
     }
   }
 
@@ -816,7 +834,7 @@ class RepoResourceSpec extends TufReposerverSpec
     raw.expires shouldBe rawJson.expires
   }
 
-  test("delegates getting specific version of root.json to keysever") {
+  test("delegates getting specific version of root.json to keyserver") {
     val newRepoId = RepoId.generate()
 
     Post(apiUri(s"repo/${newRepoId.show}")) ~> routes ~> check {

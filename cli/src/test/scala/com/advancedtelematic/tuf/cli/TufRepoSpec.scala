@@ -183,7 +183,7 @@ class TufRepoSpec extends CliSpec {
   test("adds a target to an existing targets") {
     val repo = initRepo()
 
-    val path = repo.addTarget(TargetName("fake-one"), TargetVersion("1.2.3"), 100, Refined.unsafeApply("03aa3f5e2779b625a455651b54866447f995a2970d164581b4073044435359ed"), List.empty, new URI("https://ats.com"), TargetFormat.BINARY).get
+    val path = repo.addTarget(TargetName("fake-one"), TargetVersion("1.2.3"), 100, Refined.unsafeApply("03aa3f5e2779b625a455651b54866447f995a2970d164581b4073044435359ed"), List.empty, Some(URI.create("https://ats.com")), TargetFormat.BINARY).get
     val role = parseFile(path.toFile).flatMap(_.as[TargetsRole]).valueOr(throw _)
 
     role.targets.keys.map(_.value) should contain("fake-one-1.2.3")
@@ -193,7 +193,7 @@ class TufRepoSpec extends CliSpec {
   test("adds a target to an existing targets with specified format") {
     val repo = initRepo()
 
-    val path = repo.addTarget(TargetName("fake-ostree"), TargetVersion("1.2.3"), 100, Refined.unsafeApply("03aa3f5e2779b625a455651b54866447f995a2970d164581b4073044435359ed"), List.empty, new URI("https://ats.com"), TargetFormat.OSTREE).get
+    val path = repo.addTarget(TargetName("fake-ostree"), TargetVersion("1.2.3"), 100, Refined.unsafeApply("03aa3f5e2779b625a455651b54866447f995a2970d164581b4073044435359ed"), List.empty, Some(URI.create("https://ats.com")), TargetFormat.OSTREE).get
     val role = parseFile(path.toFile).flatMap(_.as[TargetsRole]).valueOr(throw _)
 
     val format = role.targets.get(Refined.unsafeApply("fake-ostree-1.2.3")).flatMap(_.customParsed[TargetCustom]).flatMap(_.targetFormat)
