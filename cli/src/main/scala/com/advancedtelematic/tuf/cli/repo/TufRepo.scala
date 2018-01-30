@@ -100,12 +100,12 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
   }
 
   def addTarget(name: TargetName, version: TargetVersion, length: Int, checksum: Refined[String, ValidChecksum],
-                hardwareIds: List[HardwareIdentifier], url: URI, format: TargetFormat): Try[Path] = {
+                hardwareIds: List[HardwareIdentifier], url: Option[URI], format: TargetFormat): Try[Path] = {
     for {
       targetsRole <- readUnsignedRole[TargetsRole]
       targetFilename <- refineV[ValidTargetFilename](s"${name.value}-${version.value}").leftMap(s => new IllegalArgumentException(s)).toTry
       newTargetRole = {
-        val custom = TargetCustom(name, version, hardwareIds, format.some, url.some)
+        val custom = TargetCustom(name, version, hardwareIds, format.some, url)
         val clientHashes = Map(HashMethod.SHA256 -> checksum)
         val newTarget = ClientTargetItem(clientHashes, length, custom.asJson.some)
 

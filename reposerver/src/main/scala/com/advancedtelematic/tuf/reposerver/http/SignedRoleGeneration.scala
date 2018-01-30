@@ -60,7 +60,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
     List(signedSnapshot, signedTimestamp)
   }
 
-  def addToTarget(targetItem: TargetItem): Future[SignedPayload[Json]] =
+  def addTargetItem(targetItem: TargetItem): Future[SignedPayload[Json]] =
     targetRoleGeneration.addTargetItem(targetItem).flatMap(_ ⇒ regenerateSignedRoles(targetItem.repoId))
 
   def signRole[T <: VersionedRole : TufRole : Decoder : Encoder](repoId: RepoId, role: T): Future[SignedRole] = {

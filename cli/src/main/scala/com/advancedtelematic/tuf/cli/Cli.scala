@@ -60,7 +60,7 @@ case class Config(command: Command,
                   targetVersion: Option[TargetVersion] = None,
                   checksum: Option[Refined[String, ValidChecksum]] = None,
                   hardwareIds: List[HardwareIdentifier] = List.empty,
-                  targetUri: URI = URI.create(""),
+                  targetUri: Option[URI] = None,
                   keySize: Int = 2048,
                   inputPath: Path = Paths.get("empty"),
                   exportPath: Path = Paths.get(""),
@@ -237,9 +237,8 @@ object Cli extends App with VersionInfo {
                 c.copy(hardwareIds = arg.toList)
               },
             opt[URI]("url")
-              .required()
               .action { (arg, c) =>
-                c.copy(targetUri = arg)
+                c.copy(targetUri = arg.some)
               }
           ),
         cmd("sign")
@@ -403,7 +402,7 @@ object Cli extends App with VersionInfo {
       case ex @ EtagNotValid =>
         log.error("Could not push targets", ex)
         sys.exit(2)
-      case ex =>
+      case ex: Throwable =>
         log.error("", ex)
         sys.exit(3)
     }
