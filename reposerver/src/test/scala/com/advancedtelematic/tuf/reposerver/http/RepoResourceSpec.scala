@@ -66,8 +66,8 @@ class RepoResourceSpec extends TufReposerverSpec
     fakeKeyserverClient.createRoot(repoId).futureValue
   }
 
-  private def etagHeader(repoId: RepoId) =
-    `If-Match`(EntityTag(signedRoleRepo.find(repoId, RoleType.TARGETS).futureValue.checksum.hash.value))
+  private def makeRoleChecksumHeader(repoId: RepoId) =
+    RoleChecksumHeader(signedRoleRepo.find(repoId, RoleType.TARGETS).futureValue.checksum.hash)
 
   test("POST returns latest signed json") {
     Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
@@ -174,7 +174,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     Get(apiUri(s"repo/${newRepoId.show}/targets.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      header[ETag] shouldBe 'defined
+      header("x-ats-role-checksum") shouldBe defined
       signaturesShouldBeValid(newRepoId, RoleType.TARGETS, responseAs[SignedPayload[TargetsRole]])
     }
   }
@@ -610,9 +610,9 @@ class RepoResourceSpec extends TufReposerverSpec
     val repoId = addTargetToRepo()
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(etagHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
-      header[ETag].map(_.value()) should contain(etagHeader(repoId).value())
+      header("x-ats-role-checksum").map(_.value) should contain(makeRoleChecksumHeader(repoId).value)
     }
 
     Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
@@ -622,7 +622,7 @@ class RepoResourceSpec extends TufReposerverSpec
     }
   }
 
-  test("reject putting offline signed targets.json without etag if it exists already") {
+  test("reject putting offline signed targets.json without checksum if it exists already") {
     val repoId = addTargetToRepo()
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
 
@@ -639,7 +639,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(etagHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
@@ -654,7 +654,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(etagHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
@@ -682,7 +682,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(etagHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
@@ -697,7 +697,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(etagHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
@@ -714,7 +714,7 @@ class RepoResourceSpec extends TufReposerverSpec
     val targets = Map(offlineTargetFilename -> ClientTargetItem(Map.empty, 0, None))
     val signedPayload = buildSignedTargetsRole(repoId, targets)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(etagHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
       responseAs[JsonErrors].head should include("target item error some/file/name: new offline signed target items must contain custom metadata")
     }
@@ -725,7 +725,7 @@ class RepoResourceSpec extends TufReposerverSpec
     val targets = Map(offlineTargetFilename -> clientTargetItem)
     val signedPayload = buildSignedTargetsRole(repoId, targets)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(etagHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
       responseAs[JsonErrors].head should include("Invalid/Missing Checksum")
     }
@@ -740,7 +740,7 @@ class RepoResourceSpec extends TufReposerverSpec
     val targets = Map(offlineTargetFilename -> ClientTargetItem(hashes, 0, targetCustomJson.some))
     val signedPayload = buildSignedTargetsRole(repoId, targets)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(etagHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
   }
@@ -754,7 +754,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val signedPayload = SignedPayload(invalidSignedPayload.signatures, targetsRole)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(etagHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
       responseAs[JsonErrors].head should include("Invalid signature for key")
     }
@@ -767,7 +767,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val signedPayload = SignedPayload(Seq.empty, targetsRole)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(etagHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
       responseAs[JsonErrors].head should include("Valid signature count must be >= threshold")
     }
@@ -785,7 +785,7 @@ class RepoResourceSpec extends TufReposerverSpec
     val signature = TufCrypto.signPayload(sec, targetsRole).toClient(pub.id)
     val signedPayload = SignedPayload(List(signature), targetsRole)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(etagHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
       responseAs[JsonErrors].head should include(s"No public key available for key ${pub.id}")
     }
@@ -813,7 +813,7 @@ class RepoResourceSpec extends TufReposerverSpec
     val expiredTargetsRole = TargetsRole(Instant.now().minus(1, ChronoUnit.DAYS), offlineTargets, 2)
     val signedPayload = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, expiredTargetsRole).futureValue
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(etagHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 

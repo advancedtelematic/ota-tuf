@@ -5,9 +5,10 @@ import java.security.Security
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.ClientDataType.{ETag, RoleKeys, RootRole, TargetsRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.{ClientDataType, TufDataType}
 import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKeyPair, KeyId, RoleType, SignedPayload, TufKey, TufKeyPair, TufPrivateKey}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
@@ -17,6 +18,7 @@ import org.scalatest.{FunSuite, Matchers}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.TargetsResponse
+import eu.timepit.refined.api.Refined
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
@@ -68,11 +70,12 @@ class FakeUserReposerverClient extends UserReposerverClient {
 
   override def targets(): Future[TargetsResponse] = Future.successful {
     val sig = TufCrypto.signPayload(targetsPair.privkey, unsignedTargets).toClient(targetsPubKey.id)
-    TargetsResponse(SignedPayload(Seq(sig), unsignedTargets), Option(ETag("[test] fake tag")))
+    val signedPayload = SignedPayload(Seq(sig), unsignedTargets)
+    TargetsResponse(signedPayload, Option(Refined.unsafeApply("095c33175e5af42691c1b41d388c8ce842c7fbb792fcc6514b5436f7f80420db")))
   }
 
-  def pushTargets(targetsRole: SignedPayload[TargetsRole], etag: Option[ETag]): Future[Unit] =
-    Try(etag.get).flatMap { _ =>
+  def pushTargets(targetsRole: SignedPayload[TargetsRole], checksum: Option[Refined[String, ValidChecksum]]): Future[Unit] =
+    Try(checksum.get).flatMap { _ =>
       val targetsPubKey = unsignedRoot.keys(unsignedRoot.roles(RoleType.TARGETS).keyids.head)
 
       if (targetsRole.isValidFor(targetsPubKey)) {
