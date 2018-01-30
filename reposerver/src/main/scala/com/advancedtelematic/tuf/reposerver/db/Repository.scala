@@ -58,7 +58,7 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
         val newTargetItem = targetItem.copy(custom = targetCustom)
         findQ.update(newTargetItem).map(_ => newTargetItem)
       case None =>
-        createAction(targetItem.copy(custom = targetItem.custom.map(_.copy(createdAt = now))))
+        createAction(targetItem.copy(custom = targetItem.custom.map(_.copy(updatedAt = now, createdAt = now))))
     }.transactionally
   }
 
