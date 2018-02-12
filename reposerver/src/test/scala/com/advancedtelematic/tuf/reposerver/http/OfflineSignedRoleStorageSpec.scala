@@ -58,7 +58,7 @@ class OfflineSignedRoleStorageSpec extends TufReposerverSpec with DatabaseSpec w
     mockFilename -> ClientTargetItem(mockHashes, 1, Some(defaultCustom))
   )
 
-  def storeOffline(repoId: RepoId, targets: Map[TargetFilename, ClientTargetItem], version: Int): Future[ValidatedNel[String, SignedRole]] = {
+  def storeOffline(repoId: RepoId, targets: Map[TargetFilename, ClientTargetItem], version: Int): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole)]] = {
     val targetsRole = TargetsRole(Instant.now.plusSeconds(3600), targets, version)
     val payload = keyserver.sign(repoId, RoleType.TARGETS, targetsRole).futureValue
     subject.store(repoId, payload)

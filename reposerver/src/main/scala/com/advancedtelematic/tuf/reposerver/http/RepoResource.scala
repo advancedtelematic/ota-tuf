@@ -4,19 +4,20 @@ import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
 import akka.http.scaladsl.unmarshalling._
 import PredefinedFromStringUnmarshallers.CsvSeq
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
-import akka.http.scaladsl.model.headers.{RawHeader}
-import akka.http.scaladsl.model.{HttpResponse, StatusCodes, Uri}
+import akka.http.scaladsl.model.headers.RawHeader
+import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server._
 import cats.data.Validated.{Invalid, Valid}
+import cats.syntax.either._
 import com.advancedtelematic.libats.data.RefinedUtils._
 import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf_server.data.Messages.TufTargetAdded
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
-import com.advancedtelematic.tuf.reposerver.db.{RepoNamespaceRepositorySupport, SignedRoleRepositorySupport, TargetItemRepositorySupport}
+import com.advancedtelematic.tuf.reposerver.db.{RepoNamespaceRepositorySupport, TargetItemRepositorySupport}
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepository.SignedRoleNotFound
-import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
@@ -25,7 +26,7 @@ import com.advancedtelematic.libats.http.AnyvalMarshallingSupport._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.codecs.CirceCodecs._
-import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace, ValidChecksum}
+import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem._
@@ -39,7 +40,6 @@ import eu.timepit.refined.api.Refined
 import io.circe.Json
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
-
 import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
@@ -50,7 +50,6 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
                    targetStore: TargetStore, messageBusPublisher: MessageBusPublisher)
                   (implicit val db: Database, val ec: ExecutionContext) extends Directives
   with TargetItemRepositorySupport
-  with SignedRoleRepositorySupport
   with RepoNamespaceRepositorySupport
   with Settings {
 
@@ -144,34 +143,10 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
     }
   }
 
-  private def storeSignedTarget[T](repoId: RepoId, signed: SignedPayload[TargetsRole]): Route = {
-    val f: Future[ToResponseMarshallable] = offlineSignedRoleStorage.store(repoId, signed).map {
-      case Valid(_) =>
-        StatusCodes.NoContent
-      case Invalid(errors) =>
-        val obj = Json.obj("errors" -> errors.asJson)
-        StatusCodes.BadRequest -> obj
-    }
-
-    complete(f)
-  }
-
-  private def updateSignedTarget(repoId: RepoId, signedPayload: SignedPayload[TargetsRole], existentRole: SignedRole) =
-    extractRoleChecksumHeader {
-      case Some(checksum) if existentRole.checksum.hash == checksum =>
-        onSuccess(offlineSignedRoleStorage.store(repoId, signedPayload)) {
-          case Valid(newSignedRole) =>
-            respondWithCheckSum(newSignedRole.checksum.hash) {
-              complete(StatusCodes.NoContent)
-            }
-          case Invalid(errors) =>
-            val obj = Json.obj("errors" -> errors.asJson)
-            complete(StatusCodes.BadRequest -> obj)
-        }
-      case Some(_) =>
-        failWith(Errors.RoleChecksumMismatch) // TODO: Should be 412?
-      case None =>
-        failWith(Errors.RoleChecksumNotProvided)
+  private def publishTufTargetAdded(namespace: Namespace, targets: Map[TargetFilename, ClientTargetItem], existing: Seq[TargetFilename]): Unit =
+    offlineSignedRoleStorage.tufTargetsAdded(targets, existing).foreach { case (filename, checksum, clientTargetItem) =>
+       messageBusPublisher.publish(TufTargetAdded(namespace, filename, checksum,
+                                   clientTargetItem.length, clientTargetItem.customParsed[TargetCustom]))
     }
 
   private def modifyRepoRoutes(repoId: RepoId) =
@@ -219,14 +194,17 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
             complete(targetStore.retrieve(repoId, filename))
           }
         } ~
-        (pathEnd & put & entity(as[SignedPayload[TargetsRole]])) { signed =>
-          onComplete(signedRoleRepo.find(repoId, RoleType.TARGETS)) {
-            case Success(signedRole) =>
-              updateSignedTarget(repoId, signed, signedRole)
-            case Failure(SignedRoleNotFound) =>
-              storeSignedTarget(repoId, signed)
-            case Failure(t) =>
-              failWith(t)
+        (pathEnd & put & entity(as[SignedPayload[TargetsRole]])) { signedPayload =>
+          extractRoleChecksumHeader { checksum =>
+            onSuccess(offlineSignedRoleStorage.saveTargetRole(namespace, signedPayload, repoId, checksum)) {
+              case Valid((targetItems, newSignedRole)) =>
+                publishTufTargetAdded(namespace, signedPayload.signed.targets, targetItems.map(_.filename))
+                respondWithCheckSum(newSignedRole.checksum.hash) {
+                  complete(StatusCodes.NoContent)
+                }
+              case Invalid(errors) =>
+                complete(StatusCodes.BadRequest -> Json.obj("errors" -> errors.asJson))
+            }
           }
         }
       }
