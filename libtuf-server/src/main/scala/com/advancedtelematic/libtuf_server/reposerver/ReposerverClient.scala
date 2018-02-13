@@ -1,7 +1,7 @@
 package com.advancedtelematic.libtuf_server.reposerver
 
 import akka.http.scaladsl.model._
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, SignedPayload, TargetName, TargetVersion}
 import io.circe.{Decoder, Encoder, Json}
 import akka.actor.ActorSystem
 import RepoId._
@@ -19,6 +19,7 @@ import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat._
 import com.advancedtelematic.libtuf.data.TufCodecs._
+
 import scala.concurrent.{ExecutionContext, Future}
 import io.circe.generic.semiauto._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -44,9 +45,11 @@ object ReposerverClient {
                                hardwareIds: Seq[HardwareIdentifier],
                                length: Long)
 
-  val RepoConflict   = RawError(ErrorCode("repo_conflict"), StatusCodes.Conflict, "repo already exists")
-  val OfflineKey = RawError(ErrorCode("offline_key"), StatusCodes.PreconditionFailed, "repo is using offline signing, can't add targets online")
-  val UserRepoNotFound = RawError(ErrorCode("user_repo_not_found"), StatusCodes.NotFound, "the repo does not exist yet")
+  val KeysNotReady = RawError(ErrorCode("keys_not_ready"), StatusCodes.Locked, "keys not ready")
+  val RootNotInKeyserver = RawError(ErrorCode("root_role_not_in_keyserver"), StatusCodes.FailedDependency, "the root role was not found in upstream keyserver")
+  val NotFound = RawError(ErrorCode("repo_resource_not_found"), StatusCodes.NotFound, "the requested repo resource was not found")
+  val RepoConflict = RawError(ErrorCode("repo_conflict"), StatusCodes.Conflict, "repo already exists")
+  val PrivateKeysNotInKeyserver = RawError(ErrorCode("private_keys_not_found"), StatusCodes.PreconditionFailed, "could not find required private keys. The repository might be using offline signing")
 }
 
 
@@ -54,6 +57,8 @@ trait ReposerverClient {
   protected def ReposerverError(msg: String) = RawError(ErrorCode("reposerver_remote_error"), StatusCodes.BadGateway, msg)
 
   def createRoot(namespace: Namespace): Future[RepoId]
+
+  def fetchRoot(namespace: Namespace): Future[SignedPayload[RootRole]]
 
   def addTarget(namespace: Namespace, fileName: String, uri: Uri, checksum: Checksum, length: Int,
                 targetFormat: TargetFormat, name: Option[TargetName] = None, version: Option[TargetVersion] = None,
@@ -92,11 +97,25 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
     }
   }
 
+  override def fetchRoot(namespace: Namespace): Future[SignedPayload[RootRole]] = {
+    val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("user_repo/root.json")))
+    execHttpWithNamespace[SignedPayload[RootRole]](namespace, req) {
+      case status if status == StatusCodes.NotFound =>
+        Future.failed(NotFound)
+      case status if status == StatusCodes.Locked =>
+        Future.failed(KeysNotReady)
+      case status if status == StatusCodes.FailedDependency =>
+        Future.failed(RootNotInKeyserver)
+    }
+  }
+
   private def addTargetErrorHandler[T]: PartialFunction[StatusCode, Future[T]] = {
     case status if status == StatusCodes.PreconditionFailed =>
-      Future.failed(OfflineKey)
+      Future.failed(PrivateKeysNotInKeyserver)
     case status if status == StatusCodes.NotFound =>
-      Future.failed(UserRepoNotFound)
+      Future.failed(NotFound)
+    case status if status == StatusCodes.Locked =>
+      Future.failed(KeysNotReady)
   }
 
   override def addTarget(namespace: Namespace, fileName: String,
@@ -139,10 +158,15 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
     val params =
       Map(
         "name" -> name.value, "version" -> version.value,
-        "hardwareIds" -> hardwareIds.map(_.value).mkString(","),
         "targetFormat" -> targetFormat.toString)
 
-    val uri = apiUri(Path("user_repo") / "targets" / fileName).withQuery(Query(params))
+    val hwparams =
+      if(hardwareIds.isEmpty)
+        Map.empty
+      else
+        Map("hardwareIds" -> hardwareIds.map(_.value).mkString(","))
+
+    val uri = apiUri(Path("user_repo") / "targets" / fileName).withQuery(Query(params ++ hwparams))
 
     val multipartForm =
       Multipart.FormData(Multipart.FormData.BodyPart("file",

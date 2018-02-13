@@ -40,6 +40,7 @@ import scala.concurrent.Promise
 
 object FakeKeyserverClient extends KeyserverClient {
 
+  import KeyserverClient._
   import scala.concurrent.ExecutionContext.Implicits.global
   import io.circe.syntax._
 
@@ -47,11 +48,18 @@ object FakeKeyserverClient extends KeyserverClient {
 
   private val rootRoles = new ConcurrentHashMap[RepoId, RootRole]()
 
+  private val pendingRequests = new ConcurrentHashMap[RepoId, Boolean]()
+
   def publicKey(repoId: RepoId, roleType: RoleType): PublicKey = keys.get(repoId)(roleType).getPublic
 
   def resetKeyServer(): Unit = this.synchronized {
     keys.clear()
     rootRoles.clear()
+  }
+
+  def forceKeyGenerationPending(repoId: RepoId): Unit = {
+    deleteRepo(repoId)
+    pendingRequests.put(repoId, true)
   }
 
   private lazy val preGeneratedKeys = RoleType.ALL.map { role =>
@@ -113,7 +121,7 @@ object FakeKeyserverClient extends KeyserverClient {
   override def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]] =
     fetchUnsignedRoot(repoId).flatMap { unsigned =>
       sign(repoId, RoleType.ROOT, unsigned)
-    }
+  }
 
   override def addTargetKey(repoId: RepoId, key: TufKey): Future[Unit] = {
     if(!rootRoles.containsKey(repoId))
@@ -134,6 +142,9 @@ object FakeKeyserverClient extends KeyserverClient {
   override def fetchUnsignedRoot(repoId: RepoId): Future[RootRole] = {
     Future.fromTry {
       Try {
+        if(pendingRequests.asScala.getOrElse(repoId, false))
+          throw KeysNotReady
+
         rootRoles.asScala(repoId)
       }.recover {
         case _: NoSuchElementException => throw RootRoleNotFound

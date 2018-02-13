@@ -40,9 +40,7 @@ trait TufCrypto[T <: KeyType] {
   def encode(keyVal: T#Priv): Json
 
   def generateKeyPair(keySize: Int): TufKeyPair = {
-    if(!validKeySize(keySize))
-      throw new IllegalArgumentException(s"Key size too small")
-
+    require(validKeySize(keySize), "Key size too small")
     val keyPair = keyPairGenerator(keySize).generateKeyPair()
     toKeyPair(convertPublic(keyPair.getPublic), convertPrivate(keyPair.getPrivate))
   }

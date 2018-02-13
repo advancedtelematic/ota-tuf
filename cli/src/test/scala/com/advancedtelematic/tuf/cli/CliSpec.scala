@@ -34,8 +34,8 @@ class FakeUserReposerverClient extends UserReposerverClient {
 
   private val Ec25519TufKeyPair(oldPublicKey, oldPrivateKey) = TufCrypto.generateKeyPair(Ec25519KeyType, 256)
 
-  private var targetsPair = TufCrypto.generateKeyPair(Ec25519KeyType, 256)
-  var targetsPubKey = targetsPair.pubkey
+  private val targetsPair = TufCrypto.generateKeyPair(Ec25519KeyType, 256)
+  private var targetsPubKey = targetsPair.pubkey
 
   private var unsignedTargets = TargetsRole(Instant.now.plus(1, ChronoUnit.DAYS), Map.empty, 1)
 

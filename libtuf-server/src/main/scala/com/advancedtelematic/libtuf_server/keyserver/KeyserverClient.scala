@@ -19,13 +19,16 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf_server.http.{ServiceHttpClient, ServiceHttpClientSupport}
 
-trait KeyserverClient {
+object KeyserverClient {
+  val KeysNotReady = RawError(ErrorCode("keys_not_ready"), StatusCodes.Locked, "Keys not ready in remote keyserver")
   val RootRoleNotFound = RawError(ErrorCode("root_role_not_found"), StatusCodes.FailedDependency, "root role was not found in upstream key store")
   val RootRoleConflict = RawError(ErrorCode("root_role_conflict"), StatusCodes.Conflict, "root role already exists")
   val RoleKeyNotFound = RawError(ErrorCode("role_key_not_found"), StatusCodes.PreconditionFailed, s"can't sign since role was not found in upstream key store")
   val KeyError = RawError(ErrorCode("key_error"), StatusCodes.BadRequest, "key cannot be processed")
   val KeyPairNotFound = RawError(ErrorCode("keypair_not_found"), StatusCodes.NotFound, "keypair not found in keyserver")
+}
 
+trait KeyserverClient {
   def createRoot(repoId: RepoId, keyType: KeyType = RsaKeyType): Future[Json]
 
   def sign[T : Decoder : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]]
@@ -56,6 +59,7 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
                          (implicit system: ActorSystem, mat: ActorMaterializer) extends ServiceHttpClient(httpClient) with KeyserverClient {
   import io.circe.syntax._
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+  import KeyserverClient._
 
   private def apiUri(path: Path) =
     uri.withPath(Empty / "api" / "v1" ++ Slash(path))
@@ -67,6 +71,8 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
     execJsonHttp[Json, Json](req, entity) {
       case StatusCodes.Conflict =>
         Future.failed(RootRoleConflict)
+      case StatusCodes.Locked =>
+        Future.failed(KeysNotReady)
     }
   }
 
@@ -84,6 +90,8 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
     execHttp[SignedPayload[RootRole]](req) {
       case StatusCodes.NotFound =>
         Future.failed(RootRoleNotFound)
+      case StatusCodes.Locked =>
+        Future.failed(KeysNotReady)
     }
   }
 

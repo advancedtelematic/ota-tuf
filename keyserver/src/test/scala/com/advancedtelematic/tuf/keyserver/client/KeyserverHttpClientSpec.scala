@@ -2,12 +2,13 @@ package com.advancedtelematic.tuf.keyserver.client
 
 import java.security.interfaces.RSAPublicKey
 
+import cats.instances.map
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType.{Ec25519KeyType, Ec25519TufKey, Ec25519TufKeyPair, Ec25519TufPrivateKey, KeyId, RSATufKey, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.Errors.RawError
-import com.advancedtelematic.libtuf_server.keyserver.KeyserverHttpClient
+import com.advancedtelematic.libtuf_server.keyserver.{KeyserverClient, KeyserverHttpClient}
 import com.advancedtelematic.tuf.keyserver.daemon.{DefaultKeyGenerationOp, KeyGenerationOp}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
@@ -161,7 +162,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
       sig <- client.sign(repoId, RoleType.TARGETS, Json.Null)
     } yield sig
 
-    f.failed.futureValue shouldBe client.RoleKeyNotFound
+    f.failed.futureValue shouldBe KeyserverClient.RoleKeyNotFound
   }
 
   test("minimum RSA key size when creating a repo") {
@@ -223,5 +224,18 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
 
     f.futureValue shouldBe a[SignedPayload[_]]
     f.futureValue.signed shouldBe a[RootRole]
+  }
+
+  test("returns KeysNotReady when keys are not yet ready") {
+    val repoId = RepoId.generate()
+    val keyGenRequest = KeyGenRequest(KeyGenId.generate(),
+      repoId, KeyGenRequestStatus.REQUESTED, RoleType.TARGETS, 2048, RsaKeyType)
+
+    val f = for {
+      _ <- keyGenRepo.persist(keyGenRequest)
+      root <- client.fetchRootRole(repoId)
+    } yield root
+
+    f.failed.futureValue shouldBe KeyserverClient.KeysNotReady
   }
 }
