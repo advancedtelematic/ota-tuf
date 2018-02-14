@@ -5,7 +5,7 @@ import java.security.PrivateKey
 import cats.syntax.either._
 import akka.http.scaladsl.model.StatusCodes
 import cats.data.NonEmptyList
-import com.advancedtelematic.tuf.util.{ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
+import com.advancedtelematic.tuf.util.{FakeVault, ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
 import io.circe.generic.auto._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import cats.syntax.show._
@@ -624,7 +624,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
-  test("GET target key pairs") {
+  test("GET target key pairs works") {
     val keyGenerationOp = DefaultKeyGenerationOp(fakeVault)
 
     val repoId = RepoId.generate()
@@ -638,6 +638,32 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseAs[Seq[TufKeyPair]].map(_.pubkey).toSet shouldBe publicKeys.map(_.toTufKey).toSet
+    }
+  }
+
+  test("GET target key pairs error on key not found in DB") {
+    val repoId = RepoId.generate()
+
+    Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
+    }
+  }
+
+  test("GET target key pairs error on key not found in vault") {
+    // use a different vault so that the vault used by the resource doesn't find the keys
+    val wrongVault = new FakeVault()
+    val keyGenerationOp = DefaultKeyGenerationOp(wrongVault)
+
+    val repoId = RepoId.generate()
+
+    // generate target key pair
+    val targetKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
+      repoId, KeyGenRequestStatus.REQUESTED, RoleType.TARGETS, 2048, RsaKeyType)
+    keyGenRepo.persist(targetKeyGenRequest).futureValue
+    val publicKeys = keyGenerationOp(targetKeyGenRequest).futureValue
+
+    Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
+      status shouldBe StatusCodes.InternalServerError
     }
   }
 

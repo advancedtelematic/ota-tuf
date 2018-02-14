@@ -658,7 +658,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
 
     Get(apiUri(s"repo/${repoId.show}/targets/${offlineTargetFilename.value}")) ~> routes ~> check {
       status shouldBe StatusCodes.ExpectationFailed
-      responseAs[ErrorRepresentation].code shouldBe ErrorCodes.NoUriForUnamanagedTarget
+      responseAs[ErrorRepresentation].code shouldBe ErrorCodes.NoUriForUnmanagedTarget
     }
   }
 
