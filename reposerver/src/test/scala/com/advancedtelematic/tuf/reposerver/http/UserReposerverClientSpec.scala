@@ -8,7 +8,7 @@ import eu.timepit.refined._
 import com.advancedtelematic.libats.data.DataType.{Namespace, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{Ec25519KeyType, RepoId, RoleType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RepoId, RoleType, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
 import org.scalatest.time.{Seconds, Span}
@@ -107,7 +107,7 @@ class UserReposerverClientSpec extends TufReposerverSpec
   }
 
   test("pushes a target key") {
-    val newKey = TufCrypto.generateKeyPair(Ec25519KeyType, 256).pubkey
+    val newKey = TufCrypto.generateKeyPair(Ed25519KeyType, 256).pubkey
 
     val f = for {
       _ <- client.pushTargetsKey(newKey)

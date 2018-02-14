@@ -9,7 +9,7 @@ import akka.stream.ActorMaterializer
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.crypt.TufCrypto._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{Ec25519KeyType, RSATufKeyPair, RsaKeyType}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RSATufKeyPair, RsaKeyType}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.{VaultKey, VaultResourceNotFound}
 import com.advancedtelematic.tuf.util.TufKeyserverSpec
 import io.circe.Json
@@ -52,9 +52,9 @@ class VaultClientIntegrationSpec extends TufKeyserverSpec
   }
 
   test("can store ed25519 key") {
-    val pair = TufCrypto.generateKeyPair(Ec25519KeyType, 256)
+    val pair = TufCrypto.generateKeyPair(Ed25519KeyType, 256)
 
-    vault.createKey(VaultKey(pair.pubkey.id, Ec25519KeyType, pair.pubkey, pair.privkey)).futureValue
+    vault.createKey(VaultKey(pair.pubkey.id, Ed25519KeyType, pair.pubkey, pair.privkey)).futureValue
 
     vault.findKey(pair.pubkey.id).map(_.privateKey).futureValue.keyval.getEncoded shouldBe pair.privkey.keyval.getEncoded
   }
@@ -62,7 +62,7 @@ class VaultClientIntegrationSpec extends TufKeyserverSpec
   test("can decode a legacy key") {
     val pair = TufCrypto.generateKeyPair(RsaKeyType, 2048)
 
-    val vaultKey = VaultKey(pair.pubkey.id, Ec25519KeyType, pair.pubkey, pair.privkey)
+    val vaultKey = VaultKey(pair.pubkey.id, Ed25519KeyType, pair.pubkey, pair.privkey)
 
     val legacyJson = vaultKey.asJson.deepMerge(Json.obj("privateKey" → pair.privkey.keyval.toPem.asJson))
 

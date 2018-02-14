@@ -34,17 +34,17 @@ object TufCodecs {
   implicit val rsaKeyTypeEncoder: Encoder[RsaKeyType.type] = Encoder[String].contramap(_ ⇒ "RSA")
   implicit val rsaKeyTypeDecoder: Decoder[RsaKeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "RSA", RsaKeyType, s"Unknown KeyType: $str"))
 
-  implicit val ec25519KeyTypeEncoder: Encoder[Ec25519KeyType.type] = Encoder[String].contramap(_ ⇒ "ED25519")
-  implicit val ec25519KeyTypeDecoder: Decoder[Ec25519KeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "ED25519", Ec25519KeyType, s"Unknown KeyType: $str"))
+  implicit val ed25519KeyTypeEncoder: Encoder[Ed25519KeyType.type] = Encoder[String].contramap(_ ⇒ "ED25519")
+  implicit val ed25519KeyTypeDecoder: Decoder[Ed25519KeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "ED25519", Ed25519KeyType, s"Unknown KeyType: $str"))
 
   implicit val ecPrime256KeyTypeEncoder: Encoder[EcPrime256KeyType.type] = Encoder[String].contramap(_ ⇒ "ECPRIME256V1")
   implicit val ecPrime256KeyTypeDecoder: Decoder[EcPrime256KeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "ECPRIME256V1", EcPrime256KeyType, s"Unknown KeyType: $str"))
 
-  implicit val keyTypeDecoder: Decoder[KeyType] = List[Decoder[KeyType]](rsaKeyTypeDecoder.widen, ec25519KeyTypeDecoder.widen, ecPrime256KeyTypeDecoder.widen).reduceLeft(_ or _)
+  implicit val keyTypeDecoder: Decoder[KeyType] = List[Decoder[KeyType]](rsaKeyTypeDecoder.widen, ed25519KeyTypeDecoder.widen, ecPrime256KeyTypeDecoder.widen).reduceLeft(_ or _)
 
   implicit val keyTypeEncoder: Encoder[KeyType] = Encoder.instance {
     case RsaKeyType ⇒ RsaKeyType.asJson
-    case Ec25519KeyType ⇒ Ec25519KeyType.asJson
+    case Ed25519KeyType ⇒ Ed25519KeyType.asJson
     case EcPrime256KeyType ⇒ EcPrime256KeyType.asJson
   }
 
@@ -52,9 +52,9 @@ object TufCodecs {
     case key @ RSATufKey(_) ⇒
       Json.obj("keyval" → Json.obj("public" -> RsaKeyType.crypto.encode(key)),
                "keytype" → RsaKeyType.asJson)
-    case key @ Ec25519TufKey(_) ⇒
-      Json.obj("keyval" → Json.obj("public" -> Ec25519KeyType.crypto.encode(key)),
-               "keytype" → Ec25519KeyType.asJson)
+    case key @ Ed25519TufKey(_) ⇒
+      Json.obj("keyval" → Json.obj("public" -> Ed25519KeyType.crypto.encode(key)),
+               "keytype" → Ed25519KeyType.asJson)
     case key @ EcPrime256TufKey(_) ⇒
       Json.obj("keyval" → Json.obj("public" -> EcPrime256KeyType.crypto.encode(key)),
         "keytype" → EcPrime256KeyType.asJson)
@@ -64,9 +64,9 @@ object TufCodecs {
     case key @ RSATufPrivateKey(_) ⇒
       Json.obj("keyval" → Json.obj("private" -> RsaKeyType.crypto.encode(key)),
                "keytype" → RsaKeyType.asJson)
-    case key @ Ec25519TufPrivateKey(_) ⇒
-      Json.obj("keyval" → Json.obj("private" -> Ec25519KeyType.crypto.encode(key)),
-               "keytype" → Ec25519KeyType.asJson)
+    case key @ Ed25519TufPrivateKey(_) ⇒
+      Json.obj("keyval" → Json.obj("private" -> Ed25519KeyType.crypto.encode(key)),
+               "keytype" → Ed25519KeyType.asJson)
     case key @ EcPrime256TufPrivateKey(_) ⇒
       Json.obj("keyval" → Json.obj("private" -> EcPrime256KeyType.crypto.encode(key)),
         "keytype" → EcPrime256KeyType.asJson)
@@ -89,10 +89,10 @@ object TufCodecs {
       Json.obj("keytype" -> RsaKeyType.asJson,
                "keyval" -> Json.obj("public" -> RsaKeyType.crypto.encode(pub),
                                     "private" -> RsaKeyType.crypto.encode(priv)))
-    case Ec25519TufKeyPair(pub, priv) =>
-      Json.obj("keytype" -> Ec25519KeyType.asJson,
-               "keyval" -> Json.obj("public" -> Ec25519KeyType.crypto.encode(pub),
-                                    "private" -> Ec25519KeyType.crypto.encode(priv)))
+    case Ed25519TufKeyPair(pub, priv) =>
+      Json.obj("keytype" -> Ed25519KeyType.asJson,
+               "keyval" -> Json.obj("public" -> Ed25519KeyType.crypto.encode(pub),
+                                    "private" -> Ed25519KeyType.crypto.encode(priv)))
     case EcPrime256TufKeyPair(pub, priv) =>
       Json.obj("keytype" -> EcPrime256KeyType.asJson,
         "keyval" -> Json.obj("public" -> EcPrime256KeyType.crypto.encode(pub),

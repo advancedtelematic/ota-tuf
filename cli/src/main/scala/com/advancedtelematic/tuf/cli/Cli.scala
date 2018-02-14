@@ -8,7 +8,7 @@ import java.time.temporal.ChronoUnit
 
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{Ec25519KeyType, HardwareIdentifier, KeyId, KeyType, TargetFormat, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, HardwareIdentifier, KeyId, KeyType, TargetFormat, TargetName, TargetVersion}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.slf4j.LoggerFactory
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -48,7 +48,7 @@ case class Config(command: Command,
                   credentialsPath: Path = Paths.get("credentials.zip"),
                   repoName: RepoName = RepoName("default-repo"),
                   rootKey: KeyName = KeyName("default-key"),
-                  keyType: KeyType = Ec25519KeyType,
+                  keyType: KeyType = Ed25519KeyType,
                   oldRootKey: KeyName = KeyName("default-key"),
                   targetsKey: KeyName = KeyName("default-key"),
                   oldKeyId: Option[KeyId] = None,

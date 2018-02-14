@@ -6,7 +6,7 @@ import com.advancedtelematic.libats.data.DataType.Checksum
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.crypt.TufCrypto.KeyOps
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
-import com.advancedtelematic.libtuf.data.TufDataType.{Ec25519KeyType, EcPrime256KeyType, KeyType, RoleType, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, EcPrime256KeyType, KeyType, RoleType, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libats.slick.db.SlickCirceMapper
@@ -26,12 +26,12 @@ object TufSlickMappings {
   implicit val keyTypeMapper = MappedColumnType.base[KeyType, String](
     {
       case RsaKeyType ⇒ "RSA"
-      case Ec25519KeyType ⇒ "ED25519"
+      case Ed25519KeyType ⇒ "ED25519"
       case EcPrime256KeyType ⇒ "ECPRIME256V1"
     },
     {
       case "RSA" ⇒ RsaKeyType
-      case "ED25519" ⇒ Ec25519KeyType
+      case "ED25519" ⇒ Ed25519KeyType
       case "ECPRIME256V1" ⇒ EcPrime256KeyType
     }
   )

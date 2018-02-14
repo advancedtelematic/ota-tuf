@@ -93,12 +93,12 @@ object TufDataType {
 
     val crypto = TufCrypto.rsaCrypto
   }
-  case object Ec25519KeyType extends KeyType {
-    type Pub = Ec25519TufKey
-    type Priv = Ec25519TufPrivateKey
-    type Pair = Ec25519TufKeyPair
+  case object Ed25519KeyType extends KeyType {
+    type Pub = Ed25519TufKey
+    type Priv = Ed25519TufPrivateKey
+    type Pair = Ed25519TufKeyPair
 
-    val crypto = TufCrypto.ec25519Crypto
+    val crypto = TufCrypto.ed25519Crypto
   }
   case object EcPrime256KeyType extends KeyType {
     type Pub = EcPrime256TufKey
@@ -116,8 +116,8 @@ object TufDataType {
   case class RSATufKey(override val keyval: PublicKey) extends TufKey {
     override def keytype: KeyType = RsaKeyType
   }
-  case class Ec25519TufKey(override val keyval: PublicKey) extends TufKey {
-    override def keytype: KeyType = Ec25519KeyType
+  case class Ed25519TufKey(override val keyval: PublicKey) extends TufKey {
+    override def keytype: KeyType = Ed25519KeyType
   }
   case class EcPrime256TufKey(override val keyval: PublicKey) extends TufKey {
     override def keytype: KeyType = EcPrime256KeyType
@@ -130,8 +130,8 @@ object TufDataType {
   case class RSATufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey {
     override def keytype: KeyType = RsaKeyType
   }
-  case class Ec25519TufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey {
-    override def keytype: KeyType = Ec25519KeyType
+  case class Ed25519TufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey {
+    override def keytype: KeyType = Ed25519KeyType
   }
   case class EcPrime256TufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey {
     override def keytype: KeyType = EcPrime256KeyType
@@ -145,6 +145,6 @@ object TufDataType {
     def unapply(arg: TufKeyPair): Option[(TufKey, TufPrivateKey)] = Some(arg.pubkey -> arg.privkey)
   }
   case class RSATufKeyPair(override val pubkey: RSATufKey, override val privkey: RSATufPrivateKey) extends TufKeyPair
-  case class Ec25519TufKeyPair(override val pubkey: Ec25519TufKey, override val privkey: Ec25519TufPrivateKey) extends TufKeyPair
+  case class Ed25519TufKeyPair(override val pubkey: Ed25519TufKey, override val privkey: Ed25519TufPrivateKey) extends TufKeyPair
   case class EcPrime256TufKeyPair(override val pubkey: EcPrime256TufKey, override val privkey: EcPrime256TufPrivateKey) extends TufKeyPair
 }

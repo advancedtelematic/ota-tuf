@@ -8,7 +8,7 @@ import java.security.{Signature => _, _}
 
 import org.bouncycastle.jce.ECNamedCurveTable
 import org.bouncycastle.jce.spec.ECParameterSpec
-import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, Ec25519KeyType, Ec25519TufKey, Ec25519TufKeyPair, Ec25519TufPrivateKey, EcPrime256KeyType, EcPrime256TufKey, EcPrime256TufKeyPair, EcPrime256TufPrivateKey, KeyId, KeyType, RSATufKey, RSATufKeyPair, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, SignedPayload, TufKey, TufKeyPair, TufPrivateKey, ValidKeyId, ValidSignature}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, Ed25519KeyType, Ed25519TufKey, Ed25519TufKeyPair, Ed25519TufPrivateKey, EcPrime256KeyType, EcPrime256TufKey, EcPrime256TufKeyPair, EcPrime256TufPrivateKey, KeyId, KeyType, RSATufKey, RSATufKeyPair, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, SignedPayload, TufKey, TufKeyPair, TufPrivateKey, ValidKeyId, ValidSignature}
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
 import org.bouncycastle.util.encoders.{Base64, Hex}
@@ -83,7 +83,7 @@ object TufCrypto {
 
   val rsaCrypto = new RsaCrypto
 
-  val ec25519Crypto = new EC25519Crypto()
+  val ed25519Crypto = new ED25519Crypto()
 
   lazy val ecPrime256Crypto = new ECPrime256Crypto()
 
@@ -109,7 +109,7 @@ object TufCrypto {
   def isValid(signature: Signature, publicKey: PublicKey, data: Array[Byte]): Boolean = {
     val signer = signature.method match {
       case SignatureMethod.RSASSA_PSS_SHA256 ⇒ rsaCrypto.signer
-      case SignatureMethod.ED25519 ⇒ ec25519Crypto.signer
+      case SignatureMethod.ED25519 ⇒ ed25519Crypto.signer
       case other ⇒ throw new IllegalArgumentException(s"Unsupported signature method: $other")
     }
     val decodedSig = Base64.decode(signature.sig.value)
@@ -264,13 +264,13 @@ protected [crypt] abstract class ECCrypto[T <: KeyType](curve: CurveId, signatur
   override def defaultKeySize: Int = 256
 }
 
-protected [crypt] class EC25519Crypto extends ECCrypto[Ec25519KeyType.type](Curve25519, SHA256withECDSA) {
-  override def toKeyPair(publicKey: Ec25519TufKey, privateKey: Ec25519TufPrivateKey): TufKeyPair =
-    Ec25519TufKeyPair(publicKey, privateKey)
+protected [crypt] class ED25519Crypto extends ECCrypto[Ed25519KeyType.type](Curve25519, SHA256withECDSA) {
+  override def toKeyPair(publicKey: Ed25519TufKey, privateKey: Ed25519TufPrivateKey): TufKeyPair =
+    Ed25519TufKeyPair(publicKey, privateKey)
 
-  override def convertPrivate(privateKey: PrivateKey): Ec25519TufPrivateKey = Ec25519TufPrivateKey(privateKey)
+  override def convertPrivate(privateKey: PrivateKey): Ed25519TufPrivateKey = Ed25519TufPrivateKey(privateKey)
 
-  override def convertPublic(publicKey: PublicKey): Ec25519TufKey = Ec25519TufKey(publicKey)
+  override def convertPublic(publicKey: PublicKey): Ed25519TufKey = Ed25519TufKey(publicKey)
 }
 
 protected [crypt] class ECPrime256Crypto extends ECCrypto[EcPrime256KeyType.type](Prime256v1, SHA512withECDSA) {
