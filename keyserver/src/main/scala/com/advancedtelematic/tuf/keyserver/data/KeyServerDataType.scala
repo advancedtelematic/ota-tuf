@@ -31,7 +31,7 @@ object KeyServerDataType {
   }
 
   case class Key(id: KeyId, roleId: RoleId, keyType: KeyType, publicKey: PublicKey) {
-    def toTufKey: TufKey = keyType.crypto.convert(publicKey)
+    def toTufKey: TufKey = keyType.crypto.convertPublic(publicKey)
   }
 
   case class Role(id: RoleId, repoId: RepoId, roleType: RoleType, threshold: Int)

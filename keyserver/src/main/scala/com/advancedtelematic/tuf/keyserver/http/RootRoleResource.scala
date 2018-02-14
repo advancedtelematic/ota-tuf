@@ -6,7 +6,6 @@ import io.circe.syntax._
 import akka.stream.Materializer
 import cats.data.Validated.{Invalid, Valid}
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.tuf.keyserver.roles.{RootRoleGeneration, RootRoleKeyEdit, TargetKeyAccess}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
@@ -20,6 +19,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.libtuf_server.data.Marshalling._
 import com.advancedtelematic.libats.http.UUIDKeyPath.UUIDKeyPathOp
+import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 
 class RootRoleResource(vaultClient: VaultClient)
                       (implicit val db: Database, val ec: ExecutionContext, mat: Materializer)

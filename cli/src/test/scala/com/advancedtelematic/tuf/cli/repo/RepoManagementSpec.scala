@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path, Paths}
 import java.time.Instant
 
 import io.circe.jawn._
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufPrivateKey, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, Ed25519TufKey, Ed25519TufPrivateKey, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.{CliSpec, RandomNames}
 import cats.syntax.either._
@@ -72,8 +72,8 @@ class RepoManagementSpec extends CliSpec {
     val repo = repoT.get
 
     repo.authConfig.get.get shouldBe a[AuthConfig]
-    parseFile(repo.repoPath.resolve("keys/targets.pub").toFile).flatMap(_.as[TufKey]).valueOr(throw _) shouldBe a[EdTufKey]
-    parseFile(repo.repoPath.resolve("keys/targets.sec").toFile).flatMap(_.as[TufPrivateKey]).valueOr(throw _) shouldBe a[EdTufPrivateKey]
+    parseFile(repo.repoPath.resolve("keys/targets.pub").toFile).flatMap(_.as[TufKey]).valueOr(throw _) shouldBe a[Ed25519TufKey]
+    parseFile(repo.repoPath.resolve("keys/targets.sec").toFile).flatMap(_.as[TufPrivateKey]).valueOr(throw _) shouldBe a[Ed25519TufPrivateKey]
   }
 
   test("reads targets root.json from credentials.zip if present") {
@@ -90,7 +90,7 @@ class RepoManagementSpec extends CliSpec {
     val repo = RepoManagement.initialize(randomName, randomRepoPath, credentialsZip).get
     val tempPath = Files.createTempFile("tuf-repo-spec-export", ".zip")
 
-    repo.genKeys(KeyName("targets"), EdKeyType, 256).get
+    repo.genKeys(KeyName("targets"), Ed25519KeyType, 256).get
 
     val rootRole = SignedPayload(Seq.empty,
       RootRole(Map.empty, Map.empty, 2, expires = Instant.now()))
@@ -105,7 +105,7 @@ class RepoManagementSpec extends CliSpec {
 
   test("can export zip file") {
     val repo = RepoManagement.initialize(randomName, randomRepoPath, credentialsZip).get
-    repo.genKeys(KeyName("default-key"), EdKeyType, 256)
+    repo.genKeys(KeyName("default-key"), Ed25519KeyType, 256)
 
     val tempPath = Files.createTempFile("tuf-repo-spec-export", ".zip")
     RepoManagement.export(repo, KeyName("default-key"), tempPath) shouldBe Try(())
@@ -119,7 +119,7 @@ class RepoManagementSpec extends CliSpec {
 
   test("export uses configured tuf url, not what came in the original file") {
     val repo = RepoManagement.initialize(randomName, randomRepoPath, credentialsZip, repoUri = Some(new URI("https://someotherrepo.com"))).get
-    repo.genKeys(KeyName("default-key"), EdKeyType, 256)
+    repo.genKeys(KeyName("default-key"), Ed25519KeyType, 256)
 
     val tempPath = Files.createTempFile("tuf-repo-spec-export", ".zip")
     RepoManagement.export(repo, KeyName("default-key"), tempPath) shouldBe Try(())
@@ -135,7 +135,7 @@ class RepoManagementSpec extends CliSpec {
 
     Files.delete(repo.repoPath.resolve("credentials.zip"))
 
-    repo.genKeys(KeyName("targets"), EdKeyType, 256).get
+    repo.genKeys(KeyName("targets"), Ed25519KeyType, 256).get
 
     RepoManagement.export(repo, KeyName("targets"), tempPath) shouldBe a[Success[_]]
 

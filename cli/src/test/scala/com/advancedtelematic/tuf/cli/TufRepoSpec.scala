@@ -8,7 +8,7 @@ import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole, TufRole}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKeyPair, EdTufPrivateKey, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, Ed25519TufKeyPair, Ed25519TufPrivateKey, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, TufRepo}
@@ -35,8 +35,8 @@ class TufRepoSpec extends CliSpec {
     val newRootName = KeyName(s"newroot${repo.name.value}")
     val newTargetsName = KeyName(s"targets${repo.name.value}")
 
-    val pub = repo.genKeys(newRootName, EdKeyType, 256).get.pubkey
-    val pubT = repo.genKeys(newTargetsName, EdKeyType, 256).get.pubkey
+    val pub = repo.genKeys(newRootName, Ed25519KeyType, 256).get.pubkey
+    val pubT = repo.genKeys(newTargetsName, Ed25519KeyType, 256).get.pubkey
 
     repo.rotateRoot(reposerverClient, newRootName, oldRootName, newTargetsName, None).map { s =>
       (pub, pubT, s)
@@ -46,7 +46,7 @@ class TufRepoSpec extends CliSpec {
   test("adds a key to a repo") {
     val repo = initRepo()
 
-    repo.genKeys(KeyName("newkey"), EdKeyType, 256)
+    repo.genKeys(KeyName("newkey"), Ed25519KeyType, 256)
 
     Files.exists(repo.repoPath.resolve("keys").resolve("newkey.pub")) shouldBe true
   }
@@ -163,7 +163,7 @@ class TufRepoSpec extends CliSpec {
 
     val oldPrivateKey = keyStorage.readPrivateKey(KeyName(s"oldroot${repo.name.value}")).get
 
-    oldPrivateKey shouldBe a[EdTufPrivateKey]
+    oldPrivateKey shouldBe a[Ed25519TufPrivateKey]
   }
 
   test("initTargets creates an empty target") {
@@ -204,7 +204,7 @@ class TufRepoSpec extends CliSpec {
     val repo = initRepo()
 
     val targetsKeyName = KeyName("somekey")
-    repo.genKeys(targetsKeyName, EdKeyType, 256).get
+    repo.genKeys(targetsKeyName, Ed25519KeyType, 256).get
 
     repo.signTargets(targetsKeyName).get
 
@@ -219,7 +219,7 @@ class TufRepoSpec extends CliSpec {
     val repo = initRepo()
 
     val targetsKeyName = KeyName("somekey")
-    repo.genKeys(targetsKeyName, EdKeyType, 256).get
+    repo.genKeys(targetsKeyName, Ed25519KeyType, 256).get
 
     repo.signTargets(targetsKeyName, Option(21)).get
 
@@ -231,7 +231,7 @@ class TufRepoSpec extends CliSpec {
     val repo = initRepo()
 
     val targetsKeyName = KeyName("somekey")
-    val pub = repo.genKeys(targetsKeyName, EdKeyType, 256).get.pubkey
+    val pub = repo.genKeys(targetsKeyName, Ed25519KeyType, 256).get.pubkey
 
     val path = repo.signTargets(targetsKeyName).get
     val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).valueOr(throw _)

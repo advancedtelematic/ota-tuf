@@ -242,10 +242,10 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
         modifyRepoRoutes(repoId)
       }
     } ~
-    pathPrefix("repo" / RepoId.Path) { repoId =>
-      (pathEnd & post & namespaceValidation.extractor) { namespace =>
-        createRepo(namespace, repoId)
-      } ~
-        modifyRepoRoutes(repoId)
+      (pathPrefix("repo" / RepoId.Path) & namespaceValidation.extractor) { (repoId, namespace) =>
+        (pathEnd & post) {
+          createRepo(namespace, repoId)
+        } ~
+          modifyRepoRoutes(repoId)
     }
 }

@@ -31,7 +31,7 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
       case keys =>
         signAll(payload, keys)
     }.recoverWith {
-      case VaultClient.VaultKeyNotFound => Future.failed(Errors.PrivateKeysNotFound)
+      case VaultClient.VaultResourceNotFound => Future.failed(Errors.PrivateKeysNotFound)
     }
   }
 
@@ -72,7 +72,7 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
         Valid(())
       else
         s"New root.json specifies a threshold of ${roleKeys.threshold} for $role role, which is not greater than 0".invalidNel
-    }.toList.sequenceU.map(_ => ())
+    }.toList.sequence_
 
     check("previous root", oldThreshold, oldRootKeyids)
       .combine(newThresholdsAreOkay)

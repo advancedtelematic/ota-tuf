@@ -9,7 +9,7 @@ import akka.http.scaladsl.model.headers._
 import akka.stream.scaladsl.Sink
 import akka.util.ByteString
 import cats.data.NonEmptyList
-import cats.syntax.show.toShowOps
+import cats.syntax.show._
 import cats.syntax.option._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
@@ -781,7 +781,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
     val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), targets, 2)
 
-    val EdTufKeyPair(pub, sec) = TufCrypto.generateKeyPair(EdKeyType, 256)
+    val Ed25519TufKeyPair(pub, sec) = TufCrypto.generateKeyPair(Ed25519KeyType, 256)
     val signature = TufCrypto.signPayload(sec, targetsRole).toClient(pub.id)
     val signedPayload = SignedPayload(List(signature), targetsRole)
 
@@ -793,7 +793,7 @@ class RepoResourceSpec extends TufReposerverSpec
 
   test("adding a target public key delegates to keyserver") {
     val repoId = addTargetToRepo()
-    val pub = TufCrypto.generateKeyPair(EdKeyType, 256).pubkey
+    val pub = TufCrypto.generateKeyPair(Ed25519KeyType, 256).pubkey
 
     Put(apiUri(s"repo/${repoId.show}/keys/targets"), pub) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent

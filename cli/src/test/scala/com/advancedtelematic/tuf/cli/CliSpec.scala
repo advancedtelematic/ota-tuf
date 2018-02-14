@@ -10,7 +10,7 @@ import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.{ClientDataType, TufDataType}
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKeyPair, KeyId, RoleType, SignedPayload, TufKey, TufKeyPair, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, Ed25519TufKeyPair, KeyId, RoleType, SignedPayload, TufKey, TufKeyPair, TufPrivateKey}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
@@ -32,10 +32,10 @@ abstract class CliSpec extends FunSuite with Matchers with ScalaFutures {
 class FakeUserReposerverClient extends UserReposerverClient {
   import scala.concurrent.ExecutionContext.Implicits.global
 
-  private val EdTufKeyPair(oldPublicKey, oldPrivateKey) = TufCrypto.generateKeyPair(EdKeyType, 256)
+  private val Ed25519TufKeyPair(oldPublicKey, oldPrivateKey) = TufCrypto.generateKeyPair(Ed25519KeyType, 256)
 
-  private var targetsPair = TufCrypto.generateKeyPair(EdKeyType, 256)
-  var targetsPubKey = targetsPair.pubkey
+  private val targetsPair = TufCrypto.generateKeyPair(Ed25519KeyType, 256)
+  private var targetsPubKey = targetsPair.pubkey
 
   private var unsignedTargets = TargetsRole(Instant.now.plus(1, ChronoUnit.DAYS), Map.empty, 1)
 
@@ -92,5 +92,5 @@ class FakeUserReposerverClient extends UserReposerverClient {
   }
 
   override def fetchKeyPair(keyId: KeyId): Future[TufKeyPair] =
-    Future.successful(EdTufKeyPair(oldPublicKey, oldPrivateKey)).filter(_.pubkey.id == keyId)
+    Future.successful(Ed25519TufKeyPair(oldPublicKey, oldPrivateKey)).filter(_.pubkey.id == keyId)
 }

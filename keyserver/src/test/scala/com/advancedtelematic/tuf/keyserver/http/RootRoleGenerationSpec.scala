@@ -59,7 +59,7 @@ with SignedRootRoleSupport {
   test("root role can be signed with ED25519 keys") {
     val repoId = RepoId.generate()
     val rootKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
-      repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, 256, EdKeyType)
+      repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, 256, Ed25519KeyType)
 
     async {
       await(keyGenRepo.persist(rootKeyGenRequest))

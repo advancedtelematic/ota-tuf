@@ -6,7 +6,6 @@ import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, RsaKeyType}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import com.advancedtelematic.tuf.util.TufKeyserverSpec
 import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
@@ -14,6 +13,7 @@ import org.scalatest.time.{Millis, Seconds, Span}
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp.KeyGenerationOp
+import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 
 import scala.concurrent.ExecutionContext
 

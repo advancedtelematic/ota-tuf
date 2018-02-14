@@ -7,6 +7,7 @@ import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server.{Directives, Route}
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import cats.syntax.either._
+import com.advancedtelematic.libats.auth.NamespaceDirectives
 import com.advancedtelematic.libats.http.BootApp
 import com.typesafe.config.ConfigFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider

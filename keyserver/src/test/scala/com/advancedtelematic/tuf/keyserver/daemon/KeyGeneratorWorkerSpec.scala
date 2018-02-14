@@ -1,6 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.daemon
 
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, KeyType, RepoId, RoleType, RsaKeyType}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, Ed25519TufKey, KeyType, RepoId, RoleType, RsaKeyType}
 import akka.actor.{ActorSystem, Props, Status}
 import akka.testkit.{ImplicitSender, TestKitBase, TestProbe}
 import com.advancedtelematic.libtuf.crypt.TufCrypto._
@@ -59,7 +59,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
   }
 
   test("generates a ed25519 key") {
-    val keyGenReq = keyGenRequest(keyType = EdKeyType).futureValue
+    val keyGenReq = keyGenRequest(keyType = Ed25519KeyType).futureValue
     actorRef ! keyGenReq
 
     val key = expectMsgPF(timeout) {
@@ -71,10 +71,10 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
 
     val dbKey = keyRepo.find(key.id).futureValue
 
-    dbKey.keyType shouldBe EdKeyType
+    dbKey.keyType shouldBe Ed25519KeyType
     dbKey.publicKey.toPem should include("BEGIN PUBLIC KEY")
 
-    TufCrypto.edCrypto.parsePublic(Hex.toHexString(dbKey.publicKey.getEncoded)).get shouldBe a[EdTufKey]
+    TufCrypto.ed25519Crypto.parsePublic(Hex.toHexString(dbKey.publicKey.getEncoded)).get shouldBe a[Ed25519TufKey]
   }
 
   test("associates new key with role") {

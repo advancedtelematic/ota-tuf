@@ -1,24 +1,31 @@
 package com.advancedtelematic.libtuf_server.reposerver
 
 import akka.http.scaladsl.model._
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, SignedPayload, TargetName, TargetVersion}
 import io.circe.{Decoder, Encoder, Json}
 import akka.actor.ActorSystem
-import akka.http.scaladsl.model.Uri.Path
+import RepoId._
+import akka.http.scaladsl.marshalling.Marshal
+import akka.http.scaladsl.model.Uri.{Path, Query}
 import akka.http.scaladsl.model.Uri.Path.Slash
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import akka.stream.Materializer
+import akka.stream.scaladsl.Source
+import akka.util.ByteString
 import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat._
+import com.advancedtelematic.libtuf.data.TufCodecs._
 
 import scala.concurrent.{ExecutionContext, Future}
 import io.circe.generic.semiauto._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.HttpCodecs._
+import cats.syntax.show._
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf_server.http.{ServiceHttpClient, ServiceHttpClientSupport}
 
 import scala.reflect.ClassTag
@@ -38,9 +45,11 @@ object ReposerverClient {
                                hardwareIds: Seq[HardwareIdentifier],
                                length: Long)
 
-  val RepoConflict   = RawError(ErrorCode("repo_conflict"), StatusCodes.Conflict, "repo already exists")
-  val OfflineKey = RawError(ErrorCode("offline_key"), StatusCodes.PreconditionFailed, "repo is using offline signing, can't add targets online")
-  val UserRepoNotFound = RawError(ErrorCode("user_repo_not_found"), StatusCodes.NotFound, "the repo does not exist yet")
+  val KeysNotReady = RawError(ErrorCode("keys_not_ready"), StatusCodes.Locked, "keys not ready")
+  val RootNotInKeyserver = RawError(ErrorCode("root_role_not_in_keyserver"), StatusCodes.FailedDependency, "the root role was not found in upstream keyserver")
+  val NotFound = RawError(ErrorCode("repo_resource_not_found"), StatusCodes.NotFound, "the requested repo resource was not found")
+  val RepoConflict = RawError(ErrorCode("repo_conflict"), StatusCodes.Conflict, "repo already exists")
+  val PrivateKeysNotInKeyserver = RawError(ErrorCode("private_keys_not_found"), StatusCodes.PreconditionFailed, "could not find required private keys. The repository might be using offline signing")
 }
 
 
@@ -49,13 +58,17 @@ trait ReposerverClient {
 
   def createRoot(namespace: Namespace): Future[RepoId]
 
+  def fetchRoot(namespace: Namespace): Future[SignedPayload[RootRole]]
+
   def addTarget(namespace: Namespace, fileName: String, uri: Uri, checksum: Checksum, length: Int,
                 targetFormat: TargetFormat, name: Option[TargetName] = None, version: Option[TargetVersion] = None,
                 hardwareIds: Seq[HardwareIdentifier] = Seq.empty): Future[Unit]
 
-  def targets(namespace: Namespace, fileName: String, uri: Uri, checksum: Checksum, length: Int): Unit = {
-
-  }
+  def addTargetFromContent(namespace: Namespace, fileName: String, uri: Option[Uri], checksum: Checksum, length: Int,
+                           targetFormat: TargetFormat,
+                           content: Source[ByteString, Any],
+                           name: TargetName, version: TargetVersion,
+                           hardwareIds: Seq[HardwareIdentifier] = Seq.empty): Future[Unit]
 }
 
 object ReposerverHttpClient extends ServiceHttpClientSupport {
@@ -84,6 +97,27 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
     }
   }
 
+  override def fetchRoot(namespace: Namespace): Future[SignedPayload[RootRole]] = {
+    val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("user_repo/root.json")))
+    execHttpWithNamespace[SignedPayload[RootRole]](namespace, req) {
+      case status if status == StatusCodes.NotFound =>
+        Future.failed(NotFound)
+      case status if status == StatusCodes.Locked =>
+        Future.failed(KeysNotReady)
+      case status if status == StatusCodes.FailedDependency =>
+        Future.failed(RootNotInKeyserver)
+    }
+  }
+
+  private def addTargetErrorHandler[T]: PartialFunction[StatusCode, Future[T]] = {
+    case status if status == StatusCodes.PreconditionFailed =>
+      Future.failed(PrivateKeysNotInKeyserver)
+    case status if status == StatusCodes.NotFound =>
+      Future.failed(NotFound)
+    case status if status == StatusCodes.Locked =>
+      Future.failed(KeysNotReady)
+  }
+
   override def addTarget(namespace: Namespace, fileName: String,
                          uri: Uri, checksum: Checksum, length: Int,
                          targetFormat: TargetFormat,
@@ -98,16 +132,11 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
       uri = apiUri(Path("user_repo") / "targets" / fileName),
       entity = entity)
 
-    execHttpWithNamespace[Unit](namespace, req) {
-      case status if status == StatusCodes.PreconditionFailed =>
-        Future.failed(OfflineKey)
-      case status if status == StatusCodes.NotFound =>
-        Future.failed(UserRepoNotFound)
-    }
+    execHttpWithNamespace[Unit](namespace, req)(addTargetErrorHandler)
   }
 
   def execHttpWithNamespace[T : ClassTag : FromEntityUnmarshaller](namespace: Namespace, request: HttpRequest)
-                                                                  (errorHandler: PartialFunction[StatusCode, Future[T]]): Future[T] = {
+                                                                  (errorHandler: PartialFunction[StatusCode, Future[T]] = PartialFunction.empty): Future[T] = {
     val req = request.addHeader(RawHeader("x-ats-namespace", namespace.get))
 
     val authReq = authHeaders match {
@@ -121,5 +150,32 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
   private def payloadFrom(uri: Uri, checksum: Checksum, length: Int, name: Option[TargetName],
                           version: Option[TargetVersion], hardwareIds: Seq[HardwareIdentifier], targetFormat: TargetFormat): Json =
     RequestTargetItem(uri, checksum, Some(targetFormat), name, version, hardwareIds, length).asJson
+
+  override def addTargetFromContent(namespace: Namespace, fileName: String, uri: Option[Uri],
+                                    checksum: Checksum, length: Int, targetFormat: TargetFormat, content: Source[ByteString, Any],
+                                    name: TargetName, version: TargetVersion,
+                                    hardwareIds: Seq[HardwareIdentifier]): Future[Unit] = {
+    val params =
+      Map(
+        "name" -> name.value, "version" -> version.value,
+        "targetFormat" -> targetFormat.toString)
+
+    val hwparams =
+      if(hardwareIds.isEmpty)
+        Map.empty
+      else
+        Map("hardwareIds" -> hardwareIds.map(_.value).mkString(","))
+
+    val uri = apiUri(Path("user_repo") / "targets" / fileName).withQuery(Query(params ++ hwparams))
+
+    val multipartForm =
+      Multipart.FormData(Multipart.FormData.BodyPart("file",
+        HttpEntity(ContentTypes.`application/octet-stream`, length, content), Map("filename" -> fileName)))
+
+    Marshal(multipartForm).to[RequestEntity].flatMap { form =>
+      val req = HttpRequest(HttpMethods.PUT, uri, entity = form)
+      execHttpWithNamespace[Unit](namespace, req)(addTargetErrorHandler)
+    }
+  }
 }
 

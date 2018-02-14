@@ -2,12 +2,13 @@ package com.advancedtelematic.tuf.keyserver.client
 
 import java.security.interfaces.RSAPublicKey
 
+import cats.instances.map
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, EdTufKey, EdTufKeyPair, EdTufPrivateKey, KeyId, RSATufKey, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, Ed25519TufKey, Ed25519TufKeyPair, Ed25519TufPrivateKey, KeyId, RSATufKey, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.Errors.RawError
-import com.advancedtelematic.libtuf_server.keyserver.KeyserverHttpClient
+import com.advancedtelematic.libtuf_server.keyserver.{KeyserverClient, KeyserverHttpClient}
 import com.advancedtelematic.tuf.keyserver.daemon.{DefaultKeyGenerationOp, KeyGenerationOp}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
@@ -35,7 +36,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
 
   def createAndProcessRoot(repoId: RepoId): Future[Unit] = {
     for {
-      _ <- client.createRoot(repoId, EdKeyType)
+      _ <- client.createRoot(repoId, Ed25519KeyType)
       _ <- processKeyGenerationRequest(repoId)
     } yield ()
   }
@@ -43,14 +44,14 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
   def manipulateSignedRsaKey(payload: SignedPayload[RootRole]): SignedPayload[RootRole] = {
     val kid: KeyId = refineV[ValidKeyId]("0" * 64).right.get
     // change type of one of the RSA keys to Ed25519:
-    val key = EdTufKey(payload.signed.keys.values.head.keyval)
+    val key = Ed25519TufKey(payload.signed.keys.values.head.keyval)
     val signedCopy = payload.signed.copy(keys = payload.signed.keys.updated(kid, key))
     payload.copy(signed = signedCopy)
   }
 
   test("creates a root") {
     val repoId = RepoId.generate()
-    client.createRoot(repoId, EdKeyType).futureValue shouldBe a[Json]
+    client.createRoot(repoId, Ed25519KeyType).futureValue shouldBe a[Json]
   }
 
   test("adds a key to a root") {
@@ -58,7 +59,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
     val f = createAndProcessRoot(repoId)
 
     whenReady(f) { _ =>
-      val publicKey = TufCrypto.generateKeyPair(EdKeyType, 256).pubkey
+      val publicKey = TufCrypto.generateKeyPair(Ed25519KeyType, 256).pubkey
 
       val rootRoleF = for {
         _ <- client.addTargetKey(repoId, publicKey)
@@ -123,7 +124,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
     } yield (keyId, keyPair)
 
     whenReady(f) { case (keyId, keyPair) ⇒
-      keyPair shouldBe a[EdTufKeyPair]
+      keyPair shouldBe a[Ed25519TufKeyPair]
       keyPair.pubkey.id shouldBe keyId
     }
   }
@@ -161,7 +162,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
       sig <- client.sign(repoId, RoleType.TARGETS, Json.Null)
     } yield sig
 
-    f.failed.futureValue shouldBe client.RoleKeyNotFound
+    f.failed.futureValue shouldBe KeyserverClient.RoleKeyNotFound
   }
 
   test("minimum RSA key size when creating a repo") {
@@ -188,7 +189,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
     val f = createAndProcessRoot(repoId)
 
     whenReady(f) { _ =>
-      val edPublicKey = TufCrypto.generateKeyPair(EdKeyType, 256).pubkey
+      val edPublicKey = TufCrypto.generateKeyPair(Ed25519KeyType, 256).pubkey
       val rsa = RSATufKey(edPublicKey.keyval)
       val error = client.addTargetKey(repoId, rsa).failed.futureValue
 
@@ -223,5 +224,18 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
 
     f.futureValue shouldBe a[SignedPayload[_]]
     f.futureValue.signed shouldBe a[RootRole]
+  }
+
+  test("returns KeysNotReady when keys are not yet ready") {
+    val repoId = RepoId.generate()
+    val keyGenRequest = KeyGenRequest(KeyGenId.generate(),
+      repoId, KeyGenRequestStatus.REQUESTED, RoleType.TARGETS, 2048, RsaKeyType)
+
+    val f = for {
+      _ <- keyGenRepo.persist(keyGenRequest)
+      root <- client.fetchRootRole(repoId)
+    } yield root
+
+    f.failed.futureValue shouldBe KeyserverClient.KeysNotReady
   }
 }

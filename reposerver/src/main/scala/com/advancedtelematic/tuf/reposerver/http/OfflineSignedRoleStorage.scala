@@ -80,7 +80,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
       }
     }
 
-    newTargetItems.map(_.toValidatedNel).toList.sequenceU
+    newTargetItems.map(_.toValidatedNel).toList.sequence
   }
 
   private def payloadSignatureIsValid[T : TufRole : Encoder](repoId: RepoId, signedPayload: SignedPayload[T]): Future[ValidatedNel[String, SignedPayload[T]]] = async {

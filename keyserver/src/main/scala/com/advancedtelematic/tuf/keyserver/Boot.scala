@@ -7,7 +7,6 @@ import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.server.{Directives, Route}
 import com.advancedtelematic.tuf.keyserver.http.TufKeyserverRoutes
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import com.advancedtelematic.libats.slick.db.DatabaseConfig
 import com.advancedtelematic.libats.http.BootApp
 import com.typesafe.config.ConfigFactory
@@ -17,6 +16,7 @@ import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
+import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 
 import scala.concurrent.duration.Duration
 

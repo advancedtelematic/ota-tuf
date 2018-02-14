@@ -3,7 +3,7 @@ package com.advancedtelematic.tuf.cli
 import java.nio.file.Path
 import java.time.Instant
 
-import com.advancedtelematic.libtuf.data.TufDataType.{EdKeyType, KeyType, RsaKeyType, TargetFormat}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RsaKeyType, TargetFormat}
 import eu.timepit.refined
 import eu.timepit.refined.api.{Refined, Validate}
 import scopt.Read
@@ -40,7 +40,7 @@ object CliReads {
   }
 
   implicit val keyTypeRead: Read[KeyType] = Read.reads {
-    case "ec" => EdKeyType
+    case "ec" => Ed25519KeyType
     case "rsa" => RsaKeyType
     case str => throw new IllegalArgumentException(s"Invalid keytype: $str valid: (ec, rsa)")
   }

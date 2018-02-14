@@ -42,7 +42,7 @@ object Schema {
     def id = column[KeyId]("key_id", O.PrimaryKey)
     def roleId = column[RoleId]("role_id")
     def keyType = column[KeyType]("key_type")
-    def publicKey = column[PublicKey]("public_key")
+    def publicKey = column[PublicKey]("public_key") // TODO: Use TufKey instead, migrate, remove `key_type`, then remove KeyType Enum ?
 
     def roleFk = foreignKey("keys_role_fk", roleId, roles)(_.id)
 

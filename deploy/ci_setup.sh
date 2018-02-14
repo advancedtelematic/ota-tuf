@@ -18,10 +18,14 @@ echo "
 create user 'tuf_repo' identified by 'tuf_repo';
 CREATE DATABASE tuf_repo;
 GRANT ALL PRIVILEGES ON \`tuf_repo%\`.* TO 'tuf_repo'@'%';
-FLUSH PRIVILEGES;
 
 CREATE DATABASE ota_tuf;
 GRANT ALL PRIVILEGES ON \`ota_tuf%\`.* TO 'ota_tuf'@'%';
+
+create user 'tuf_ca' identified by 'tuf_ca';
+CREATE DATABASE tuf_ca;
+GRANT ALL PRIVILEGES ON \`tuf_ca%\`.* TO 'tuf_ca'@'%';
+
 FLUSH PRIVILEGES;
 " > ota_tuf_entrypoint.d/db_user.sql
 

@@ -4,11 +4,11 @@ import java.io.{StringReader, StringWriter}
 import java.security
 import java.security.interfaces.RSAPublicKey
 import java.security.spec.{PKCS8EncodedKeySpec, X509EncodedKeySpec}
-import java.security.{Signature ⇒ _, _}
+import java.security.{Signature => _, _}
 
 import org.bouncycastle.jce.ECNamedCurveTable
 import org.bouncycastle.jce.spec.ECParameterSpec
-import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, EdKeyType, EdTufKey, EdTufKeyPair, EdTufPrivateKey, KeyId, KeyType, RSATufKey, RSATufKeyPair, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, SignedPayload, TufKey, TufKeyPair, TufPrivateKey, ValidKeyId, ValidSignature}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, Ed25519KeyType, Ed25519TufKey, Ed25519TufKeyPair, Ed25519TufPrivateKey, EcPrime256KeyType, EcPrime256TufKey, EcPrime256TufKeyPair, EcPrime256TufPrivateKey, KeyId, KeyType, RSATufKey, RSATufKeyPair, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, SignedPayload, TufKey, TufKeyPair, TufPrivateKey, ValidKeyId, ValidSignature}
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
 import org.bouncycastle.util.encoders.{Base64, Hex}
@@ -24,10 +24,11 @@ import cats.implicits._
 import io.circe.{Encoder, Json}
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
+import com.advancedtelematic.libtuf.crypt.ECCrypto._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole}
 
 import scala.util.control.NoStackTrace
-import scala.util.{Success, Try}
+import scala.util.Try
 
 trait TufCrypto[T <: KeyType] {
   def parsePublic(keyVal: String): Try[T#Pub]
@@ -38,7 +39,11 @@ trait TufCrypto[T <: KeyType] {
 
   def encode(keyVal: T#Priv): Json
 
-  def generateKeyPair(keySize: Int): TufKeyPair
+  def generateKeyPair(keySize: Int): TufKeyPair = {
+    require(validKeySize(keySize), "Key size too small")
+    val keyPair = keyPairGenerator(keySize).generateKeyPair()
+    toKeyPair(convertPublic(keyPair.getPublic), convertPrivate(keyPair.getPrivate))
+  }
 
   def generateKeyPair(): TufKeyPair = generateKeyPair(defaultKeySize)
 
@@ -54,7 +59,9 @@ trait TufCrypto[T <: KeyType] {
       pub ← parsePublic(publicKey)
     } yield toKeyPair(pub, priv)
 
-  def convert(publicKey: PublicKey): T#Pub
+  def convertPublic(publicKey: PublicKey): T#Pub
+
+  def convertPrivate(privateKey: PrivateKey): T#Priv
 
   def signer: security.Signature
 
@@ -63,6 +70,8 @@ trait TufCrypto[T <: KeyType] {
   def validKeySize(size: Int): Boolean
 
   val signatureMethod: SignatureMethod
+
+  def keyPairGenerator(keySize: Int): KeyPairGenerator
 }
 
 object TufCrypto {
@@ -74,7 +83,9 @@ object TufCrypto {
 
   val rsaCrypto = new RsaCrypto
 
-  val edCrypto = new EdCrypto
+  val ed25519Crypto = new ED25519Crypto()
+
+  lazy val ecPrime256Crypto = new ECPrime256Crypto()
 
   def signPayload[T : Encoder](key: TufPrivateKey, payload: T): Signature = {
     val bytes = payload.asJson.canonical.getBytes
@@ -93,12 +104,12 @@ object TufCrypto {
   }
 
   def convert[T <: KeyType](keyType: T, publicKey: PublicKey): T#Pub =
-    keyType.crypto.convert(publicKey)
+    keyType.crypto.convertPublic(publicKey)
 
   def isValid(signature: Signature, publicKey: PublicKey, data: Array[Byte]): Boolean = {
     val signer = signature.method match {
       case SignatureMethod.RSASSA_PSS_SHA256 ⇒ rsaCrypto.signer
-      case SignatureMethod.ED25519 ⇒ edCrypto.signer
+      case SignatureMethod.ED25519 ⇒ ed25519Crypto.signer
       case other ⇒ throw new IllegalArgumentException(s"Unsupported signature method: $other")
     }
     val decodedSig = Base64.decode(signature.sig.value)
@@ -170,7 +181,7 @@ object TufCrypto {
         case None =>
           s"payload signed with unknown key ${clientSig.keyid}".invalidNel
       }
-    }.toList.sequenceU
+    }.toList.sequence
   }
 
   def payloadSignatureIsValid[T : TufRole : Encoder](rootRole: RootRole, signedPayload: SignedPayload[T]): ValidatedNel[String, SignedPayload[T]] = {
@@ -189,7 +200,7 @@ object TufCrypto {
           }
           .map(_.id)
           .toValidatedNel
-      }.toList.sequenceU
+      }.toList.sequence
 
     val threshold = rootRole.roles(signedPayloadRoleType).threshold
 
@@ -200,62 +211,81 @@ object TufCrypto {
 
 }
 
-protected [crypt] class EdCrypto extends TufCrypto[EdKeyType.type] {
+protected [crypt] object ECCrypto {
+  sealed trait CurveId {
+    def parameterSpec: ECParameterSpec
+  }
+  case object Curve25519 extends CurveId {
+    override def parameterSpec: ECParameterSpec = {
+      val ecP = ECNamedCurveTable.getParameterSpec("curve25519")
+      new ECParameterSpec(ecP.getCurve, ecP.getG, ecP.getN, ecP.getH, ecP.getSeed)
+    }
+  }
+  case object Prime256v1 extends CurveId {
+    override def parameterSpec: ECParameterSpec = ECNamedCurveTable.getParameterSpec("prime256v1")
+  }
+
+  protected [crypt] class SignatureAlgorithm(val method: SignatureMethod, val id: String)
+  case object SHA256withECDSA extends SignatureAlgorithm(SignatureMethod.ED25519, "SHA256withECDSA")
+  case object SHA512withECDSA extends SignatureAlgorithm(SignatureMethod.ECPrime256V1, "SHA512withECDSA")
+}
+
+protected [crypt] abstract class ECCrypto[T <: KeyType](curve: CurveId, signatureAlgorithm: SignatureAlgorithm) extends TufCrypto[T] {
+  private lazy val fac = KeyFactory.getInstance("ECDSA", "BC")
+
   private lazy val generator = {
     val generator = KeyPairGenerator.getInstance("ECDSA", "BC")
-    val ecP = ECNamedCurveTable.getParameterSpec("curve25519")
-    val ecSpec = new ECParameterSpec(ecP.getCurve, ecP.getG, ecP.getN, ecP.getH, ecP.getSeed)
-    generator.initialize(ecSpec)
+    generator.initialize(curve.parameterSpec)
     generator
   }
 
-  override def parsePublic(publicKeyHex: String): Try[EdTufKey] = Try {
+  override def parsePublic(publicKeyHex: String): Try[T#Pub] = Try {
     val spec = new X509EncodedKeySpec(Hex.decode(publicKeyHex))
-    val fac = KeyFactory.getInstance("ECDSA", "BC")
-    EdTufKey(fac.generatePublic(spec))
+    convertPublic(fac.generatePublic(spec))
   }
 
-  override def parsePrivate(privateKeyHex: String): Try[EdTufPrivateKey] = Try {
+  override def parsePrivate(privateKeyHex: String): Try[T#Priv] = Try {
     val spec = new PKCS8EncodedKeySpec(Hex.decode(privateKeyHex))
-    val fac = KeyFactory.getInstance("ECDSA", "BC")
-    EdTufPrivateKey(fac.generatePrivate(spec))
+    convertPrivate(fac.generatePrivate(spec))
   }
 
-  override def generateKeyPair(keySize: Int): EdTufKeyPair = {
-    val keyPair = generator.generateKeyPair()
-    EdTufKeyPair(EdTufKey(keyPair.getPublic), EdTufPrivateKey(keyPair.getPrivate))
-  }
+  def keyPairGenerator(keySize: Int): KeyPairGenerator = generator
 
-  override def encode(keyVal: EdTufKey): Json = Json.fromString(Hex.toHexString(keyVal.keyval.getEncoded))
+  override def encode(keyVal: T#Pub): Json = Json.fromString(Hex.toHexString(keyVal.keyval.getEncoded))
 
-  override def encode(keyVal: EdTufPrivateKey): Json = Json.fromString(Hex.toHexString(keyVal.keyval.getEncoded))
+  override def encode(keyVal: T#Priv): Json = Json.fromString(Hex.toHexString(keyVal.keyval.getEncoded))
 
-  override def convert(publicKey: PublicKey): EdTufKey = EdTufKey(publicKey)
+  override def signer: security.Signature = java.security.Signature.getInstance(signatureAlgorithm.id, "BC")
 
-  override def signer: security.Signature = java.security.Signature.getInstance("SHA512withECDSA", "BC")
-
-  override val signatureMethod: SignatureMethod = SignatureMethod.ED25519
-
-  override def toKeyPair(publicKey: EdTufKey, privateKey: EdTufPrivateKey): TufKeyPair =
-    EdTufKeyPair(publicKey, privateKey)
+  override val signatureMethod: SignatureMethod = signatureAlgorithm.method
 
   override def validKeySize(size: Int): Boolean = size == 256
 
   override def defaultKeySize: Int = 256
 }
 
-protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
-  import TufCrypto.KeyOps
+protected [crypt] class ED25519Crypto extends ECCrypto[Ed25519KeyType.type](Curve25519, SHA256withECDSA) {
+  override def toKeyPair(publicKey: Ed25519TufKey, privateKey: Ed25519TufPrivateKey): TufKeyPair =
+    Ed25519TufKeyPair(publicKey, privateKey)
 
-  override def generateKeyPair(size: Int): RSATufKeyPair = {
-    if(size < 2048) {
-      throw new IllegalArgumentException("Key size too small, must be >= 2048")
-    }
-    val keyGen = KeyPairGenerator.getInstance("RSA", "BC")
-    keyGen.initialize(size)
-    val keyPair = keyGen.generateKeyPair()
-    RSATufKeyPair(RSATufKey(keyPair.getPublic), RSATufPrivateKey(keyPair.getPrivate))
-  }
+  override def convertPrivate(privateKey: PrivateKey): Ed25519TufPrivateKey = Ed25519TufPrivateKey(privateKey)
+
+  override def convertPublic(publicKey: PublicKey): Ed25519TufKey = Ed25519TufKey(publicKey)
+}
+
+protected [crypt] class ECPrime256Crypto extends ECCrypto[EcPrime256KeyType.type](Prime256v1, SHA512withECDSA) {
+  override def toKeyPair(publicKey: EcPrime256TufKey, privateKey: EcPrime256TufPrivateKey): TufKeyPair =
+    EcPrime256TufKeyPair(publicKey, privateKey)
+
+  override def convertPrivate(privateKey: PrivateKey): EcPrime256TufPrivateKey = EcPrime256TufPrivateKey(privateKey)
+
+  override def convertPublic(publicKey: PublicKey): EcPrime256TufKey = EcPrime256TufKey(publicKey)
+}
+
+
+protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
+
+  import TufCrypto.KeyOps
 
   override def parsePublic(publicKey: String): Try[RSATufKey] = {
     val parser = new PEMParser(new StringReader(publicKey))
@@ -265,8 +295,8 @@ protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
       val pemKeyPair = parser.readObject().asInstanceOf[SubjectPublicKeyInfo]
       val pubKey = converter.getPublicKey(pemKeyPair)
       pubKey match {
-        case rsaPubKey : RSAPublicKey if rsaPubKey.getModulus().bitLength() >= 2048 => RSATufKey(pubKey)
-        case _ : RSAPublicKey => throw new IllegalArgumentException("Key size too small, must be >= 2048")
+        case rsaPubKey: RSAPublicKey if rsaPubKey.getModulus.bitLength() >= 2048 => convertPublic(pubKey)
+        case _: RSAPublicKey => throw new IllegalArgumentException("Key size too small, must be >= 2048")
         case _ => throw new IllegalArgumentException("Key is not an RSAPublicKey")
       }
     }
@@ -278,7 +308,7 @@ protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
 
     Try {
       val pemKeyPair = parser.readObject().asInstanceOf[PEMKeyPair]
-      RSATufPrivateKey(converter.getKeyPair(pemKeyPair).getPrivate)
+      convertPrivate(converter.getKeyPair(pemKeyPair).getPrivate)
     }
   }
 
@@ -286,17 +316,23 @@ protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
 
   override def encode(keyVal: RSATufPrivateKey): Json = Json.fromString(keyVal.keyval.toPem)
 
-  override def signer: security.Signature =
-    java.security.Signature.getInstance("SHA256withRSAandMGF1", "BC") // RSASSA-PSS
+  override def signer: security.Signature = java.security.Signature.getInstance("SHA256withRSAandMGF1", "BC") // RSASSA-PSS
 
   override val signatureMethod: SignatureMethod = SignatureMethod.RSASSA_PSS_SHA256
 
-  override def convert(publicKey: PublicKey): RSATufKey = RSATufKey(publicKey)
+  override def convertPublic(publicKey: PublicKey): RSATufKey = RSATufKey(publicKey)
 
-  override def toKeyPair(publicKey: RSATufKey, privateKey: RSATufPrivateKey): TufKeyPair =
-    RSATufKeyPair(publicKey, privateKey)
+  override def convertPrivate(privateKey: PrivateKey): RSATufPrivateKey = RSATufPrivateKey(privateKey)
+
+  override def toKeyPair(publicKey: RSATufKey, privateKey: RSATufPrivateKey): TufKeyPair = RSATufKeyPair(publicKey, privateKey)
 
   override def validKeySize(size: Int): Boolean = size >= 2048
 
   override def defaultKeySize: Int = 2048
+
+  override def keyPairGenerator(keySize: Int): KeyPairGenerator = {
+    val keyGen = KeyPairGenerator.getInstance("RSA", "BC")
+    keyGen.initialize(keySize)
+    keyGen
+  }
 }
