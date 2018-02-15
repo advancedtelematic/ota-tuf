@@ -109,12 +109,4 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
       case None =>
         Future.failed(Errors.RoleChecksumNotProvided)
     }
-
-  def tufTargetsAdded(targets: Map[TargetFilename, ClientTargetItem], existing: Seq[TargetFilename]) =
-    (targets -- existing.toSet).flatMap { case (targetFilename, clientTargetItem) =>
-      clientTargetItem.hashes.headOption.map { case (hashMethod, validChecksum) =>
-        (targetFilename, Checksum(hashMethod, validChecksum), clientTargetItem)
-      }
-    }
-
 }

@@ -45,9 +45,29 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 import slick.jdbc.MySQLProfile.api._
 import RoleChecksumHeader._
+import cats.implicits._
+
+class TufTargetsPublisher(messageBus: MessageBusPublisher)(implicit ec: ExecutionContext) {
+  def targetAdded(namespace: Namespace, item: TargetItem): Future[Unit] =
+    messageBus.publish(TufTargetAdded(namespace, item.filename, item.checksum, item.length, item.custom))
+
+  def newTargetsAdded(namespace: Namespace, allTargets: Map[TargetFilename, ClientTargetItem], existing: Seq[TargetItem]): Future[Unit] = {
+    newTargetsFromExisting(allTargets, existing.map(_.filename)).toList.traverse_ { case (filename, checksum, clientTargetItem) =>
+      messageBus.publish(TufTargetAdded(namespace, filename, checksum,
+        clientTargetItem.length, clientTargetItem.customParsed[TargetCustom]))
+    }
+  }
+
+  private def newTargetsFromExisting(allTargets: Map[TargetFilename, ClientTargetItem], existing: Seq[TargetFilename]) =
+    (allTargets -- existing.toSet).flatMap { case (targetFilename, clientTargetItem) =>
+      clientTargetItem.hashes.headOption.map { case (hashMethod, validChecksum) =>
+        (targetFilename, Checksum(hashMethod, validChecksum), clientTargetItem)
+      }
+    }
+}
 
 class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: NamespaceValidation,
-                   targetStore: TargetStore, messageBusPublisher: MessageBusPublisher)
+                   targetStore: TargetStore, tufTargetsPublisher: TufTargetsPublisher)
                   (implicit val db: Database, val ec: ExecutionContext) extends Directives
   with TargetItemRepositorySupport
   with RepoNamespaceRepositorySupport
@@ -91,7 +111,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   private def addTargetItem(namespace: Namespace, item: TargetItem): Future[SignedPayload[Json]] =
     for {
       result <- signedRoleGeneration.addTargetItem(item)
-      _ <- messageBusPublisher.publish(TufTargetAdded(namespace, item.filename, item.checksum, item.length, item.custom))
+      _ <- tufTargetsPublisher.targetAdded(namespace, item)
     } yield result
 
   private def addTarget(namespace: Namespace, filename: TargetFilename, repoId: RepoId, clientItem: RequestTargetItem): Route =
@@ -143,11 +163,6 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
     }
   }
 
-  private def publishTufTargetAdded(namespace: Namespace, targets: Map[TargetFilename, ClientTargetItem], existing: Seq[TargetFilename]): Unit =
-    offlineSignedRoleStorage.tufTargetsAdded(targets, existing).foreach { case (filename, checksum, clientTargetItem) =>
-       messageBusPublisher.publish(TufTargetAdded(namespace, filename, checksum,
-                                   clientTargetItem.length, clientTargetItem.customParsed[TargetCustom]))
-    }
 
   private def modifyRepoRoutes(repoId: RepoId) =
     namespaceValidation(repoId) { namespace =>
@@ -198,7 +213,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
           extractRoleChecksumHeader { checksum =>
             onSuccess(offlineSignedRoleStorage.saveTargetRole(namespace, signedPayload, repoId, checksum)) {
               case Valid((targetItems, newSignedRole)) =>
-                publishTufTargetAdded(namespace, signedPayload.signed.targets, targetItems.map(_.filename))
+                tufTargetsPublisher.newTargetsAdded(namespace, signedPayload.signed.targets, targetItems)
                 respondWithCheckSum(newSignedRole.checksum.hash) {
                   complete(StatusCodes.NoContent)
                 }
