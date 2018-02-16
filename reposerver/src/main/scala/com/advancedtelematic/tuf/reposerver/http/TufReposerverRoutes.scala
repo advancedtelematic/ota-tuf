@@ -26,7 +26,7 @@ class TufReposerverRoutes(keyserverClient: KeyserverClient,
     handleRejections(rejectionHandler) {
       ErrorHandler.handleErrors {
         pathPrefix("api" / "v1") {
-            new RepoResource(keyserverClient, namespaceValidation, targetStore, messageBusPublisher).route
+            new RepoResource(keyserverClient, namespaceValidation, targetStore, new TufTargetsPublisher(messageBusPublisher)).route
         } ~ DbHealthResource(versionMap).route
       }
     }

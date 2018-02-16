@@ -30,6 +30,7 @@ lazy val serverDependencies = libraryDependencies ++= {
   Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaV,
     "com.typesafe.akka" %% "akka-stream" % akkaV,
+    "com.typesafe.akka" %% "akka-stream-testkit" % akkaV,
     "com.typesafe.akka" %% "akka-http" % akkaHttpV,
     "com.typesafe.akka" %% "akka-slf4j" % akkaV,
     "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test",

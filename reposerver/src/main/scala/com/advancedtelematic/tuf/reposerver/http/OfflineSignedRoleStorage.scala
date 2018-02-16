@@ -11,7 +11,7 @@ import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole,
 import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import io.circe.Encoder
 import cats.implicits._
-import com.advancedtelematic.libats.data.DataType.Checksum
+import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.http.HttpCodecs._
@@ -21,6 +21,8 @@ import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
+import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepository.SignedRoleNotFound
+import com.advancedtelematic.tuf.reposerver.http.RoleChecksumHeader.RoleChecksum
 
 class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
                                         (implicit val db: Database, val ec: ExecutionContext)
@@ -28,7 +30,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
 
   private val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
 
-  def store(repoId: RepoId, signedPayload: SignedPayload[TargetsRole]): Future[ValidatedNel[String, SignedRole]] =
+  def store(repoId: RepoId, signedPayload: SignedPayload[TargetsRole]): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole)]] =
     for {
       validatedPayloadSig <- payloadSignatureIsValid(repoId, signedPayload)
       existingTargets <- targetItemRepo.findFor(repoId)
@@ -39,7 +41,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
 
           signedRoleGeneration.regenerateSignedDependent(repoId, signedTargetRole, signedPayload.signed.expires)
             .flatMap(dependent => signedRoleRepo.storeAll(targetItemRepo)(repoId: RepoId, signedTargetRole :: dependent, items))
-            .map(_ => signedTargetRole.validNel)
+            .map(_ => (existingTargets, signedTargetRole).validNel)
         case i @ Invalid(_) =>
           FastFuture.successful(i)
       }
@@ -88,4 +90,23 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
 
     TufCrypto.payloadSignatureIsValid(rootRole, signedPayload)
   }
+
+  def saveTargetRole(namespace: Namespace, signedTargetPayload: SignedPayload[TargetsRole], repoId: RepoId, checksum: Option[RoleChecksum]) =
+    signedRoleRepo.find(repoId, RoleType.TARGETS).flatMap { existingRole =>
+      updateSignedTarget(repoId, namespace, signedTargetPayload, existingRole, checksum)
+    }.recoverWith {
+      case SignedRoleNotFound =>
+        store(repoId, signedTargetPayload)
+    }
+
+  private def updateSignedTarget(repoId: RepoId, namespace: Namespace, signedTargetPayload: SignedPayload[TargetsRole],
+                                 existingRole: SignedRole, checksumOpt: Option[RoleChecksum]) =
+    checksumOpt match {
+      case Some(checksum) if existingRole.checksum.hash == checksum =>
+        store(repoId, signedTargetPayload)
+      case Some(_) =>
+        Future.failed(Errors.RoleChecksumMismatch) // TODO: Should be 412?
+      case None =>
+        Future.failed(Errors.RoleChecksumNotProvided)
+    }
 }

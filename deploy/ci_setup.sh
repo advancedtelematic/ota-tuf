@@ -11,7 +11,7 @@ if [[ `docker ps -q | wc -l` -gt 0 ]]; then
 fi
 
 if [[ ! -d "ota_tuf_entrypoint.d/" ]]; then
-    mkdir --verbose ota_tuf_entrypoint.d/
+    mkdir -v ota_tuf_entrypoint.d/
 fi
 
 echo "
