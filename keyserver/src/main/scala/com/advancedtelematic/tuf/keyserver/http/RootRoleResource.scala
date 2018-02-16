@@ -2,24 +2,24 @@ package com.advancedtelematic.tuf.keyserver.http
 
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.StatusCodes
-import io.circe.syntax._
 import akka.stream.Materializer
 import cats.data.Validated.{Invalid, Valid}
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
-import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.tuf.keyserver.roles.{RootRoleGeneration, RootRoleKeyEdit, TargetKeyAccess}
-import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
-
-import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.libtuf_server.data.Marshalling._
 import com.advancedtelematic.libats.http.UUIDKeyPath.UUIDKeyPathOp
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
+import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import io.circe.{Decoder, Encoder, Json}
+import io.circe.syntax._
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
+import slick.jdbc.MySQLProfile.api._
 
 class RootRoleResource(vaultClient: VaultClient)
                       (implicit val db: Database, val ec: ExecutionContext, mat: Materializer)
@@ -104,7 +104,11 @@ class RootRoleResource(vaultClient: VaultClient)
           } ~
           path("pairs") {
             get {
-              complete(targetRole.keyPairs(repoId))
+              onComplete(targetRole.keyPairs(repoId)) {
+                case Success(pairs) if pairs.nonEmpty => complete(pairs)
+                case Success(_) => complete(StatusCodes.NotFound)
+                case Failure(t) => complete(StatusCodes.InternalServerError -> t.getMessage)
+              }
             }
           }
         }
