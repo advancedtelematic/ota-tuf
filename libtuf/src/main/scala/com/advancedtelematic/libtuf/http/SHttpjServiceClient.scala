@@ -80,7 +80,7 @@ abstract class SHttpjServiceClient(client: scalaj.http.HttpRequest ⇒ Future[Sc
         } else {
           log.debug(s"request failed: $request")
           Future.failed {
-            HttpjClientError(s"${this.getClass.getSimpleName}|Unexpected response from remote server at ${request.method}|${request.url}|$parsedErr")
+            HttpjClientError(s"${this.getClass.getSimpleName}|Unexpected response from remote server at ${request.method}|${resp.code}|${request.url}|$parsedErr")
           }
         }
       }
