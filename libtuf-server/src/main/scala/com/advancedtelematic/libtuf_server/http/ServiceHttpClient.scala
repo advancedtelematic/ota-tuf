@@ -80,7 +80,7 @@ abstract class ServiceHttpClient(httpClient: HttpRequest => Future[HttpResponse]
         else
           tryErrorParsing(r).flatMap { error =>
             log.debug(s"request failed: $request")
-            val e = error.copy(msg = s"${this.getClass.getSimpleName}|Unexpected response from remote server at ${request.uri}|${error.msg}")
+            val e = error.copy(msg = s"${this.getClass.getSimpleName}|Unexpected response from remote server at ${request.uri}|${r.status.intValue()}|${error.msg}")
             FastFuture.failed(e)
           }
     }
