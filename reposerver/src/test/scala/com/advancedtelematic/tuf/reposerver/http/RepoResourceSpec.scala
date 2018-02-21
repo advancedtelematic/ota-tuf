@@ -44,10 +44,9 @@ import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpe
 import scala.concurrent.Future
 import eu.timepit.refined.api.Refined
 import com.advancedtelematic.libtuf.data.ClientDataType.RoleTypeOps
-import scala.concurrent.ExecutionContext.Implicits
 
 trait RepoSupport extends ResourceSpec with SignedRoleRepositorySupport with ScalaFutures with ScalatestRouteTest  { this: Suite ⇒
-  implicit val ec = Implicits.global
+  implicit val ec = executor
 
   def makeRoleChecksumHeader(repoId: RepoId) =
     RoleChecksumHeader(signedRoleRepo.find(repoId, RoleType.TARGETS).futureValue.checksum.hash)

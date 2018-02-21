@@ -4,7 +4,6 @@ import java.nio.file.attribute.{PosixFilePermission, PosixFilePermissions}
 import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
 import java.util
 import PosixFilePermission._
-import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, TufKey, TufKeyPair, TufPrivateKey}
@@ -20,7 +19,7 @@ class CliKeyStorage(repo: Path) {
 
   private lazy val log = LoggerFactory.getLogger(this.getClass)
 
-  private lazy val SECRET_KEY_PERMISSIONS = util.EnumSet.of(OWNER_READ, OWNER_WRITE)
+  private lazy val SECRET_KEY_PERMISSIONS = Set(OWNER_READ, OWNER_WRITE)
 
   private val keysPath: Path = repo.resolve("keys")
 
@@ -35,7 +34,7 @@ class CliKeyStorage(repo: Path) {
   }
 
   private def writePrivate(keyName: KeyName, tufKey: TufPrivateKey): Try[Unit] = Try {
-    try Files.createFile(keyName.privateKeyPath, PosixFilePermissions.asFileAttribute(SECRET_KEY_PERMISSIONS))
+    try Files.createFile(keyName.privateKeyPath, PosixFilePermissions.asFileAttribute(SECRET_KEY_PERMISSIONS.asJava))
     catch { case _: FileAlreadyExistsException => () }
 
     Files.write(keyName.privateKeyPath, tufKey.asJson.spaces2.getBytes)
@@ -45,7 +44,7 @@ class CliKeyStorage(repo: Path) {
     writeKeys(name, pair.pubkey, pair.privkey)
 
   private def ensureKeysDirCreated(): Try[Unit] = Try {
-    val perms = PosixFilePermissions.asFileAttribute(SECRET_KEY_PERMISSIONS + OWNER_EXECUTE)
+    val perms = PosixFilePermissions.asFileAttribute((SECRET_KEY_PERMISSIONS + OWNER_EXECUTE).asJava)
     Files.createDirectories(keysPath, perms)
 
     val currentPerms = Files.getPosixFilePermissions(keysPath)
