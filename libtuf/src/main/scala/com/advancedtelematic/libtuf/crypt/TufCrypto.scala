@@ -8,7 +8,7 @@ import java.security.{Signature => _, _}
 
 import org.bouncycastle.jce.ECNamedCurveTable
 import org.bouncycastle.jce.spec.ECParameterSpec
-import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, Ed25519KeyType, Ed25519TufKey, Ed25519TufKeyPair, Ed25519TufPrivateKey, EcPrime256KeyType, EcPrime256TufKey, EcPrime256TufKeyPair, EcPrime256TufPrivateKey, KeyId, KeyType, RSATufKey, RSATufKeyPair, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, SignedPayload, TufKey, TufKeyPair, TufPrivateKey, ValidKeyId, ValidSignature}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, EcPrime256KeyType, EcPrime256TufKey, EcPrime256TufKeyPair, EcPrime256TufPrivateKey, Ed25519KeyType, Ed25519TufKey, Ed25519TufKeyPair, Ed25519TufPrivateKey, KeyId, KeyType, RSATufKey, RSATufKeyPair, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, SignedPayload, TufKey, TufKeyPair, TufPrivateKey, ValidKeyId, ValidSignature}
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
 import org.bouncycastle.util.encoders.{Base64, Hex}
@@ -26,6 +26,7 @@ import io.circe.syntax._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.ECCrypto._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole}
+import cats.implicits._
 
 import scala.util.control.NoStackTrace
 import scala.util.Try
@@ -166,23 +167,6 @@ object TufCrypto {
 
   def generateKeyPair[T <: KeyType](keyType: T, keySize: Int): TufKeyPair =
     keyType.crypto.generateKeyPair(keySize)
-
-  def verifySignatures[T : Encoder](signedPayload: SignedPayload[T], publicKeys: Map[KeyId, TufKey]):
-  ValidatedNel[String, List[ClientSignature]] = {
-    import cats.implicits._
-
-    signedPayload.signatures.par.map { (clientSig : ClientSignature) =>
-      publicKeys.get(clientSig.keyid) match {
-        case Some(key) =>
-          if (TufCrypto.isValid(clientSig, key.keyval, signedPayload.signed))
-            Valid(clientSig)
-          else
-            s"Invalid signature for key ${clientSig.keyid}".invalidNel
-        case None =>
-          s"payload signed with unknown key ${clientSig.keyid}".invalidNel
-      }
-    }.toList.sequence
-  }
 
   def payloadSignatureIsValid[T : TufRole : Encoder](rootRole: RootRole, signedPayload: SignedPayload[T]): ValidatedNel[String, SignedPayload[T]] = {
     val signedPayloadRoleType = implicitly[TufRole[T]].roleType

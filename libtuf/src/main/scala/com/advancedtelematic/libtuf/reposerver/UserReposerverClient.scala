@@ -9,7 +9,7 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TufKey, TufKeyPair}
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpResponse
-import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{RoleChecksumNotValid, TargetsResponse}
+import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{RoleChecksumNotValid, RoleNotFound, TargetsResponse}
 import eu.timepit.refined.api.Refined
 import io.circe.Decoder
 
@@ -25,10 +25,12 @@ object UserReposerverClient {
   case class TargetsResponse(targets: SignedPayload[TargetsRole], checksum: Option[Refined[String, ValidChecksum]])
 
   case object RoleChecksumNotValid extends Exception("could not overwrite targets, trying to update an older version of role. Did you run `targets pull` ?") with NoStackTrace
+
+  case class RoleNotFound(msg: String) extends Exception(s"role not found: $msg") with NoStackTrace
 }
 
 trait UserReposerverClient {
-  def root(): Future[SignedPayload[RootRole]]
+  def root(version: Option[Int] = None): Future[SignedPayload[RootRole]]
 
   def fetchKeyPair(keyId: KeyId): Future[TufKeyPair]
 
@@ -39,8 +41,6 @@ trait UserReposerverClient {
   def targets(): Future[TargetsResponse]
 
   def pushTargets(targetsRole: SignedPayload[TargetsRole], previousChecksum: Option[Refined[String, ValidChecksum]]): Future[Unit]
-
-  def pushTargetsKey(key: TufKey): Future[TufKey]
 }
 
 class UserReposerverHttpClient(reposerverUri: URI,
@@ -59,9 +59,15 @@ class UserReposerverHttpClient(reposerverUri: URI,
   private def apiUri(path: String): String =
     URI.create(reposerverUri.toString + "/api/v1/user_repo/" + path).toString
 
-  def root(): Future[SignedPayload[RootRole]] = {
-    val req = Http(apiUri("root.json")).method("GET")
-    execHttp[SignedPayload[RootRole]](req)().map(_.body)
+  def root(version: Option[Int] = None): Future[SignedPayload[RootRole]] = {
+    val filename = version match {
+      case Some(v) => v + ".root.json"
+      case None => "root.json"
+    }
+    val req = Http(apiUri(filename)).method("GET")
+    execHttp[SignedPayload[RootRole]](req) {
+      case (404, error) => Future.failed(RoleNotFound(error.description))
+    }.map(_.body)
   }
 
   override def fetchKeyPair(keyId: KeyId): Future[TufKeyPair] = {
@@ -98,10 +104,5 @@ class UserReposerverHttpClient(reposerverUri: URI,
       case (428, _) =>
         Future.failed(RoleChecksumNotValid)
     }
-  }
-
-  override def pushTargetsKey(key: TufKey): Future[TufKey] = {
-    val req = Http(apiUri("keys/targets")).method("PUT")
-    execJsonHttp[Unit, TufKey](req, key)().map(_ => key)
   }
 }

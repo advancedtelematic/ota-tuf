@@ -11,6 +11,9 @@ import akka.http.scaladsl.unmarshalling.{FromEntityUnmarshaller, Unmarshaller}
 import akka.stream.Materializer
 import cats.syntax.either._
 import cats.syntax.functor._
+import com.advancedtelematic.libats.data.ErrorCode
+import com.advancedtelematic.libats.http.Errors
+import com.advancedtelematic.libats.http.Errors.JsonError
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufCodecs
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RSATufPrivateKey, TufKey, TufKeyPair, TufPrivateKey}
@@ -42,7 +45,8 @@ object VaultClient {
     def toTufKeyPair: Try[TufKeyPair] = keyType.crypto.castToKeyPair(publicKey, privateKey)
   }
 
-  case object VaultResourceNotFound extends Exception("vault resource not found") with NoStackTrace
+  case object VaultResourceNotFound extends Errors.Error(ErrorCode("vault_resource_not_found"),
+    StatusCodes.BadGateway, "vault resource not found")
 
   object VaultKey {
     implicit val encoder: Encoder[VaultKey] = deriveEncoder[VaultKey]

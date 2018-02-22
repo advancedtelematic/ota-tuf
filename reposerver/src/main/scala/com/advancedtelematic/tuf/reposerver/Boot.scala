@@ -2,6 +2,7 @@ package com.advancedtelematic.tuf.reposerver
 
 import java.security.Security
 
+import akka.event.Logging
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server.{Directives, Route}
@@ -70,7 +71,7 @@ object Boot extends BootApp
   val targetStore = TargetStore(keyStoreClient,  targetStoreEngine, messageBusPublisher)
 
   val routes: Route =
-    (versionHeaders(version) & logResponseMetrics(projectName)) {
+    (versionHeaders(version) & logResponseMetrics(projectName) & logRequestResult(("reposerver", Logging.InfoLevel))) {
       new TufReposerverRoutes(keyStoreClient, NamespaceValidation.withDatabase, targetStore, messageBusPublisher).routes
     }
 

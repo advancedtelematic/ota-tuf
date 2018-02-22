@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.daemon
 
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, Ed25519TufKey, KeyId, KeyType, RepoId, RoleType, RsaKeyType}
 import akka.actor.{ActorSystem, Props, Status}
 import akka.testkit.{ImplicitSender, TestKitBase, TestProbe}
 import com.advancedtelematic.libtuf.crypt.TufCrypto._
@@ -15,6 +16,7 @@ import io.circe.syntax._
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Milliseconds, Seconds, Span}
 import org.bouncycastle.util.encoders.Hex
+
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 
@@ -30,6 +32,9 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
   val actorRef = system.actorOf(KeyGeneratorWorker.props(DefaultKeyGenerationOp(fakeVault)))
 
   private val timeout = Span(20, Seconds)
+
+  def findKey(keyId: KeyId): Future[Key] =
+    keyRepo.findAll(Seq(keyId)).map(_.head)
 
   override implicit def patienceConfig =
     PatienceConfig().copy(timeout = timeout, interval = Span(300, Milliseconds))
@@ -55,7 +60,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
 
       keyGenRepo.find(keyGenReq.id).futureValue.status shouldBe KeyGenRequestStatus.GENERATED
 
-      val dbKey = keyRepo.find(key.id).futureValue
+      val dbKey = keyRepo.findAll(Seq(key.id)).futureValue.head
 
       dbKey.keyType shouldBe keyType
       dbKey.publicKey.toPem should include("BEGIN PUBLIC KEY")

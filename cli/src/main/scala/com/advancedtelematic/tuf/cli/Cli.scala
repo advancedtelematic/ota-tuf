@@ -26,20 +26,24 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.RoleChecksumNotValid
-import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
+import cats.syntax.either._
 
 sealed trait Command
 case object Help extends Command
 case object GenKeys extends Command
 case object InitRepo extends Command
-case object Rotate extends Command
+case object MoveOffline extends Command
 case object GetTargets extends Command
 case object InitTargets extends Command
 case object AddTarget extends Command
 case object SignTargets extends Command
+case object SignRoot extends Command
 case object PullTargets extends Command
 case object PushTargets extends Command
-case object PushTargetsKey extends Command
+case object PullRoot extends Command
+case object PushRoot extends Command
+case object AddRootKey extends Command
+case object RemoveRootKey extends Command
 case object Export extends Command
 case object VerifyRoot extends Command
 
@@ -50,7 +54,8 @@ case class Config(command: Command,
                   rootKey: KeyName = KeyName("default-key"),
                   keyType: KeyType = Ed25519KeyType,
                   oldRootKey: KeyName = KeyName("default-key"),
-                  targetsKey: KeyName = KeyName("default-key"),
+                  keyNames: List[KeyName]= List.empty,
+                  keyIds: List[KeyId]= List.empty,
                   oldKeyId: Option[KeyId] = None,
                   version: Option[Int] = None,
                   expires: Instant = Instant.now().plus(1, ChronoUnit.DAYS),
@@ -61,10 +66,12 @@ case class Config(command: Command,
                   checksum: Option[Refined[String, ValidChecksum]] = None,
                   hardwareIds: List[HardwareIdentifier] = List.empty,
                   targetUri: Option[URI] = None,
-                  keySize: Int = 2048,
+                  keySize: Option[Int] = None,
                   inputPath: Path = Paths.get("empty"),
                   exportPath: Path = Paths.get(""),
+                  force: Boolean = false,
                   reposerverUrl: Option[URI] = None)
+
 
 object Cli extends App with VersionInfo {
   import CliReads._
@@ -90,11 +97,6 @@ object Cli extends App with VersionInfo {
       c.copy(repoName = name)
     }
 
-    opt[String]("reposerver").action { (_, c) =>
-      log.warn("--reposerver: This option has no effect when not used with command <init>")
-      c
-    }
-
     version("version")
 
     cmd("init")
@@ -106,10 +108,6 @@ object Cli extends App with VersionInfo {
         opt[URI]("reposerver").action { (arg, c) =>
           c.copy(reposerverUrl = arg.some)
         },
-        opt[Unit]("no-auth").action { (_, c) =>
-          log.warn("--no-auth option has no effect, use `\"no_auth\": true` in credentials.zip")
-          c
-        },
         opt[Path]("credentials")
           .abbr("c")
           .text("path to credentials file, credentials.zip")
@@ -119,42 +117,35 @@ object Cli extends App with VersionInfo {
           }
       )
 
-    cmd("gen-keys")
-      .action { (_, c) =>
-        c.copy(command = GenKeys)
-      }
-      .text("Generate new offline keys")
-      .children(
-        opt[KeyName]("name").abbr("n").required().action { (name, c) =>
-          c.copy(rootKey = name)
-        },
-        opt[KeyType]("type")
-          .abbr("t")
-          .action { (keyType, c) =>
-            c.copy(keyType = keyType)
-          }
-          .text("key type, ec or rsa"),
-        opt[Int]("keysize").text("defaults to 2048 for RSA keys").action {
-          (keySize, c) =>
-            c.copy(keySize = keySize)
-        }
-      )
+    cmd("key").children(
+      cmd("generate")
+        .action { (_, c) => c.copy(command = GenKeys) }
+        .text("Generate a new key")
+        .children(
+          opt[KeyName]("name").abbr("n").required().action { (name, c) =>
+            c.copy(rootKey = name)
+          },
+          opt[KeyType]("type")
+            .abbr("t")
+            .action { (keyType, c) =>
+              c.copy(keyType = keyType)
+            }
+            .text("key type, ed25519 or rsa"),
+          opt[Int]("keysize")
+            .action { (keySize, c) => c.copy(keySize = keySize.some) }
+        )
+    )
 
-    cmd("push-targets-key")
+    cmd("move-offline")
       .action { (_, c) =>
-        c.copy(command = PushTargetsKey)
+        c.copy(command = MoveOffline)
       }
-      .children(
-        opt[KeyName]("name").required().action { (arg, c) =>
-          c.copy(targetsKey = arg)
-        }
-      )
-
-    cmd("rotate")
-      .action { (_, c) =>
-        c.copy(command = Rotate)
-      }
-      .text("Download root.json, sign a new root.json with offline keys")
+      .text(
+        """Move root keys to offline keys
+          | Deletes online root and target keys from server
+          | Downloads and signs a new root.json with new offline keys
+          | Push the new root
+        """.stripMargin)
       .children(
         opt[KeyName]("new-root")
           .text("new root key to add to root.json, must exist")
@@ -165,8 +156,8 @@ object Cli extends App with VersionInfo {
         opt[KeyName]("new-targets")
           .text("new targets key to add to root.json, must exist")
           .required()
-          .action { (keyName, c) =>
-            c.copy(targetsKey = keyName)
+          .action { (keyName: KeyName, c) =>
+            c.copy(keyNames = List(keyName))
           },
         opt[KeyName]("old-root-alias")
           .text(
@@ -182,8 +173,52 @@ object Cli extends App with VersionInfo {
           }
       )
 
+    cmd("root")
+      .children(
+        cmd("pull")
+          .action { (_, c) => c.copy(command = PullRoot) }
+          .children(
+            opt[Unit]("force")
+              .action { (_, c) => c.copy(force = true) }
+              .text("Skip validation of remote root.json against local root.json")
+          ),
+        cmd("push")
+          .action { (_, c) => c.copy(command = PushRoot) },
+        cmd("key")
+          .children(
+            cmd("add")
+              .action { (_, c) => c.copy(command = AddRootKey) }
+              .children(
+                opt[KeyName]("key-name")
+                  .unbounded()
+                  .required()
+                  .action { (arg, c) => c.copy(keyNames = arg :: c.keyNames) }
+              ),
+            cmd("remove")
+              .action { (_, c) => c.copy(command = RemoveRootKey) }
+              .children(
+                opt[KeyName]("key-name")
+                  .unbounded()
+                  .action { (arg, c) => c.copy(keyNames = arg :: c.keyNames) },
+                opt[KeyId]("key-id")
+                  .unbounded()
+                  .action { (arg, c) => c.copy(keyIds = arg :: c.keyIds) },
+              )
+          ),
+        cmd("sign")
+          .action { (_, c) => c.copy(command = SignRoot) }
+          .children(
+            opt[KeyName]("key-name")
+              .unbounded()
+              .action { (arg, c) =>
+                c.copy(keyNames = arg :: c.keyNames)
+              }
+              .required()
+          )
+      )
+
     cmd("targets")
-      .action { (_,c) =>
+      .action { (_, c) =>
         c.copy(command = InitTargets)
       }
       .children(
@@ -248,7 +283,7 @@ object Cli extends App with VersionInfo {
           .children(
             opt[KeyName]("key-name")
               .action { (arg, c) =>
-                c.copy(targetsKey = arg)
+                c.copy(keyNames = List(arg))
               }
               .required(),
             opt[Int]("version")
@@ -277,7 +312,7 @@ object Cli extends App with VersionInfo {
           .text("name of target keys (public and private) to export")
           .required()
           .action { (argc, c) =>
-            c.copy(targetsKey = argc)
+            c.copy(keyNames = List(argc))
           },
         opt[Path]("to")
           .text("name of ZIP file to export to")
@@ -301,6 +336,15 @@ object Cli extends App with VersionInfo {
       .children(
         opt[Path]('i', "in").action { (arg, c) => c.copy(inputPath = arg) }
       )
+
+    checkConfig { c =>
+      c.command match {
+        case RemoveRootKey if c.keyIds.isEmpty && c.keyNames.isEmpty =>
+          "To remove a root key you need to specify at least one key id or key name".asLeft
+        case _ =>
+          Right(())
+      }
+    }
   }
 
   val default = Config(command = Help)
@@ -330,16 +374,16 @@ object Cli extends App with VersionInfo {
           .map(_ => log.info(s"Finished init for ${config.repoName.value} using ${config.credentialsPath}"))
           .toFuture
 
-      case Rotate =>
+      case MoveOffline =>
         repoServer
           .flatMap { client =>
-            tufRepo.rotateRoot(client,
+            tufRepo.moveRootOffline(client,
               config.rootKey,
               config.oldRootKey,
-              config.targetsKey,
+              config.keyNames.head,
               config.oldKeyId)
           }
-          .map(_ => log.info(s"root.json rotated, saved to $repoPath"))
+          .map(_ => log.info(s"root keys are offline, root.json saved to $repoPath"))
 
       case GetTargets =>
         repoServer
@@ -366,7 +410,7 @@ object Cli extends App with VersionInfo {
 
       case SignTargets =>
         tufRepo
-          .signTargets(config.targetsKey, config.version)
+          .signTargets(config.keyNames, config.version)
           .map(p => log.info(s"signed targets.json to $p"))
           .toFuture
 
@@ -380,13 +424,29 @@ object Cli extends App with VersionInfo {
           .flatMap(tufRepo.pushTargets)
           .map(_ => log.info("Pushed targets"))
 
-      case PushTargetsKey =>
-        repoServer
-          .flatMap(client => tufRepo.pushTargetsKey(client, config.targetsKey))
-          .map(key => log.info(s"Pushed key ${key.id} to server"))
+      case PullRoot =>
+        repoServer.flatMap(client => tufRepo.pullRoot(client, config.force))
+          .map(_ => log.info("Pulled root.json"))
+
+      case PushRoot =>
+        repoServer.flatMap(client => tufRepo.pushRoot(client))
+          .map(_ => log.info("Pushed root.json"))
+
+      case SignRoot =>
+        tufRepo.signRoot(config.keyNames).toFuture
+          .map(p => log.info(s"signed root.json saved to $p"))
+
+      case AddRootKey =>
+        tufRepo.addRootKeys(config.keyNames).toFuture
+          .map(p => log.info(s"keys added to unsigned root.json saved to $p"))
+
+      case RemoveRootKey =>
+        tufRepo.keyIdsByName(config.keyNames).flatMap { keyIds =>
+          tufRepo.removeRootKeys(config.keyIds ++ keyIds)
+        }.map(p => log.info(s"keys removed from unsigned root.json saved to $p")).toFuture
 
       case Export =>
-        RepoManagement.export(tufRepo, config.targetsKey, config.exportPath).toFuture
+        RepoManagement.export(tufRepo, config.keyNames.head, config.exportPath).toFuture
 
       case VerifyRoot =>
         CliUtil.verifyRootFile(config.inputPath)
@@ -402,9 +462,8 @@ object Cli extends App with VersionInfo {
       case ex @ RoleChecksumNotValid =>
         log.error("Could not push targets", ex)
         sys.exit(2)
-      case ex: Throwable =>
-        log.error("", ex)
-        sys.exit(3)
+      case ex: Throwable => // Already logged
+        log.debug(ex.getMessage)
     }
   }
 }

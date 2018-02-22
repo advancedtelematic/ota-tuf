@@ -56,6 +56,12 @@ trait UserReposerverClientSpec extends TufReposerverSpec
     signedRoot.signed shouldBe a[RootRole]
   }
 
+  test("fetches a root by version") {
+    val oldRoot = client.root().futureValue
+    val newRoot = client.root(Some(oldRoot.signed.version)).futureValue
+    newRoot.signed.version shouldBe oldRoot.signed.version
+  }
+
   test("accepts old root") {
     val signedRoot = client.root().futureValue
     client.pushSignedRoot(signedRoot).futureValue
@@ -104,19 +110,6 @@ trait UserReposerverClientSpec extends TufReposerverSpec
     val targetsResponse = client.targets().futureValue
     targetsResponse.targets.signatures shouldNot be(empty)
     targetsResponse.checksum shouldNot be(empty)
-  }
-
-  test("pushes a target key") {
-    val newKey = TufCrypto.generateKeyPair(Ed25519KeyType, 256).pubkey
-
-    val f = for {
-      _ <- client.pushTargetsKey(newKey)
-      newRoot <- fakeKeyserverClient.fetchUnsignedRoot(repoId)
-    } yield newRoot
-
-    val newRoot = f.futureValue
-
-    newRoot.roles(RoleType.TARGETS).keyids should contain(newKey.id)
   }
 }
 

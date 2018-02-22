@@ -122,22 +122,6 @@ class FakeKeyserverClient(defaultKeyType: KeyType) extends KeyserverClient {
       sign(repoId, RoleType.ROOT, unsigned)
   }
 
-  override def addTargetKey(repoId: RepoId, key: TufKey): Future[Unit] = {
-    if(!rootRoles.containsKey(repoId))
-      FastFuture.failed(RootRoleNotFound)
-    else {
-      rootRoles.computeIfPresent(repoId, (_: RepoId, role: RootRole) => {
-        val newKeys = role.keys + (key.id -> key)
-        val targetRoleKeys = role.roles(RoleType.TARGETS)
-        val newTargetKeys = RoleKeys(targetRoleKeys.keyids :+ key.id, targetRoleKeys.threshold)
-
-        role.copy(keys = newKeys, roles = role.roles + (RoleType.TARGETS -> newTargetKeys))
-      })
-
-      FastFuture.successful(())
-    }
-  }
-
   override def fetchUnsignedRoot(repoId: RepoId): Future[RootRole] = {
     Future.fromTry {
       Try {

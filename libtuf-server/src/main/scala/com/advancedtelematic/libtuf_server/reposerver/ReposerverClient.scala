@@ -15,7 +15,7 @@ import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libats.data.ErrorCode
-import com.advancedtelematic.libats.http.Errors.RawError
+import com.advancedtelematic.libats.http.Errors.{JsonError, RawError, RemoteServiceError}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat._
 import com.advancedtelematic.libtuf.data.TufCodecs._
@@ -92,7 +92,7 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
   override def createRoot(namespace: Namespace): Future[RepoId] = {
     val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("user_repo")))
     execHttpWithNamespace[RepoId](namespace, req) {
-      case status if status == StatusCodes.Conflict =>
+      case error if error.status == StatusCodes.Conflict =>
         Future.failed(RepoConflict)
     }
   }
@@ -100,21 +100,21 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
   override def fetchRoot(namespace: Namespace): Future[SignedPayload[RootRole]] = {
     val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("user_repo/root.json")))
     execHttpWithNamespace[SignedPayload[RootRole]](namespace, req) {
-      case status if status == StatusCodes.NotFound =>
+      case error if error.status == StatusCodes.NotFound =>
         Future.failed(NotFound)
-      case status if status == StatusCodes.Locked =>
+      case error if error.status == StatusCodes.Locked =>
         Future.failed(KeysNotReady)
-      case status if status == StatusCodes.FailedDependency =>
+      case error if error.status == StatusCodes.FailedDependency =>
         Future.failed(RootNotInKeyserver)
     }
   }
 
-  private def addTargetErrorHandler[T]: PartialFunction[StatusCode, Future[T]] = {
-    case status if status == StatusCodes.PreconditionFailed =>
+  private def addTargetErrorHandler[T]: PartialFunction[RemoteServiceError, Future[T]] = {
+    case error if error.status == StatusCodes.PreconditionFailed =>
       Future.failed(PrivateKeysNotInKeyserver)
-    case status if status == StatusCodes.NotFound =>
+    case error if error.status == StatusCodes.NotFound =>
       Future.failed(NotFound)
-    case status if status == StatusCodes.Locked =>
+    case error if error.status == StatusCodes.Locked =>
       Future.failed(KeysNotReady)
   }
 
@@ -136,7 +136,7 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
   }
 
   def execHttpWithNamespace[T : ClassTag : FromEntityUnmarshaller](namespace: Namespace, request: HttpRequest)
-                                                                  (errorHandler: PartialFunction[StatusCode, Future[T]] = PartialFunction.empty): Future[T] = {
+                                                                  (errorHandler: PartialFunction[RemoteServiceError, Future[T]] = PartialFunction.empty): Future[T] = {
     val req = request.addHeader(RawHeader("x-ats-namespace", namespace.get))
 
     val authReq = authHeaders match {

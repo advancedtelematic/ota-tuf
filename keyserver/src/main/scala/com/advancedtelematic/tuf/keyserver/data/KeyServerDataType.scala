@@ -18,9 +18,6 @@ object KeyServerDataType {
   case class KeyGenId(uuid: UUID) extends UUIDKey
   object KeyGenId extends UUIDKeyObj[KeyGenId]
 
-  case class RoleId(uuid: UUID) extends UUIDKey
-  object RoleId extends UUIDKeyObj[RoleId]
-
   case class KeyGenRequest(id: KeyGenId, repoId: RepoId,
                            status: KeyGenRequestStatus, roleType: RoleType,
                            keySize: Int,
@@ -30,9 +27,7 @@ object KeyServerDataType {
     require(keyType.crypto.validKeySize(keySize), s"Invalid keysize ($keySize) for $keyType")
   }
 
-  case class Key(id: KeyId, roleId: RoleId, keyType: KeyType, publicKey: PublicKey) {
+  case class Key(id: KeyId, repoId: RepoId, roleType: RoleType, keyType: KeyType, publicKey: PublicKey) {
     def toTufKey: TufKey = keyType.crypto.convertPublic(publicKey)
   }
-
-  case class Role(id: RoleId, repoId: RepoId, roleType: RoleType, threshold: Int)
 }
