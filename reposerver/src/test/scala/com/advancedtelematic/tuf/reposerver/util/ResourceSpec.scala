@@ -1,7 +1,7 @@
 package com.advancedtelematic.tuf.reposerver.util
 
 import java.nio.file.Files
-import java.security.{KeyPair, PublicKey}
+import java.security.{KeyPair, PrivateKey, PublicKey}
 import java.time.Instant
 import java.time.temporal.{ChronoField, ChronoUnit}
 import java.util.NoSuchElementException
@@ -38,7 +38,7 @@ import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStoreEngine
 
 import scala.concurrent.Promise
 
-object FakeKeyserverClient extends KeyserverClient {
+class FakeKeyserverClient(defaultKeyType: KeyType) extends KeyserverClient {
 
   import KeyserverClient._
   import scala.concurrent.ExecutionContext.Implicits.global
@@ -63,18 +63,17 @@ object FakeKeyserverClient extends KeyserverClient {
   }
 
   private lazy val preGeneratedKeys = RoleType.ALL.map { role =>
-    val RSATufKeyPair(publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
+    val TufKeyPair(publicKey, privateKey) = TufCrypto.generateKeyPair(defaultKeyType, defaultKeyType.crypto.defaultKeySize)
     role -> new KeyPair(publicKey.keyval, privateKey.keyval)
   }.toMap
 
-  // TODO: No support for EC keys
   private def generateRoot(repoId: RepoId, keyType: KeyType): RootRole = {
     val roles = keys.get(repoId).map { case (role, keyPair) =>
       role -> RoleKeys(List(keyPair.getPublic.id), threshold = 1)
     }
 
     val clientKeys = keys.get(repoId).map { case (_, keyPair) =>
-      keyPair.getPublic.id -> RSATufKey(keyPair.getPublic)
+      keyPair.getPublic.id -> defaultKeyType.crypto.convertPublic(keyPair.getPublic)
     }
 
     // expires truncated to seconds since circe codecs will code it that way, we cannot save it with more precision than that
@@ -113,7 +112,7 @@ object FakeKeyserverClient extends KeyserverClient {
     val fkey = okey.map(FastFuture.successful).getOrElse(FastFuture.failed(RoleKeyNotFound))
 
     fkey.map { key =>
-      val signature = TufCrypto.signPayload(RSATufPrivateKey(key.getPrivate), payload).toClient(key.getPublic.id)
+      val signature = TufCrypto.signPayload(defaultKeyType.crypto.convertPrivate(key.getPrivate), payload).toClient(key.getPublic.id)
       SignedPayload(List(signature), payload)
     }
   }
@@ -170,7 +169,8 @@ object FakeKeyserverClient extends KeyserverClient {
   override def fetchTargetKeyPairs(repoId: RepoId): Future[Seq[TufKeyPair]] =  FastFuture.successful {
     val keyPair = keys.asScala.getOrElse(repoId, throw RoleKeyNotFound).getOrElse(RoleType.TARGETS, throw RoleKeyNotFound)
 
-    Seq(RSATufKeyPair(RSATufKey(keyPair.getPublic), RSATufPrivateKey(keyPair.getPrivate)))
+    Seq(defaultKeyType.crypto.toKeyPair(defaultKeyType.crypto.convertPublic(keyPair.getPublic),
+                                        defaultKeyType.crypto.convertPrivate(keyPair.getPrivate)))
   }
 
   override def fetchRootRole(repoId: RepoId, version: Int): Future[SignedPayload[RootRole]] =
@@ -178,7 +178,9 @@ object FakeKeyserverClient extends KeyserverClient {
 
   override def fetchKeyPair(repoId: RepoId, keyId: KeyId): Future[TufKeyPair] = Future.fromTry { Try {
     val keyPair = keys.asScala.getOrElse(repoId, throw KeyPairNotFound).values.find(_.getPublic.id == keyId).getOrElse(throw KeyPairNotFound)
-    RSATufKeyPair(RSATufKey(keyPair.getPublic), RSATufPrivateKey(keyPair.getPrivate))
+    val pb = defaultKeyType.crypto.convertPublic(keyPair.getPublic)
+    val prv = defaultKeyType.crypto.convertPrivate(keyPair.getPrivate)
+    defaultKeyType.crypto.toKeyPair(pb, prv)
   } }
 }
 
@@ -214,7 +216,6 @@ trait HttpClientSpecSupport {
   }
 }
 
-
 trait ResourceSpec extends TufReposerverSpec
   with ScalatestRouteTest
   with DatabaseSpec
@@ -224,7 +225,7 @@ trait ResourceSpec extends TufReposerverSpec
 
   def apiUri(path: String): String = "/api/v1/" + path
 
-  val fakeKeyserverClient = FakeKeyserverClient
+  val fakeKeyserverClient: FakeKeyserverClient
 
   val defaultNamespaceExtractor = NamespaceDirectives.defaultNamespaceExtractor.map(_.namespace)
 

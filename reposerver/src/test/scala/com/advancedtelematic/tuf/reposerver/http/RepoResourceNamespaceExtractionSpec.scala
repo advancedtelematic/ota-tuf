@@ -3,7 +3,7 @@ package com.advancedtelematic.tuf.reposerver.http
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server.Route
 import com.advancedtelematic.libats.http.ErrorHandler
-import com.advancedtelematic.libtuf.data.TufDataType.RepoId
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RepoId, RsaKeyType}
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.prop.Whenever
 import org.scalatest.{BeforeAndAfterAll, Inspectors}
@@ -17,9 +17,9 @@ import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
 import scala.concurrent.ExecutionContext
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
-import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
+import com.advancedtelematic.tuf.reposerver.util._
 
-class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
+trait RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
   with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration with RepoNamespaceRepositorySupport {
 
   implicit val ec = ExecutionContext.global
@@ -85,4 +85,12 @@ class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
       }
     }
   }
+}
+
+class RsaRepoResourceNamespaceExtractionSpec extends RepoResourceNamespaceExtractionSpec {
+  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(RsaKeyType)
+}
+
+class EdRepoResourceNamespaceExtractionSpec extends RepoResourceNamespaceExtractionSpec {
+  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(Ed25519KeyType)
 }

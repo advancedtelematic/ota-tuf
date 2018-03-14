@@ -8,16 +8,16 @@ import akka.stream.scaladsl.{FileIO, Sink}
 import akka.util.ByteString
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetName, TargetVersion, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RepoId, RsaKeyType, TargetName, TargetVersion, ValidTargetFilename}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.BINARY
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverHttpClient
-import com.advancedtelematic.tuf.reposerver.util.{HttpClientSpecSupport, ResourceSpec, TufReposerverSpec}
+import com.advancedtelematic.tuf.reposerver.util._
 import org.scalatest.concurrent.{Eventually, PatienceConfiguration}
 import org.scalatest.time.{Seconds, Span}
 
-class ReposerverHttpClientSpec extends TufReposerverSpec
+trait ReposerverHttpClientSpec extends TufReposerverSpec
   with ResourceSpec
   with HttpClientSpecSupport
   with PatienceConfiguration
@@ -90,4 +90,12 @@ class ReposerverHttpClientSpec extends TufReposerverSpec
     client.addTarget(Namespace("non-existant-namespace"), "filename", Uri("http://example.com"),
                      Sha256Digest.digest("hi".getBytes), 42, BINARY).failed.futureValue shouldBe ReposerverClient.NotFound
   }
+}
+
+class RsaReposerverHttpClientSpec extends ReposerverHttpClientSpec {
+  override val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(RsaKeyType)
+}
+
+class EdReposerverHttpClientSpec extends ReposerverHttpClientSpec {
+  override val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(Ed25519KeyType)
 }
