@@ -40,7 +40,8 @@ import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTa
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
-import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
+import com.advancedtelematic.tuf.reposerver.util._
+
 import scala.concurrent.Future
 import eu.timepit.refined.api.Refined
 import com.advancedtelematic.libtuf.data.ClientDataType.RoleTypeOps
@@ -87,7 +88,7 @@ trait RepoSupport extends ResourceSpec with SignedRoleRepositorySupport with Sca
   val offlineTargets = createOfflineTargets(offlineTargetFilename)
 }
 
-class RepoResourceSpec extends TufReposerverSpec with RepoSupport
+trait RepoResourceSpec extends TufReposerverSpec with RepoSupport
   with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration with SignedRoleRepositorySupport {
 
   val repoId = RepoId.generate()
@@ -874,11 +875,18 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
 
 }
 
+class RsaRepoResourceSpec extends RepoResourceSpec {
+  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(RsaKeyType)
+}
+
+class EdRepoResourceSpec extends RepoResourceSpec {
+  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(Ed25519KeyType)
+}
 
 // Test for message publishing in separate class
 // because MemoryMessageBus maintains queue and supports only single subscriber.
 //
-class RepoResourceTufTargetSpec extends TufReposerverSpec
+trait RepoResourceTufTargetSpec extends TufReposerverSpec
   with ResourceSpec with PatienceConfiguration with RepoSupport {
 
   override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
@@ -901,7 +909,15 @@ class RepoResourceTufTargetSpec extends TufReposerverSpec
   }
 }
 
-class RepoResourceTufTargetInitialJsonSpec extends TufReposerverSpec
+class RsaRepoResourceTufTargetSpec extends RepoResourceTufTargetSpec {
+  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(RsaKeyType)
+}
+
+class EdRepoResourceTufTargetSpec extends RepoResourceTufTargetSpec {
+  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(Ed25519KeyType)
+}
+
+trait RepoResourceTufTargetInitialJsonSpec extends TufReposerverSpec
   with ResourceSpec with PatienceConfiguration with RepoSupport {
 
   override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
@@ -927,7 +943,15 @@ class RepoResourceTufTargetInitialJsonSpec extends TufReposerverSpec
   }
 }
 
-class RepoResourceTufTargetJsonSpec extends TufReposerverSpec
+class RsaRepoResourceTufTargetInitialJsonSpec extends RepoResourceTufTargetInitialJsonSpec {
+  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(RsaKeyType)
+}
+
+class EdRepoResourceTufTargetInitialJsonSpec extends RepoResourceTufTargetInitialJsonSpec {
+  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(Ed25519KeyType)
+}
+
+trait RepoResourceTufTargetJsonSpec extends TufReposerverSpec
   with ResourceSpec with PatienceConfiguration with RepoSupport {
 
   override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
@@ -973,9 +997,18 @@ class RepoResourceTufTargetJsonSpec extends TufReposerverSpec
 
     sink.requestNext()
   }
+
 }
 
-class RepoResourceTufTargetStoreSpec extends TufReposerverSpec
+class RsaRepoResourceTufTargetJsonSpec extends RepoResourceTufTargetJsonSpec {
+  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(RsaKeyType)
+}
+
+class EdRepoResourceTufTargetJsonSpec extends RepoResourceTufTargetJsonSpec {
+  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(Ed25519KeyType)
+}
+
+trait RepoResourceTufTargetStoreSpec extends TufReposerverSpec
     with ResourceSpec  with Inspectors with Whenever with PatienceConfiguration {
 
   override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
@@ -1007,6 +1040,14 @@ class RepoResourceTufTargetStoreSpec extends TufReposerverSpec
       messages.last shouldBe a[TufTargetAdded]
     }
   }
+}
+
+class RsaRepoResourceTufTargetStoreSpec extends RepoResourceTufTargetStoreSpec {
+  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(RsaKeyType)
+}
+
+class EdRepoResourceTufTargetStoreSpec extends RepoResourceTufTargetStoreSpec {
+  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(Ed25519KeyType)
 }
 
 object JsonErrors {

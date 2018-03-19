@@ -5,7 +5,7 @@ import akka.http.scaladsl.model.{HttpEntity, Multipart, StatusCodes}
 import akka.util.ByteString
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.reposerver.target_store.{S3TargetStoreEngine, TargetStore}
-import com.advancedtelematic.tuf.reposerver.util.{ResourceSpec, TufReposerverSpec}
+import com.advancedtelematic.tuf.reposerver.util._
 import org.scalatest.{BeforeAndAfterAll, Inspectors}
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.prop.Whenever
@@ -22,6 +22,9 @@ class S3StorageResourceIntegrationSpec extends TufReposerverSpec
   override lazy val targetStore = new TargetStore(fakeKeyserverClient, s3Storage, fakeHttpClient, messageBusPublisher)
 
   private val tufTargetsPublisher = new TufTargetsPublisher(messageBusPublisher)
+
+  // make sure the key type is not used
+  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(null)
 
   override lazy val routes = new RepoResource(fakeKeyserverClient, namespaceValidation,
     targetStore, tufTargetsPublisher).route
