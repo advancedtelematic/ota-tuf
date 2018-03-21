@@ -83,6 +83,7 @@ object TufDataType {
   sealed trait KeyType {
     type Pub <: TufKey
     type Priv <: TufPrivateKey
+    type Pair <: TufKeyPair
 
     val crypto: TufCrypto[this.type]
   }

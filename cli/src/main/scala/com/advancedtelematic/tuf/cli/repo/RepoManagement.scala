@@ -21,8 +21,7 @@ import io.circe.jawn._
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Json}
 import org.slf4j.LoggerFactory
-
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
@@ -58,7 +57,7 @@ object RepoManagement {
     }
 
     def copyEntries(src: ZipFile, dest: ZipOutputStream): Try[Unit] = {
-      val entries = src.entries().map { zipEntry =>
+      val entries = src.entries().asScala.map { zipEntry =>
         val is = src.getInputStream(zipEntry)
 
         if (zipEntry.getName != zipTargetKeyName.publicKeyName &&
