@@ -9,7 +9,7 @@ import akka.stream.ActorMaterializer
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.crypt.TufCrypto._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RSATufKeyPair, RsaKeyType}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RsaKeyType}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.{VaultKey, VaultResourceNotFound}
 import com.advancedtelematic.tuf.util.TufKeyserverSpec
 import io.circe.Json
@@ -29,34 +29,8 @@ class VaultClientIntegrationSpec extends TufKeyserverSpec
 
   lazy val vault = VaultClient(vaultAddr, vaultToken, vaultMount)
 
-  test("creates/finds a key") {
-    val RSATufKeyPair(publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
-
-    vault.createKey(VaultKey(publicKey.id, RsaKeyType, publicKey, privateKey)).futureValue
-
-    vault.findKey(publicKey.id).map(_.privateKey).futureValue shouldBe privateKey
-  }
-
-  test("deletes a key") {
-    val RSATufKeyPair(publicKey, privateKey) = TufCrypto.generateKeyPair(RsaKeyType, 2048)
-
-    vault.createKey(VaultKey(publicKey.id, RsaKeyType, publicKey, privateKey)).futureValue
-
-    vault.deleteKey(publicKey.id).futureValue
-
-    vault.findKey(publicKey.id).failed.futureValue shouldBe VaultResourceNotFound
-  }
-
   test("renews the token") {
     vault.renewToken().futureValue shouldBe(())
-  }
-
-  test("can store ed25519 key") {
-    val pair = TufCrypto.generateKeyPair(Ed25519KeyType, 256)
-
-    vault.createKey(VaultKey(pair.pubkey.id, Ed25519KeyType, pair.pubkey, pair.privkey)).futureValue
-
-    vault.findKey(pair.pubkey.id).map(_.privateKey).futureValue.keyval.getEncoded shouldBe pair.privkey.keyval.getEncoded
   }
 
   test("can decode a legacy key") {
@@ -76,4 +50,29 @@ class VaultClientIntegrationSpec extends TufKeyserverSpec
 
     vault.findKey(pair.pubkey.id).map(_.privateKey).futureValue shouldBe pair.privkey
   }
+
+  def keySpecific(keyType: KeyType, name: String): Unit = {
+
+    test("creates/finds a key " + name) {
+      val keyPair = TufCrypto.generateKeyPair(keyType, keyType.crypto.defaultKeySize)
+
+      vault.createKey(VaultKey(keyPair.pubkey.id, keyType, keyPair.pubkey, keyPair.privkey)).futureValue
+
+      vault.findKey(keyPair.pubkey.id).map(_.privateKey).futureValue shouldBe keyPair.privkey
+    }
+
+    test("deletes a key " + name) {
+      val keyPair = TufCrypto.generateKeyPair(keyType, keyType.crypto.defaultKeySize)
+
+      vault.createKey(VaultKey(keyPair.pubkey.id, keyType, keyPair.pubkey, keyPair.privkey)).futureValue
+
+      vault.deleteKey(keyPair.pubkey.id).futureValue
+
+      vault.findKey(keyPair.pubkey.id).failed.futureValue shouldBe VaultResourceNotFound
+    }
+  }
+
+  testsFor(keySpecific(RsaKeyType, "RSA"))
+  testsFor(keySpecific(Ed25519KeyType, "Ed25519"))
+
 }

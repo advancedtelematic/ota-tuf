@@ -1,13 +1,12 @@
 package com.advancedtelematic.tuf.keyserver.daemon
 
-import akka.actor.{ActorSystem, Props}
+import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKitBase}
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, RsaKeyType}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RepoId, RoleType, RsaKeyType}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.tuf.util.TufKeyserverSpec
 import com.advancedtelematic.libats.test.DatabaseSpec
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
 import org.scalatest.concurrent.PatienceConfiguration.{Interval, Timeout}
@@ -54,45 +53,54 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
 
   private val interval = Interval(Span(300, Milliseconds))
 
-  test("processes pending generation requests") {
-    expectGenerated(KeyGenRequestStatus.GENERATED)
-  }
-
-  test("retries periodically for new pending requests") {
-    expectGenerated(KeyGenRequestStatus.GENERATED)
-
-    val keyGenReqs = Future.sequence {
-      (1 to 20).map { _ =>
-        val repoId = RepoId.generate()
-        val otherKeyGenReq = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType = RsaKeyType, keySize = 2048)
-        keyGenRepo.persist(otherKeyGenReq).map(_.id)
-      }
-    }
-
-    eventually(timeout, interval) {
-      val ids = keyGenReqs.flatMap { ids => Future.sequence(ids.map(keyGenRepo.find)) }.futureValue
-
-      forAll(ids) { id =>
-        id.status shouldBe KeyGenRequestStatus.GENERATED
-      }
-    }
-  }
-
-  test("recovers when single worker fails") {
-    expectGenerated(KeyGenRequestStatus.ERROR, size = Int.MaxValue)
-
-    expectGenerated(KeyGenRequestStatus.GENERATED)
-
-    expectGenerated(KeyGenRequestStatus.GENERATED)
-  }
-
-  def expectGenerated(newStatus: KeyGenRequestStatus, size: Int = 2048): Assertion = {
+  def expectGenerated(newStatus: KeyGenRequestStatus, kt: KeyType, size: Int): Assertion = {
     val repoId = RepoId.generate()
-    val keyGenRequest = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType = RsaKeyType, keySize = size)
+    val keyGenRequest = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT,
+      keyType = kt, keySize = size)
 
     keyGenRepo.persist(keyGenRequest).futureValue
     eventually(timeout, interval) {
       keyGenRepo.find(keyGenRequest.id).futureValue.status shouldBe newStatus
     }
   }
+
+  test("recovers when single worker fails") {
+    // this only gets to the generator for RSA
+    expectGenerated(KeyGenRequestStatus.ERROR, RsaKeyType, size = Int.MaxValue)
+
+    expectGenerated(KeyGenRequestStatus.GENERATED, RsaKeyType, 2048)
+
+    expectGenerated(KeyGenRequestStatus.GENERATED, RsaKeyType, 2048)
+  }
+
+  def keySpecific(keyType: KeyType, name: String): Unit = {
+
+    test("processes pending generation requests " + name) {
+      expectGenerated(KeyGenRequestStatus.GENERATED, keyType, keyType.crypto.defaultKeySize)
+    }
+
+    test("retries periodically for new pending requests " + name) {
+      expectGenerated(KeyGenRequestStatus.GENERATED, keyType, keyType.crypto.defaultKeySize)
+
+      val keyGenReqs = Future.sequence {
+        (1 to 20).map { _ =>
+          val repoId = RepoId.generate()
+          val otherKeyGenReq = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT,
+                                             keyType = keyType, keySize = keyType.crypto.defaultKeySize)
+          keyGenRepo.persist(otherKeyGenReq).map(_.id)
+        }
+      }
+
+      eventually(timeout, interval) {
+        val ids = keyGenReqs.flatMap { ids => Future.sequence(ids.map(keyGenRepo.find)) }.futureValue
+
+        forAll(ids) { id =>
+          id.status shouldBe KeyGenRequestStatus.GENERATED
+        }
+      }
+    }
+  }
+
+  testsFor(keySpecific(RsaKeyType, "RSA"))
+  testsFor(keySpecific(Ed25519KeyType, "Ed25519"))
 }

@@ -8,7 +8,6 @@ import com.advancedtelematic.libats.test.LongTest
 import com.advancedtelematic.tuf.keyserver.vault.VaultTokenRenewer.Renewed
 import com.advancedtelematic.tuf.util.TufKeyserverSpec
 import org.scalatest.BeforeAndAfterAll
-
 import scala.concurrent.duration._
 
 class VaultTokenRenewerSpec extends TufKeyserverSpec with TestKitBase with LongTest with BeforeAndAfterAll {
