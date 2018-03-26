@@ -10,7 +10,7 @@ import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.{ClientDataType, TufDataType}
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, Ed25519TufKeyPair, KeyId, RoleType, SignedPayload, TufKey, TufKeyPair, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RoleType, SignedPayload, TufKey, TufKeyPair, TufPrivateKey}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
@@ -29,44 +29,43 @@ abstract class CliSpec extends FunSuite with Matchers with ScalaFutures {
   override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(10, Seconds))
 }
 
-class FakeUserReposerverClient extends UserReposerverClient {
+class FakeUserReposerverClient(keyType: KeyType) extends UserReposerverClient {
   import scala.concurrent.ExecutionContext.Implicits.global
 
-  private val Ed25519TufKeyPair(oldPublicKey, oldPrivateKey) = TufCrypto.generateKeyPair(Ed25519KeyType, 256)
+  private val oldPair = keyType.crypto.generateKeyPair(keyType.crypto.defaultKeySize)
 
-  private val targetsPair = TufCrypto.generateKeyPair(Ed25519KeyType, 256)
+  private val targetsPair = keyType.crypto.generateKeyPair(keyType.crypto.defaultKeySize)
   private var targetsPubKey = targetsPair.pubkey
 
   private var unsignedTargets = TargetsRole(Instant.now.plus(1, ChronoUnit.DAYS), Map.empty, 1)
 
   private var unsignedRoot = RootRole(
     Map(
-    oldPublicKey.id -> oldPublicKey,
+    oldPair.pubkey.id -> oldPair.pubkey,
     targetsPubKey.id -> targetsPubKey),
     Map(
-      RoleType.ROOT -> RoleKeys(Seq(oldPublicKey.id), 1),
+      RoleType.ROOT -> RoleKeys(Seq(oldPair.pubkey.id), 1),
       RoleType.TARGETS -> RoleKeys(Seq(targetsPubKey.id), 1)
     ), 1, Instant.now.plus(1, ChronoUnit.HOURS))
 
   override def root(): Future[SignedPayload[RootRole]] = Future.successful {
-    val sig = TufCrypto.signPayload(oldPrivateKey, unsignedRoot).toClient(oldPublicKey.id)
+    val sig = TufCrypto.signPayload(oldPair.privkey, unsignedRoot).toClient(oldPair.pubkey.id)
     SignedPayload(Seq(sig), unsignedRoot)
   }
 
   override def deleteKey(keyId: KeyId): Future[Unit] = {
-    if(keyId == oldPublicKey.id)
+    if(keyId == oldPair.pubkey.id)
       Future.successful(())
     else
       Future.failed(new RuntimeException(s"[test] key not found $keyId"))
   }
 
-  override def pushSignedRoot(signedRoot: TufDataType.SignedPayload[ClientDataType.RootRole]) = {
-    if(signedRoot.isValidFor(oldPublicKey)) {
+  override def pushSignedRoot(signedRoot: TufDataType.SignedPayload[ClientDataType.RootRole]) =
+    if (signedRoot.isValidFor(oldPair.pubkey)) {
       unsignedRoot = signedRoot.signed
       Future.successful(())
     } else
       Future.failed(new RuntimeException("[test] invalid signatures for root role"))
-  }
 
   override def targets(): Future[TargetsResponse] = Future.successful {
     val sig = TufCrypto.signPayload(targetsPair.privkey, unsignedTargets).toClient(targetsPubKey.id)
@@ -92,5 +91,5 @@ class FakeUserReposerverClient extends UserReposerverClient {
   }
 
   override def fetchKeyPair(keyId: KeyId): Future[TufKeyPair] =
-    Future.successful(Ed25519TufKeyPair(oldPublicKey, oldPrivateKey)).filter(_.pubkey.id == keyId)
+    Future.successful(keyType.crypto.castToKeyPair(oldPair.pubkey, oldPair.privkey).get).filter(_.pubkey.id == keyId)
 }
