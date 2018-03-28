@@ -11,8 +11,7 @@ import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyType}
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RoleType, SignedPayload, TufKeyPair}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyId, KeyType, RoleType, RsaKeyType, SignedPayload, TufKeyPair}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
@@ -21,9 +20,25 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{RoleNotFound, TargetsResponse}
 import eu.timepit.refined.api.Refined
+import org.scalactic.source.Position
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
+
+trait KeyTypeSpecSupport {
+  self: FunSuite =>
+
+  def keyTypeClientTest(name: String)(fn: (FakeUserReposerverClient, KeyType) => Any)(implicit pos: Position): Unit = {
+    test(name + " Ed25519")(fn(FakeUserReposerverClient(Ed25519KeyType), Ed25519KeyType))
+    test(name + " RSA")(fn(FakeUserReposerverClient(RsaKeyType), RsaKeyType))
+  }
+
+  def keyTypeTest(name: String)(fn: KeyType => Any)(implicit pos: Position): Unit = {
+    test(name + " Ed25519")(fn(Ed25519KeyType))
+    test(name + " RSA")(fn(RsaKeyType))
+  }
+}
+
 
 abstract class CliSpec extends FunSuite with Matchers with ScalaFutures {
   Security.addProvider(new BouncyCastleProvider)
