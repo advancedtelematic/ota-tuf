@@ -23,9 +23,6 @@ class S3StorageResourceIntegrationSpec extends TufReposerverSpec
 
   private val tufTargetsPublisher = new TufTargetsPublisher(messageBusPublisher)
 
-  // make sure the key type is not used
-  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(null)
-
   override lazy val routes = new RepoResource(fakeKeyserverClient, namespaceValidation,
     targetStore, tufTargetsPublisher).route
 

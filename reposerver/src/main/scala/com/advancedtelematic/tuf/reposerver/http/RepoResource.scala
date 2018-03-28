@@ -1,6 +1,5 @@
 package com.advancedtelematic.tuf.reposerver.http
 
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
 import akka.http.scaladsl.unmarshalling._
 import PredefinedFromStringUnmarshallers.CsvSeq
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
@@ -8,20 +7,20 @@ import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server._
 import cats.data.Validated.{Invalid, Valid}
+import cats.implicits._
 import cats.syntax.either._
 import com.advancedtelematic.libats.data.RefinedUtils._
 import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf_server.data.Messages.TufTargetAdded
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId}
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, _}
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
 import com.advancedtelematic.tuf.reposerver.db.{RepoNamespaceRepositorySupport, TargetItemRepositorySupport}
-import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepository.SignedRoleNotFound
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RootRole, TargetCustom, TargetsRole}
+import com.advancedtelematic.libtuf.data.TufDataType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
-import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.libats.http.AnyvalMarshallingSupport._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -37,7 +36,7 @@ import com.advancedtelematic.libtuf_server.data.Marshalling._
 import com.advancedtelematic.tuf.reposerver.http.Errors.NoRepoForNamespace
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import eu.timepit.refined.api.Refined
-import io.circe.Json
+import io.circe.{Decoder, Encoder, Json}
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
 import scala.collection.immutable
@@ -45,7 +44,6 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 import slick.jdbc.MySQLProfile.api._
 import RoleChecksumHeader._
-import cats.implicits._
 
 class TufTargetsPublisher(messageBus: MessageBusPublisher)(implicit ec: ExecutionContext) {
   def targetAdded(namespace: Namespace, item: TargetItem): Future[Unit] =
@@ -66,12 +64,25 @@ class TufTargetsPublisher(messageBus: MessageBusPublisher)(implicit ec: Executio
     }
 }
 
+object RepoResource {
+
+  object CreateRepositoryRequest {
+    implicit val encoder: Encoder[CreateRepositoryRequest] = io.circe.generic.semiauto.deriveEncoder
+    implicit val decoder: Decoder[CreateRepositoryRequest] = io.circe.generic.semiauto.deriveDecoder
+  }
+
+  case class CreateRepositoryRequest(keyType: KeyType)
+}
+
 class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: NamespaceValidation,
                    targetStore: TargetStore, tufTargetsPublisher: TufTargetsPublisher)
                   (implicit val db: Database, val ec: ExecutionContext) extends Directives
   with TargetItemRepositorySupport
   with RepoNamespaceRepositorySupport
   with Settings {
+
+  import RepoResource.CreateRepositoryRequest
+  import CreateRepositoryRequest._
 
   private val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
   private val offlineSignedRoleStorage = new OfflineSignedRoleStorage(keyserverClient)
@@ -100,13 +111,18 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
     }
   }
 
-  private def createRepo(namespace: Namespace, repoId: RepoId): Route =
+  private def createRepo(namespace: Namespace, repoId: RepoId, keyType: KeyType): Route =
    complete {
      repoNamespaceRepo.ensureNotExists(namespace)
-       .flatMap(_ => keyserverClient.createRoot(repoId))
+       .flatMap(_ => keyserverClient.createRoot(repoId, keyType))
        .flatMap(_ => repoNamespaceRepo.persist(repoId, namespace))
        .map(_ => repoId)
    }
+
+  private def createRepo(namespace: Namespace, repoId: RepoId): Route =
+    entity(as[CreateRepositoryRequest]) { keyType =>
+      createRepo(namespace, repoId, keyType.keyType)
+    } ~ createRepo(namespace, repoId, defaultKeyType)
 
   private def addTargetItem(namespace: Namespace, item: TargetItem): Future[SignedPayload[Json]] =
     for {
@@ -235,6 +251,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
         (pathEnd & post) {
           createRepo(namespace, repoId)
         } ~
-          modifyRepoRoutes(repoId)
-    }
+        modifyRepoRoutes(repoId)
+      }
+
 }

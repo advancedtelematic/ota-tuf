@@ -8,7 +8,7 @@ import eu.timepit.refined._
 import com.advancedtelematic.libats.data.DataType.{Namespace, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util._
 import org.scalatest.time.{Seconds, Span}
@@ -20,7 +20,7 @@ import org.scalatest.BeforeAndAfter
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 
-trait UserReposerverClientSpec extends TufReposerverSpec
+class UserReposerverClientSpec(keyType: KeyType) extends TufReposerverSpec
   with ResourceSpec
   with FakeScalajHttpClient
   with RepoNamespaceRepositorySupport
@@ -43,7 +43,7 @@ trait UserReposerverClientSpec extends TufReposerverSpec
   }
 
   before {
-    fakeKeyserverClient.createRoot(repoId).futureValue
+    fakeKeyserverClient.createRoot(repoId, keyType).futureValue
   }
 
   after {
@@ -113,10 +113,6 @@ trait UserReposerverClientSpec extends TufReposerverSpec
   }
 }
 
-class RsaUserReposerverClientSpec extends UserReposerverClientSpec {
-  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(RsaKeyType)
-}
+class RsaUserReposerverClientSpec extends UserReposerverClientSpec(RsaKeyType)
 
-class EdUserReposerverClientSpec extends UserReposerverClientSpec {
-  val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(Ed25519KeyType)
-}
+class EdUserReposerverClientSpec extends UserReposerverClientSpec(Ed25519KeyType)

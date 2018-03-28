@@ -17,6 +17,7 @@ import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.libats.messaging.MessageBus
+import com.advancedtelematic.libtuf.data.TufDataType.RsaKeyType
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverHttpClient
 import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
@@ -44,6 +45,9 @@ trait Settings {
   lazy val useS3 = _config.getString("storage.type").equals("s3")
 
   lazy val userRepoSizeLimit = _config.getInt("reposerver.sizeLimit")
+
+  // default key type for repo creation when none is given
+  val defaultKeyType = RsaKeyType
 }
 
 object Boot extends BootApp
