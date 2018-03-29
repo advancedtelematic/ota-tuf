@@ -181,6 +181,7 @@ object Cli extends App with VersionInfo {
             opt[Unit]("force")
               .action { (_, c) => c.copy(force = true) }
               .text("Skip validation of remote root.json against local root.json")
+              .hidden()
           ),
         cmd("push")
           .action { (_, c) => c.copy(command = PushRoot) },

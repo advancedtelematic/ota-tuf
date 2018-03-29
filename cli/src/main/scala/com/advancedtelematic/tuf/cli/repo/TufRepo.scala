@@ -10,6 +10,7 @@ import java.time.{Instant, Period}
 import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import cats.data.Validated.{Invalid, Valid}
 import cats.syntax._
+import scala.async.Async._
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -20,7 +21,6 @@ import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, HardwareI
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
 import com.advancedtelematic.tuf.cli.DataType._
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoConfig, RepoName}
-import com.advancedtelematic.tuf.cli.repo.TufRepo.{RoleChecksumNotFound, RoleMissing, RootPullError, TargetsPullError}
 import com.advancedtelematic.tuf.cli.{CliCodecs, CliUtil}
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.refineV
@@ -32,7 +32,7 @@ import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{RoleNotFound, TargetsResponse}
 import java.nio.file.attribute.PosixFilePermission._
-
+import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import cats.data.{NonEmptyList, Validated, ValidatedNel}
 import com.advancedtelematic.libtuf.data.RootRoleValidation
 
@@ -180,6 +180,13 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     rootRolesF
   }
 
+  private def validateSameVersion(from: SignedPayload[RootRole], to: SignedPayload[RootRole]): Future[Unit] = {
+    if(from.asJson.canonical == to.asJson.canonical)
+      Future.successful(())
+    else
+      Future.failed(RootPullError(NonEmptyList.of("New root as same version as old root but is not the same root.json")))
+  }
+
   private def validatePath(reposerverClient: UserReposerverClient, from: SignedPayload[RootRole], to: SignedPayload[RootRole]): Future[Unit] = {
     val rootRolesF = fetchRootChain(reposerverClient, from.signed.version + 1, to.signed.version)
 
@@ -202,12 +209,17 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     def newRootIsvalid(newRoot: SignedPayload[RootRole]): Future[SignedPayload[RootRole]] = {
       if(skipLocalValidation)
         RootRoleValidation.rootIsValid(newRoot).toTry.toFuture
-      else {
-        for {
-          oldRoot <- readSignedRole[RootRole].toFuture
-          _ <- validatePath(reposerverClient, oldRoot, newRoot)
-        } yield newRoot
-      }
+      else
+        async {
+          val oldRoot = await(readSignedRole[RootRole].toFuture)
+
+          if (oldRoot.signed.version == newRoot.signed.version)
+            await(validateSameVersion(oldRoot, newRoot))
+          else
+            await(validatePath(reposerverClient, oldRoot, newRoot))
+
+          newRoot
+        }
     }
 
     for {
