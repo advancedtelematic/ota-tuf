@@ -345,6 +345,30 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
     repo.pullRoot(reposerverClient, skipLocalValidation = false).futureValue
   }
 
+  test("pull fails when new root.json is not the same as old root but has same version numbers") {
+    val repo = initRepo()
+    val reposerverClient = FakeUserReposerverClient(Ed25519KeyType)
+
+    val oldSignedRoot = repo.pullRoot(reposerverClient, skipLocalValidation = true).futureValue
+
+    val newRoot = oldSignedRoot.signed.copy(expires = Instant.now().plus(100, ChronoUnit.DAYS))
+    reposerverClient.setRoot(reposerverClient.sign(newRoot))
+
+    val error = repo.pullRoot(reposerverClient, skipLocalValidation = false).failed.futureValue
+
+    error shouldBe a[RootPullError]
+    error.asInstanceOf[RootPullError].errors.head shouldBe "New root as same version as old root but is not the same root.json"
+  }
+
+  test("pull succeeds when new root.json is the same as old json") {
+    val repo = initRepo()
+    val reposerverClient = FakeUserReposerverClient(Ed25519KeyType)
+
+    repo.pullRoot(reposerverClient, skipLocalValidation = true).futureValue
+
+    repo.pullRoot(reposerverClient, skipLocalValidation = false).futureValue shouldBe a[SignedPayload[RootRole]]
+  }
+
   test("pull fails when new root.json is not valid against local root.json") {
     val repo = initRepo()
     val reposerverClient = FakeUserReposerverClient(Ed25519KeyType)
