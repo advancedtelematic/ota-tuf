@@ -11,39 +11,34 @@ import com.advancedtelematic.tuf.cli.repo.CliKeyStorage
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 
-class CliKeyStorageSpec extends CliSpec {
+class CliKeyStorageSpec extends CliSpec with KeyTypeSpecSupport  {
   val tempDir = Files.createTempDirectory("tuf-keys")
 
   lazy val subject = new CliKeyStorage(tempDir)
 
-  def keySpecific[T <: KeyType, Pub <: T#Pub : ClassTag, Priv <: T#Priv : ClassTag](keyType: KeyType, name: String): Unit = {
-    test("generates a key " + name) {
-      val keyName = KeyName("test-key")
-      subject.genKeys(keyName, keyType)
+  keyTypeTest("generates a key ") { keyType =>
+    val keyName = KeyName("test-key")
+    subject.genKeys(keyName, keyType)
 
-      val (pub, priv) = subject.readKeyPair(keyName).get
+    val (pub, priv) = subject.readKeyPair(keyName).get
 
-      pub shouldBe a[Pub]
-      priv shouldBe a[Priv]
-    }
-
-    test("writes keys with limited permissions " + name) {
-      val keyName = KeyName("test-key-02")
-      subject.genKeys(keyName, keyType)
-
-      val perms = Files.getPosixFilePermissions(tempDir.resolve("keys").resolve(keyName.value + ".sec"))
-      perms.asScala shouldBe Set(OWNER_READ, OWNER_WRITE)
-    }
-
-    test("creates key directory with limited permissions "  + name) {
-      val keyName = KeyName("test-key-02")
-      subject.genKeys(keyName, keyType)
-
-      val perms = Files.getPosixFilePermissions(tempDir.resolve("keys"))
-      perms.asScala shouldBe Set(OWNER_READ, OWNER_WRITE, OWNER_EXECUTE)
-    }
+    pub.keytype shouldBe keyType
+    priv.keytype shouldBe keyType
   }
 
-  testsFor(keySpecific[RsaKeyType.type, RSATufKey, RSATufPrivateKey](RsaKeyType, "RSA"))
-  testsFor(keySpecific[Ed25519KeyType.type, Ed25519TufKey, Ed25519TufPrivateKey](Ed25519KeyType, "Ed25519"))
+  keyTypeTest("writes keys with limited permissions ") { keyType =>
+    val keyName = KeyName("test-key-02")
+    subject.genKeys(keyName, keyType)
+
+    val perms = Files.getPosixFilePermissions(tempDir.resolve("keys").resolve(keyName.value + ".sec"))
+    perms.asScala shouldBe Set(OWNER_READ, OWNER_WRITE)
+  }
+
+  keyTypeTest("creates key directory with limited permissions " ) { keyType =>
+    val keyName = KeyName("test-key-02")
+    subject.genKeys(keyName, keyType)
+
+    val perms = Files.getPosixFilePermissions(tempDir.resolve("keys"))
+    perms.asScala shouldBe Set(OWNER_READ, OWNER_WRITE, OWNER_EXECUTE)
+  }
 }

@@ -9,10 +9,12 @@ import akka.http.scaladsl.server.Route
 import scala.concurrent.duration._
 import akka.testkit.TestDuration
 import com.advancedtelematic.libats.test.DatabaseSpec
-import com.advancedtelematic.libtuf.data.TufDataType.RepoId
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RepoId, RsaKeyType}
 import com.advancedtelematic.tuf.keyserver.daemon.DefaultKeyGenerationOp
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.Key
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
+import org.scalactic.source.Position
+import org.scalatest.FunSuite
 
 import scala.concurrent.{Future, Promise}
 
@@ -46,6 +48,15 @@ trait RootGenerationSpecSupport {
         }
       }.map(_.flatten)
     }
+  }
+}
+
+trait KeyTypeSpecSupport {
+  self: FunSuite =>
+
+  def keyTypeTest(name: String)(fn: KeyType => Any)(implicit pos: Position): Unit = {
+    test(name + " Ed25519")(fn(Ed25519KeyType))
+    test(name + " RSA")(fn(RsaKeyType))
   }
 }
 

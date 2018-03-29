@@ -5,7 +5,7 @@ import akka.testkit.{ImplicitSender, TestKitBase}
 import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RepoId, RoleType, RsaKeyType}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
-import com.advancedtelematic.tuf.util.TufKeyserverSpec
+import com.advancedtelematic.tuf.util.{KeyTypeSpecSupport, TufKeyserverSpec}
 import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
@@ -20,6 +20,7 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
   with KeyGenRequestSupport
   with Eventually
   with BeforeAndAfterAll
+  with KeyTypeSpecSupport
   with Inspectors {
 
   override implicit lazy val system: ActorSystem = ActorSystem(this.getClass.getSimpleName)
@@ -73,34 +74,28 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
     expectGenerated(KeyGenRequestStatus.GENERATED, RsaKeyType, 2048)
   }
 
-  def keySpecific(keyType: KeyType, name: String): Unit = {
-
-    test("processes pending generation requests " + name) {
+  keyTypeTest("processes pending generation requests ") { keyType =>
       expectGenerated(KeyGenRequestStatus.GENERATED, keyType, keyType.crypto.defaultKeySize)
     }
 
-    test("retries periodically for new pending requests " + name) {
-      expectGenerated(KeyGenRequestStatus.GENERATED, keyType, keyType.crypto.defaultKeySize)
+  keyTypeTest("retries periodically for new pending requests ") { keyType =>
+    expectGenerated(KeyGenRequestStatus.GENERATED, keyType, keyType.crypto.defaultKeySize)
 
-      val keyGenReqs = Future.sequence {
-        (1 to 20).map { _ =>
-          val repoId = RepoId.generate()
-          val otherKeyGenReq = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT,
-                                             keyType = keyType, keySize = keyType.crypto.defaultKeySize)
-          keyGenRepo.persist(otherKeyGenReq).map(_.id)
-        }
+    val keyGenReqs = Future.sequence {
+      (1 to 20).map { _ =>
+        val repoId = RepoId.generate()
+        val otherKeyGenReq = KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT,
+          keyType = keyType, keySize = keyType.crypto.defaultKeySize)
+        keyGenRepo.persist(otherKeyGenReq).map(_.id)
       }
+    }
 
-      eventually(timeout, interval) {
-        val ids = keyGenReqs.flatMap { ids => Future.sequence(ids.map(keyGenRepo.find)) }.futureValue
+    eventually(timeout, interval) {
+      val ids = keyGenReqs.flatMap { ids => Future.sequence(ids.map(keyGenRepo.find)) }.futureValue
 
-        forAll(ids) { id =>
-          id.status shouldBe KeyGenRequestStatus.GENERATED
-        }
+      forAll(ids) { id =>
+        id.status shouldBe KeyGenRequestStatus.GENERATED
       }
     }
   }
-
-  testsFor(keySpecific(RsaKeyType, "RSA"))
-  testsFor(keySpecific(Ed25519KeyType, "Ed25519"))
 }

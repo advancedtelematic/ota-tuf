@@ -10,6 +10,10 @@ import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMe
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.Encoder
 import TufCrypto.PublicKeyOps
+import com.advancedtelematic.libtuf.data.TufDataType.RsaKeyType
+
+import scala.reflect.ClassTag
+
 
 object TufDataType {
   final case class ValidHardwareIdentifier()
@@ -80,13 +84,14 @@ object TufDataType {
 
   case class SignedPayload[T : Encoder](signatures: Seq[ClientSignature], signed: T)
 
-  sealed trait KeyType {
+  sealed trait KeyType { self =>
     type Pub <: TufKey
     type Priv <: TufPrivateKey
     type Pair <: TufKeyPair
 
     val crypto: TufCrypto[this.type]
   }
+
   case object RsaKeyType extends KeyType {
     type Pub = RSATufKey
     type Priv = RSATufPrivateKey
