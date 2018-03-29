@@ -3,23 +3,26 @@ package com.advancedtelematic.tuf.cli
 import java.net.URI
 import java.nio.file.Files
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
-import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole, TufRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole, TargetCustom, TargetsRole, TufRole}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, Ed25519TufKeyPair, Ed25519TufPrivateKey, KeyType, RSATufPrivateKey, RoleType, RsaKeyType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RSATufPrivateKey, RsaKeyType}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, Ed25519TufPrivateKey, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, TufRepo}
 import io.circe.jawn._
 import eu.timepit.refined.api.Refined
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
+import com.advancedtelematic.tuf.cli.repo.TufRepo.{RoleMissing, RootPullError}
 
 import scala.concurrent.Future
 import io.circe.syntax._
-
 import scala.reflect.ClassTag
+import scala.util.Success
 
 class TufRepoSpec extends CliSpec {
 
@@ -29,37 +32,47 @@ class TufRepoSpec extends CliSpec {
     val repo = new TufRepo(RepoName(RandomNames() + "-repo"), Files.createTempDirectory("tuf-repo").resolve("repo"))
     repo.initRepoDirs().get
     repo.initTargets(11, Instant.now).get
+
+    val rootKeys = repo.genKeys(KeyName("root"), Ed25519KeyType).get
+    val targetKeys = repo.genKeys(KeyName("target"), Ed25519KeyType).get
+
+    val keys = Map(rootKeys.pubkey.id -> rootKeys.pubkey, targetKeys.pubkey.id -> targetKeys.pubkey)
+
+    val roles = Map(
+      RoleType.ROOT -> RoleKeys(Seq(rootKeys.pubkey.id), threshold = 1),
+      RoleType.TARGETS -> RoleKeys(Seq(targetKeys.pubkey.id), threshold = 1)
+    )
+
+    val rootRole = RootRole(keys, roles, version = 1, Instant.now.plus(365, ChronoUnit.DAYS))
+
+    repo.writeUnsignedRole(rootRole)
+
     repo
   }
 
   def keySpecific[T <: KeyType, Priv <: T#Priv : ClassTag](keyType: KeyType, name: String): Unit = {
 
-    def rotate(repo: TufRepo, reposerverClient: FakeUserReposerverClient = new FakeUserReposerverClient(keyType)):
-                                                                  Future[(TufKey, TufKey, SignedPayload[RootRole])] = {
+    def moveOffline(repo: TufRepo, reposerverClient: FakeUserReposerverClient = FakeUserReposerverClient(keyType)): Future[(TufKey, TufKey, SignedPayload[RootRole])] = {
       val oldRootName = KeyName(s"oldroot${repo.name.value}")
       val newRootName = KeyName(s"newroot${repo.name.value}")
       val newTargetsName = KeyName(s"targets${repo.name.value}")
 
-      val pub = repo.genKeys(newRootName, keyType, keyType.crypto.defaultKeySize).get.pubkey
-      val pubT = repo.genKeys(newTargetsName, keyType, keyType.crypto.defaultKeySize).get.pubkey
+      val pub = repo.genKeys(newRootName, keyType).get.pubkey
+      val pubT = repo.genKeys(newTargetsName, keyType).get.pubkey
 
-      repo.rotateRoot(reposerverClient, newRootName, oldRootName, newTargetsName, None).map { s =>
-        (pub, pubT, s)
-      }
+      repo.moveRootOffline(reposerverClient, newRootName, oldRootName, newTargetsName, None).map { s => (pub, pubT, s) }
     }
 
     test("adds a key to a repo " + name) {
       val repo = initRepo()
-
-      repo.genKeys(KeyName("newkey"), keyType, keyType.crypto.defaultKeySize)
+      repo.genKeys(KeyName("newkey"), keyType)
 
       Files.exists(repo.repoPath.resolve("keys").resolve("newkey.pub")) shouldBe true
     }
 
     test("root after rotate contains new key ids " + name) {
       val repo = initRepo()
-
-      val (pub, pubT, signedPayload) = rotate(repo).futureValue
+      val (pub, pubT, signedPayload) = moveOffline(repo).futureValue
 
       signedPayload.signed shouldBe a[RootRole]
       signedPayload.signed.keys.keys should contain(pub.id)
@@ -71,13 +84,13 @@ class TufRepoSpec extends CliSpec {
     test("root after rotate is properly signed " + name) {
       val repo = initRepo()
 
-      val client = new FakeUserReposerverClient(keyType)
+      val client = FakeUserReposerverClient(keyType)
 
       val oldRoot = client.root().futureValue.signed
       val oldRootPubKeyId = oldRoot.roles(RoleType.ROOT).keyids.head
       val oldRootPub = oldRoot.keys(oldRootPubKeyId)
 
-      val (pub, pubT, signedPayload) = rotate(repo, client).futureValue
+      val (pub, pubT, signedPayload) = moveOffline(repo, client).futureValue
 
       signedPayload.isValidFor(pub)
       signedPayload.isValidFor(oldRootPub)
@@ -85,12 +98,10 @@ class TufRepoSpec extends CliSpec {
 
     test("does not overwrite existing unsigned targets.json during rotate " + name) {
       val repo = initRepo()
-
-      val client = new FakeUserReposerverClient(keyType)
-
+      val client = FakeUserReposerverClient(keyType)
       val signedTargets = repo.readUnsignedRole[TargetsRole].get
 
-      rotate(repo, client).futureValue
+      moveOffline(repo, client).futureValue
 
       repo.readUnsignedRole[TargetsRole].get.asJson shouldBe signedTargets.asJson
     }
@@ -98,13 +109,13 @@ class TufRepoSpec extends CliSpec {
     test("pulls targets.json from reposerver during rotate " + name) {
       val repo = initRepo()
 
-      val client = new FakeUserReposerverClient(keyType)
+      val client = FakeUserReposerverClient(keyType)
 
       Files.delete(repo.repoPath.resolve("roles/unsigned/targets.json"))
 
       val signedTargets = client.targets().futureValue
 
-      rotate(repo, client).futureValue
+      moveOffline(repo, client).futureValue
 
       repo.readUnsignedRole[TargetsRole].get.asJson shouldBe signedTargets.targets.signed.asJson
 
@@ -113,9 +124,7 @@ class TufRepoSpec extends CliSpec {
 
     test("new root role contains new root id " + name) {
       val repo = initRepo()
-
-      val (pub, pubT, signedPayload) = rotate(repo).futureValue
-
+      val (pub, pubT, signedPayload) = moveOffline(repo).futureValue
       val rootRole = signedPayload.signed
 
       rootRole.roles(RoleType.ROOT).keyids should contain(pub.id)
@@ -127,12 +136,9 @@ class TufRepoSpec extends CliSpec {
 
     test("new root role does not contain old targets keys " + name) {
       val repo = initRepo()
-
-      val reposerverClient = new FakeUserReposerverClient(keyType)
-
+      val reposerverClient = FakeUserReposerverClient(keyType)
       val oldTargetsKeyId = reposerverClient.root().map(_.signed.roles(RoleType.TARGETS).keyids.head).futureValue
-      val (_, pubT, signedPayload) = rotate(repo, reposerverClient).futureValue
-
+      val (_, pubT, signedPayload) = moveOffline(repo, reposerverClient).futureValue
       val rootRole = signedPayload.signed
 
       rootRole.keys.keys should contain(pubT.id)
@@ -141,8 +147,7 @@ class TufRepoSpec extends CliSpec {
 
     test("new root role has proper version bump " + name) {
       val repo = initRepo()
-
-      val (pub, pubT, signedPayload) = rotate(repo).futureValue
+      val (pub, pubT, signedPayload) = moveOffline(repo).futureValue
 
       val rootRole = signedPayload.signed
 
@@ -152,8 +157,7 @@ class TufRepoSpec extends CliSpec {
     test("rotate key is signed by both root keys " + name) {
       val repo = initRepo()
       val keyStorage = new CliKeyStorage(repo.repoPath)
-
-      val (newPubKey, _, signedPayload) = rotate(repo).futureValue
+      val (newPubKey, _, signedPayload) = moveOffline(repo).futureValue
       val oldPubKey = keyStorage.readPublicKey(KeyName(s"oldroot${repo.name.value}")).get
 
       signedPayload.isValidFor(newPubKey) shouldBe true
@@ -163,9 +167,7 @@ class TufRepoSpec extends CliSpec {
     test("saves deleted root when rotating " + name) {
       val repo = initRepo()
       val keyStorage = new CliKeyStorage(repo.repoPath)
-
-      rotate(repo).futureValue
-
+      moveOffline(repo).futureValue
       val oldPrivateKey = keyStorage.readPrivateKey(KeyName(s"oldroot${repo.name.value}")).get
 
       oldPrivateKey shouldBe a[Priv]
@@ -209,24 +211,21 @@ class TufRepoSpec extends CliSpec {
       val repo = initRepo()
 
       val targetsKeyName = KeyName("somekey")
-      repo.genKeys(targetsKeyName, Ed25519KeyType, 256).get
+      repo.genKeys(targetsKeyName, keyType).get
 
-      repo.signTargets(targetsKeyName).get
+      repo.signTargets(Seq(targetsKeyName)).get
 
       val payload = repo.readSignedRole[TargetsRole].get
       payload.signed.version shouldBe 12
-
-      val unsignedPayload = repo.readUnsignedRole[TargetsRole].get
-      unsignedPayload.version shouldBe 12
     }
 
     test("sets version when specified " + name) {
       val repo = initRepo()
 
       val targetsKeyName = KeyName("somekey")
-      repo.genKeys(targetsKeyName, Ed25519KeyType, 256).get
+      repo.genKeys(targetsKeyName, keyType).get
 
-      repo.signTargets(targetsKeyName, Option(21)).get
+      repo.signTargets(Seq(targetsKeyName), Option(21)).get
 
       val payload = repo.readSignedRole[TargetsRole].get
       payload.signed.version shouldBe 21
@@ -234,11 +233,10 @@ class TufRepoSpec extends CliSpec {
 
     test("signs targets " + name) {
       val repo = initRepo()
-
       val targetsKeyName = KeyName("somekey")
-      val pub = repo.genKeys(targetsKeyName, Ed25519KeyType, 256).get.pubkey
+      val pub = repo.genKeys(targetsKeyName, keyType).get.pubkey
 
-      val path = repo.signTargets(targetsKeyName).get
+      val path = repo.signTargets(Seq(targetsKeyName)).get
       val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).valueOr(throw _)
 
       payload.signatures.map(_.keyid) should contain(pub.id)
@@ -246,50 +244,207 @@ class TufRepoSpec extends CliSpec {
       payload.isValidFor(pub) shouldBe true
     }
 
-    test("pushes targets to reposerver " + name) {
+    test("pushed targets are validated against new targets key when moving root offline" + name) {
       import scala.collection.JavaConverters._
-
       val repo = initRepo()
-
-      val reposerverClient = new FakeUserReposerverClient(keyType)
-
-      val (_, pubTargets, _) = rotate(repo, reposerverClient).futureValue
-
-      repo.signTargets(KeyName(s"targets${repo.name.value}")).get
+      val reposerverClient = FakeUserReposerverClient(keyType)
+      val (_, pubTargets, _) = moveOffline(repo, reposerverClient).futureValue
+      repo.signTargets(Seq(KeyName(s"targets${repo.name.value}"))).get
       Files.write(repo.repoPath.resolve("roles").resolve(TufRole.targetsTufRole.checksumPath), Seq("997890bc85c5796408ceb20b0ca75dabe6fe868136e926d24ad0f36aa424f99d").asJava)
 
       val payload = repo.pushTargets(reposerverClient).futureValue
 
       payload.isValidFor(pubTargets) shouldBe true
     }
+  }
 
-    test("pushes targets pub key to reposerver " + name) {
-      val repo = initRepo()
+  test("saves targets.json and checksum to file when pulling") {
+    val repo = initRepo()
 
-      val reposerverClient = new FakeUserReposerverClient(keyType)
+    val reposerverClient = FakeUserReposerverClient(Ed25519KeyType)
 
-      val (_, pubTargets, _) = rotate(repo, reposerverClient).futureValue
+    val rootRole = reposerverClient.root().futureValue
 
-      val pushedKey = repo.pushTargetsKey(reposerverClient, KeyName(s"targets${repo.name.value}")).futureValue
+    repo.pullTargets(reposerverClient, rootRole.signed).futureValue
 
-      pushedKey shouldBe pubTargets
+    repo.readUnsignedRole[TargetsRole].get shouldBe a[TargetsRole]
+
+    Files.readAllLines(repo.repoPath.resolve("roles/targets.json.checksum")).get(0) shouldNot be(empty)
+  }
+
+  test("can pull a root.json when no local root is available, when forcing") {
+    val repo = initRepo()
+    val reposerverClient = FakeUserReposerverClient(Ed25519KeyType)
+
+    val newRoot = repo.pullRoot(reposerverClient, skipLocalValidation = true).futureValue
+
+    val signed = repo.readSignedRole[RootRole]
+    signed shouldBe a[Success[_]]
+
+    signed.get.asJson shouldBe newRoot.asJson
+
+    val rootRole = repo.readUnsignedRole[RootRole]
+    rootRole.get.asJson shouldBe newRoot.signed.asJson
+  }
+
+  test("adds root key to unsigned root") {
+    val repo = initRepo()
+
+    val keyname = KeyName("somekey")
+    val keyPair = repo.genKeys(keyname, Ed25519KeyType).get
+
+    repo.addRootKeys(List(keyname))
+
+    val rootRole = repo.readUnsignedRole[RootRole].get
+
+    rootRole.keys(keyPair.pubkey.id) shouldBe keyPair.pubkey
+    rootRole.roles(RoleType.ROOT).keyids should contain(keyPair.pubkey.id)
+  }
+
+  test("removes root key from unsigned root") {
+    val repo = initRepo()
+
+    val keyname = KeyName("somekey")
+    val keyPair = repo.genKeys(keyname, Ed25519KeyType).get
+
+    repo.addRootKeys(List(keyname))
+    val keyIds = repo.keyIdsByName(List(KeyName("root"))).get
+    repo.removeRootKeys(keyIds)
+
+    val rootRole = repo.readUnsignedRole[RootRole].get
+
+    rootRole.roles(RoleType.ROOT).keyids shouldBe Seq(keyPair.pubkey.id)
+  }
+
+  test("can remove keys using key ids") {
+    val repo = initRepo()
+
+    val keyname = KeyName("somekey")
+    val keyPair = repo.genKeys(keyname, Ed25519KeyType).get
+    val othername = KeyName("otherkey")
+    val otherKeyPair = repo.genKeys(othername, Ed25519KeyType).get
+
+    repo.addRootKeys(List(keyname, othername))
+    repo.removeRootKeys(List(keyPair.pubkey.id))
+
+    val rootRole = repo.readUnsignedRole[RootRole].get
+
+    rootRole.roles(RoleType.ROOT).keyids should contain(otherKeyPair.pubkey.id)
+    rootRole.roles(RoleType.ROOT).keyids shouldNot contain(keyPair.pubkey.id)
+  }
+
+  test("pull succeeds when new root.json is valid against local root.json") {
+    val repo = initRepo()
+    val reposerverClient = FakeUserReposerverClient(Ed25519KeyType)
+
+    val oldRoot = repo.pullRoot(reposerverClient, skipLocalValidation = true).futureValue
+
+    val newUnsignedRoot = oldRoot.signed.copy(version = oldRoot.signed.version + 1)
+    val newRoot = reposerverClient.sign(newUnsignedRoot)
+
+    reposerverClient.pushSignedRoot(newRoot).futureValue
+
+    repo.pullRoot(reposerverClient, skipLocalValidation = false).futureValue
+  }
+
+  test("pull fails when new root.json is not valid against local root.json") {
+    val repo = initRepo()
+    val reposerverClient = FakeUserReposerverClient(Ed25519KeyType)
+
+    val oldRoot = repo.pullRoot(reposerverClient, skipLocalValidation = true).futureValue
+
+    val newUnsignedRoot = oldRoot.signed.copy(version = oldRoot.signed.version + 1)
+    reposerverClient.setRoot(SignedPayload(Seq.empty, newUnsignedRoot))
+
+    val error = repo.pullRoot(reposerverClient, skipLocalValidation = false).failed.futureValue
+
+    val oldKeyId = oldRoot.signed.roles(RoleType.ROOT).keyids.head
+
+    error shouldBe a[RootPullError]
+    error.getMessage should include(s"No signature found for key $oldKeyId")
+    error.getMessage should include(s"Root role version 1 requires 1 valid signatures in version 2, 0 supplied")
+  }
+
+  test("fails with proper error when cannot find root at specified version") {
+    val repo = initRepo()
+    val reposerverClient = FakeUserReposerverClient(Ed25519KeyType)
+
+    val oldRoot = repo.pullRoot(reposerverClient, skipLocalValidation = true).futureValue
+
+    val newUnsignedRoot = oldRoot.signed.copy(version = oldRoot.signed.version + 10)
+    reposerverClient.setRoot(SignedPayload(Seq.empty, newUnsignedRoot))
+
+    val error = repo.pullRoot(reposerverClient, skipLocalValidation = false).failed.futureValue
+
+    error shouldBe a[RootPullError]
+    error.getMessage should include(s"role with version 2 not found")
+  }
+
+  test("validates a root chain") {
+    val repo = initRepo()
+    val reposerverClient = FakeUserReposerverClient(Ed25519KeyType)
+
+    val oldRoot = repo.pullRoot(reposerverClient, skipLocalValidation = true).futureValue
+
+    for(i <- 1 until 10) {
+      val newUnsignedRoot = oldRoot.signed.copy(version = oldRoot.signed.version + i)
+      val newRoot = reposerverClient.sign(newUnsignedRoot)
+      reposerverClient.pushSignedRoot(newRoot).futureValue
     }
 
+    val newRoot = repo.pullRoot(reposerverClient, skipLocalValidation = false).futureValue
 
-    test("saves targets.json and checksum to file when pulling " + name) {
-      val repo = initRepo()
+    newRoot shouldBe a[SignedPayload[_]]
+    newRoot.signed shouldBe a[RootRole]
+  }
 
-      val reposerverClient = new FakeUserReposerverClient(keyType)
+  test("pull fails when local root does not exist") {
+    val repo = initRepo()
+    val reposerverClient = FakeUserReposerverClient(Ed25519KeyType)
 
-      val rootRole = reposerverClient.root().futureValue
+    val error = repo.pullRoot(reposerverClient, skipLocalValidation = false).failed.futureValue
 
-      repo.pullTargets(reposerverClient, rootRole.signed).futureValue
+    error shouldBe a[RoleMissing[_]]
+  }
 
-      repo.readUnsignedRole[TargetsRole].get shouldBe a[TargetsRole]
+  test("can push root.json") {
+    val repo = initRepo()
+    val reposerverClient = FakeUserReposerverClient(Ed25519KeyType)
 
-      Files.readAllLines(repo.repoPath.resolve("roles/targets.json.checksum")).get(0) shouldNot be(empty)
-    }
+    repo.pullRoot(reposerverClient, skipLocalValidation = true).futureValue
 
+    repo.pushRoot(reposerverClient).futureValue
+
+    val signed = repo.readSignedRole[RootRole]
+    signed shouldBe a[Success[_]]
+  }
+
+  test("signs root") {
+    val repo = initRepo()
+
+    val keyname = KeyName("somekey")
+    val pub = repo.genKeys(keyname, Ed25519KeyType).get.pubkey
+
+    val keyname02 = KeyName("somekey02")
+    val pub02 = repo.genKeys(keyname02, Ed25519KeyType).get.pubkey
+
+    val path = repo.signRoot(Seq(keyname, keyname02)).get
+    val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[RootRole]]).valueOr(throw _)
+
+    payload.isValidFor(pub) shouldBe true
+    payload.isValidFor(pub02) shouldBe true
+  }
+
+  test("signing root increases version") {
+    val repo = initRepo()
+
+    val keyname = KeyName("somekey")
+    val pub = repo.genKeys(keyname, Ed25519KeyType).get.pubkey
+
+    val path = repo.signRoot(Seq(keyname)).get
+    val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[RootRole]]).valueOr(throw _)
+
+    payload.signed.version shouldBe 2
   }
 
   keySpecific[RsaKeyType.type,RSATufPrivateKey](RsaKeyType, "RSA")

@@ -191,11 +191,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       (get & path(JsonRoleTypeMetaPath)) { roleType =>
         findRole(repoId, roleType)
       } ~
-      (put & path("keys" / "targets") & entity(as[TufKey])) { key =>
-        val f = keyserverClient.addTargetKey(repoId, key).map(_ => StatusCodes.NoContent)
-        complete(f)
-      } ~
-      pathPrefix("targets") {
+       pathPrefix("targets") {
         path(TargetFilenamePath) { filename =>
           post {
             entity(as[RequestTargetItem]) { clientItem =>

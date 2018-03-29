@@ -804,22 +804,6 @@ trait RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  test("adding a target public key delegates to keyserver") {
-    val repoId = addTargetToRepo()
-    val pub = TufCrypto.generateKeyPair(Ed25519KeyType, 256).pubkey
-
-    Put(apiUri(s"repo/${repoId.show}/keys/targets"), pub) ~> routes ~> check {
-      status shouldBe StatusCodes.NoContent
-    }
-
-    Get(apiUri(s"repo/${repoId.show}/root.json")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      val rootRole = responseAs[SignedPayload[RootRole]].signed
-      rootRole.roles(RoleType.TARGETS).keyids should contain(pub.id)
-      rootRole.keys(pub.id) shouldBe pub
-    }
-  }
-
   test("return offline targets.json even if expired") {
     val repoId = addTargetToRepo()
 

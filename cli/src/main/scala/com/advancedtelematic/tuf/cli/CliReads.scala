@@ -40,9 +40,9 @@ object CliReads {
   }
 
   implicit val keyTypeRead: Read[KeyType] = Read.reads {
-    case "ec" => Ed25519KeyType
+    case "ed25519" => Ed25519KeyType
     case "rsa" => RsaKeyType
-    case str => throw new IllegalArgumentException(s"Invalid keytype: $str valid: (ec, rsa)")
+    case str => throw new IllegalArgumentException(s"Invalid keytype: $str valid: (ed25519, rsa)")
   }
 
   implicit def anyvalRead[T <: AnyVal](implicit gen: Generic.Aux[T, String :: HNil]): Read[T] = Read.stringRead.map { str =>

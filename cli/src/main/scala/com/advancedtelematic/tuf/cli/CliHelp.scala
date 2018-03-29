@@ -1,23 +1,46 @@
 package com.advancedtelematic.tuf.cli
 
+import cats.syntax.flatMap
+import com.advancedtelematic.libats.data.ErrorRepresentation
+import com.advancedtelematic.libtuf.data.ErrorCodes
+import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
 import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
+import io.circe.Json
 import org.slf4j.LoggerFactory
+import io.circe.syntax._
 
 import scala.concurrent.Future
 
 object CliHelp {
   lazy val log = LoggerFactory.getLogger(this.getClass)
 
-  val showError: PartialFunction[Throwable, Throwable] = {
+  private val showError: PartialFunction[Throwable, Throwable] = {
     case ex =>
-      log.info(ex.getMessage)
+      log.error("An error occurred", ex)
       ex
   }
 
-  private val explainError: PartialFunction[Throwable, Throwable] = showError andThen {
+  private val explainError: PartialFunction[Throwable, Throwable] = {
+    case ex: HttpjClientError if ex.remoteError.code == ErrorCodes.KeyServer.InvalidRootRole =>
+      val causes = for {
+        errorRepr <- ex.remoteError.cause.flatMap(_.as[ErrorRepresentation].toOption)
+        errorMsgs <- errorRepr.cause.flatMap(_.as[List[String]].toOption)
+      } yield (errorRepr.description :: errorMsgs).mkString("\n  ")
+
+      log.debug(ex.remoteError.asJson.noSpaces)
+
+      log.info(
+        s"""Server could not validate the root role:
+           |  ${causes.getOrElse(ex.msg)}
+          """.stripMargin)
+
+      ex
+
     case ex: TargetsPullError =>
       log.info(
         s"""
+          | ${ex.msg}
+          |
           |Common causes for this error include:
           |
           |- You are trying to pull a version of targets.json signed with keys no longer present on root.json.
@@ -29,12 +52,10 @@ object CliHelp {
           |  Did you already rotate a root.json with different keys and you are trying to rotate it again using old keys?
           |  Did you remove the public key currently associated to the targets role?
           |
-          |  If the targets key is still online on the server, you can try downloading a fresh credentials.zip, otherwise you will need to add this public key manually to this local tuf repository.
+          |  If the targets key is still online on the server, you can try downloading a fresh credentials.zip
           |
           |- The Server could not return a valid checksum when pulling targets.
           |""".stripMargin)
-      ex
-    case ex => log.error("", ex)
       ex
   }
 
@@ -42,6 +63,7 @@ object CliHelp {
     case ex if explainError.isDefinedAt(ex) =>
       Future.failed(explainError(ex))
     case ex =>
+      showError(ex)
       Future.failed(ex)
   }
 }

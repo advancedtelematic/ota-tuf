@@ -13,7 +13,6 @@ import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.tuf.cli.repo.TufRepo.{MissingCredentialsZipFile, RepoAlreadyInitialized}
-import io.circe.Json
 import io.circe.syntax._
 
 import scala.reflect.ClassTag
@@ -92,7 +91,6 @@ class RepoManagementSpec extends CliSpec {
   }
 
   def keySpecific[T <: KeyType, Pub <: T#Pub : ClassTag, Priv <: T#Priv : ClassTag](keyType: KeyType, name: String): Unit = {
-
     val zip = Paths.get(this.getClass.getResource(s"/credentials_${name.toLowerCase}.zip").toURI)
 
     test("reads targets keys from credentials.zip if present " + name) {
@@ -110,7 +108,7 @@ class RepoManagementSpec extends CliSpec {
       val repo = RepoManagement.initialize(randomName, randomRepoPath, zip).get
       val tempPath = Files.createTempFile("tuf-repo-spec-export", ".zip")
 
-      repo.genKeys(KeyName("targets"), keyType, keyType.crypto.defaultKeySize).get
+      repo.genKeys(KeyName("targets"), keyType).get
 
       val rootRole = SignedPayload(Seq.empty,
         RootRole(Map.empty, Map.empty, 2, expires = Instant.now()))
@@ -125,7 +123,7 @@ class RepoManagementSpec extends CliSpec {
 
     test("can export zip file " + name) {
       val repo = RepoManagement.initialize(randomName, randomRepoPath, zip).get
-      repo.genKeys(KeyName("default-key"), keyType, keyType.crypto.defaultKeySize)
+      repo.genKeys(KeyName("default-key"), keyType)
 
       val tempPath = Files.createTempFile("tuf-repo-spec-export", ".zip")
       RepoManagement.export(repo, KeyName("default-key"), tempPath) shouldBe Try(())
@@ -139,7 +137,7 @@ class RepoManagementSpec extends CliSpec {
 
     test("export uses configured tuf url, not what came in the original file " + name) {
       val repo = RepoManagement.initialize(randomName, randomRepoPath, zip, repoUri = Some(new URI("https://someotherrepo.com"))).get
-      repo.genKeys(KeyName("default-key"), keyType, keyType.crypto.defaultKeySize)
+      repo.genKeys(KeyName("default-key"), keyType)
 
       val tempPath = Files.createTempFile("tuf-repo-spec-export", ".zip")
       RepoManagement.export(repo, KeyName("default-key"), tempPath) shouldBe Try(())
@@ -155,7 +153,7 @@ class RepoManagementSpec extends CliSpec {
 
       Files.delete(repo.repoPath.resolve("credentials.zip"))
 
-      repo.genKeys(KeyName("targets"), keyType, keyType.crypto.defaultKeySize).get
+      repo.genKeys(KeyName("targets"), keyType).get
 
       RepoManagement.export(repo, KeyName("targets"), tempPath) shouldBe a[Success[_]]
 
@@ -167,5 +165,4 @@ class RepoManagementSpec extends CliSpec {
 
   testsFor(keySpecific[RsaKeyType.type, RSATufKey, RSATufPrivateKey](RsaKeyType, "RSA"))
   testsFor(keySpecific[Ed25519KeyType.type, Ed25519TufKey, Ed25519TufPrivateKey](Ed25519KeyType, "Ed25519"))
-
 }

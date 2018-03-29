@@ -3,7 +3,7 @@ package com.advancedtelematic.libtuf.http
 import io.circe.{Decoder, Encoder, Json}
 import cats.syntax.either._
 import com.advancedtelematic.libats.data
-import com.advancedtelematic.libats.data.{ErrorCode, ErrorCodes, ErrorRepresentation}
+import com.advancedtelematic.libats.data.{ErrorRepresentation}
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.{HttpResponse, HttpjClientError}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -17,7 +17,7 @@ import scala.util.control.NoStackTrace
 
 object SHttpjServiceClient {
 
-  case class HttpjClientError(msg: String) extends Exception(s"remote_service_error: $msg") with NoStackTrace
+  case class HttpjClientError(msg: String, remoteError: ErrorRepresentation) extends Throwable(msg) with NoStackTrace
 
   case class HttpResponse[T](body: T, response: ScalaJHttpResponse[Array[Byte]])
 
@@ -47,14 +47,12 @@ abstract class SHttpjServiceClient(client: scalaj.http.HttpRequest ⇒ Future[Sc
 
   private def tryErrorParsing(response: ScalaJHttpResponse[Array[Byte]]): ErrorRepresentation = {
     def fallbackToResponseParse: String = {
-      tryParseResponse[Json](response).flatMap { json ⇒
-        json.hcursor.downField("errors").as[List[String]].map(_.mkString).toTry
-      }.recover {
-        case _ => new String(response.body)
-      }.map { errorRepr =>
-        s"http/${response.code}: $errorRepr"
+      tryParseResponse[Json](response).map { errorRepr =>
+        errorRepr.noSpaces
+      }.recover { case _ =>
+        new String(response.body)
       }.getOrElse {
-        s"Unknown error: $response"
+        s"Unknown error|$response"
       }
     }
 
@@ -80,7 +78,8 @@ abstract class SHttpjServiceClient(client: scalaj.http.HttpRequest ⇒ Future[Sc
         } else {
           log.debug(s"request failed: $request")
           Future.failed {
-            HttpjClientError(s"${this.getClass.getSimpleName}|Unexpected response from remote server at ${request.method}|${resp.code}|${request.url}|$parsedErr")
+            val msg = s"${this.getClass.getSimpleName}|${request.method}|http/${resp.code}|${request.url}|${parsedErr.description}"
+            HttpjClientError(msg, parsedErr)
           }
         }
       }

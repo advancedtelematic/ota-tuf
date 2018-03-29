@@ -63,8 +63,8 @@ class CliKeyStorage(repo: Path) {
     } yield ()
   }
 
-  def genKeys(name: KeyName, keyType: KeyType, keySize: Int): Try[TufKeyPair] = {
-    val pair = keyType.crypto.generateKeyPair(keySize)
+  def genKeys(name: KeyName, keyType: KeyType, keySize: Option[Int] = None): Try[TufKeyPair] = {
+    val pair = keyType.crypto.generateKeyPair(keySize.getOrElse(keyType.crypto.defaultKeySize))
     writeKeys(name, pair).map(_ => pair)
   }
 

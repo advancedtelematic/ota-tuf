@@ -2,6 +2,7 @@ package com.advancedtelematic.tuf.keyserver
 
 import java.security.Security
 
+import akka.event.Logging
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.model.Uri.Path
@@ -50,7 +51,7 @@ object Boot extends BootApp
   lazy val vaultClient = VaultClient(vaultAddr, vaultToken, vaultMount)
 
   val routes: Route =
-    (versionHeaders(version) & logResponseMetrics(projectName)) {
+    (versionHeaders(version) & logResponseMetrics(projectName) & logRequestResult(("tuf-keyserver", Logging.InfoLevel))) {
       new TufKeyserverRoutes(vaultClient).routes
     }
 

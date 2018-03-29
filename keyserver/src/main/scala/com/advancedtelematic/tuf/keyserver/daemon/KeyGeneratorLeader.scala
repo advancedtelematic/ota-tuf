@@ -14,9 +14,10 @@ import com.advancedtelematic.libtuf.crypt.TufCrypto._
 import scala.async.Async._
 import scala.concurrent.duration._
 import akka.pattern.pipe
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp.KeyGenerationOp
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
-import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport, RoleRepositorySupport}
+import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKey
 import org.slf4j.LoggerFactory
@@ -102,17 +103,16 @@ object DefaultKeyGenerationOp {
 class DefaultKeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database, val ec: ExecutionContext)
   extends KeyGenerationOp
     with KeyGenRequestSupport
-    with KeyRepositorySupport
-    with RoleRepositorySupport {
+    with KeyRepositorySupport {
 
   private lazy val _log = LoggerFactory.getLogger(this.getClass)
 
-  protected def generateKeys(roleId: RoleId, keyType: KeyType, keySize: Int, threshold: Int): Seq[(Key, TufKeyPair)] = {
-    require(threshold > 0, "threshold must be greater than 0")
+  protected def generateKeys(kgr: KeyGenRequest): Seq[(Key, TufKeyPair)] = {
+    require(kgr.threshold > 0, "threshold must be greater than 0")
 
-    (0 until threshold).map { _ =>
-      val pair = TufCrypto.generateKeyPair(keyType, keySize)
-      (Key(pair.pubkey.id, roleId, keyType, pair.pubkey.keyval), pair)
+    (0 until kgr.threshold).map { _ =>
+      val pair = TufCrypto.generateKeyPair(kgr.keyType, kgr.keySize)
+      (Key(pair.pubkey.id, kgr.repoId, kgr.roleType, kgr.keyType, pair.pubkey.keyval), pair)
     }
   }
 
@@ -125,13 +125,11 @@ class DefaultKeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database
 
   def apply(kgr: KeyGenRequest): Future[Seq[Key]] =
     async {
-      val role = Role(RoleId.generate(), kgr.repoId, kgr.roleType, kgr.threshold)
-
-      val keyPairs = generateKeys(role.id, kgr.keyType, kgr.keySize, kgr.threshold)
+      val keyPairs = generateKeys(kgr)
       val keys = keyPairs.map(_._1)
 
       await(saveToVault(keyPairs))
-      await(keyGenRepo.persistGenerated(kgr, keys, role, keyRepo, roleRepo))
+      await(keyGenRepo.persistGenerated(kgr, keys, keyRepo))
 
       _log.info("Generated keys {}", keys.map(_.id.value).mkString(","))
       keys
@@ -147,8 +145,7 @@ object KeyGeneratorWorker {
 class KeyGeneratorWorker(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(implicit val db: Database) extends Actor
   with ActorLogging
   with KeyGenRequestSupport
-  with KeyRepositorySupport
-  with RoleRepositorySupport {
+  with KeyRepositorySupport {
 
   implicit val ec = context.dispatcher
 

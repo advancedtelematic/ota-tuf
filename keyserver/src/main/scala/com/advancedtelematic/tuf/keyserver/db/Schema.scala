@@ -40,29 +40,15 @@ object Schema {
 
   class KeyTable(tag: Tag) extends Table[Key](tag, "keys") {
     def id = column[KeyId]("key_id", O.PrimaryKey)
-    def roleId = column[RoleId]("role_id")
+    def repoId = column[RepoId]("repo_id")
+    def roleType = column[RoleType]("role_type")
     def keyType = column[KeyType]("key_type")
     def publicKey = column[PublicKey]("public_key") // TODO: Use TufKey instead, migrate, remove `key_type`, then remove KeyType Enum ?
 
-    def roleFk = foreignKey("keys_role_fk", roleId, roles)(_.id)
-
-    override def * = (id, roleId, keyType, publicKey) <> ((Key.apply _).tupled, Key.unapply)
+    override def * = (id, repoId, roleType, keyType, publicKey) <> ((Key.apply _).tupled, Key.unapply)
   }
 
   protected [db] val keys = TableQuery[KeyTable]
-
-  class RoleTable(tag: Tag) extends Table[Role](tag, "roles") {
-    def id = column[RoleId]("role_id", O.PrimaryKey)
-    def repoId = column[RepoId]("repo_id")
-    def roleType = column[RoleType]("role_type")
-    def threshold = column[Int]("threshold")
-
-    def uniqueRepoIdRoleTypeIdx = index("roles_unique_idx", (repoId, roleType), unique = true)
-
-    override def * = (id, repoId, roleType, threshold) <> ((Role.apply _).tupled, Role.unapply)
-  }
-
-  protected [db] val roles = TableQuery[RoleTable]
 
   implicit val signedPayloadRootRoleMapper = circeMapper[SignedPayload[RootRole]]
 

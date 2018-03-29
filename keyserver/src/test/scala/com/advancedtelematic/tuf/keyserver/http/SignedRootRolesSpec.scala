@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.http
 
+
 import scala.async.Async._
 import com.advancedtelematic.tuf.util.TufKeyserverSpec
 import com.advancedtelematic.libats.test.DatabaseSpec
@@ -11,16 +12,17 @@ import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.daemon.DefaultKeyGenerationOp
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
-import com.advancedtelematic.tuf.keyserver.roles.RootRoleGeneration
+import com.advancedtelematic.tuf.keyserver.roles.SignedRootRoles
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, SignedRootRoleSupport}
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}
+
 import scala.concurrent.ExecutionContext
 
-class RootRoleGenerationSpec extends TufKeyserverSpec with DatabaseSpec
+class SignedRootRolesSpec extends TufKeyserverSpec with DatabaseSpec
 with Inspectors with PatienceConfiguration
 with KeyGenRequestSupport
 with SignedRootRoleSupport {
@@ -29,7 +31,7 @@ with SignedRootRoleSupport {
 
   override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(10, Seconds))
 
-  val rootGeneration = new RootRoleGeneration(fakeVault)
+  val signedRootRoles = new SignedRootRoles(fakeVault)
   val keyGenerationOp = DefaultKeyGenerationOp(fakeVault)
 
   def keySpecific(keyType: KeyType, name: String): Unit = {
@@ -42,8 +44,7 @@ with SignedRootRoleSupport {
       async {
         await(keyGenRepo.persist(rootKeyGenRequest))
         await(keyGenerationOp(rootKeyGenRequest))
-
-        val signed = await(rootGeneration.findOrGenerate(repoId))
+        val signed = await(signedRootRoles.findAndPersist(repoId))
 
         val rootKeyId = signed.signed.roles(RoleType.ROOT).keyids.head
         val publicKey = signed.signed.keys(rootKeyId).keyval
@@ -61,13 +62,14 @@ with SignedRootRoleSupport {
       val rootKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
         repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType.crypto.defaultKeySize, keyType)
 
+
       async {
         await(keyGenRepo.persist(rootKeyGenRequest))
         await(keyGenerationOp(rootKeyGenRequest))
 
-        val signed = await(rootGeneration.findOrGenerate(repoId))
+        val signed = await(signedRootRoles.findAndPersist(repoId))
 
-        await(signedRootRoleRepo.findLatestValid(repoId)).asJson shouldBe signed.asJson
+        await(signedRootRoleRepo.findLatest(repoId)).asJson shouldBe signed.asJson
       }.futureValue
     }
 

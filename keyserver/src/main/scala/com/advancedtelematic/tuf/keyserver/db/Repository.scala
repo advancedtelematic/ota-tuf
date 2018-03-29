@@ -42,13 +42,11 @@ protected [db] class KeyGenRequestRepository()(implicit db: Database, ec: Execut
       }.transactionally
     }
 
+
   def persistGenerated(keyGenRequest: KeyGenRequest,
                        keys: Seq[Key],
-                       role: Role,
-                       keyRepository: KeyRepository,
-                       roleRepository: RoleRepository): Future[KeyGenRequest] = {
+                       keyRepository: KeyRepository): Future[KeyGenRequest] = {
     val dbIO = for {
-      _ <- roleRepository.persistAction(role)
       _ <- setStatusAction(keyGenRequest.id, KeyGenRequestStatus.GENERATED)
       _ <- keyRepository.persistAllAction(keys)
     } yield keyGenRequest.copy(status = KeyGenRequestStatus.GENERATED)
@@ -103,52 +101,17 @@ object KeyRepository {
 }
 
 protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext) {
-  import Schema.{keys, roles}
+  import Schema.keys
   import KeyRepository._
   import com.advancedtelematic.libats.slick.db.SlickPipeToUnit.pipeToUnit
 
   def persist(key: Key): Future[Unit] = db.run(persistAction(key))
 
-  def find(keyId: KeyId): Future[Key] =
-    db.run(keys.filter(_.id === keyId).result.failIfNotSingle(KeyNotFound))
+  protected [db] def deleteRepoKeys(repoId: RepoId): DBIO[Unit] =
+    keys.filter(_.repoId === repoId).delete.map(_ => ())
 
   def findAll(keyIds: Seq[KeyId]): Future[Seq[Key]] =
-    db.run(keys.filter(_.id.inSet(keyIds)).result)
-
-  def repoKeysForRole(repoId: RepoId, roleType: RoleType): Future[Seq[Key]] =
-    db.run {
-      roles.join(keys).on(_.id === _.roleId)
-        .filter(_._1.repoId === repoId)
-        .filter(_._1.roleType === roleType)
-        .map(_._2)
-        .result
-    }
-
-  def repoKeys(repoId: RepoId): Future[Seq[Key]] =
-    db.run {
-      roles.join(keys).on(_.id === _.roleId)
-        .filter(_._1.repoId === repoId)
-        .map(_._2)
-        .result
-    }
-
-  def repoKeysByRole(repoId: RepoId): Future[Map[RoleType, (Role, Seq[Key])]] = {
-    db.run {
-      val repoKeys = roles
-        .filter(_.repoId === repoId)
-        .join(keys).on(_.id === _.roleId)
-        .result
-
-      repoKeys.map { roleKeys =>
-        roleKeys
-          .groupBy(_._1.roleType)
-          .filter { case (_, values) => values.nonEmpty }
-          .mapValues { keysSeq =>
-            (keysSeq.head._1, keysSeq.map(_._2))
-          }
-      }
-    }
-  }
+    db.run(keys.filter(_.id.inSet(keyIds)).result.failIfEmpty(KeyNotFound))
 
   protected [db] def persistAllAction(keys: Seq[Key]): DBIO[Unit] =
     DBIO.sequence(keys.map(Schema.keys.insertOrUpdate))
@@ -156,31 +119,12 @@ protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext
   protected [db] def persistAction(key: Key): DBIO[Unit] = {
     Schema.keys.insertOrUpdate(key).map(_ => ())
   }
-}
 
-trait RoleRepositorySupport extends DatabaseSupport {
-  lazy val roleRepo = new RoleRepository()
-}
-
-protected [db] class RoleRepository()(implicit db: Database, ec: ExecutionContext) {
-  def persist(role: Role): Future[Role] =
-    db.run(persistAction(role))
-
-  def find(repoId: RepoId, roleType: RoleType): Future[Role] = db.run {
-    Schema.roles
-      .filter(_.repoId === repoId)
-      .filter(_.roleType === roleType)
-      .result
-      .failIfNotSingle(MissingEntity[Role])
+  def repoKeys(repoId: RepoId): Future[Seq[Key]] = db.run {
+    Schema.keys.filter(_.repoId === repoId).result
   }
-
-  def update(role: Role): Future[Role] = {
-    db.run(Schema.roles.filter(_.id === role.id).update(role).map(_ => role))
-  }
-
-  protected [db] def persistAction(role: Role): DBIO[Role] =
-      (Schema.roles += role).map(_ => role)
 }
+
 
 trait SignedRootRoleSupport extends DatabaseSupport {
   lazy val signedRootRoleRepo = new SignedRootRoleRepository()
@@ -196,46 +140,20 @@ protected[db] class SignedRootRoleRepository()(implicit db: Database, ec: Execut
   import Schema.signedRootRoles
   import SignedRootRoleRepository.{MissingSignedRole, RootRoleExists}
 
-  def persist(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = {
+  def persist(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = db.run {
+    persistAction(repoId, signedPayload)
+  }
+
+  def persistAndDeleteRepoKeys(keyRepository: KeyRepository)(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = db.run {
+    keyRepository.deleteRepoKeys(repoId).andThen(persistAction(repoId, signedPayload).transactionally)
+  }
+  protected [db] def persistAction(repoId: RepoId, signedPayload: SignedPayload[RootRole]): DBIO[Unit] = {
     val expires = signedPayload.signed.expires
 
     val io = (signedRootRoles += ((repoId, expires, signedPayload.signed.version, signedPayload)))
       .handleIntegrityErrors(RootRoleExists)
 
-    db.run(io).map(_ => ())
-  }
-
-  def storeKeys(repoId: RepoId, rootRole: RootRole): Future[Unit] = {
-    def cleanKeys(roleIds: Set[RoleId]): DBIO[_] =
-      Schema.keys
-        .filter(_.roleId.inSet(roleIds))
-        .delete
-
-    def addKeys(newRoot: RootRole, existingRoles: Map[RoleType, RoleId]): DBIO[_] = {
-      val newKeys = existingRoles.flatMap { case (roleType, roleId) =>
-        newRoot.roles(roleType).keyids.map { keyid =>
-          val tuf = newRoot.keys(keyid)
-          Key(keyid, roleId, tuf.keytype, tuf.keyval)
-        }
-      }
-
-      Schema.keys ++= newKeys
-    }
-
-    val existingRolesIO: DBIO[Map[RoleType, RoleId]] =
-      Schema.roles
-        .filter(_.repoId === repoId)
-        .map(role => role.roleType -> role.id)
-        .result
-        .map(_.toMap)
-
-    val act = for {
-      existingRoles <- existingRolesIO
-      _ <- cleanKeys(existingRoles.values.toSet)
-      _ <- addKeys(rootRole, existingRoles)
-    } yield ()
-
-    db.run(act.transactionally)
+    io.map(_ => ())
   }
 
   def nextVersion(repoId: RepoId): Future[Int] = db.run {
@@ -248,10 +166,9 @@ protected[db] class SignedRootRoleRepository()(implicit db: Database, ec: Execut
       .map(_.getOrElse(0) + 1)
   }
 
-  def findLatestValid(repoId: RepoId): Future[SignedPayload[RootRole]] =
+  def findLatest(repoId: RepoId): Future[SignedPayload[RootRole]] =
     db.run {
       signedRootRoles
-        .filter(_.expiresAt > Instant.now())
         .filter(_.repoId === repoId)
         .sortBy(_.version.desc)
         .take(1)
@@ -270,5 +187,4 @@ protected[db] class SignedRootRoleRepository()(implicit db: Database, ec: Execut
         .result
         .failIfNotSingle(MissingSignedRole)
     }
-
 }

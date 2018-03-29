@@ -4,41 +4,43 @@ import java.io._
 import java.net.URI
 import java.nio.file.attribute.PosixFilePermissions
 import java.nio.file.{Files, Path}
+import java.nio.file.Path
 import java.time.{Instant, Period}
 
+import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import cats.data.Validated.{Invalid, Valid}
-import cats.syntax.either._
-import cats.syntax.option._
+import cats.syntax._
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, MetaPath, RoleKeys, RootRole, TargetCustom, TargetsRole, TufRole, TufRoleOps}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, MetaPath, RoleKeys, RootRole, TargetCustom, TargetsRole, TufRole, TufRoleOps, VersionedRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetName, TargetVersion, TufKey, TufKeyPair, TufPrivateKey, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetName, TargetVersion, TufKey, TufKeyPair, TufPrivateKey, ValidTargetFilename}
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
-
 import com.advancedtelematic.tuf.cli.DataType._
-import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoConfig, RepoName}
-import com.advancedtelematic.tuf.cli.repo.TufRepo.{RoleChecksumNotFound, TargetsPullError}
+import com.advancedtelematic.tuf.cli.repo.TufRepo.{RoleChecksumNotFound, RoleMissing, RootPullError, TargetsPullError}
 import com.advancedtelematic.tuf.cli.{CliCodecs, CliUtil}
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.refineV
 import io.circe.jawn.parseFile
 import io.circe.syntax._
-import io.circe.{Decoder, Encoder}
+import io.circe.{Decoder, Encoder, ParsingFailure}
 import org.slf4j.LoggerFactory
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
-import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.TargetsResponse
+import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{RoleNotFound, TargetsResponse}
 import java.nio.file.attribute.PosixFilePermission._
+
+import cats.data.{NonEmptyList, Validated, ValidatedNel}
+import com.advancedtelematic.libtuf.data.RootRoleValidation
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util
 import scala.util.control.NoStackTrace
 import scala.util.{Failure, Success, Try}
+import shapeless.{:: => _, Path => _, _}
 
 object TufRepo {
   import CliCodecs._
@@ -57,6 +59,18 @@ object TufRepo {
 
   case class TargetsPullError(msg: String) extends Exception(s"Could not pull targets from server $msg") with NoStackTrace
 
+  case class RoleMissing[T](rolePath: String)(implicit ev: TufRole[T]) extends Throwable(s"Missing role ${ev.toMetaPath.toString()} at $rolePath") with NoStackTrace
+
+  case class RootPullError(errors: NonEmptyList[String]) extends Throwable("Could not validate a valid root.json chain:\n" + errors.toList.mkString("\n")) with NoStackTrace
+
+  implicit class RootValidationTryConversion(value: ValidatedNel[String, SignedPayload[RootRole]]) {
+    def toTry =
+      value.fold(
+        errors => Failure(RootPullError(errors)),
+        signedPayload => Success(signedPayload)
+      )
+  }
+
   protected [repo] def readConfigFile(repoPath: Path): Try[RepoConfig] =
     Try { new FileInputStream(repoPath.resolve("config.json").toFile) }
       .flatMap { is => CliUtil.readJsonFrom[RepoConfig](is) }
@@ -70,6 +84,8 @@ object TufRepo {
 
 class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionContext) {
   import CliCodecs._
+  import cats.implicits._
+  import TufRepo._
 
   protected[repo] lazy val keyStorage = new CliKeyStorage(repoPath)
 
@@ -102,6 +118,24 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     checkPerms(rolesPath.resolve("unsigned"))
   }
 
+  def keyIdsByName(keyNames: List[KeyName]): Try[List[KeyId]] = for {
+    keys <- keyNames.traverse(keyStorage.readPublicKey)
+  } yield keys.map(_.id)
+
+  def removeRootKeys(keyIds: List[KeyId]): Try[Path] = for {
+    unsignedRoot <- readUnsignedRole[RootRole]
+    newRoot = unsignedRoot.removeRoleKeys(RoleType.ROOT, keyIds.toSet)
+    path <- writeUnsignedRole(newRoot)
+  } yield path
+
+  def addRootKeys(keyNames: List[KeyName]): Try[Path] =
+    for {
+      unsignedRoot <- readUnsignedRole[RootRole]
+      keys <- keyNames.traverse(keyStorage.readPublicKey)
+      newRoot = unsignedRoot.addRoleKeys(RoleType.ROOT, keys:_*)
+      path <- writeUnsignedRole(newRoot)
+    } yield path
+
   def addTarget(name: TargetName, version: TargetVersion, length: Int, checksum: Refined[String, ValidChecksum],
                 hardwareIds: List[HardwareIdentifier], url: Option[URI], format: TargetFormat): Try[Path] = {
     for {
@@ -131,6 +165,64 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     }
   }
 
+  private def fetchRootChain(reposerverClient: UserReposerverClient, from: Int, to: Int): Future[Vector[SignedPayload[RootRole]]] = {
+    val versionsToFetch = from until to
+
+    val rootRolesF = versionsToFetch.foldLeft(Future.successful(Vector.empty[SignedPayload[RootRole]])) { (accF, vv) =>
+      for {
+        acc <- accF
+        payload <- reposerverClient.root(vv.some).recoverWith {
+          case RoleNotFound(msg) => Future.failed(RootPullError(NonEmptyList.of(msg)))
+        }
+      } yield acc :+ payload
+    }
+
+    rootRolesF
+  }
+
+  private def validatePath(reposerverClient: UserReposerverClient, from: SignedPayload[RootRole], to: SignedPayload[RootRole]): Future[Unit] = {
+    val rootRolesF = fetchRootChain(reposerverClient, from.signed.version + 1, to.signed.version)
+
+    rootRolesF.flatMap { rootRoles =>
+      val validated = (from +: rootRoles :+ to).sliding(2, 1).toList.traverse {
+        case Vector(oldR, newR) =>
+          RootRoleValidation.newRootIsValid(newR, oldR)
+        case l =>
+          throw new IllegalArgumentException(s"too many elements for $l")
+      }
+
+      validated.fold(
+        errors => Future.failed(RootPullError(errors)),
+        _ => Future.successful(())
+      )
+    }
+  }
+
+  def pullRoot(reposerverClient: UserReposerverClient, skipLocalValidation: Boolean): Future[SignedPayload[RootRole]] = {
+    def newRootIsvalid(newRoot: SignedPayload[RootRole]): Future[SignedPayload[RootRole]] = {
+      if(skipLocalValidation)
+        RootRoleValidation.rootIsValid(newRoot).toTry.toFuture
+      else {
+        for {
+          oldRoot <- readSignedRole[RootRole].toFuture
+          _ <- validatePath(reposerverClient, oldRoot, newRoot)
+        } yield newRoot
+      }
+    }
+
+    for {
+      newRoot <- reposerverClient.root()
+      _ <- newRootIsvalid(newRoot)
+      _ <- writeUnsignedRole(newRoot.signed).toFuture
+      _ <- writeSignedRole(newRoot).toFuture
+    } yield newRoot
+  }
+
+  def pushRoot(client: UserReposerverClient): Future[Unit] = for {
+    signedRoot <- readSignedRole[RootRole].toFuture
+    _ <- client.pushSignedRoot(signedRoot)
+  } yield ()
+
   def pullTargets(reposerverClient: UserReposerverClient, rootRole: RootRole): Future[SignedPayload[TargetsRole]] =
     reposerverClient.targets().flatMap {
       case TargetsResponse(targets, checksum) =>
@@ -153,16 +245,33 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       } yield targets
     }
 
-  def signTargets(targetsKey: KeyName, version: Option[Int] = None): Try[Path] =
+  def signRoot(keys: Seq[KeyName], version: Option[Int] = None): Try[Path] =
+    signRole[RootRole](version, keys)
+
+  def signTargets(targetsKeys: Seq[KeyName], version: Option[Int] = None): Try[Path] =
+    signRole[TargetsRole](version, targetsKeys)
+
+  private val VersionPath = ^.version
+  import cats.implicits._
+
+  private def signRole[T : Decoder : Encoder](version: Option[Int], keys: Seq[KeyName])
+                                             (implicit ev: TufRole[T], versionL: VersionPath.Lens[T, Int]): Try[Path] = {
+    def signatures(payload: T): Try[List[ClientSignature]] =
+      keys.toList.traverse { key =>
+        keyStorage.readKeyPair(key).map { case (pub, priv) =>
+          TufCrypto.signPayload(priv, payload).toClient(pub.id)
+        }
+      }
+
     for {
-      (pub, priv) <- keyStorage.readKeyPair(targetsKey)
-      unsigned <- readUnsignedRole[TargetsRole]
-      newUnsigned = unsigned.copy(version = version.getOrElse(unsigned.version + 1))
-      sig = TufCrypto.signPayload(priv, newUnsigned).toClient(pub.id)
-      signedRole = SignedPayload(Seq(sig), newUnsigned)
-      _ <- writeUnsignedRole(signedRole.signed)
+      unsigned <- readUnsignedRole[T]
+      newV = version.getOrElse(versionL().get(unsigned) + 1)
+      newUnsigned = versionL().set(unsigned)(newV)
+      sigs <- signatures(newUnsigned)
+      signedRole = SignedPayload(sigs, newUnsigned)
       path <- writeSignedRole(signedRole)
     } yield path
+  }
 
   private def deleteOrReadKey(reposerverClient: UserReposerverClient, keyName: KeyName, keyId: KeyId): Future[TufPrivateKey] = {
     keyStorage.readPrivateKey(keyName).toFuture.recoverWith { case _ =>
@@ -175,14 +284,25 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     }
   }
 
+  private def withExistingRolePath[T : TufRole, U](path: Path)(fn: Path => Try[U]): Try[U] = {
+    if (path.toFile.exists())
+      fn(path)
+    else
+      Failure(RoleMissing[T](path.toString))
+  }
+
   def readUnsignedRole[T : Decoder](implicit ev: TufRole[T]): Try[T] = {
     val path = rolesPath.resolve("unsigned").resolve(ev.toMetaPath.value)
-    parseFile(path.toFile).flatMap(_.as[T]).toTry
+    withExistingRolePath[T, T](path) { p =>
+      parseFile(p.toFile).flatMap(_.as[T]).toTry
+    }
   }
 
   def readSignedRole[T](implicit decoder: Decoder[SignedPayload[T]], ev: TufRole[T]): Try[SignedPayload[T]] = {
     val path = rolesPath.resolve(ev.toMetaPath.value)
-    parseFile(path.toFile).flatMap(_.as[SignedPayload[T]]).toTry
+    withExistingRolePath[T, SignedPayload[T]](path) { p =>
+      parseFile(p.toFile).flatMap(_.as[SignedPayload[T]]).toTry
+    }
   }
 
   private def readChecksum[T](implicit ev: TufRole[T]): Try[Refined[String, ValidChecksum]] = Try {
@@ -197,7 +317,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     Files.write(rolesPath.resolve(TufRole.targetsTufRole.checksumPath), checksum.value.getBytes)
   }
 
-  private def writeUnsignedRole[T : TufRole : Encoder](role: T): Try[Path] =
+  def writeUnsignedRole[T : TufRole : Encoder](role: T): Try[Path] =
     writeRole(rolesPath.resolve("unsigned"), role.toMetaPath, role)
 
   def writeSignedRole[T : TufRole : Encoder](signedPayload: SignedPayload[T]): Try[Path] =
@@ -209,14 +329,14 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     rolePath
   }
 
-  def genKeys(name: KeyName, keyType: KeyType, keySize: Int): Try[TufKeyPair] =
+  def genKeys(name: KeyName, keyType: KeyType, keySize: Option[Int] = None): Try[TufKeyPair] =
     keyStorage.genKeys(name, keyType, keySize)
 
-  def rotateRoot(repoClient: UserReposerverClient,
-                 newRootName: KeyName,
-                 oldRootName: KeyName,
-                 newTargetsName: KeyName,
-                 oldKeyId: Option[KeyId]): Future[SignedPayload[RootRole]] = {
+  def moveRootOffline(repoClient: UserReposerverClient,
+                      newRootName: KeyName,
+                      oldRootName: KeyName,
+                      newTargetsName: KeyName,
+                      oldKeyId: Option[KeyId]): Future[SignedPayload[RootRole]] = {
     for {
       (newRootPubKey, newRootPrivKey) <- keyStorage.readKeyPair(newRootName).toFuture
       (newTargetsPubKey, _) <- keyStorage.readKeyPair(newTargetsName).toFuture
@@ -240,10 +360,6 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       _ <- repoClient.pushSignedRoot(newSignedRoot)
       _ <- writeSignedRole(newSignedRoot).toFuture
     } yield newSignedRoot
-  }
-
-  def pushTargetsKey(reposerver: UserReposerverClient, keyName: KeyName): Future[TufKey] = {
-    keyStorage.readPublicKey(keyName).toFuture.flatMap(reposerver.pushTargetsKey)
   }
 
   def treehubConfig: Try[TreehubConfig] = TufRepo.readConfigFile(repoPath).map(_.treehub)

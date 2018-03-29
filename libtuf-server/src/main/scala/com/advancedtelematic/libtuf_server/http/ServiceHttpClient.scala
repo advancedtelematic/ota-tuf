@@ -11,8 +11,6 @@ import akka.stream.Materializer
 import cats.syntax.either._
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libats.http.Errors
-import com.advancedtelematic.libats.http.Errors.JsonError
-import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.{Encoder, Json}
 import org.slf4j.LoggerFactory
@@ -40,48 +38,42 @@ abstract class ServiceHttpClient(httpClient: HttpRequest => Future[HttpResponse]
 
   protected implicit val unitFromEntityUnmarshaller: FromEntityUnmarshaller[Unit] = Unmarshaller.strict(_.discardBytes())
 
-  private def defaultErrorHandler[T](): PartialFunction[StatusCode, Future[T]] = PartialFunction.empty
+  private def defaultErrorHandler[T](): PartialFunction[RemoteServiceError, Future[T]] = PartialFunction.empty
 
   protected def execJsonHttp[Res : ClassTag : FromEntityUnmarshaller, Req : Encoder]
   (request: HttpRequest, entity: Req)
-  (errorHandler: PartialFunction[StatusCode, Future[Res]] = defaultErrorHandler()): Future[Res] = {
+  (errorHandler: PartialFunction[RemoteServiceError, Future[Res]] = defaultErrorHandler()): Future[Res] = {
     val httpEntity = HttpEntity(ContentTypes.`application/json`, entity.asJson.noSpaces)
     val req = request.withEntity(httpEntity)
     execHttp(req)(errorHandler)
   }
 
-  private def tryErrorParsing(response: HttpResponse)(implicit um: FromEntityUnmarshaller[ErrorRepresentation]): Future[JsonError] = {
+  private def tryErrorParsing(response: HttpResponse)(implicit um: FromEntityUnmarshaller[ErrorRepresentation]): Future[RemoteServiceError] = {
     um(response.entity).map { rawError =>
-      RemoteServiceError(s"${rawError.description}", rawError.asJson.some, rawError.errorId.getOrElse(UUID.randomUUID()))
+      RemoteServiceError(s"${rawError.description}", response.status, rawError.cause.getOrElse(Json.Null),
+        rawError.code, rawError.some, rawError.errorId.getOrElse(UUID.randomUUID()))
     }.recoverWith { case _ =>
-      FailFastCirceSupport.jsonUnmarshaller(response.entity).flatMap { json =>
-        Future.fromTry {
-          json.hcursor.downField("errors").as[List[String]].toTry.map { errors =>
-            RemoteServiceError(s"http/${response.status}", errors.asJson.some)
-          }
-        }
-      }
-    }.recoverWith { case _ =>
-      Unmarshaller.stringUnmarshaller(response.entity).map(msg => Errors.RemoteServiceError(msg))
+      Unmarshaller.stringUnmarshaller(response.entity).map(msg => RemoteServiceError(msg, response.status))
     }.recover { case _ =>
-      RemoteServiceError(s"Unknown error: $response")
+      RemoteServiceError(s"Unknown error: $response", response.status)
     }
   }
 
   protected def execHttp[T : ClassTag](request: HttpRequest)
-                                      (errorHandler: PartialFunction[StatusCode, Future[T]] = defaultErrorHandler())
+                                      (errorHandler: PartialFunction[RemoteServiceError, Future[T]] = defaultErrorHandler())
                                       (implicit um: FromEntityUnmarshaller[T]): Future[T] =
     httpClient(request).flatMap {
       case r @ HttpResponse(status, _, _, _) if status.isSuccess() =>
         um(r.entity)
       case r =>
-        if (errorHandler.isDefinedAt(r.status))
-          errorHandler(r.status).map { t => r.discardEntityBytes() ; t }.recoverWith { case ex => r.discardEntityBytes(); Future.failed(ex) }
-        else
-          tryErrorParsing(r).flatMap { error =>
+        tryErrorParsing(r).flatMap { error =>
+          if (errorHandler.isDefinedAt(error))
+            errorHandler(error).recoverWith { case ex => r.discardEntityBytes(); Future.failed(ex) }
+          else {
             log.debug(s"request failed: $request")
-            val e = error.copy(msg = s"${this.getClass.getSimpleName}|Unexpected response from remote server at ${request.uri}|${r.status.intValue()}|${error.msg}")
+            val e = error.copy(msg = s"${this.getClass.getSimpleName}|Unexpected response from remote server at ${request.uri}|${request.method.value}|${r.status.intValue()}|${error.msg}")
             FastFuture.failed(e)
           }
+        }
     }
 }

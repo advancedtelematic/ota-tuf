@@ -1,43 +1,40 @@
 package com.advancedtelematic.tuf.keyserver.http
 
-import java.security.PrivateKey
-
 import cats.syntax.either._
 import akka.http.scaladsl.model.StatusCodes
-import cats.data.NonEmptyList
-import com.advancedtelematic.tuf.util.{FakeVault, ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
+import akka.http.scaladsl.testkit.RouteTest
+import com.advancedtelematic.tuf.util.{ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
 import io.circe.generic.auto._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import cats.syntax.show._
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RSATufPrivateKey, RepoId, TufPrivateKey, _}
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
-import io.circe.{Decoder, Encoder, Json}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RepoId, TufPrivateKey, _}
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequestStatus}
+import io.circe.{Encoder, Json}
 import org.scalatest.Inspectors
 import org.scalatest.concurrent.PatienceConfiguration
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
+import com.advancedtelematic.libtuf.data.ErrorCodes
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.tuf.keyserver.daemon.{DefaultKeyGenerationOp, KeyGenerationOp}
-import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport, RoleRepositorySupport}
+import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultResourceNotFound
 import eu.timepit.refined.api.Refined
 import org.scalatest.time.{Millis, Seconds, Span}
 import io.circe.generic.semiauto._
-
-import scala.concurrent.{ExecutionContext, Future}
+import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import scala.reflect.ClassTag
+import scala.concurrent.{ExecutionContext, Future}
 
 class RootRoleResourceSpec extends TufKeyserverSpec
   with ResourceSpec
   with KeyGenRequestSupport
   with KeyRepositorySupport
-  with RoleRepositorySupport
   with RootGenerationSpecSupport
   with PatienceConfiguration
+  with HttpResponseTestOps
   with Inspectors {
 
   implicit val ec = ExecutionContext.global
@@ -74,11 +71,11 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
+      responseAs[ErrorRepresentation].description shouldBe "Missing entity: RootRole"
     }
   }
 
   def keySpecific[T <: KeyType, P <: T#Pub: ClassTag](keyType: KeyType, name: String): Unit = {
-
     test("POST returns Accepted " + name) {
       Post(apiUri(s"root/${RepoId.generate().show}"), ClientRootGenRequest(keyType = keyType)) ~> routes ~> check {
         status shouldBe StatusCodes.Accepted
@@ -203,7 +200,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     test("GET returns 200 if keys are ready " + name) {
       val repoId = RepoId.generate()
 
-      generateRootRole(repoId, keyType = keyType).futureValue
+      generateRootRole(repoId, keyType).futureValue
 
       Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
@@ -247,27 +244,27 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     test("POST to repoId/roletype signs any payload with existing keys " + name) {
       val repoId = RepoId.generate()
 
-      generateRootRole(repoId, keyType = keyType).futureValue
+      generateRootRole(repoId, keyType).futureValue
 
       val toSignPayload = Json.fromFields(List("some" -> Json.fromString("signed stuff")))
+
+      val targetKey = Get(apiUri(s"root/${repoId.show}/keys/targets/pairs"))  ~> routes ~> check {
+        responseAs[Seq[TufKeyPair]].head
+      }
 
       Post(apiUri(s"root/${repoId.show}/targets"), toSignPayload) ~> routes ~> check {
         status shouldBe StatusCodes.OK
 
         val signedPayload = responseAs[SignedPayload[Json]]
 
-        println(signedPayload.asJson.spaces2)
-
         signedPayload.signatures shouldNot be(empty)
-
-        val targetKey = keyRepo.repoKeysForRole(repoId, RoleType.TARGETS).futureValue.head
 
         signedPayload.signed shouldBe toSignPayload
 
         forAll(signedPayload.signatures) { sig =>
-          sig.keyid shouldBe targetKey.id
+          sig.keyid shouldBe targetKey.pubkey.id
 
-          val isValidT = TufCrypto.isValid(sig, targetKey.publicKey, signedPayload.signed)
+          val isValidT = TufCrypto.isValid(sig, targetKey.pubkey.keyval, signedPayload.signed)
           isValidT shouldBe true
         }
       }
@@ -276,7 +273,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     test("POST to repoId/roletype return 412 when key is offline " + name) {
       val repoId = RepoId.generate()
 
-      generateRootRole(repoId, keyType = keyType).futureValue
+      generateRootRole(repoId, keyType).futureValue
 
       val targetKeyId = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
@@ -295,7 +292,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     test("DELETE on private_key wipes root private key " + name) {
       val repoId = RepoId.generate()
 
-      generateRootRole(repoId, keyType = keyType).futureValue
+      generateRootRole(repoId, keyType).futureValue
 
       val rootKeyId = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
@@ -312,7 +309,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     test("DELETE on private_key wipes non root private key " + name) {
       val repoId = RepoId.generate()
 
-      generateRootRole(repoId, keyType = keyType).futureValue
+      generateRootRole(repoId, keyType).futureValue
 
       val keyId = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
@@ -328,7 +325,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     test("wiping private key still allows download of root.json " + name) {
       val repoId = RepoId.generate()
-      generateRootRole(repoId, keyType = keyType).futureValue
+      generateRootRole(repoId, keyType).futureValue
 
       val rootKeyId = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
@@ -347,7 +344,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     test("GET on an unsigned root returns unsigned root " + name) {
       val repoId = RepoId.generate()
-      generateRootRole(repoId, keyType = keyType).futureValue
+      generateRootRole(repoId, keyType).futureValue
 
       Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
@@ -357,7 +354,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     test("GET on unsigned root role returns root role with increased version " + name) {
       val repoId = RepoId.generate()
-      generateRootRole(repoId, keyType = keyType).futureValue
+      generateRootRole(repoId, keyType).futureValue
 
       Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
@@ -370,9 +367,109 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       }
     }
 
-    test("POST returns 4xx when signature is not valid " + name) {
+    test("supports multiple offline signed root.json updates" + name) {
       val repoId = RepoId.generate()
-      generateRootRole(repoId, keyType = keyType).futureValue
+      generateRootRole(repoId, keyType).futureValue
+
+      def latestRoot() =
+        Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+          status shouldBe StatusCodes.OK
+          responseAs[RootRole]
+        }
+
+      def signedRoot(lastRoot: RootRole, lastKeyId: KeyId, lastKey: TufPrivateKey) = {
+        val keyPair = keyType.crypto.generateKeyPair()
+
+        val newRoot = lastRoot.withRoleKeys(RoleType.ROOT, keyPair.pubkey, lastRoot.keys(lastKeyId))
+
+        val oldSignature = TufCrypto.signPayload(lastKey, newRoot)
+        val oldClientSig = ClientSignature(lastKeyId, oldSignature.method, oldSignature.sig)
+
+        val newSignature = TufCrypto.signPayload(keyPair.privkey, newRoot)
+        val newClientSig = ClientSignature(keyPair.pubkey.id, newSignature.method, newSignature.sig)
+
+        (keyPair, SignedPayload(Seq(oldClientSig, newClientSig), newRoot))
+      }
+
+      val lastRoot = latestRoot()
+      val lastRootKeyId = lastRoot.roles(RoleType.ROOT).keyids.head
+      val lastRootKey = fakeVault.findKey(lastRootKeyId).futureValue
+
+      val (newKeyPair, signedPayload0) = signedRoot(lastRoot, lastRootKeyId, lastRootKey.privateKey)
+
+      Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload0) ~> routes ~> check { // TODO: Wrong api ? this is messed up
+        status shouldBe StatusCodes.NoContent
+      }
+
+      val (_, signedPayload1) = signedRoot(latestRoot(), newKeyPair.pubkey.id, newKeyPair.privkey)
+
+      Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload1) ~> routes ~> check {
+        status shouldBe StatusCodes.NoContent
+      }
+
+      Get(apiUri(s"root/${repoId.show}"), signedPayload1) ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+        responseAs[SignedPayload[RootRole]] shouldBe signedPayload1
+      }
+    }
+
+    test("POST offline signed deletes all keys for role" + name) {
+      val repoId = RepoId.generate()
+      generateRootRole(repoId, keyType).futureValue
+
+      val oldRootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+        responseAs[RootRole]
+      }
+
+      val keyPair = keyType.crypto.generateKeyPair()
+      val (newPubKey, newPrivKey) = (keyPair.pubkey, keyPair.privkey)
+
+      val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
+      val rootRole = oldRootRole.withRoleKeys(RoleType.ROOT, newPubKey)
+
+      val newSignature = signWithKeyPair(newPubKey.id, newPrivKey, rootRole)
+      val oldSignedPayload = signPayloadWithVaultKey(rootKeyId, rootRole)
+      val signedPayload = oldSignedPayload.copy(signatures = newSignature +: oldSignedPayload.signatures)
+
+      Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+        val keyPairs = responseAs[Seq[TufKeyPair]]
+        keyPairs shouldNot be(empty)
+      }
+
+      Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
+        status shouldBe StatusCodes.NoContent
+      }
+
+      Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
+        status shouldBe StatusCodes.PreconditionFailed
+        responseAs[ErrorRepresentation].code shouldBe ErrorCodes.KeyServer.PrivateKeysNotFound
+      }
+    }
+
+    test("POST offline with same version returns bad request " + name) {
+      val repoId = RepoId.generate()
+      generateRootRole(repoId, keyType).futureValue
+
+      val rootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+        responseAs[RootRole]
+      }
+
+      val sameVersionRoot = rootRole.copy(version = rootRole.version - 1)
+      val rootKeyId = sameVersionRoot.roles(RoleType.ROOT).keyids.head
+      val signedPayload = signPayloadWithVaultKey(rootKeyId, sameVersionRoot)
+
+      Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
+        responseErrors should contain("Invalid version bump from 1 to 1")
+        status shouldBe StatusCodes.BadRequest
+      }
+    }
+
+    test("POST returns 4xx when signature is not valid" + name) {
+      val repoId = RepoId.generate()
+      generateRootRole(repoId, keyType).futureValue
 
       val rootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
@@ -380,17 +477,18 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       }
 
       val rootKeyId = rootRole.roles(RoleType.ROOT).keyids.head
-      val signedPayload = clientSignPayload(rootKeyId, rootRole, "sign something else")
+      val clientSignature = clientSignWithVaultKey(rootKeyId, "not a root role")
+      val signedPayload = SignedPayload(Seq(clientSignature), rootRole)
 
       Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
         status shouldBe StatusCodes.BadRequest
-        responseAs[JsonErrors].head should include(s"Invalid signature for key $rootKeyId")
+        responseErrors should contain(s"Invalid signature for key $rootKeyId in root.json version 2")
       }
     }
 
     test("POST returns error payload is not signed with all keys " + name) {
       val repoId = RepoId.generate()
-      generateRootRole(repoId, keyType = keyType).futureValue
+      generateRootRole(repoId, keyType).futureValue
 
       val rootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
@@ -401,14 +499,14 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
       Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
         status shouldBe StatusCodes.BadRequest
-        responseAs[JsonErrors].errors.toList should contain("Only 0 signatures present from previous root, need at least 1")
-        responseAs[JsonErrors].errors.toList should contain("Only 0 signatures present from new root, need at least 1")
+        responseErrors should contain("Root role version 1 requires 1 valid signatures in version 2, 0 supplied")
+        responseErrors should contain("Root role version 2 requires 1 valid signatures in version 2, 0 supplied")
       }
     }
 
     test("POST offline signed returns 204 when signature is valid " + name) {
       val repoId = RepoId.generate()
-      generateRootRole(repoId, keyType = keyType).futureValue
+      generateRootRole(repoId, keyType).futureValue
 
       val rootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
@@ -416,34 +514,16 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       }
 
       val rootKeyId = rootRole.roles(RoleType.ROOT).keyids.head
-      val signedPayload = clientSignPayload(rootKeyId, rootRole, rootRole)
+      val signedPayload = signPayloadWithVaultKey(rootKeyId, rootRole)
 
       Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
         status shouldBe StatusCodes.NoContent
       }
     }
 
-    test("POST offline with same version returns Conflict " + name) {
-      val repoId = RepoId.generate()
-      generateRootRole(repoId, keyType = keyType).futureValue
-
-      val rootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-        responseAs[RootRole]
-      }
-
-      val sameVersionRoot = rootRole.copy(version = rootRole.version - 1)
-      val rootKeyId = sameVersionRoot.roles(RoleType.ROOT).keyids.head
-      val signedPayload = clientSignPayload(rootKeyId, sameVersionRoot, sameVersionRoot)
-
-      Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
-        status shouldBe StatusCodes.Conflict
-      }
-    }
-
     test("GET with version after POST offline signed returns old root " + name) {
       val repoId = RepoId.generate()
-      generateRootRole(repoId, keyType = keyType).futureValue
+      generateRootRole(repoId, keyType).futureValue
 
       val oldRootRole = Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
@@ -456,7 +536,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       }
 
       val rootKeyId = newUnsignedRole.roles(RoleType.ROOT).keyids.head
-      val signedPayload = clientSignPayload(rootKeyId, newUnsignedRole, newUnsignedRole)
+      val signedPayload = signPayloadWithVaultKey(rootKeyId, newUnsignedRole)
 
       Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
         status shouldBe StatusCodes.NoContent
@@ -470,93 +550,62 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       oldRootRole.asJson shouldBe rootRoleV1.asJson
     }
 
-    test("POST offline signed updates keys when signature is valid " + name) {
-      val repoId = RepoId.generate()
-      generateRootRole(repoId, keyType = keyType).futureValue
+  test("POST offline signed updates keys when signature is valid " + name) {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId, keyType).futureValue
 
-      val oldRootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-        responseAs[RootRole]
-      }
-
-      val keyPair = keyType.crypto.generateKeyPair(keyType.crypto.defaultKeySize)
-
-      val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
-      val rootRole = oldRootRole.withRoleKeys(RoleType.ROOT, keyPair.pubkey)
-
-      val newSignature = signWithKeyPair(keyPair.pubkey.id, keyPair.privkey, rootRole)
-      val oldsignedPayload = clientSignPayload(rootKeyId, rootRole, rootRole)
-      val signedPayload = oldsignedPayload.copy(signatures = newSignature +: oldsignedPayload.signatures)
-
-      Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
-        status shouldBe StatusCodes.NoContent
-      }
-
-      Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-        val resp = responseAs[RootRole]
-
-        rootRole.copy(version = rootRole.version + 1, expires = resp.expires) shouldBe resp
-      }
+    val oldRootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[RootRole]
     }
 
-    test("POST offline signed updates threshold when signature is valid " + name) {
-      val repoId = RepoId.generate()
-      generateRootRole(repoId, keyType = keyType).futureValue
+    val keyPair = keyType.crypto.generateKeyPair()
 
-      val oldRootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-        responseAs[RootRole]
-      }
+    val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
+    val rootRole = oldRootRole.withRoleKeys(RoleType.ROOT, keyPair.pubkey)
 
-      val newPair = keyType.crypto.generateKeyPair(keyType.crypto.defaultKeySize)
-      val newPair2 = keyType.crypto.generateKeyPair(keyType.crypto.defaultKeySize)
+    val newSignature = signWithKeyPair(keyPair.pubkey.id, keyPair.privkey, rootRole)
+    val oldSignedPayload = signPayloadWithVaultKey(rootKeyId, rootRole)
+    val signedPayload = oldSignedPayload.copy(signatures = newSignature +: oldSignedPayload.signatures)
 
-      val newRootKeys = List(newPair.pubkey, newPair2.pubkey).map(k => k.id -> k).toMap
-      val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
-      val newKeys = (oldRootRole.keys - rootKeyId) ++ newRootKeys
-      val newRoles = oldRootRole.roles + (RoleType.ROOT -> RoleKeys(newRootKeys.keys.toSeq, 2))
-      val rootRole = oldRootRole.copy(keys = newKeys, roles = newRoles)
-
-      val newSignature1 = signWithKeyPair(newPair.pubkey.id, newPair.privkey, rootRole)
-      val newSignature2 = signWithKeyPair(newPair2.pubkey.id, newPair2.privkey, rootRole)
-      val oldsignedPayload = clientSignPayload(rootKeyId, rootRole, rootRole)
-      val signedPayload = oldsignedPayload.copy(signatures = List(newSignature1, newSignature2) ++ oldsignedPayload.signatures)
-
-      Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
-        status shouldBe StatusCodes.NoContent
-      }
-
-      roleRepo.find(repoId, RoleType.ROOT).futureValue.threshold shouldBe 2
+    Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
     }
+
+    Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val resp = responseAs[RootRole]
+      rootRole.copy(version = rootRole.version + 1, expires = resp.expires) shouldBe resp
+    }
+  }
 
     test("POST offline signed returns 400 when not signed with new " + name) {
       val repoId = RepoId.generate()
-      generateRootRole(repoId, keyType = keyType).futureValue
+      generateRootRole(repoId, keyType).futureValue
 
       val oldRootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
         responseAs[RootRole]
       }
 
-      val newKey = keyType.crypto.generateKeyPair(keyType.crypto.defaultKeySize).pubkey
+      val newKey = keyType.crypto.generateKeyPair().pubkey
 
       val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
       val newKeys = (oldRootRole.keys - rootKeyId) + (newKey.id -> newKey)
       val newRoles = (oldRootRole.roles - RoleType.ROOT) + (RoleType.ROOT -> RoleKeys(Seq(newKey.id), 1))
       val rootRole = oldRootRole.copy(keys = newKeys, roles = newRoles)
 
-      val signedPayload = clientSignPayload(rootKeyId, rootRole, rootRole)
+      val signedPayload = signPayloadWithVaultKey(rootKeyId, rootRole)
 
       Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
         status shouldBe StatusCodes.BadRequest
-        responseAs[JsonErrors].errors.toList should contain("Only 0 signatures present from new root, need at least 1")
+        responseErrors should contain("Root role version 2 requires 1 valid signatures in version 2, 0 supplied")
       }
     }
 
     test("POST offline signed returns 400 when not signed with old " + name) {
       val repoId = RepoId.generate()
-      generateRootRole(repoId, keyType = keyType).futureValue
+      generateRootRole(repoId, keyType).futureValue
 
       val oldRootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
@@ -572,44 +621,13 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
       Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
         status shouldBe StatusCodes.BadRequest
-        responseAs[JsonErrors].head should include (s"Only 0 signatures present from previous root, need at least 1")
+        responseErrors should contain("Root role version 1 requires 1 valid signatures in version 2, 0 supplied")
       }
     }
 
-    test("POST to keys/targets adds new public key to root role " + name) {
+    test("GET target key pairs " + name) {
       val repoId = RepoId.generate()
-      generateRootRole(repoId, keyType = keyType).futureValue
-
-      val publicKey = keyType.crypto.generateKeyPair(keyType.crypto.defaultKeySize).pubkey
-
-      val newRootRole = Put(apiUri(s"root/${repoId.show}/keys/targets"), publicKey) ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-        val rootRole = responseAs[SignedPayload[RootRole]].signed
-
-        val targetKeys = rootRole.roles(RoleType.TARGETS)
-        targetKeys.keyids should contain(publicKey.id)
-
-        rootRole.keys(publicKey.id) shouldBe publicKey
-
-        rootRole
-      }
-
-      Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-        responseAs[SignedPayload[RootRole]].signed shouldBe newRootRole
-      }
-    }
-
-    test("GET target key pairs works " + name) {
-      val keyGenerationOp = DefaultKeyGenerationOp(fakeVault)
-
-      val repoId = RepoId.generate()
-
-      // generate target key pair
-      val targetKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
-        repoId, KeyGenRequestStatus.REQUESTED, RoleType.TARGETS, keyType.crypto.defaultKeySize, keyType)
-      keyGenRepo.persist(targetKeyGenRequest).futureValue
-      val publicKeys = keyGenerationOp(targetKeyGenRequest).futureValue
+      val publicKeys = generateRootRole(repoId, keyType).futureValue.filter(_.roleType == RoleType.TARGETS)
 
       Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
@@ -618,23 +636,16 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
 
     test("GET target key pairs error on key not found in vault " + name) {
-      // use a different vault so that the vault used by the resource doesn't find the keys
-      val wrongVault = new FakeVault()
-      val keyGenerationOp = DefaultKeyGenerationOp(wrongVault)
-
       val repoId = RepoId.generate()
+      val keys = generateRootRole(repoId, keyType).futureValue
 
-      // generate target key pair
-      val targetKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
-        repoId, KeyGenRequestStatus.REQUESTED, RoleType.TARGETS, keyType.crypto.defaultKeySize, keyType)
-      keyGenRepo.persist(targetKeyGenRequest).futureValue
-      val publicKeys = keyGenerationOp(targetKeyGenRequest).futureValue
+      Future.sequence(keys.map(_.id).map(fakeVault.deleteKey)).futureValue
 
       Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
-        status shouldBe StatusCodes.InternalServerError
+        responseAs[ErrorRepresentation].code.code shouldBe "vault_resource_not_found"
+        status shouldBe StatusCodes.BadGateway
       }
     }
-
   }
 
   testsFor(keySpecific[RsaKeyType.type, RSATufKey](RsaKeyType, "RSA"))
@@ -645,14 +656,18 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     ClientSignature(keyId, signature.method, signature.sig)
   }
 
-  def clientSignPayload[T : Encoder](rootKeyId: KeyId, role: RootRole, payloadToSign: T): SignedPayload[RootRole] = {
-    val vaultKey = fakeVault.findKey(rootKeyId).futureValue
-    val signature = TufCrypto.signPayload(vaultKey.privateKey, payloadToSign)
-    val clientSignature = ClientSignature(rootKeyId, signature.method, signature.sig)
-    SignedPayload(Seq(clientSignature), role)
+  def clientSignWithVaultKey[T : Encoder](keyId: KeyId, payload: T): ClientSignature = {
+    val vaultKey = fakeVault.findKey(keyId).futureValue
+    val signature = TufCrypto.signPayload(vaultKey.privateKey, payload)
+    ClientSignature(keyId, signature.method, signature.sig)
   }
 
-  def generateRootRole(repoId: RepoId, threshold: Int = 1, keyType: KeyType): Future[Seq[Key]] = {
+  def signPayloadWithVaultKey[T : Encoder](keyId: KeyId, payloadToSign: T): SignedPayload[T] = {
+    val clientSignature = clientSignWithVaultKey(keyId, payloadToSign)
+    SignedPayload(Seq(clientSignature), payloadToSign)
+  }
+
+  def generateRootRole(repoId: RepoId, keyType: KeyType, threshold: Int = 1): Future[Seq[Key]] = {
     val keysF = Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(threshold, keyType)) ~> routes ~> check {
       status shouldBe StatusCodes.Accepted
 
@@ -670,26 +685,13 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       keys
     }
   }
-
-  implicit class RootRoleOps(value: RootRole) {
-    def withRoleKeys(roleType: RoleType, keys: TufKey*): RootRole = {
-      val oldRoleKeys = value.roles(roleType)
-      val newRoles = value.roles + (roleType -> oldRoleKeys.copy(keyids = keys.map(_.id)))
-
-      val newKeys = newRoles.values.flatMap(_.keyids).toSet[KeyId].map { keyid =>
-        value.keys.get(keyid).orElse(keys.find(_.id == keyid)).get
-      }.map(k => k.id -> k).toMap
-
-      value.copy(keys = newKeys, roles = newRoles)
-    }
-  }
 }
 
-object JsonErrors {
-  implicit val jsonErrorsEncoder: Encoder[JsonErrors] = deriveEncoder
-  implicit val jsonErrorsDecoder: Decoder[JsonErrors] = deriveDecoder
-}
+trait HttpResponseTestOps {
+  self: RouteTest =>
+    import cats.syntax.either._
+    import scala.concurrent.duration._
 
-case class JsonErrors(errors: NonEmptyList[String]) {
-  def head: String = errors.head
+    def responseErrors: List[String] =
+      responseAs[ErrorRepresentation].cause.flatMap(_.as[List[String]].toOption).getOrElse(List.empty)
 }
