@@ -51,7 +51,7 @@ object Boot extends BootApp
   lazy val vaultClient = VaultClient(vaultAddr, vaultToken, vaultMount)
 
   val routes: Route =
-    (versionHeaders(version) & logResponseMetrics(projectName) & logRequestResult(("tuf-keyserver", Logging.InfoLevel))) {
+    (versionHeaders(version) & logResponseMetrics(projectName) & logRequestResult(("tuf-keyserver", Logging.DebugLevel))) {
       new TufKeyserverRoutes(vaultClient).routes
     }
 
