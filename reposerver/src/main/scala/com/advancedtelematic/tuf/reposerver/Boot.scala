@@ -71,7 +71,7 @@ object Boot extends BootApp
   val targetStore = TargetStore(keyStoreClient,  targetStoreEngine, messageBusPublisher)
 
   val routes: Route =
-    (versionHeaders(version) & logResponseMetrics(projectName) & logRequestResult(("reposerver", Logging.InfoLevel))) {
+    (versionHeaders(version) & logResponseMetrics(projectName) & logRequestResult(("reposerver", Logging.DebugLevel))) {
       new TufReposerverRoutes(keyStoreClient, NamespaceValidation.withDatabase, targetStore, messageBusPublisher).routes
     }
 
