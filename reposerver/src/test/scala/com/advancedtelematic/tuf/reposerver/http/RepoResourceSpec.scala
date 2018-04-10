@@ -61,13 +61,12 @@ trait RepoSupport extends ResourceSpec with SignedRoleRepositorySupport with Sca
   }
 
   def addTargetToRepo(repoId: RepoId = RepoId.generate()): RepoId = {
-    fakeKeyserverClient.createRoot(repoId)
+    fakeKeyserverClient.createRoot(repoId).futureValue
 
     Post(apiUri(s"repo/${repoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
+      repoId
     }
-
-    repoId
   }
 
   def buildSignedTargetsRole(repoId: RepoId, targets: Map[TargetFilename, ClientTargetItem], version: Int = 2): SignedPayload[TargetsRole] = {
