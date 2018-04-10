@@ -14,7 +14,7 @@ import com.typesafe.config.ConfigFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.LogDirectives._
-import com.advancedtelematic.libats.http.monitoring.MetricsSupport
+import com.advancedtelematic.libats.http.monitoring.{MetricsSupport, VaultHealthCheck}
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
@@ -52,7 +52,7 @@ object Boot extends BootApp
 
   val routes: Route =
     (versionHeaders(version) & logResponseMetrics(projectName) & logRequestResult(("tuf-keyserver", Logging.DebugLevel))) {
-      new TufKeyserverRoutes(vaultClient).routes
+      new TufKeyserverRoutes(vaultClient, dependencyChecks = Seq(new VaultHealthCheck(vaultAddr, vaultToken))).routes
     }
 
   Http().bindAndHandle(routes, host, port)

@@ -8,13 +8,12 @@ import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.server.{Directives, Route}
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import cats.syntax.either._
-import com.advancedtelematic.libats.auth.NamespaceDirectives
 import com.advancedtelematic.libats.http.BootApp
 import com.typesafe.config.ConfigFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.LogDirectives._
-import com.advancedtelematic.libats.http.monitoring.MetricsSupport
+import com.advancedtelematic.libats.http.monitoring.{MetricsSupport, ServiceHealthCheck}
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.libats.messaging.MessageBus
 import com.advancedtelematic.libtuf.data.TufDataType.RsaKeyType
@@ -74,9 +73,13 @@ object Boot extends BootApp
 
   val targetStore = TargetStore(keyStoreClient,  targetStoreEngine, messageBusPublisher)
 
+  val keyserverHealthCheck = new ServiceHealthCheck(keyServerUri)
+
   val routes: Route =
     (versionHeaders(version) & logResponseMetrics(projectName) & logRequestResult(("reposerver", Logging.DebugLevel))) {
-      new TufReposerverRoutes(keyStoreClient, NamespaceValidation.withDatabase, targetStore, messageBusPublisher).routes
+      new TufReposerverRoutes(keyStoreClient, NamespaceValidation.withDatabase, targetStore,
+        messageBusPublisher,
+        Seq(keyserverHealthCheck)).routes
     }
 
   Http().bindAndHandle(routes, host, port)

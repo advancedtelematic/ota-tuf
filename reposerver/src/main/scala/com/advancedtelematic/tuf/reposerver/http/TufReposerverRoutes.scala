@@ -3,7 +3,8 @@ package com.advancedtelematic.tuf.reposerver.http
 import akka.http.scaladsl.server.{Directives, _}
 import akka.stream.Materializer
 import com.advancedtelematic.libats.http.DefaultRejectionHandler._
-import com.advancedtelematic.libats.http.ErrorHandler
+import com.advancedtelematic.libats.http.{ErrorHandler, HealthCheck}
+import com.advancedtelematic.libats.http.monitoring.{ServiceHealthCheck, VaultHealthCheck}
 import com.advancedtelematic.libats.slick.monitoring.DbHealthResource
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
@@ -17,7 +18,8 @@ import scala.concurrent.ExecutionContext
 class TufReposerverRoutes(keyserverClient: KeyserverClient,
                           namespaceValidation: NamespaceValidation,
                           targetStore: TargetStore,
-                          messageBusPublisher: MessageBusPublisher)
+                          messageBusPublisher: MessageBusPublisher,
+                          dependencyChecks: Seq[HealthCheck] = Seq.empty)
                          (implicit val db: Database, val ec: ExecutionContext, mat: Materializer) extends VersionInfo {
 
   import Directives._
@@ -26,8 +28,8 @@ class TufReposerverRoutes(keyserverClient: KeyserverClient,
     handleRejections(rejectionHandler) {
       ErrorHandler.handleErrors {
         pathPrefix("api" / "v1") {
-            new RepoResource(keyserverClient, namespaceValidation, targetStore, new TufTargetsPublisher(messageBusPublisher)).route
-        } ~ DbHealthResource(versionMap).route
+          new RepoResource(keyserverClient, namespaceValidation, targetStore, new TufTargetsPublisher(messageBusPublisher)).route
+        } ~ DbHealthResource(versionMap, dependencies = dependencyChecks).route
       }
     }
 }

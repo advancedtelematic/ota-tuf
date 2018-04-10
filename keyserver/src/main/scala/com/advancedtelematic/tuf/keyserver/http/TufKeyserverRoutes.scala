@@ -3,8 +3,9 @@ package com.advancedtelematic.tuf.keyserver.http
 import akka.http.scaladsl.server.{Directives, _}
 import akka.stream.Materializer
 import com.advancedtelematic.tuf.keyserver.VersionInfo
-import com.advancedtelematic.libats.http.ErrorHandler
+import com.advancedtelematic.libats.http.{ErrorHandler, HealthCheck}
 import com.advancedtelematic.libats.http.DefaultRejectionHandler._
+import com.advancedtelematic.libats.http.monitoring.VaultHealthCheck
 import com.advancedtelematic.libats.slick.monitoring.DbHealthResource
 import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 
@@ -12,7 +13,7 @@ import scala.concurrent.ExecutionContext
 import slick.jdbc.MySQLProfile.api._
 
 
-class TufKeyserverRoutes(vaultClient: VaultClient)
+class TufKeyserverRoutes(vaultClient: VaultClient, dependencyChecks: Seq[HealthCheck] = Seq.empty)
                         (implicit val db: Database, val ec: ExecutionContext, mat: Materializer) extends VersionInfo {
 
   import Directives._
@@ -22,7 +23,7 @@ class TufKeyserverRoutes(vaultClient: VaultClient)
       ErrorHandler.handleErrors {
         pathPrefix("api" / "v1") {
             new RootRoleResource(vaultClient).route
-        } ~ DbHealthResource(versionMap).route
+        } ~ DbHealthResource(versionMap, dependencies = dependencyChecks).route
       }
     }
 }
