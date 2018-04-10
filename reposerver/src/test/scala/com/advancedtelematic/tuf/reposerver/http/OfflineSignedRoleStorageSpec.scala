@@ -28,7 +28,6 @@ import org.scalatest.FunSuite
 
 class OfflineSignedRoleStorageSpec extends TufReposerverSpec with DatabaseSpec with PatienceConfiguration
   with TargetItemRepositorySupport {
-  this: FunSuite =>
 
   implicit val ec = scala.concurrent.ExecutionContext.global
 
@@ -55,84 +54,81 @@ class OfflineSignedRoleStorageSpec extends TufReposerverSpec with DatabaseSpec w
     mockFilename -> ClientTargetItem(mockHashes, 1, Some(defaultCustom))
   )
 
-  // "name" is needed because test descriptions need to be unique
-  def perKeyserver(keyserver: KeyserverClient, name: String) {
-    val subject = new OfflineSignedRoleStorage(keyserver)
+  val keyserver: KeyserverClient = new FakeKeyserverClient
 
-    val signedRoleGeneration = new SignedRoleGeneration(keyserver)
+  val subject = new OfflineSignedRoleStorage(keyserver)
 
-    def storeOffline(repoId: RepoId, targets: Map[TargetFilename, ClientTargetItem], version: Int): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole)]] = {
-      val targetsRole = TargetsRole(Instant.now.plusSeconds(3600), targets, version)
-      val payload = keyserver.sign(repoId, RoleType.TARGETS, targetsRole).futureValue
-      subject.store(repoId, payload)
-    }
+  val signedRoleGeneration = new SignedRoleGeneration(keyserver)
 
-    test("allows previously online targets to contain empty custom metadata" + name) {
-      val repoId = RepoId.generate()
-      keyserver.createRoot(repoId).futureValue
-
-      signedRoleGeneration.addTargetItem(TargetItem(repoId, mockFilename, mockUri.some, mockChecksum, 22, None, StorageMethod.Managed)).futureValue
-      val existingItem = targetItemRepo.findByFilename(repoId, mockFilename).futureValue
-
-      val newTargetItems = Map(mockFilename -> ClientTargetItem(mockHashes, existingItem.length, existingItem.custom.map(_.asJson)))
-
-      storeOffline(repoId, newTargetItems, version = 2).futureValue shouldBe a[Valid[_]]
-    }
-
-    test("allows changing of custom data for existing items " + name) {
-      val repoId = RepoId.generate()
-
-      keyserver.createRoot(repoId).futureValue
-
-      val newCustom = defaultCustom.as[TargetCustom].valueOr(throw _).copy(targetFormat = TargetFormat.BINARY.some)
-
-      val oldTargetItem = TargetItem(repoId, mockFilename, mockUri.some, mockChecksum, 22, newCustom.some, StorageMethod.Managed)
-      signedRoleGeneration.addTargetItem(oldTargetItem).futureValue
-
-      val newTargetItems = Map(mockFilename -> ClientTargetItem(mockHashes, oldTargetItem.length, newCustom.asJson.some))
-
-      storeOffline(repoId, newTargetItems, version = 2).futureValue shouldBe a[Valid[_]]
-
-      targetItemRepo.findByFilename(repoId, mockFilename).futureValue.custom.flatMap(_.targetFormat) should contain(TargetFormat.BINARY)
-    }
-
-    test("keeps some attributes of previously existing targets unchanged when storing new offline targets " + name) {
-      val repoId = RepoId.generate()
-
-      keyserver.createRoot(repoId).futureValue
-
-      val oldFilename = "my/oldfilename".refineTry[ValidTargetFilename].get
-
-      val oldTargetItem = TargetItem(repoId, oldFilename, mockUri.some, mockChecksum, 22, defaultCustom.as[TargetCustom].toOption, StorageMethod.Managed)
-      signedRoleGeneration.addTargetItem(oldTargetItem).futureValue
-
-      val newChecksum = "33a1e103ecb162181620d521915879e68736ea20e4eabe22cc243115d4d43563".refineTry[ValidChecksum].get
-      val newHashes = Map(HashMethod.SHA256 -> newChecksum)
-
-      val newTargetItems = mockTargetItems + (oldFilename -> ClientTargetItem(newHashes, 44, oldTargetItem.custom.map(_.asJson)))
-
-      storeOffline(repoId, newTargetItems, version = 2).futureValue shouldBe a[Valid[_]]
-
-      val newTargetItem = targetItemRepo.findByFilename(repoId, oldFilename).futureValue
-
-      newTargetItem.length shouldBe 44
-      newTargetItem.checksum.hash shouldBe newChecksum
-      newTargetItem.storageMethod shouldBe StorageMethod.Managed
-    }
-
-    test("deletes old target items when storing offline targets " + name) {
-      val repoId = RepoId.generate()
-
-      keyserver.createRoot(repoId).futureValue
-
-      storeOffline(repoId, mockTargetItems, version = 1).futureValue shouldBe a[Valid[_]]
-      targetItemRepo.findFor(repoId).futureValue shouldNot be(empty)
-
-      storeOffline(repoId, Map.empty, version = 2).futureValue shouldBe a[Valid[_]]
-      targetItemRepo.findFor(repoId).futureValue shouldBe empty
-    }
+  def storeOffline(repoId: RepoId, targets: Map[TargetFilename, ClientTargetItem], version: Int): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole)]] = {
+    val targetsRole = TargetsRole(Instant.now.plusSeconds(3600), targets, version)
+    val payload = keyserver.sign(repoId, RoleType.TARGETS, targetsRole).futureValue
+    subject.store(repoId, payload)
   }
 
-  testsFor(perKeyserver(new FakeKeyserverClient(RsaKeyType), "RSA"))
-  testsFor(perKeyserver(new FakeKeyserverClient(Ed25519KeyType), "Ed25519"))
+  keyTypeTest("allows previously online targets to contain empty custom metadata") { keyType =>
+    val repoId = RepoId.generate()
+    keyserver.createRoot(repoId).futureValue
+
+    signedRoleGeneration.addTargetItem(TargetItem(repoId, mockFilename, mockUri.some, mockChecksum, 22, None, StorageMethod.Managed)).futureValue
+    val existingItem = targetItemRepo.findByFilename(repoId, mockFilename).futureValue
+
+    val newTargetItems = Map(mockFilename -> ClientTargetItem(mockHashes, existingItem.length, existingItem.custom.map(_.asJson)))
+
+    storeOffline(repoId, newTargetItems, version = 2).futureValue shouldBe a[Valid[_]]
+  }
+
+  keyTypeTest("allows changing of custom data for existing items ") { keyType =>
+    val repoId = RepoId.generate()
+
+    keyserver.createRoot(repoId).futureValue
+
+    val newCustom = defaultCustom.as[TargetCustom].valueOr(throw _).copy(targetFormat = TargetFormat.BINARY.some)
+
+    val oldTargetItem = TargetItem(repoId, mockFilename, mockUri.some, mockChecksum, 22, newCustom.some, StorageMethod.Managed)
+    signedRoleGeneration.addTargetItem(oldTargetItem).futureValue
+
+    val newTargetItems = Map(mockFilename -> ClientTargetItem(mockHashes, oldTargetItem.length, newCustom.asJson.some))
+
+    storeOffline(repoId, newTargetItems, version = 2).futureValue shouldBe a[Valid[_]]
+
+    targetItemRepo.findByFilename(repoId, mockFilename).futureValue.custom.flatMap(_.targetFormat) should contain(TargetFormat.BINARY)
+  }
+
+  keyTypeTest("keeps some attributes of previously existing targets unchanged when storing new offline targets ") { keyType =>
+    val repoId = RepoId.generate()
+
+    keyserver.createRoot(repoId).futureValue
+
+    val oldFilename = "my/oldfilename".refineTry[ValidTargetFilename].get
+
+    val oldTargetItem = TargetItem(repoId, oldFilename, mockUri.some, mockChecksum, 22, defaultCustom.as[TargetCustom].toOption, StorageMethod.Managed)
+    signedRoleGeneration.addTargetItem(oldTargetItem).futureValue
+
+    val newChecksum = "33a1e103ecb162181620d521915879e68736ea20e4eabe22cc243115d4d43563".refineTry[ValidChecksum].get
+    val newHashes = Map(HashMethod.SHA256 -> newChecksum)
+
+    val newTargetItems = mockTargetItems + (oldFilename -> ClientTargetItem(newHashes, 44, oldTargetItem.custom.map(_.asJson)))
+
+    storeOffline(repoId, newTargetItems, version = 2).futureValue shouldBe a[Valid[_]]
+
+    val newTargetItem = targetItemRepo.findByFilename(repoId, oldFilename).futureValue
+
+    newTargetItem.length shouldBe 44
+    newTargetItem.checksum.hash shouldBe newChecksum
+    newTargetItem.storageMethod shouldBe StorageMethod.Managed
+  }
+
+  keyTypeTest("deletes old target items when storing offline targets ") { keyType =>
+    val repoId = RepoId.generate()
+
+    keyserver.createRoot(repoId).futureValue
+
+    storeOffline(repoId, mockTargetItems, version = 1).futureValue shouldBe a[Valid[_]]
+    targetItemRepo.findFor(repoId).futureValue shouldNot be(empty)
+
+    storeOffline(repoId, Map.empty, version = 2).futureValue shouldBe a[Valid[_]]
+    targetItemRepo.findFor(repoId).futureValue shouldBe empty
+  }
+
 }

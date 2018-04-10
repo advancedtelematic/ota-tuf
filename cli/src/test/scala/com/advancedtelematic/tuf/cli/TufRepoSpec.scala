@@ -366,7 +366,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
 
     repo.pullRoot(reposerverClient, skipLocalValidation = true).futureValue
 
-    repo.pullRoot(reposerverClient, skipLocalValidation = false).futureValue shouldBe a[SignedPayload[RootRole]]
+    repo.pullRoot(reposerverClient, skipLocalValidation = false).futureValue shouldBe a[SignedPayload[_]]
   }
 
   test("pull fails when new root.json is not valid against local root.json") {

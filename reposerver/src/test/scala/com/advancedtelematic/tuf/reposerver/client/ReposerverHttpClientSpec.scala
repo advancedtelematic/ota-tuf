@@ -14,10 +14,11 @@ import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverHttpClient
 import com.advancedtelematic.tuf.reposerver.util._
+import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps.genNs
 import org.scalatest.concurrent.{Eventually, PatienceConfiguration}
 import org.scalatest.time.{Seconds, Span}
 
-trait ReposerverHttpClientSpec extends TufReposerverSpec
+class ReposerverHttpClientSpec extends TufReposerverSpec
   with ResourceSpec
   with HttpClientSpecSupport
   with PatienceConfiguration
@@ -27,40 +28,40 @@ trait ReposerverHttpClientSpec extends TufReposerverSpec
 
   val client = new ReposerverHttpClient("http://localhost", testHttpClient)
 
-  test("creates a root") {
-    val ns = Namespace("create_root")
+  keyTypeTest("creates a root") { keyType =>
+    val ns = genNs
     client.createRoot(ns).futureValue shouldBe a[RepoId]
   }
 
-  test("fetches a root") {
-    val ns = Namespace("other_root")
+  keyTypeTest("fetches a root") { keyType =>
+    val ns = genNs
     client.createRoot(ns).futureValue
     client.fetchRoot(ns).futureValue.signed shouldBe a[RootRole]
   }
 
-  test("fails if role not on keyserver") {
-    val ns = Namespace("no_keyserver_root_other_root")
+  keyTypeTest("fails if role not on keyserver") { keyType =>
+    val ns = genNs
     val repoId = client.createRoot(ns).futureValue
     fakeKeyserverClient.deleteRepo(repoId)
     client.fetchRoot(ns).failed.futureValue shouldBe ReposerverClient.RootNotInKeyserver
   }
 
-  test("fails if keys not ready") {
-    val ns = Namespace("keyserver_keys_not_ready")
+  keyTypeTest("fails if keys not ready") { keyType =>
+    val ns = genNs
     val repoId = client.createRoot(ns).futureValue
     fakeKeyserverClient.forceKeyGenerationPending(repoId)
     client.fetchRoot(ns).failed.futureValue shouldBe ReposerverClient.KeysNotReady
   }
 
-  test("can add target") {
-    val ns = Namespace(RepoId.generate.toString)
+  keyTypeTest("can add target") { keyType =>
+    val ns = genNs
     client.createRoot(ns).futureValue shouldBe a[RepoId]
     client.addTarget(ns, "filename", Uri("http://example.com"),
                      Sha256Digest.digest("hi".getBytes), 42, BINARY).futureValue shouldBe(())
   }
 
-  test("can add target with content") {
-    val ns = Namespace("content-ns")
+  keyTypeTest("can add target with content") { keyType =>
+    val ns = genNs
     val tempFile = Files.createTempFile("reposerver-client", ".txt")
     val text = "some string".getBytes
     Files.write(tempFile, text)
@@ -77,8 +78,8 @@ trait ReposerverHttpClientSpec extends TufReposerverSpec
     bytes.utf8String shouldBe "some string"
   }
 
-  test("can't add target if keys are not in keyserver") {
-    val ns = Namespace("creating-repo")
+  keyTypeTest("can't add target if keys are not in keyserver") { keyType =>
+    val ns = genNs
     val repoId = client.createRoot(ns).futureValue
     fakeKeyserverClient.forceKeyGenerationPending(repoId)
 
@@ -86,16 +87,8 @@ trait ReposerverHttpClientSpec extends TufReposerverSpec
       Sha256Digest.digest("hi".getBytes), 42, BINARY).failed.futureValue shouldBe ReposerverClient.KeysNotReady
   }
 
-  test("can't add target to nonexistant repo") {
+  keyTypeTest("can't add target to nonexistant repo") { keyType =>
     client.addTarget(Namespace("non-existant-namespace"), "filename", Uri("http://example.com"),
                      Sha256Digest.digest("hi".getBytes), 42, BINARY).failed.futureValue shouldBe ReposerverClient.NotFound
   }
-}
-
-class RsaReposerverHttpClientSpec extends ReposerverHttpClientSpec {
-  override val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(RsaKeyType)
-}
-
-class EdReposerverHttpClientSpec extends ReposerverHttpClientSpec {
-  override val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient(Ed25519KeyType)
 }
