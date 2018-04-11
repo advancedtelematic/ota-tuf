@@ -6,10 +6,10 @@ import com.advancedtelematic.libats.data.DataType.Checksum
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.crypt.TufCrypto.KeyOps
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, EcPrime256KeyType, KeyType, RoleType, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{EcPrime256KeyType, Ed25519KeyType, KeyType, RoleType, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libats.slick.db.SlickCirceMapper
+import com.advancedtelematic.libats.slick.db.{SlickCirceMapper, SlickEncryptedColumn}
 import io.circe.Json
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.codecs.CirceAts._
@@ -45,4 +45,6 @@ object TufSlickMappings {
   implicit val jsonSignedPayloadMapper = SlickCirceMapper.circeMapper[SignedPayload[Json]]
 
   implicit val tufKeyMapper = SlickCirceMapper.circeMapper[TufKey]
+
+  implicit val encryptedTufPrivateKeyMapper = SlickEncryptedColumn.encryptedColumnJsonMapper[TufPrivateKey]
 }

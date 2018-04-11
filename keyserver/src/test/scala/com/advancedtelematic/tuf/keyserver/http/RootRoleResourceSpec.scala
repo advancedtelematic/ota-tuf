@@ -19,8 +19,7 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.ErrorCodes
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultResourceNotFound
+import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepository, KeyRepositorySupport}
 import eu.timepit.refined.api.Refined
 import org.scalatest.time.{Millis, Seconds, Span}
 import io.circe.generic.semiauto._
@@ -52,11 +51,12 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
-  test("returns 404 if there are no keys for given repo/roletype") {
+  test("returns 412 if there are no private keys for given repo/roletype") {
     val repoId = RepoId.generate()
 
     Post(apiUri(s"root/${repoId.show}/targets"), Json.Null) ~> routes ~> check {
-      status shouldBe StatusCodes.NotFound
+      status shouldBe StatusCodes.PreconditionFailed
+      responseAs[ErrorRepresentation].code shouldBe ErrorCodes.KeyServer.PrivateKeysNotFound
     }
   }
 
@@ -272,7 +272,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
-  keyTypeTest("POST to repoId/roletype return 412 when key is offline ") { keyType =>
+  keyTypeTest("POST to repoId/roletype return 412 when key is offline") { keyType =>
     val repoId = RepoId.generate()
 
     generateRootRole(repoId, keyType).futureValue
@@ -287,6 +287,8 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
 
     Post(apiUri(s"root/${repoId.show}/targets"), Json.Null) ~> routes ~> check {
+      println(responseAs[Json].noSpaces)
+
       status shouldBe StatusCodes.PreconditionFailed
     }
   }
@@ -305,7 +307,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       status shouldBe StatusCodes.NoContent
     }
 
-    fakeVault.findKey(rootKeyId).failed.futureValue shouldBe VaultResourceNotFound
+    keyRepo.find(rootKeyId).failed.futureValue shouldBe KeyRepository.KeyNotFound
   }
 
   keyTypeTest("DELETE on private_key wipes non root private key ") { keyType =>
@@ -322,7 +324,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       status shouldBe StatusCodes.NoContent
     }
 
-    fakeVault.findKey(keyId).failed.futureValue shouldBe VaultResourceNotFound
+    keyRepo.find(keyId).failed.futureValue shouldBe KeyRepository.KeyNotFound
   }
 
   keyTypeTest("wiping private key still allows download of root.json ") { keyType =>
@@ -395,9 +397,9 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     val lastRoot = latestRoot()
     val lastRootKeyId = lastRoot.roles(RoleType.ROOT).keyids.head
-    val lastRootKey = fakeVault.findKey(lastRootKeyId).futureValue
+    val lastRootKey = keyRepo.find(lastRootKeyId).futureValue
 
-    val (newKeyPair, signedPayload0) = signedRoot(lastRoot, lastRootKeyId, lastRootKey.privateKey)
+    val (newKeyPair, signedPayload0) = signedRoot(lastRoot, lastRootKeyId, lastRootKey.privateKey.value)
 
     Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload0) ~> routes ~> check { // TODO: Wrong api ? this is messed up
       status shouldBe StatusCodes.NoContent
@@ -431,7 +433,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     val rootRole = oldRootRole.withRoleKeys(RoleType.ROOT, newPubKey)
 
     val newSignature = signWithKeyPair(newPubKey.id, newPrivKey, rootRole)
-    val oldSignedPayload = signPayloadWithVaultKey(rootKeyId, rootRole)
+    val oldSignedPayload = signPayloadWithKey(rootKeyId, rootRole)
     val signedPayload = oldSignedPayload.copy(signatures = newSignature +: oldSignedPayload.signatures)
 
     Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
@@ -445,8 +447,8 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
 
     Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
-      status shouldBe StatusCodes.PreconditionFailed
-      responseAs[ErrorRepresentation].code shouldBe ErrorCodes.KeyServer.PrivateKeysNotFound
+      status shouldBe StatusCodes.NotFound
+      responseAs[ErrorRepresentation].code.code shouldBe "missing_entity"
     }
   }
 
@@ -461,7 +463,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     val sameVersionRoot = rootRole.copy(version = rootRole.version - 1)
     val rootKeyId = sameVersionRoot.roles(RoleType.ROOT).keyids.head
-    val signedPayload = signPayloadWithVaultKey(rootKeyId, sameVersionRoot)
+    val signedPayload = signPayloadWithKey(rootKeyId, sameVersionRoot)
 
     Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
       responseErrors should contain("Invalid version bump from 1 to 1")
@@ -479,7 +481,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
 
     val rootKeyId = rootRole.roles(RoleType.ROOT).keyids.head
-    val clientSignature = clientSignWithVaultKey(rootKeyId, "not a root role")
+    val clientSignature = clientSignWithKey(rootKeyId, "not a root role")
     val signedPayload = SignedPayload(Seq(clientSignature), rootRole)
 
     Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
@@ -516,7 +518,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
 
     val rootKeyId = rootRole.roles(RoleType.ROOT).keyids.head
-    val signedPayload = signPayloadWithVaultKey(rootKeyId, rootRole)
+    val signedPayload = signPayloadWithKey(rootKeyId, rootRole)
 
     Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
@@ -538,7 +540,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
 
     val rootKeyId = newUnsignedRole.roles(RoleType.ROOT).keyids.head
-    val signedPayload = signPayloadWithVaultKey(rootKeyId, newUnsignedRole)
+    val signedPayload = signPayloadWithKey(rootKeyId, newUnsignedRole)
 
     Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
@@ -567,7 +569,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     val rootRole = oldRootRole.withRoleKeys(RoleType.ROOT, keyPair.pubkey)
 
     val newSignature = signWithKeyPair(keyPair.pubkey.id, keyPair.privkey, rootRole)
-    val oldSignedPayload = signPayloadWithVaultKey(rootKeyId, rootRole)
+    val oldSignedPayload = signPayloadWithKey(rootKeyId, rootRole)
     val signedPayload = oldSignedPayload.copy(signatures = newSignature +: oldSignedPayload.signatures)
 
     Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
@@ -597,7 +599,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     val newRoles = (oldRootRole.roles - RoleType.ROOT) + (RoleType.ROOT -> RoleKeys(Seq(newKey.id), 1))
     val rootRole = oldRootRole.copy(keys = newKeys, roles = newRoles)
 
-    val signedPayload = signPayloadWithVaultKey(rootKeyId, rootRole)
+    val signedPayload = signPayloadWithKey(rootKeyId, rootRole)
 
     Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
@@ -637,15 +639,15 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
-  keyTypeTest("GET target key pairs error on key not found in vault ") { keyType =>
+  keyTypeTest("GET target key pairs error when private keys do not exist") { keyType =>
     val repoId = RepoId.generate()
     val keys = generateRootRole(repoId, keyType).futureValue
 
-    Future.sequence(keys.map(_.id).map(fakeVault.deleteKey)).futureValue
+    Future.sequence(keys.map(_.id).map(keyRepo.delete)).futureValue
 
     Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
-      responseAs[ErrorRepresentation].code.code shouldBe "vault_resource_not_found"
-      status shouldBe StatusCodes.BadGateway
+      responseAs[ErrorRepresentation].code.code shouldBe "missing_entity"
+      status shouldBe StatusCodes.NotFound
     }
   }
 
@@ -654,14 +656,14 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     ClientSignature(keyId, signature.method, signature.sig)
   }
 
-  def clientSignWithVaultKey[T: Encoder](keyId: KeyId, payload: T): ClientSignature = {
-    val vaultKey = fakeVault.findKey(keyId).futureValue
-    val signature = TufCrypto.signPayload(vaultKey.privateKey, payload)
+  def clientSignWithKey[T: Encoder](keyId: KeyId, payload: T): ClientSignature = {
+    val key = keyRepo.find(keyId).futureValue
+    val signature = TufCrypto.signPayload(key.privateKey.value, payload)
     ClientSignature(keyId, signature.method, signature.sig)
   }
 
-  def signPayloadWithVaultKey[T: Encoder](keyId: KeyId, payloadToSign: T): SignedPayload[T] = {
-    val clientSignature = clientSignWithVaultKey(keyId, payloadToSign)
+  def signPayloadWithKey[T: Encoder](keyId: KeyId, payloadToSign: T): SignedPayload[T] = {
+    val clientSignature = clientSignWithKey(keyId, payloadToSign)
     SignedPayload(Seq(clientSignature), payloadToSign)
   }
 

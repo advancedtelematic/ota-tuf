@@ -110,6 +110,9 @@ protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext
   protected [db] def deleteRepoKeys(repoId: RepoId): DBIO[Unit] =
     keys.filter(_.repoId === repoId).delete.map(_ => ())
 
+  def find(keyId: KeyId): Future[Key] =
+    findAll(Seq(keyId)).map(_.head)
+
   def findAll(keyIds: Seq[KeyId]): Future[Seq[Key]] =
     db.run(keys.filter(_.id.inSet(keyIds)).result.failIfEmpty(KeyNotFound))
 
@@ -122,6 +125,10 @@ protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext
 
   def repoKeys(repoId: RepoId): Future[Seq[Key]] = db.run {
     Schema.keys.filter(_.repoId === repoId).result
+  }
+
+  def delete(keyId: KeyId): Future[Unit] = db.run {
+    keys.filter(_.id === keyId).delete.map(_ => ())
   }
 }
 

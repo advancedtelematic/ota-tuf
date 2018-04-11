@@ -3,9 +3,10 @@ package com.advancedtelematic.tuf.keyserver.db
 import java.security.PublicKey
 import java.time.Instant
 
+import com.advancedtelematic.libats.slick.db.SlickEncryptedColumn.EncryptedColumn
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, SignedPayload}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, SignedPayload, TufPrivateKey}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
@@ -44,8 +45,9 @@ object Schema {
     def roleType = column[RoleType]("role_type")
     def keyType = column[KeyType]("key_type")
     def publicKey = column[PublicKey]("public_key") // TODO: Use TufKey instead, migrate, remove `key_type`, then remove KeyType Enum ?
+    def privateKey = column[EncryptedColumn[TufPrivateKey]]("private_key")
 
-    override def * = (id, repoId, roleType, keyType, publicKey) <> ((Key.apply _).tupled, Key.unapply)
+    override def * = (id, repoId, roleType, keyType, publicKey, privateKey) <> ((Key.apply _).tupled, Key.unapply)
   }
 
   protected [db] val keys = TableQuery[KeyTable]

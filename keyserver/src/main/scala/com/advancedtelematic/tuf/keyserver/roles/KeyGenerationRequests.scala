@@ -11,7 +11,6 @@ import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.tuf.keyserver.db._
 import com.advancedtelematic.tuf.keyserver.http._
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.{RootRoleValidation, TufDataType}
@@ -19,13 +18,13 @@ import com.advancedtelematic.libtuf.data.{RootRoleValidation, TufDataType}
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 
-class SignedRootRoles(vaultClient: VaultClient)
+class SignedRootRoles()
                      (implicit val db: Database, val ec: ExecutionContext)
 extends KeyRepositorySupport with SignedRootRoleSupport {
 
   private val DEFAULT_ROLE_EXPIRE = Duration.ofDays(365)
   private val rootRoleGeneration = new KeyGenerationRequests()
-  private val roleSigning = new RoleSigning(vaultClient)
+  private val roleSigning = new RoleSigning()
 
   def findByVersion(repoId: RepoId, version: Int): Future[SignedPayload[RootRole]] =
     signedRootRoleRepo.findByVersion(repoId, version)

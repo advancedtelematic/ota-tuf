@@ -36,7 +36,7 @@ trait HttpClientSpecSupport {
 trait RootGenerationSpecSupport {
   self: ResourceSpec with KeyGenRequestSupport =>
 
-  private val keyGenerationOp = DefaultKeyGenerationOp(fakeVault)
+  private val keyGenerationOp = DefaultKeyGenerationOp()
 
   def processKeyGenerationRequest(repoId: RepoId): Future[Seq[Key]] = {
     keyGenRepo.findBy(repoId).flatMap { ids ⇒
@@ -66,5 +66,5 @@ trait ResourceSpec extends TufKeyserverSpec
   with LongHttpRequest {
   def apiUri(path: String): String = "/api/v1/" + path
 
-  lazy val routes = new TufKeyserverRoutes(fakeVault).routes
+  lazy val routes = new TufKeyserverRoutes().routes
 }
