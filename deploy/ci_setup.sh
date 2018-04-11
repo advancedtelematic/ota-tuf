@@ -47,7 +47,7 @@ function start_vault {
            -e VAULT_DEV_ROOT_TOKEN_ID=$VAULT_TOKEN \
            --volume $(pwd)/keyserver/src/main/resources:/tmp/resources \
            -p 8200:8200 \
-           -d vault
+           -d vault:0.6.5
 }
 
 function setup_vault {
@@ -67,8 +67,8 @@ function ensure_vault_running {
     sleep 5s
 
     for t in `seq $tries`; do
-        res=$(curl --silent --fail 127.0.0.1:8200)
-        if [[ $? == 22 ]]; then
+        res=$(curl --silent --fail 127.0.0.1:8200/v1/sys/health)
+        if [[ $? == 0 ]]; then
             echo "vault is ready"
 
             setup_vault
@@ -84,8 +84,8 @@ function ensure_vault_running {
         fi
     done
 
-    res=$(curl --silent --fail 127.0.0.1:8200)
-    if [[ $? != 22 ]]; then
+    res=$(curl --silent --fail 127.0.0.1:8200/v1/sys/health)
+    if [[ $? != 0 ]]; then
         echo "Error, could not start vault"
         exit -1;
     fi
