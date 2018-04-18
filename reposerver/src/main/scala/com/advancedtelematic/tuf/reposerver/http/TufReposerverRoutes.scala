@@ -4,7 +4,6 @@ import akka.http.scaladsl.server.{Directives, _}
 import akka.stream.Materializer
 import com.advancedtelematic.libats.http.DefaultRejectionHandler._
 import com.advancedtelematic.libats.http.{ErrorHandler, HealthCheck}
-import com.advancedtelematic.libats.http.monitoring.{ServiceHealthCheck, VaultHealthCheck}
 import com.advancedtelematic.libats.slick.monitoring.DbHealthResource
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient

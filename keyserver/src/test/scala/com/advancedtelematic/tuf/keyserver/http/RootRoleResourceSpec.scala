@@ -1,6 +1,5 @@
 package com.advancedtelematic.tuf.keyserver.http
 
-import cats.syntax.either._
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.RouteTest
 import com.advancedtelematic.tuf.util.{KeyTypeSpecSupport, ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
@@ -9,10 +8,10 @@ import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import cats.syntax.show._
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RepoId, TufPrivateKey, _}
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TufPrivateKey, _}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequestStatus}
 import io.circe.{Encoder, Json}
-import org.scalatest.{FunSuite, Inspectors}
+import org.scalatest.Inspectors
 import org.scalatest.concurrent.PatienceConfiguration
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -22,9 +21,7 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepository, KeyRepositorySupport}
 import eu.timepit.refined.api.Refined
 import org.scalatest.time.{Millis, Seconds, Span}
-import io.circe.generic.semiauto._
 import com.advancedtelematic.libtuf.data.RootManipulationOps._
-import org.scalactic.source.Position
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -689,8 +686,6 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
 trait HttpResponseTestOps {
   self: RouteTest =>
-    import cats.syntax.either._
-    import scala.concurrent.duration._
 
     def responseErrors: List[String] =
       responseAs[ErrorRepresentation].cause.flatMap(_.as[List[String]].toOption).getOrElse(List.empty)

@@ -47,8 +47,6 @@ import eu.timepit.refined.api.Refined
 import com.advancedtelematic.libtuf.data.ClientDataType.RoleTypeOps
 import com.advancedtelematic.tuf.reposerver.http.RepoResource.CreateRepositoryRequest
 
-import scala.util.Random
-
 trait RepoSupport extends ResourceSpec with SignedRoleRepositorySupport with ScalaFutures with ScalatestRouteTest { this: Suite ⇒
   implicit val ec = executor
 

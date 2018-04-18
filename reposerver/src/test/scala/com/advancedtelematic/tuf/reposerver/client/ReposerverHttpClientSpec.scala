@@ -8,7 +8,7 @@ import akka.stream.scaladsl.{FileIO, Sink}
 import akka.util.ByteString
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RepoId, RsaKeyType, TargetName, TargetVersion, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetName, TargetVersion, ValidTargetFilename}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.BINARY
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient

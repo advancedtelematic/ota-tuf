@@ -18,7 +18,6 @@ import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import java.security.KeyFactory
 
-import cats.data.Validated.Valid
 import cats.data.{NonEmptyList, ValidatedNel}
 import cats.implicits._
 import io.circe.{Encoder, Json}

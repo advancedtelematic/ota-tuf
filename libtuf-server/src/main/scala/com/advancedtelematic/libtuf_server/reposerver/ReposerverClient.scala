@@ -15,7 +15,7 @@ import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libats.data.ErrorCode
-import com.advancedtelematic.libats.http.Errors.{JsonError, RawError, RemoteServiceError}
+import com.advancedtelematic.libats.http.Errors.{RawError, RemoteServiceError}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat._
 import com.advancedtelematic.libtuf.data.TufCodecs._
@@ -24,7 +24,6 @@ import scala.concurrent.{ExecutionContext, Future}
 import io.circe.generic.semiauto._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.HttpCodecs._
-import cats.syntax.show._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf_server.http.{ServiceHttpClient, ServiceHttpClientSupport}
 

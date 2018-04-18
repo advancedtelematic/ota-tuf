@@ -8,7 +8,6 @@ import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.tuf.cli.repo.TufRepo
 
 import scala.concurrent.{ExecutionContext, Future}
-import org.slf4j.LoggerFactory
 
 import scala.util.{Failure, Success}
 import scalaj.http.HttpRequest

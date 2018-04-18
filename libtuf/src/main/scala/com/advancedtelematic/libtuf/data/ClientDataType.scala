@@ -10,7 +10,6 @@ import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.{Decoder, Json}
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import cats.syntax.either._
 import com.advancedtelematic.libats.data.DataType.HashMethod.HashMethod
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
 

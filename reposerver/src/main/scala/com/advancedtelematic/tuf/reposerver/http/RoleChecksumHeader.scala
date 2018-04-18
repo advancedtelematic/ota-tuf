@@ -5,7 +5,6 @@ import akka.http.scaladsl.server.{Directive0, Directive1, Directives}
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.refineV
-import cats.syntax.either._
 
 object RoleChecksumHeader {
   import Directives._

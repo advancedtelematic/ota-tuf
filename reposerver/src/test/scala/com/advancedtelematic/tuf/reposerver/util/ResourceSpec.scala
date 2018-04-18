@@ -1,9 +1,9 @@
 package com.advancedtelematic.tuf.reposerver.util
 
 import java.nio.file.Files
-import java.security.{KeyPair, PrivateKey, PublicKey}
+import java.security.PublicKey
 import java.time.Instant
-import java.time.temporal.{ChronoField, ChronoUnit}
+import java.time.temporal.ChronoUnit
 import java.util.NoSuchElementException
 import java.util.concurrent.ConcurrentHashMap
 

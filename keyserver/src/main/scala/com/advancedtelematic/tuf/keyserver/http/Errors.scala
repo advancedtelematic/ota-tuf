@@ -1,7 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.http
 
 import akka.http.scaladsl.model.StatusCodes
-import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{JsonError, RawError}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenId

@@ -2,13 +2,11 @@ package com.advancedtelematic.tuf.reposerver.http
 
 import akka.http.scaladsl.unmarshalling._
 import PredefinedFromStringUnmarshallers.CsvSeq
-import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server._
 import cats.data.Validated.{Invalid, Valid}
 import cats.implicits._
-import cats.syntax.either._
 import com.advancedtelematic.libats.data.RefinedUtils._
 import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
@@ -17,7 +15,6 @@ import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
 import com.advancedtelematic.tuf.reposerver.db.{RepoNamespaceRepositorySupport, TargetItemRepositorySupport}
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RootRole, TargetCustom, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
@@ -28,14 +25,12 @@ import com.advancedtelematic.libats.codecs.CirceCodecs._
 import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
-import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem._
 import com.advancedtelematic.libats.http.UUIDKeyPath._
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.Settings
 import com.advancedtelematic.libtuf_server.data.Marshalling._
 import com.advancedtelematic.tuf.reposerver.http.Errors.NoRepoForNamespace
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import eu.timepit.refined.api.Refined
 import io.circe.{Decoder, Encoder, Json}
 import io.circe.syntax._
 import org.slf4j.LoggerFactory

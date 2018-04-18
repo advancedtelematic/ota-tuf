@@ -1,9 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.db
 
-import java.time.Instant
-
 import com.advancedtelematic.libtuf.data.TufDataType._
-import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
@@ -14,7 +11,6 @@ import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import slick.jdbc.MySQLProfile.api._
 import scala.concurrent.{ExecutionContext, Future}
-import com.advancedtelematic.libtuf_server.data.TufSlickMappings._
 import SlickMappings._
 
 trait DatabaseSupport {

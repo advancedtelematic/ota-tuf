@@ -1,11 +1,9 @@
 package com.advancedtelematic.tuf.cli.repo
 
 import java.nio.file.attribute.{PosixFilePermission, PosixFilePermissions}
-import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
-import java.util
+import java.nio.file.{FileAlreadyExistsException, Files, Path}
 import PosixFilePermission._
 import scala.collection.JavaConverters._
-import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, TufKey, TufKeyPair, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.KeyName
 import org.slf4j.LoggerFactory

@@ -2,14 +2,11 @@ package com.advancedtelematic.tuf.keyserver.client
 
 import java.security.interfaces.RSAPublicKey
 
-import cats.syntax.either._
-import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{EcPrime256KeyType, Ed25519KeyType, Ed25519TufKey, Ed25519TufKeyPair, KeyId, KeyType, RSATufKeyPair, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
+import com.advancedtelematic.libtuf.data.TufDataType.{EcPrime256KeyType, Ed25519TufKey, KeyId, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libats.http.Errors.{RawError, RemoteServiceError}
+import com.advancedtelematic.libats.http.Errors.RemoteServiceError
 import com.advancedtelematic.libtuf_server.keyserver.{KeyserverClient, KeyserverHttpClient}
-import com.advancedtelematic.tuf.keyserver.daemon.DefaultKeyGenerationOp
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 import com.advancedtelematic.tuf.util._
@@ -19,9 +16,7 @@ import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Millis, Seconds, Span}
 
 import scala.async.Async.{async, await}
-import scala.concurrent.java8.FuturesConvertersImpl.P
 import scala.concurrent.{ExecutionContext, Future}
-import scala.reflect.ClassTag
 
 class KeyserverHttpClientSpec extends TufKeyserverSpec
   with ResourceSpec

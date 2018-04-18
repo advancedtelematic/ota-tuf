@@ -10,10 +10,8 @@ import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMe
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.Encoder
 import TufCrypto.PublicKeyOps
-import com.advancedtelematic.libtuf.data.TufDataType.RsaKeyType
-
-import scala.reflect.ClassTag
-
+import com.advancedtelematic.libats.data.DataType.HashMethod.HashMethod
+import com.advancedtelematic.libats.data.DataType.ValidChecksum
 
 object TufDataType {
   final case class ValidHardwareIdentifier()
@@ -39,6 +37,11 @@ object TufDataType {
       _ => "TargetFilename cannot be empty or bigger than 254 chars or contain `..`",
       ValidTargetFilename()
     )
+
+  final case class OperationResult(target: TargetFilename, hashes: Map[HashMethod, Refined[String, ValidChecksum]],
+                                   length: Long, resultCode: Int, resultText: String) {
+    def isSuccess:Boolean = resultCode == 0 || resultCode == 1
+  }
 
   case class ValidKeyId()
   type KeyId = Refined[String, ValidKeyId]

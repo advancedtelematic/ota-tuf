@@ -9,15 +9,14 @@ import java.time.{Instant, Period}
 
 import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import cats.data.Validated.{Invalid, Valid}
-import cats.syntax._
 import scala.async.Async._
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, MetaPath, RoleKeys, RootRole, TargetCustom, TargetsRole, TufRole, TufRoleOps, VersionedRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, MetaPath, RoleKeys, RootRole, TargetCustom, TargetsRole, TufRole, TufRoleOps}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetName, TargetVersion, TufKey, TufKeyPair, TufPrivateKey, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetName, TargetVersion, TufKeyPair, TufPrivateKey, ValidTargetFilename}
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
 import com.advancedtelematic.tuf.cli.DataType._
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoConfig, RepoName}
@@ -26,14 +25,14 @@ import eu.timepit.refined.api.Refined
 import eu.timepit.refined.refineV
 import io.circe.jawn.parseFile
 import io.circe.syntax._
-import io.circe.{Decoder, Encoder, ParsingFailure}
+import io.circe.{Decoder, Encoder}
 import org.slf4j.LoggerFactory
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{RoleNotFound, TargetsResponse}
 import java.nio.file.attribute.PosixFilePermission._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
-import cats.data.{NonEmptyList, Validated, ValidatedNel}
+import cats.data.{NonEmptyList, ValidatedNel}
 import com.advancedtelematic.libtuf.data.RootRoleValidation
 
 import scala.collection.JavaConverters._
@@ -83,7 +82,6 @@ object TufRepo {
 }
 
 class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionContext) {
-  import CliCodecs._
   import cats.implicits._
   import TufRepo._
 

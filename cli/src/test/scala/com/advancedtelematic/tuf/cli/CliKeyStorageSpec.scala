@@ -4,12 +4,10 @@ import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermission
 import PosixFilePermission._
 
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, Ed25519TufKey, Ed25519TufPrivateKey, KeyType, RSATufKey, RSATufPrivateKey, RsaKeyType}
 import com.advancedtelematic.tuf.cli.DataType.KeyName
 import com.advancedtelematic.tuf.cli.repo.CliKeyStorage
 
 import scala.collection.JavaConverters._
-import scala.reflect.ClassTag
 
 class CliKeyStorageSpec extends CliSpec with KeyTypeSpecSupport  {
   val tempDir = Files.createTempDirectory("tuf-keys")
