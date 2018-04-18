@@ -178,7 +178,7 @@ object TufCrypto {
     val validSignatureCount: ValidatedNel[String, List[KeyId]] =
       sigsByKeyId.par.map { case (keyId, sig) =>
         publicKeys.get(keyId)
-          .toRight(s"No public key available for key ${sig.keyid}")
+          .toRight(s"key ${sig.keyid} required for role validation not found in root role")
           .ensure(s"Invalid signature for key ${sig.keyid}") { key =>
             signedPayload.isValidFor(key)
           }
