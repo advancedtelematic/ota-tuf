@@ -93,7 +93,7 @@ class RootRoleResource()
         }
       } ~
       pathPrefix("keys") {
-        (path(KeyIdPath) & get) { keyId ⇒
+        (get & path(KeyIdPath)) { keyId ⇒
           complete(rootRoleKeyEdit.findKeyPair(repoId, keyId))
         } ~
         pathPrefix("targets") { // TODO: This should be param roleType=targets
