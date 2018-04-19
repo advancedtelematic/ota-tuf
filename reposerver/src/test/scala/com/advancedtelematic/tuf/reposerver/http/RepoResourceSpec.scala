@@ -818,7 +818,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
-      responseAs[JsonErrors].head should include(s"No public key available for key ${pub.id}")
+      responseAs[JsonErrors].head should include(s"key ${pub.id} required for role validation not found in root role")
     }
   }
 

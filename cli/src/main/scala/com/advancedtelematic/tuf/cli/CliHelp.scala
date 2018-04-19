@@ -44,7 +44,7 @@ object CliHelp {
           |Common causes for this error include:
           |
           |- You are trying to pull a version of targets.json signed with keys no longer present on root.json.
-          |  This happens if you rotate root.json and try to pull targets.json without first pushing a targets.json signed with the new targets.keys.
+          |  This can happen if you rotate root.json and try to pull targets.json without first pushing a targets.json signed with the new targets.keys.
           |
           |  Sign a targets.json with the keys used to rotate root.json, push it to the server and try again.
           |
