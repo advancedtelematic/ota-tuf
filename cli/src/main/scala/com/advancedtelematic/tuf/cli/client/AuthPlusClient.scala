@@ -31,7 +31,7 @@ protected class AuthPlusClient(val config: AuthConfig,
 
   def authToken(): Future[AuthPlusToken] = {
 
-    val req = scalaj.http.Http(apiUri("/token"))
+    val req = scalaj.http.Http(apiUri("token"))
       .auth(config.client_id, config.client_secret)
       .postForm(Seq("grant_type" → "client_credentials"))
 
