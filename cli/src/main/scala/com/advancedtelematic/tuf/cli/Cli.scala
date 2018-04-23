@@ -465,6 +465,7 @@ object Cli extends App with VersionInfo {
         sys.exit(2)
       case ex: Throwable => // Already logged
         log.debug(ex.getMessage)
+        sys.exit(3)
     }
   }
 }
