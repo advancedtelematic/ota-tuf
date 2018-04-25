@@ -2,7 +2,7 @@ package com.advancedtelematic.tuf.keyserver.daemon
 
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKitBase}
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RepoId, RoleType, RsaKeyType}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RepoId, RoleType, RsaKeyType}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.tuf.util.{KeyTypeSpecSupport, TufKeyserverSpec}
@@ -28,7 +28,7 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
   implicit val ec = ExecutionContext.global
 
   val testKeyGenOp: KeyGenRequest => Future[Seq[Key]] = (kgr: KeyGenRequest) => {
-    val defaultOp = DefaultKeyGenerationOp(fakeVault)
+    val defaultOp = DefaultKeyGenerationOp()
 
     if(kgr.keySize > 2048)
       Future.failed(new Exception("test: Key size too big"))

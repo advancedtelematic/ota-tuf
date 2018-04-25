@@ -1,19 +1,19 @@
 package com.advancedtelematic.tuf.keyserver.roles
 
+import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, _}
 import com.advancedtelematic.tuf.keyserver.db._
 import com.advancedtelematic.tuf.keyserver.http.Errors
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import io.circe.Encoder
 import slick.jdbc.MySQLProfile.api._
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 
-class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: ExecutionContext)
-  extends SignedRootRoleSupport {
+class RoleSigning()(implicit val db: Database, val ec: ExecutionContext)
+  extends SignedRootRoleSupport with KeyRepositorySupport {
 
   import com.advancedtelematic.libtuf.data.RootManipulationOps._
 
@@ -27,7 +27,7 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
       await(signWithKeys(payload, keys))
 
   }.recoverWith {
-    case VaultClient.VaultResourceNotFound => Future.failed(Errors.PrivateKeysNotFound)
+    case KeyRepository.KeyNotFound => Future.failed(Errors.PrivateKeysNotFound)
   }
 
   protected [roles] def signWithKeys[T : Encoder](payload: T, keys: Seq[TufKey]): Future[SignedPayload[T]] = {
@@ -46,5 +46,8 @@ class RoleSigning(vaultClient: VaultClient)(implicit val db: Database, val ec: E
   }
 
   private def fetchPrivateKey(key: TufKey): Future[TufPrivateKey] =
-    vaultClient.findKey(key.id).map(_.privateKey)
+    keyRepo.find(key.id).recoverWith {
+      case KeyRepository.KeyNotFound =>
+        FastFuture.failed(Errors.PrivateKeysNotFound)
+    }.map(_.privateKey.value)
 }

@@ -32,8 +32,8 @@ class SignedRootRolesSpec extends TufKeyserverSpec with DatabaseSpec
 
   override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(10, Seconds))
 
-  val signedRootRoles = new SignedRootRoles(fakeVault)
-  val keyGenerationOp = DefaultKeyGenerationOp(fakeVault)
+  val signedRootRoles = new SignedRootRoles()
+  val keyGenerationOp = DefaultKeyGenerationOp()
 
   keyTypeTest("root role payload must be signed with root key") { keyType =>
     val repoId = RepoId.generate()

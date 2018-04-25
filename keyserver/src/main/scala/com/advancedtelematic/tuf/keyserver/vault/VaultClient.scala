@@ -28,13 +28,7 @@ import scala.util.Try
 import scala.util.control.NoStackTrace
 
 trait VaultClient {
-  def createKey(key: VaultKey): Future[Unit]
-
   def findKey(keyId: KeyId): Future[VaultKey]
-
-  def deleteKey(keyId: KeyId): Future[Unit]
-
-  def renewToken(): Future[Unit]
 }
 
 object VaultClient {
@@ -91,25 +85,9 @@ class VaultHttpClient(vaultHost: Uri, token: String, mount: Path)(implicit syste
 
   case class VaultError(msg: String) extends Exception(msg) with NoStackTrace
 
-  override def createKey(key: VaultKey): Future[Unit] = {
-    val req = HttpRequest(POST, vaultHost.withPath(mountPath / key.id.value))
-      .withEntity(key.asJson.noSpaces)
-    execute[Unit](req)
-  }
-
   override def findKey(keyId: KeyId): Future[VaultKey] = {
     val req = HttpRequest(GET, vaultHost.withPath(mountPath / keyId.value))
     execute[VaultKey](req)
-  }
-
-  override def deleteKey(keyId: KeyId): Future[Unit] = {
-    val req = HttpRequest(DELETE, vaultHost.withPath(mountPath / keyId.value))
-    execute[Unit](req)
-  }
-
-  override def renewToken(): Future[Unit] = {
-    val req = HttpRequest(POST, vaultHost.withPath(Path("/v1") / "auth" / "token" / "renew-self"))
-    execute[Unit](req)
   }
 
   private def execute[T](request: HttpRequest)(implicit um: FromEntityUnmarshaller[T]): Future[T] = {

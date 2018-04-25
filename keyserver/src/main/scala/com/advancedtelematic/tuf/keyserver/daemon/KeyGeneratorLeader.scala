@@ -14,12 +14,11 @@ import com.advancedtelematic.libtuf.crypt.TufCrypto._
 import scala.async.Async._
 import scala.concurrent.duration._
 import akka.pattern.pipe
+import com.advancedtelematic.libats.slick.db.SlickEncryptedColumn.EncryptedColumn
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.keyserver.daemon.KeyGenerationOp.KeyGenerationOp
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient.VaultKey
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -28,8 +27,8 @@ import scala.concurrent.{ExecutionContext, Future}
 object KeyGeneratorLeader {
   case object Tick
 
-  def props(vaultClient: VaultClient)(implicit db: Database, ec: ExecutionContext): Props =
-    Props(new KeyGeneratorLeader(DefaultKeyGenerationOp(vaultClient)))
+  def props()(implicit db: Database, ec: ExecutionContext): Props =
+    Props(new KeyGeneratorLeader(DefaultKeyGenerationOp()))
 
 
   def props(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(implicit db: Database): Props =
@@ -96,11 +95,11 @@ object KeyGenerationOp {
 }
 
 object DefaultKeyGenerationOp {
-  def apply(vaultClient: VaultClient)(implicit db: Database,  ec: ExecutionContext): DefaultKeyGenerationOp =
-    new DefaultKeyGenerationOp(vaultClient)
+  def apply()(implicit db: Database,  ec: ExecutionContext): DefaultKeyGenerationOp =
+    new DefaultKeyGenerationOp()
 }
 
-class DefaultKeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database, val ec: ExecutionContext)
+class DefaultKeyGenerationOp()(implicit val db: Database, val ec: ExecutionContext)
   extends KeyGenerationOp
     with KeyGenRequestSupport
     with KeyRepositorySupport {
@@ -112,15 +111,8 @@ class DefaultKeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database
 
     (0 until kgr.threshold).map { _ =>
       val pair = TufCrypto.generateKeyPair(kgr.keyType, kgr.keySize)
-      (Key(pair.pubkey.id, kgr.repoId, kgr.roleType, kgr.keyType, pair.pubkey.keyval), pair)
+      (Key(pair.pubkey.id, kgr.repoId, kgr.roleType, kgr.keyType, pair.pubkey.keyval, EncryptedColumn(pair.privkey)), pair)
     }
-  }
-
-  protected def saveToVault(keys: Seq[(Key, TufKeyPair)]): Future[Unit] = {
-    Future.traverse(keys) { case (key, keyPair) =>
-      val vaultKey = VaultKey(key.id, key.keyType, keyPair.pubkey, keyPair.privkey)
-      vaultClient.createKey(vaultKey)
-    }.map(_ => ())
   }
 
   def apply(kgr: KeyGenRequest): Future[Seq[Key]] =
@@ -128,7 +120,6 @@ class DefaultKeyGenerationOp(vaultClient: VaultClient)(implicit val db: Database
       val keyPairs = generateKeys(kgr)
       val keys = keyPairs.map(_._1)
 
-      await(saveToVault(keyPairs))
       await(keyGenRepo.persistGenerated(kgr, keys, keyRepo))
 
       _log.info("Generated keys {}", keys.map(_.id.value).mkString(","))

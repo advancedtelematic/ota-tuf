@@ -30,7 +30,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
 
   implicit val ec = ExecutionContext.global
 
-  val actorRef = system.actorOf(KeyGeneratorWorker.props(DefaultKeyGenerationOp(fakeVault)))
+  val actorRef = system.actorOf(KeyGeneratorWorker.props(DefaultKeyGenerationOp()))
 
   private val timeout = Span(20, Seconds)
 
@@ -108,22 +108,6 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
     exception.cause.getMessage shouldBe "test: key gen failed"
 
     keyGenRepo.find(keyGenId).futureValue.status shouldBe KeyGenRequestStatus.ERROR
-  }
-
-  keyTypeTest("adds key to vault ") { implicit keyType =>
-    actorRef ! keyGenRequest().futureValue
-
-    val key = expectMsgPF(timeout) {
-      case Status.Success(t: Seq[Key]@unchecked) => t.head
-      case Status.Failure(ex) => fail(ex)
-    }
-
-    val pubKey = fakeVault.findKey(key.id).futureValue.publicKey
-    val privKey = fakeVault.findKey(key.id).futureValue.privateKey
-
-    pubKey.keyval.toPem should include("BEGIN PUBLIC KEY")
-    privKey.keyval.toPem should include("BEGIN")
-    privKey.keyval.toPem should include("PRIVATE KEY")
   }
 
   keyTypeTest("threshold keys per role ") { implicit keyType =>

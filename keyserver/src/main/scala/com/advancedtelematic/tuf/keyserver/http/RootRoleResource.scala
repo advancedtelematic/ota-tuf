@@ -15,7 +15,6 @@ import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.libtuf_server.data.Marshalling._
 import com.advancedtelematic.libats.http.UUIDKeyPath.UUIDKeyPathOp
 import com.advancedtelematic.libtuf.data.ErrorCodes
-import com.advancedtelematic.tuf.keyserver.vault.VaultClient
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe._
 import io.circe.syntax._
@@ -23,16 +22,16 @@ import io.circe.syntax._
 import scala.concurrent.{ExecutionContext, Future}
 import slick.jdbc.MySQLProfile.api._
 
-class RootRoleResource(vaultClient: VaultClient)
+class RootRoleResource()
                       (implicit val db: Database, val ec: ExecutionContext, mat: Materializer)
   extends KeyGenRequestSupport {
   import akka.http.scaladsl.server.Directives._
   import ClientRootGenRequest._
 
   val keyGenerationRequests = new KeyGenerationRequests()
-  val signedRootRoles = new SignedRootRoles(vaultClient)
-  val rootRoleKeyEdit = new RootRoleKeyEdit(vaultClient)
-  val roleSigning = new RoleSigning(vaultClient)
+  val signedRootRoles = new SignedRootRoles()
+  val rootRoleKeyEdit = new RootRoleKeyEdit()
+  val roleSigning = new RoleSigning()
 
   val route =
     pathPrefix("root" / RepoId.Path) { repoId =>
@@ -94,7 +93,7 @@ class RootRoleResource(vaultClient: VaultClient)
         }
       } ~
       pathPrefix("keys") {
-        (path(KeyIdPath) & get) { keyId ⇒
+        (get & path(KeyIdPath)) { keyId ⇒
           complete(rootRoleKeyEdit.findKeyPair(repoId, keyId))
         } ~
         pathPrefix("targets") { // TODO: This should be param roleType=targets
