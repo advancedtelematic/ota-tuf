@@ -1,9 +1,8 @@
 package com.advancedtelematic.libtuf.data
 
-import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RoleType, TufKey}
-import io.circe.RootEncoder
 
 object RootManipulationOps {
   implicit class RootManipulationOps(value: RootRole) {

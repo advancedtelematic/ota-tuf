@@ -10,7 +10,7 @@ import cats.data.Validated.Valid
 import cats.data.ValidatedNel
 import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, TargetCustom, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RepoId, RoleType, RsaKeyType, TargetFilename, TargetFormat, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, TargetFilename, TargetFormat, ValidTargetFilename}
 import com.advancedtelematic.tuf.reposerver.util._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.codecs.CirceCodecs._
@@ -24,7 +24,6 @@ import io.circe.Json
 import scala.concurrent.Future
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}
-import org.scalatest.FunSuite
 
 class OfflineSignedRoleStorageSpec extends TufReposerverSpec with DatabaseSpec with PatienceConfiguration
   with TargetItemRepositorySupport {

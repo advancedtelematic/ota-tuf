@@ -1,7 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.http
 
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
-import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNel
@@ -14,7 +13,6 @@ import cats.implicits._
 import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import slick.jdbc.MySQLProfile.api._
-import com.advancedtelematic.libats.http.HttpCodecs._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 

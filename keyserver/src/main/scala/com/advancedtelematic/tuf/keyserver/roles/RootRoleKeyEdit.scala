@@ -1,10 +1,7 @@
 package com.advancedtelematic.tuf.keyserver.roles
 
-import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, TufKeyPair}
 import com.advancedtelematic.tuf.keyserver.db.{KeyRepository, KeyRepositorySupport}
-import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.ClientCodecs._
 
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}

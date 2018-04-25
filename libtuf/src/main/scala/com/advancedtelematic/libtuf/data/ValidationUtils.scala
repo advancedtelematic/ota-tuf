@@ -1,10 +1,8 @@
 package com.advancedtelematic.libtuf.data
 
 import java.util.Base64
-import java.util.Base64.Decoder
 
 import eu.timepit.refined.api.Validate
-import org.bouncycastle.util.encoders.Hex
 
 import scala.util.Try
 

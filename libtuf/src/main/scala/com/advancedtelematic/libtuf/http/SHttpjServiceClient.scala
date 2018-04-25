@@ -1,14 +1,13 @@
 package com.advancedtelematic.libtuf.http
 
 import io.circe.{Decoder, Encoder, Json}
-import cats.syntax.either._
 import com.advancedtelematic.libats.data
 import com.advancedtelematic.libats.data.{ErrorRepresentation}
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.{HttpResponse, HttpjClientError}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
-import scala.util.{Failure, Success, Try}
+import scala.util.{Success, Try}
 import scalaj.http.{HttpRequest, HttpResponse => ScalaJHttpResponse}
 import io.circe.syntax._
 import org.slf4j.LoggerFactory

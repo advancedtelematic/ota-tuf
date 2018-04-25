@@ -13,7 +13,6 @@ import cats.syntax.either._
 import cats.syntax.functor._
 import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors
-import com.advancedtelematic.libats.http.Errors.JsonError
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufCodecs
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RSATufPrivateKey, TufKey, TufKeyPair, TufPrivateKey}

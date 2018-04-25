@@ -6,7 +6,7 @@ import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TufKey, TufKeyPair}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TufKeyPair}
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpResponse
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{RoleChecksumNotValid, RoleNotFound, TargetsResponse}
@@ -18,8 +18,7 @@ import scala.reflect.ClassTag
 import scala.util.control.NoStackTrace
 import scalaj.http.{Http, HttpRequest}
 import eu.timepit.refined._
-import cats.syntax.either._
-import com.advancedtelematic.libats.data.{ErrorCodes, ErrorRepresentation}
+import com.advancedtelematic.libats.data.ErrorRepresentation
 
 object UserReposerverClient {
   case class TargetsResponse(targets: SignedPayload[TargetsRole], checksum: Option[Refined[String, ValidChecksum]])

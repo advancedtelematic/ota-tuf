@@ -13,7 +13,7 @@ import com.advancedtelematic.tuf.keyserver.db._
 import com.advancedtelematic.tuf.keyserver.http._
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.{RootRoleValidation, TufDataType}
+import com.advancedtelematic.libtuf.data.RootRoleValidation
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}

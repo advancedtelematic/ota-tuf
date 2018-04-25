@@ -1,11 +1,9 @@
 package com.advancedtelematic.tuf.cli
 
-import cats.syntax.flatMap
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libtuf.data.ErrorCodes
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
 import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
-import io.circe.Json
 import org.slf4j.LoggerFactory
 import io.circe.syntax._
 
