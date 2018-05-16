@@ -40,6 +40,7 @@ import scala.util.{Failure, Success}
 import slick.jdbc.MySQLProfile.api._
 import RoleChecksumHeader._
 
+
 class TufTargetsPublisher(messageBus: MessageBusPublisher)(implicit ec: ExecutionContext) {
   def targetAdded(namespace: Namespace, item: TargetItem): Future[Unit] =
     messageBus.publish(TufTargetAdded(namespace, item.filename, item.checksum, item.length, item.custom))
@@ -114,9 +115,15 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
        .map(_ => repoId)
    }
 
+  private val malformedRequestContentRejectionHandler = RejectionHandler.newBuilder().handle {
+    case MalformedRequestContentRejection(msg, _) => complete((StatusCodes.BadRequest, msg))
+  }.result()
+
   private def createRepo(namespace: Namespace, repoId: RepoId): Route =
-    entity(as[CreateRepositoryRequest]) { keyType =>
-      createRepo(namespace, repoId, keyType.keyType)
+    handleRejections(malformedRequestContentRejectionHandler) {
+      entity(as[CreateRepositoryRequest]) { request =>
+        createRepo(namespace, repoId, request.keyType)
+      }
     } ~ createRepo(namespace, repoId, defaultKeyType)
 
   private def addTargetItem(namespace: Namespace, item: TargetItem): Future[SignedPayload[Json]] =
@@ -242,11 +249,11 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
         modifyRepoRoutes(repoId)
       }
     } ~
-      (pathPrefix("repo" / RepoId.Path) & namespaceValidation.extractor) { (repoId, namespace) =>
-        (pathEnd & post) {
-          createRepo(namespace, repoId)
-        } ~
-        modifyRepoRoutes(repoId)
-      }
+    (pathPrefix("repo" / RepoId.Path) & namespaceValidation.extractor) { (repoId, namespace) =>
+      (pathEnd & post) {
+        createRepo(namespace, repoId)
+      } ~
+      modifyRepoRoutes(repoId)
+    }
 
 }

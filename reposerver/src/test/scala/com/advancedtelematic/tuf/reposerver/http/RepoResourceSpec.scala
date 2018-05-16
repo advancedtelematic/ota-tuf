@@ -6,6 +6,7 @@ import java.time.temporal.ChronoUnit
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
+import akka.http.scaladsl.server.{MalformedRequestContentRejection, RejectionHandler}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.stream.scaladsl.Sink
 import akka.stream.testkit.scaladsl.TestSink
@@ -16,10 +17,11 @@ import cats.syntax.option._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientHashes, ClientTargetItem, RootRole, SnapshotRole, TargetCustom, TargetsRole, TimestampRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.RoleTypeOps
 import com.advancedtelematic.libtuf_server.data.Messages.{PackageStorageUsage, TufTargetAdded}
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, _}
 import io.circe.syntax._
-import io.circe.{Decoder, Encoder, Json}
+import io.circe.{Decoder, Encoder, Json, ParsingFailure}
 import org.scalatest.concurrent.{PatienceConfiguration, ScalaFutures}
 import org.scalatest.prop.Whenever
 import org.scalatest.time.{Seconds, Span}
@@ -30,6 +32,7 @@ import com.advancedtelematic.libats.http.HttpCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import cats.syntax.either._
+import com.advancedtelematic.libats.codecs.{DeserializationException, RefinementError}
 import com.advancedtelematic.libats.data.DataType.HashMethod
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
@@ -37,15 +40,14 @@ import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
+import com.advancedtelematic.tuf.reposerver.http.RepoResource.CreateRepositoryRequest
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util._
-
-import scala.concurrent.Future
 import eu.timepit.refined.api.Refined
-import com.advancedtelematic.libtuf.data.ClientDataType.RoleTypeOps
-import com.advancedtelematic.tuf.reposerver.http.RepoResource.CreateRepositoryRequest
+import scala.concurrent.Future
+
 
 trait RepoSupport extends ResourceSpec with SignedRoleRepositorySupport with ScalaFutures with ScalatestRouteTest { this: Suite ⇒
   implicit val ec = executor
@@ -461,8 +463,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
   }
 
   keyTypeTest("POST on user_create creates a repository for a namespace with given KeyType") { keyType =>
-    val (otherKeyType, otherKeyTypeName) = if (keyType == Ed25519KeyType) (RsaKeyType, "rsa")
-                                           else (Ed25519KeyType, "ed25519")
+    val otherKeyType = if (keyType == Ed25519KeyType) RsaKeyType else Ed25519KeyType
 
     withRandomNamepace { implicit ns =>
       Post(apiUri("user_repo"), CreateRepositoryRequest(otherKeyType)).namespaced ~> routes ~> check {
@@ -523,6 +524,16 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
 
       Post(apiUri("user_repo")).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.Conflict
+      }
+    }
+  }
+
+  keyTypeTest("creating repo fails for invalid key type parameter") { keyType =>
+    withRandomNamepace { implicit ns =>
+      Post(apiUri("user_repo"))
+          .withEntity(ContentTypes.`application/json`, """ { "keyType":"caesar" } """)
+          .namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.BadRequest
       }
     }
   }
@@ -890,7 +901,7 @@ class RepoResourceTufTargetSpec(keyType: KeyType) extends TufReposerverSpec
     val source = memoryMessageBus.subscribe[TufTargetAdded]()
 
     withNamespace(s"default-${repoId.show}") { implicit ns =>
-      Post(apiUri(s"repo/${repoId.show}"), keyType).namespaced ~> routes ~> check {
+      Post(apiUri(s"repo/${repoId.show}"), CreateRepositoryRequest(keyType)).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.OK
       }
 
@@ -1007,7 +1018,7 @@ class RepoResourceTufTargetStoreSpec(keyType: KeyType) extends TufReposerverSpec
     val source = memoryMessageBus.subscribe[PackageStorageUsage]()
 
     withNamespace(s"default-${repoId.show}") { implicit ns =>
-      Post(apiUri(s"repo/${repoId.show}"), keyType).namespaced ~> routes ~> check {
+      Post(apiUri(s"repo/${repoId.show}"), CreateRepositoryRequest(keyType)).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.OK
       }
 
