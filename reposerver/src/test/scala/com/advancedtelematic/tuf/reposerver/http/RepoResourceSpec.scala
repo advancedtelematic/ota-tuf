@@ -12,40 +12,40 @@ import akka.stream.scaladsl.Sink
 import akka.stream.testkit.scaladsl.TestSink
 import akka.util.ByteString
 import cats.data.NonEmptyList
-import cats.syntax.show._
+import cats.syntax.either._
 import cats.syntax.option._
+import cats.syntax.show._
+import com.advancedtelematic.libats.codecs.CirceCodecs._
+import com.advancedtelematic.libats.codecs.{DeserializationException, RefinementError}
+import com.advancedtelematic.libats.data.DataType.HashMethod
+import com.advancedtelematic.libats.data.ErrorRepresentation
+import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
+import com.advancedtelematic.libats.http.Errors.RawError
+import com.advancedtelematic.libats.http.HttpCodecs._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientHashes, ClientTargetItem, RootRole, SnapshotRole, TargetCustom, TargetsRole, TimestampRole}
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RoleTypeOps
-import com.advancedtelematic.libtuf_server.data.Messages.{PackageStorageUsage, TufTargetAdded}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientHashes, ClientTargetItem, RootRole, SnapshotRole, TargetCustom, TargetsRole, TimestampRole}
+import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, _}
+import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
+import com.advancedtelematic.libtuf_server.data.Messages.{PackageStorageUsage, TufTargetAdded}
+import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest
+import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
+import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
+import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
+import com.advancedtelematic.tuf.reposerver.util._
+import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import eu.timepit.refined.api.Refined
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Json, ParsingFailure}
 import org.scalatest.concurrent.{PatienceConfiguration, ScalaFutures}
 import org.scalatest.prop.Whenever
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors, Suite}
-import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import com.advancedtelematic.libats.codecs.CirceCodecs._
-import com.advancedtelematic.libats.http.HttpCodecs._
-import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.ClientCodecs._
-import cats.syntax.either._
-import com.advancedtelematic.libats.codecs.{DeserializationException, RefinementError}
-import com.advancedtelematic.libats.data.DataType.HashMethod
-import com.advancedtelematic.libats.data.ErrorRepresentation
-import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
-import com.advancedtelematic.libats.http.Errors.RawError
-import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
-import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
-import com.advancedtelematic.tuf.reposerver.http.RepoResource.CreateRepositoryRequest
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
-import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
-import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
-import com.advancedtelematic.tuf.reposerver.util._
-import eu.timepit.refined.api.Refined
 import scala.concurrent.Future
 
 

@@ -30,6 +30,7 @@ import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.Settings
 import com.advancedtelematic.libtuf_server.data.Marshalling._
 import com.advancedtelematic.tuf.reposerver.http.Errors.NoRepoForNamespace
+import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.{Decoder, Encoder, Json}
 import io.circe.syntax._
@@ -60,16 +61,6 @@ class TufTargetsPublisher(messageBus: MessageBusPublisher)(implicit ec: Executio
     }
 }
 
-object RepoResource {
-
-  object CreateRepositoryRequest {
-    implicit val encoder: Encoder[CreateRepositoryRequest] = io.circe.generic.semiauto.deriveEncoder
-    implicit val decoder: Decoder[CreateRepositoryRequest] = io.circe.generic.semiauto.deriveDecoder
-  }
-
-  case class CreateRepositoryRequest(keyType: KeyType)
-}
-
 class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: NamespaceValidation,
                    targetStore: TargetStore, tufTargetsPublisher: TufTargetsPublisher)
                   (implicit val db: Database, val ec: ExecutionContext) extends Directives
@@ -77,8 +68,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   with RepoNamespaceRepositorySupport
   with Settings {
 
-  import RepoResource.CreateRepositoryRequest
-  import CreateRepositoryRequest._
+  import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest._
 
   private val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
   private val offlineSignedRoleStorage = new OfflineSignedRoleStorage(keyserverClient)
