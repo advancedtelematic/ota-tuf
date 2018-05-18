@@ -8,7 +8,7 @@ object Requests {
 
   case class CreateRepositoryRequest(keyType: KeyType)
 
-  implicit val encoder: Encoder[CreateRepositoryRequest] = io.circe.generic.semiauto.deriveEncoder
-  implicit val decoder: Decoder[CreateRepositoryRequest] = io.circe.generic.semiauto.deriveDecoder
+  implicit val createRepositoryRequestEncoder: Encoder[CreateRepositoryRequest] = io.circe.generic.semiauto.deriveEncoder
+  implicit val createRepositoryRequestDecoder: Decoder[CreateRepositoryRequest] = io.circe.generic.semiauto.deriveDecoder
 
 }
