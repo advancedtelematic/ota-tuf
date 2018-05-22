@@ -206,8 +206,9 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
     format should contain(TargetFormat.OSTREE)
   }
 
-  keyTypeTest("bumps version when signing targets role ") { keyType =>
+  keyTypeTest("bumps version when signing targets role") { keyType =>
     val repo = initRepo()
+    val previousExpires = repo.readUnsignedRole[TargetsRole].get.expires
 
     val targetsKeyName = KeyName("somekey")
     repo.genKeys(targetsKeyName, keyType).get
@@ -216,6 +217,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
 
     val payload = repo.readSignedRole[TargetsRole].get
     payload.signed.version shouldBe 12
+    payload.signed.expires should be > previousExpires
   }
 
   keyTypeTest("sets version when specified ") { keyType =>
