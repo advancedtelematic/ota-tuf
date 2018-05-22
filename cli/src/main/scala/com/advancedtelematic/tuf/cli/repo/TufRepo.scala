@@ -4,12 +4,10 @@ import java.io._
 import java.net.URI
 import java.nio.file.attribute.PosixFilePermissions
 import java.nio.file.{Files, Path}
-import java.nio.file.Path
 import java.time.{Instant, Period}
 
-import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import cats.data.Validated.{Invalid, Valid}
-import scala.async.Async._
+import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -34,7 +32,7 @@ import java.nio.file.attribute.PosixFilePermission._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import cats.data.{NonEmptyList, ValidatedNel}
 import com.advancedtelematic.libtuf.data.RootRoleValidation
-
+import scala.async.Async._
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
@@ -91,7 +89,8 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
 
   private lazy val rolesPath = repoPath.resolve("roles")
 
-  private val DEFAULT_EXPIRE_TIME = Period.ofDays(365)
+  private val DEFAULT_ROOT_EXPIRE_TIME = Period.ofDays(365)
+  private val DEFAULT_TARGET_EXPIRE_TIME = Period.ofDays(31)
 
   def initTargets(version: Int, expires: Instant): Try[Path] = {
     val emptyTargets = TargetsRole(expires, Map.empty, version)
@@ -262,10 +261,12 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     signRole[TargetsRole](version, targetsKeys)
 
   private val VersionPath = ^.version
+  private val ExpiresPath = ^.expires
   import cats.implicits._
 
   private def signRole[T : Decoder : Encoder](version: Option[Int], keys: Seq[KeyName])
-                                             (implicit ev: TufRole[T], versionL: VersionPath.Lens[T, Int]): Try[Path] = {
+                                             (implicit ev: TufRole[T], versionL: VersionPath.Lens[T, Int],
+                                              expiresL: ExpiresPath.Lens[T, Instant]): Try[Path] = {
     def signatures(payload: T): Try[List[ClientSignature]] =
       keys.toList.traverse { key =>
         keyStorage.readKeyPair(key).map { case (pub, priv) =>
@@ -276,7 +277,8 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     for {
       unsigned <- readUnsignedRole[T]
       newV = version.getOrElse(versionL().get(unsigned) + 1)
-      newUnsigned = versionL().set(unsigned)(newV)
+      withIncreasedVersion = versionL().set(unsigned)(newV)
+      newUnsigned = expiresL().set(withIncreasedVersion)(Instant.now().plus(DEFAULT_TARGET_EXPIRE_TIME))
       sigs <- signatures(newUnsigned)
       signedRole = SignedPayload(sigs, newUnsigned)
       path <- writeSignedRole(signedRole)
@@ -361,7 +363,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       newRootRoleKeys = RoleKeys(Seq(newRootPubKey.id), threshold = 1)
       newTargetsRoleKeys = RoleKeys(Seq(newTargetsPubKey.id), threshold = 1)
       newRootRoleMap = oldRootRole.roles ++ Map(RoleType.ROOT -> newRootRoleKeys, RoleType.TARGETS -> newTargetsRoleKeys)
-      newExpireTime = oldRootRole.expires.plus(DEFAULT_EXPIRE_TIME)
+      newExpireTime = oldRootRole.expires.plus(DEFAULT_ROOT_EXPIRE_TIME)
       newRootRole = oldRootRole.copy(keys = newKeySet, roles = newRootRoleMap, version = oldRootRole.version + 1, newExpireTime)
       newRootSignature = TufCrypto.signPayload(newRootPrivKey, newRootRole).toClient(newRootPubKey.id)
       newRootOldSignature = TufCrypto.signPayload(oldRootPrivKey, newRootRole).toClient(oldRootPubKeyId)
