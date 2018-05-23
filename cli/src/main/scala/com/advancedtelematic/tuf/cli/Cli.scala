@@ -96,6 +96,7 @@ object Cli extends App with VersionInfo {
     opt[RepoName]("repo").abbr("r").required().action { (name, c) =>
       c.copy(repoName = name)
     }
+    .text("required for all subcommands")
 
     version("version")
 
@@ -110,11 +111,11 @@ object Cli extends App with VersionInfo {
         },
         opt[Path]("credentials")
           .abbr("c")
-          .text("path to credentials file, credentials.zip")
-          .required()
           .action { (path, c) =>
             c.copy(credentialsPath = path)
           }
+          .text("path to credentials file, credentials.zip")
+          .required()
       )
 
     cmd("key").children(
