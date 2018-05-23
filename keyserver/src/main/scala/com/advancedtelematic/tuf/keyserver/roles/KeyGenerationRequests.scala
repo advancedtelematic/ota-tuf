@@ -46,7 +46,11 @@ extends KeyRepositorySupport with SignedRootRoleSupport {
 
     RootRoleValidation.newRootIsValid(signed, oldSignedRoot) match {
       case Valid(_) =>
-        await(signedRootRoleRepo.persistAndDeleteRepoKeys(keyRepo)(repoId, signed))
+        val oldKeyIds = oldSignedRoot.signed.keys.keys.toSet
+        val newOnlineKeys = signed.signed.roleKeys(RoleType.SNAPSHOT, RoleType.TIMESTAMP).map(_.id).toSet
+        val keysToDelete = oldKeyIds -- newOnlineKeys
+
+        await(signedRootRoleRepo.persistAndDeleteRepoKeys(keyRepo)(repoId, signed, keysToDelete))
         Valid(signed)
       case r@Invalid(_) => r
     }
