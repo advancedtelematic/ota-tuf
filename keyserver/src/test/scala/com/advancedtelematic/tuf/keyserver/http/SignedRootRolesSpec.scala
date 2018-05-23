@@ -16,17 +16,19 @@ import com.advancedtelematic.tuf.keyserver.roles.SignedRootRoles
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
-import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, SignedRootRoleSupport}
+import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport, SignedRootRoleSupport}
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}
-
+import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import scala.concurrent.ExecutionContext
+import com.advancedtelematic.tuf.keyserver.db.KeyRepository.KeyNotFound
 
 class SignedRootRolesSpec extends TufKeyserverSpec with DatabaseSpec
   with Inspectors with PatienceConfiguration
   with KeyGenRequestSupport
   with KeyTypeSpecSupport
-  with SignedRootRoleSupport {
+  with SignedRootRoleSupport
+  with KeyRepositorySupport {
 
   implicit val ec = ExecutionContext.global
 

@@ -7,8 +7,8 @@ import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RoleType, TufKey}
 object RootManipulationOps {
   implicit class RootManipulationOps(value: RootRole) {
 
-    def roleKeys(roleType: RoleType): List[TufKey] = {
-      val keyids = value.roles.get(roleType).map(_.keyids).toSet.flatten
+    def roleKeys(roleTypes: RoleType*): List[TufKey] = {
+      val keyids = value.roles.filterKeys(roleTypes.contains).values.map(_.keyids).toSet.flatten
       value.keys.filterKeys(keyids.contains).values.toList
     }
 

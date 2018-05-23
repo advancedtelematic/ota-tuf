@@ -103,8 +103,8 @@ protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext
 
   def persist(key: Key): Future[Unit] = db.run(persistAction(key))
 
-  protected [db] def deleteRepoKeys(repoId: RepoId): DBIO[Unit] =
-    keys.filter(_.repoId === repoId).delete.map(_ => ())
+  protected [db] def deleteRepoKeys(repoId: RepoId, keysToDelete: Set[KeyId]): DBIO[Unit] =
+    keys.filter(_.repoId === repoId).filter(_.id.inSet(keysToDelete)).delete.map(_ => ())
 
   def find(keyId: KeyId): Future[Key] =
     findAll(Seq(keyId)).map(_.head)
@@ -147,9 +147,10 @@ protected[db] class SignedRootRoleRepository()(implicit db: Database, ec: Execut
     persistAction(repoId, signedPayload)
   }
 
-  def persistAndDeleteRepoKeys(keyRepository: KeyRepository)(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = db.run {
-    keyRepository.deleteRepoKeys(repoId).andThen(persistAction(repoId, signedPayload).transactionally)
+  def persistAndDeleteRepoKeys(keyRepository: KeyRepository)(repoId: RepoId, signedPayload: SignedPayload[RootRole], keysToDelete: Set[KeyId]): Future[Unit] = db.run {
+    keyRepository.deleteRepoKeys(repoId, keysToDelete).andThen(persistAction(repoId, signedPayload).transactionally)
   }
+
   protected [db] def persistAction(repoId: RepoId, signedPayload: SignedPayload[RootRole]): DBIO[Unit] = {
     val expires = signedPayload.signed.expires
 

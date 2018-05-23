@@ -22,6 +22,7 @@ import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyReposito
 import eu.timepit.refined.api.Refined
 import org.scalatest.time.{Millis, Seconds, Span}
 import com.advancedtelematic.libtuf.data.RootManipulationOps._
+import KeyRepository.KeyNotFound
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -646,6 +647,39 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       responseAs[ErrorRepresentation].code.code shouldBe "missing_entity"
       status shouldBe StatusCodes.NotFound
     }
+  }
+
+  test("keeps snapshot and timestamp keys online when storing user persisted root role ") {
+    val repoId = RepoId.generate()
+    generateRootRole(repoId, Ed25519KeyType).futureValue
+
+    val rootRole = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[RootRole]
+    }
+
+    val rootKeyId = rootRole.roles(RoleType.ROOT).keyids.head
+    val newSignature = clientSignWithKey(rootKeyId, rootRole)
+    val oldSignedPayload = signPayloadWithKey(rootKeyId, rootRole)
+    val signedPayload = oldSignedPayload.copy(signatures = newSignature +: oldSignedPayload.signatures)
+
+    Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    val newRoot = signedPayload.signed
+
+    val snapshotKeyId = newRoot.roleKeys(RoleType.SNAPSHOT).head.id
+    keyRepo.find(snapshotKeyId).futureValue shouldBe a[Key]
+
+    val timestampKeyId = newRoot.roleKeys(RoleType.TIMESTAMP).head.id
+    keyRepo.find(timestampKeyId).futureValue shouldBe a[Key]
+
+    val targetsKeyId = newRoot.roleKeys(RoleType.TARGETS).head.id
+    keyRepo.find(targetsKeyId).failed.futureValue shouldBe KeyNotFound
+
+    val newRootKeyId = newRoot.roleKeys(RoleType.ROOT).head.id
+    keyRepo.find(newRootKeyId).failed.futureValue shouldBe KeyNotFound
   }
 
   def signWithKeyPair(keyId: KeyId, priv: TufPrivateKey, role: RootRole): ClientSignature = {
