@@ -10,7 +10,8 @@ Download the archive file, unpack and run:
     cd garage-sign/
     bin/garage-sign --help
 
-== Offline sign use case (aka PRO-3669)
+== Offline signing use case
+// (aka PRO-3669)
 
 1. User rotates root keys offline, see <<Rotate Root Keys>>. This
 usually does not happen on the same machine where the targets are
@@ -18,11 +19,11 @@ pulled/pushed.
 
 2. Pull targets
 
-    garage-sign targets pull --repo buchtel
+    garage-sign targets pull --repo myrepo
 
 3. Add a target
 
-   garage-sign targets add --repo buchtel \
+   garage-sign targets add --repo myrepo \
    --format binary \
    --length 5877 \
    --name dashboards \
@@ -33,65 +34,65 @@ pulled/pushed.
 
 4. Sign new targets.json
 
-   garage-sign targets sign --repo buchtel --key-name <targets key used to rotate>
+   garage-sign targets sign --repo myrepo --key-name <targets key used to rotate>
 
 5. Push new targets.json
 
-   garage-sign targets push --repo buchtel
+   garage-sign targets push --repo myrepo
 
 == Rotate Root Keys
 
 1. Initialize a local ota-plus cache using credentials.zip downloaded
 from ATS Garage:
 
-    garage-sign init --repo buchtel --credentials credentials.zip --reposerver <reposerver uri>
+    garage-sign init --repo myrepo --credentials credentials.zip --reposerver <reposerver uri>
 +
 or
 +
-    garage-sign init --repo buchtel --credentials credentials.zip
+    garage-sign init --repo myrepo --credentials credentials.zip
 
 2. Generate new root and target keys
 
-    garage-sign gen-keys --repo buchtel --name buchtel-root --type ec
-    
-    garage-sign gen-keys --repo buchtel --name buchtel-targets --type ec
-    
+    garage-sign key generate --repo myrepo --name myrepo-root --type ed25519
+
+    garage-sign key generate --repo myrepo --name myrepo-targets --type ed25519
+
 3. Rotate Root Keys
 
-    garage-sign move-offline --repo buchtel --new-root buchtel-root \
-    --new-targets buchtel-targets --old-root-alias old-root
+    garage-sign move-offline --repo myrepo --new-root myrepo-root \
+    --new-targets myrepo-targets --old-root-alias old-root
 
 4. Check repository
 
-    tree tuf/buchtel/
+    tree tuf/myrepo/
 
-    tuf/buchtel
+    tuf/myrepo
     ├── auth.json
     ├── keys
-    │   ├── buchtel-root.pub
-    │   ├── buchtel-root.sec
-    │   ├── buchtel-targets.pub
-    │   ├── buchtel-targets.sec
+    │   ├── myrepo-root.pub
+    │   ├── myrepo-root.sec
+    │   ├── myrepo-targets.pub
+    │   ├── myrepo-targets.sec
     │   ├── old-root.pub
     │   └── old-root.sec
     └── roles
         └── root.json
 
-    cat tuf/buchtel/root.json
+    cat tuf/myrepo/root.json
 
 5. It is recommended that at this point you sign `targets.json` with
 the new keys and upload it to reposerver, otherwise clients will get
 an error when trying to validate the old `targets.json`, retrieved by
 the server, with the new `root.json`.
 
-    cat tuf/buchtel/roles/unsigned/targets.json
+    cat tuf/myrepo/roles/unsigned/targets.json
 
     # verify unsigned targets.json, this should have been pulled
     # during `rotate`.
 
-    garage-sign targets sign --repo buchtel --key-name targets
+    garage-sign targets sign --repo myrepo --key-name targets
 
-    garage-sign targets push --repo buchtel
+    garage-sign targets push --repo myrepo
 
 
 == Managing an offline root.json
@@ -110,4 +111,4 @@ to sign targets using `targets-sign`. If the user signing the new
 targets is not the same as the user rotating the root keys, you'll
 need to export the new credentials:
 
-    garage-sign  export-credentials --repo buchtel --target-key-name targets --to creds_export.zip
+    garage-sign  export-credentials --repo myrepo --target-key-name targets --to creds_export.zip
