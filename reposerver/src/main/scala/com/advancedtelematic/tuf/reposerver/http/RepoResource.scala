@@ -11,9 +11,9 @@ import com.advancedtelematic.libats.data.RefinedUtils._
 import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf_server.data.Messages.TufTargetAdded
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, _}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, TargetFilename, _}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
-import com.advancedtelematic.tuf.reposerver.db.{RepoNamespaceRepositorySupport, TargetItemRepositorySupport}
+import com.advancedtelematic.tuf.reposerver.db.{FilenameCommentRepository, RepoNamespaceRepositorySupport, TargetItemRepositorySupport}
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
@@ -30,9 +30,9 @@ import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.Settings
 import com.advancedtelematic.libtuf_server.data.Marshalling._
 import com.advancedtelematic.tuf.reposerver.http.Errors.NoRepoForNamespace
-import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest
+import com.advancedtelematic.libtuf_server.data.Requests.{CommentRequest, CreateRepositoryRequest, _}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import io.circe.{Decoder, Encoder, Json}
+import io.circe.Json
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
 import scala.collection.immutable
@@ -40,6 +40,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 import slick.jdbc.MySQLProfile.api._
 import RoleChecksumHeader._
+import eu.timepit.refined.api.Refined
 
 
 class TufTargetsPublisher(messageBus: MessageBusPublisher)(implicit ec: ExecutionContext) {
@@ -66,9 +67,8 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
                   (implicit val db: Database, val ec: ExecutionContext) extends Directives
   with TargetItemRepositorySupport
   with RepoNamespaceRepositorySupport
+  with FilenameCommentRepository.Support
   with Settings {
-
-  import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest._
 
   private val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
   private val offlineSignedRoleStorage = new OfflineSignedRoleStorage(keyserverClient)
@@ -171,6 +171,24 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
     }
   }
 
+  def findComment(repoId: RepoId, filename: TargetFilename): Route =
+    complete {
+      filenameCommentRepo.find(repoId, filename).map(CommentRequest)
+    }
+
+  def findComments(repoId: RepoId): Route =
+    complete {
+      filenameCommentRepo.find(repoId).map {
+        _.map {
+          case (filename, comment) => FilenameComment(filename, comment)
+        }
+      }
+    }
+
+  def addComment(repoId: RepoId, filename: TargetFilename, commentRequest: CommentRequest): Route =
+    complete {
+      filenameCommentRepo.persist(repoId, filename, commentRequest.comment)
+    }
 
   private def modifyRepoRoutes(repoId: RepoId) =
     namespaceValidation(repoId) { namespace =>
@@ -199,7 +217,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       (get & path(JsonRoleTypeMetaPath)) { roleType =>
         findRole(repoId, roleType)
       } ~
-       pathPrefix("targets") {
+      pathPrefix("targets") {
         path(TargetFilenamePath) { filename =>
           post {
             entity(as[RequestTargetItem]) { clientItem =>
@@ -224,6 +242,21 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
               case Invalid(errors) =>
                 complete(StatusCodes.BadRequest -> Json.obj("errors" -> errors.asJson))
             }
+          }
+        }
+      } ~
+      pathPrefix("comments") {
+        pathEnd {
+          findComments(repoId)
+        } ~
+        pathPrefix(TargetFilenamePath) { filename =>
+          put {
+            entity(as[CommentRequest]) { commentRequest =>
+              addComment(repoId, filename, commentRequest)
+            }
+          } ~
+          get {
+            findComment(repoId, filename)
           }
         }
       }

@@ -32,7 +32,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, _}
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
 import com.advancedtelematic.libtuf_server.data.Messages.{PackageStorageUsage, TufTargetAdded}
-import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest
+import com.advancedtelematic.libtuf_server.data.Requests._
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
@@ -46,6 +46,7 @@ import org.scalatest.concurrent.{PatienceConfiguration, ScalaFutures}
 import org.scalatest.prop.Whenever
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors, Suite}
+
 import scala.concurrent.Future
 
 
@@ -747,7 +748,6 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-
   keyTypeTest("PUT offline target fails when target does not include custom meta") { keyType =>
     val repoId = addTargetToRepo()
 
@@ -912,6 +912,7 @@ class RepoResourceTufTargetSpec(keyType: KeyType) extends TufReposerverSpec
       source.runWith(Sink.head).futureValue shouldBe a[TufTargetAdded]
     }
   }
+
 }
 
 class RsaRepoResourceTufTargetSpec extends RepoResourceTufTargetSpec(RsaKeyType)
@@ -1000,7 +1001,7 @@ class RsaRepoResourceTufTargetJsonSpec extends RepoResourceTufTargetJsonSpec(Rsa
 class EdRepoResourceTufTargetJsonSpec extends RepoResourceTufTargetJsonSpec(Ed25519KeyType)
 
 class RepoResourceTufTargetStoreSpec(keyType: KeyType) extends TufReposerverSpec
-    with ResourceSpec  with Inspectors with Whenever with PatienceConfiguration {
+    with ResourceSpec with Inspectors with Whenever with PatienceConfiguration {
 
   override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
 
@@ -1036,6 +1037,89 @@ class RepoResourceTufTargetStoreSpec(keyType: KeyType) extends TufReposerverSpec
 class RsaRepoResourceTufTargetStoreSpec extends RepoResourceTufTargetStoreSpec(RsaKeyType)
 
 class EdRepoResourceTufTargetStoreSpec extends RepoResourceTufTargetStoreSpec(Ed25519KeyType)
+
+class RepoResourceCommentSpec extends TufReposerverSpec with ResourceSpec with PatienceConfiguration with RepoSupport
+{
+
+  override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
+
+  test("set comment for existing repo id and package") {
+    val repoId = addTargetToRepo()
+
+    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+  }
+
+  test("set comment for existing repo id and non-existing package") {
+    val repoId = RepoId.generate()
+    fakeKeyserverClient.createRoot(repoId).futureValue
+
+    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
+    }
+  }
+
+  test("set comment for non-existing repo id and non-existing package") {
+    val repoId = RepoId.generate()
+
+    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
+    }
+  }
+
+  test("get existing comment") {
+    val repoId = addTargetToRepo()
+
+    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("ಠ_ಠ"))) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/comments/myfile01")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      entityAs[CommentRequest] shouldBe CommentRequest(TargetComment("ಠ_ಠ"))
+    }
+  }
+
+  test("trying to get missing comment for existing repo id and package returns 404") {
+    val repoId = addTargetToRepo()
+
+    Get(apiUri(s"repo/${repoId.show}/comments/myfile01")) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
+    }
+  }
+
+  test("trying to get non-existing comment list for existing repo id") {
+    val repoId = addTargetToRepo()
+
+    Get(apiUri(s"repo/${repoId.show}/comments")) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
+    }
+  }
+
+  test("trying to get comment list for non-existing repo id") {
+    val repoId = RepoId.generate()
+
+    Get(apiUri(s"repo/${repoId.show}/comments")) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
+    }
+  }
+
+  test("get existing comment list") {
+    val repoId = addTargetToRepo()
+
+    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/comments")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      entityAs[Seq[FilenameComment]] shouldBe List(FilenameComment("myfile01".refineTry[ValidTargetFilename].get,
+        TargetComment("comment")))
+    }
+  }
+
+}
 
 object JsonErrors {
   import io.circe.generic.semiauto._

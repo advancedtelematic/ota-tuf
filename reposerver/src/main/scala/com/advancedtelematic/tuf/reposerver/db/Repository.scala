@@ -12,17 +12,18 @@ import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEnt
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, TargetFilename}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
-import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
+import com.advancedtelematic.libtuf_server.data.Requests.TargetComment
 import com.advancedtelematic.libtuf_server.data.TufSlickMappings._
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport.MissingNamespaceException
 import com.advancedtelematic.tuf.reposerver.http.Errors
-
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
+import slick.jdbc.MySQLProfile.api._
+
 
 trait DatabaseSupport {
   implicit val ec: ExecutionContext
@@ -214,5 +215,43 @@ protected[db] class RepoNamespaceRepository()(implicit db: Database, ec: Executi
       .size
       .result
       .map(_ > 0)
+  }
+}
+
+object FilenameCommentRepository {
+  trait Support extends DatabaseSupport {
+    lazy val filenameCommentRepo = new FilenameCommentRepository()
+  }
+
+  val CommentNotFound = MissingEntity[TargetComment]()
+
+  val PackageMissing = MissingEntity[TargetFilename]()
+}
+
+protected [db] class FilenameCommentRepository()(implicit db: Database, ec: ExecutionContext) {
+  import FilenameCommentRepository._
+  import Schema.filenameComments
+
+  def persist(repoId: RepoId, filename: TargetFilename, comment: TargetComment): Future[Int] = db.run {
+    filenameComments.insertOrUpdate((repoId, filename, comment))
+      .handleIntegrityErrors(PackageMissing)
+  }
+
+  def find(repoId: RepoId, filename: TargetFilename): Future[TargetComment] = db.run {
+    filenameComments
+      .filter(_.repoId === repoId)
+      .filter(_.filename === filename)
+      .map(_.comment)
+      .result
+      .headOption
+      .failIfNone(CommentNotFound)
+  }
+
+  def find(repoId: RepoId): Future[Seq[(TargetFilename, TargetComment)]] = db.run {
+    filenameComments
+      .filter(_.repoId === repoId)
+      .map(filenameComment => (filenameComment.filename, filenameComment.comment))
+      .result
+      .failIfEmpty(CommentNotFound)
   }
 }

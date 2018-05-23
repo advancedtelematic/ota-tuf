@@ -6,12 +6,13 @@ import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, SignedPayload, TargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, SignedPayload, TargetFilename, TargetName, TargetVersion}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
 import io.circe.Json
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.StorageMethod._
 import SlickMappings._
+import com.advancedtelematic.libtuf_server.data.Requests.TargetComment
 
 object Schema {
   import com.advancedtelematic.libats.slick.codecs.SlickRefined._
@@ -64,4 +65,18 @@ object Schema {
   }
 
   protected [db] val repoNamespaces = TableQuery[RepoNamespaceTable]
+
+  class PackageCommentTable(tag: Tag) extends Table[(RepoId, TargetFilename, TargetComment)](tag, "filename_comments") {
+    def repoId = column[RepoId]("repo_id")
+    def filename = column[TargetFilename]("filename")
+    def comment = column[TargetComment]("comment")
+
+    def pk = primaryKey("repo_name_pk", (repoId, filename))
+
+    def targetItemFk = foreignKey("target_item_fk", (repoId, filename), targetItems)(c => (c.repoId, c.filename), onDelete = ForeignKeyAction.Cascade)
+
+    override def * = (repoId, filename, comment)
+  }
+
+  protected [db] val filenameComments = TableQuery[PackageCommentTable]
 }
