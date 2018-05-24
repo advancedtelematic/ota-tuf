@@ -49,5 +49,5 @@ class RoleSigning()(implicit val db: Database, val ec: ExecutionContext)
     keyRepo.find(key.id).recoverWith {
       case KeyRepository.KeyNotFound =>
         FastFuture.failed(Errors.PrivateKeysNotFound)
-    }.map(_.privateKey.value)
+    }.map(_.privateKey)
 }
