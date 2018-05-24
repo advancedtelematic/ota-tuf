@@ -31,10 +31,10 @@ object KeyServerDataType {
   }
 
   case class Key(id: KeyId, repoId: RepoId, roleType: RoleType, keyType: KeyType, publicKey: PublicKey,
-                 privateKey: EncryptedColumn[TufPrivateKey]) {
+                 privateKey: TufPrivateKey) {
     def toTufKey: TufKey = keyType.crypto.convertPublic(publicKey)
 
     // TODO: Cant I get rid of this?
-    def toTufKeyPair: Try[TufKeyPair] = keyType.crypto.castToKeyPair(toTufKey, privateKey.value)
+    def toTufKeyPair: Try[TufKeyPair] = keyType.crypto.castToKeyPair(toTufKey, privateKey)
   }
 }

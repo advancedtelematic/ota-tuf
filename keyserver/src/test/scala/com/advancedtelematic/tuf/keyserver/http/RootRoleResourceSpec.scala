@@ -397,7 +397,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     val lastRootKeyId = lastRoot.roles(RoleType.ROOT).keyids.head
     val lastRootKey = keyRepo.find(lastRootKeyId).futureValue
 
-    val (newKeyPair, signedPayload0) = signedRoot(lastRoot, lastRootKeyId, lastRootKey.privateKey.value)
+    val (newKeyPair, signedPayload0) = signedRoot(lastRoot, lastRootKeyId, lastRootKey.privateKey)
 
     Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload0) ~> routes ~> check { // TODO: Wrong api ? this is messed up
       status shouldBe StatusCodes.NoContent
@@ -689,7 +689,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
   def clientSignWithKey[T: Encoder](keyId: KeyId, payload: T): ClientSignature = {
     val key = keyRepo.find(keyId).futureValue
-    val signature = TufCrypto.signPayload(key.privateKey.value, payload)
+    val signature = TufCrypto.signPayload(key.privateKey, payload)
     ClientSignature(keyId, signature.method, signature.sig)
   }
 

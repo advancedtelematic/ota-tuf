@@ -33,7 +33,7 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
 
   def genKeys(keyType: KeyType): (TufKeyPair, Key) = {
     val keyPair = keyType.crypto.generateKeyPair (keyType.crypto.defaultKeySize)
-    val dbKey = Key (keyPair.pubkey.id, RepoId.generate (), RoleType.ROOT, keyType, keyPair.pubkey.keyval, EncryptedColumn(keyPair.privkey))
+    val dbKey = Key (keyPair.pubkey.id, RepoId.generate (), RoleType.ROOT, keyType, keyPair.pubkey.keyval, keyPair.privkey)
 
     (keyPair, dbKey)
   }

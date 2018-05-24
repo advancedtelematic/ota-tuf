@@ -49,7 +49,7 @@ class KeyGeneratorLeader(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(imp
       .props(KeyGeneratorWorker.props(keyGenerationOp))
 
      context.system.actorOf(routerProps)
-   }
+  }
 
   def waiting(totalTasks: Int, remaining: Int): Receive =
     if(remaining == 0) {
@@ -109,7 +109,7 @@ class DefaultKeyGenerationOp()(implicit val db: Database, val ec: ExecutionConte
 
     (0 until kgr.threshold).map { _ =>
       val pair = TufCrypto.generateKeyPair(kgr.keyType, kgr.keySize)
-      (Key(pair.pubkey.id, kgr.repoId, kgr.roleType, kgr.keyType, pair.pubkey.keyval, EncryptedColumn(pair.privkey)), pair)
+      (Key(pair.pubkey.id, kgr.repoId, kgr.roleType, kgr.keyType, pair.pubkey.keyval, pair.privkey), pair)
     }
   }
 

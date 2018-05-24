@@ -47,7 +47,7 @@ object Schema {
     def publicKey = column[PublicKey]("public_key") // TODO: Use TufKey instead, migrate, remove `key_type`, then remove KeyType Enum ?
     def privateKey = column[EncryptedColumn[TufPrivateKey]]("private_key")
 
-    override def * = (id, repoId, roleType, keyType, publicKey, privateKey) <> ((Key.apply _).tupled, Key.unapply)
+    override def * = (id, repoId, roleType, keyType, publicKey, privateKey.decrypted) <> ((Key.apply _).tupled, Key.unapply)
   }
 
   protected [db] val keys = TableQuery[KeyTable]
