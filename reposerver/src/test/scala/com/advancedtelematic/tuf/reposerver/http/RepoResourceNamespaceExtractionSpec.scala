@@ -10,6 +10,7 @@ import org.scalatest.{BeforeAndAfterAll, Inspectors}
 import cats.syntax.show._
 import com.advancedtelematic.libats.auth.NamespaceDirectives
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
+import com.advancedtelematic.libtuf_server.data.Requests.{CommentRequest, TargetComment}
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
@@ -61,6 +62,7 @@ class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
       Post(s"/repo/${repoId.show}/targets/myfile", testFile).namespaced ~> Route.seal(routes) ~> check {
         status shouldBe StatusCodes.OK
       }
+
     }
   }
 
@@ -82,6 +84,12 @@ class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
       Post(s"/user_repo/targets/myfile", testFile).namespaced ~> Route.seal(routes) ~> check {
         status shouldBe StatusCodes.OK
       }
+
+
+      Put(s"/user_repo/comments/myfile", CommentRequest(TargetComment("comment"))).namespaced ~> Route.seal(routes) ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
     }
   }
 }
