@@ -8,7 +8,7 @@ import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.server.{Directives, Route}
 import com.advancedtelematic.tuf.keyserver.http.TufKeyserverRoutes
-import com.advancedtelematic.libats.slick.db.DatabaseConfig
+import com.advancedtelematic.libats.slick.db.{DatabaseConfig, SlickEncryptionConfig}
 import com.advancedtelematic.libats.http.BootApp
 import com.typesafe.config.ConfigFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider
@@ -36,6 +36,7 @@ object Boot extends BootApp
   with DatabaseConfig
   with MetricsSupport
   with DatabaseMetrics
+  with SlickEncryptionConfig
   with InfluxdbMetricsReporterSupport {
 
   implicit val _db = db
