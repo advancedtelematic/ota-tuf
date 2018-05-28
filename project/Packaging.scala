@@ -14,7 +14,7 @@ object Packaging {
 
       packageName in Docker := distPackageName,
 
-      dockerUpdateLatest in Docker := true,
+      dockerUpdateLatest := true,
 
       defaultLinuxInstallLocation in Docker := s"/opt/${moduleName.value}",
 

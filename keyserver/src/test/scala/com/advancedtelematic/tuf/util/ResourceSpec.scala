@@ -20,7 +20,7 @@ import scala.concurrent.{Future, Promise}
 
 trait LongHttpRequest {
   implicit def default(implicit system: ActorSystem) =
-    RouteTestTimeout(10.seconds.dilated(system))
+    RouteTestTimeout(15.seconds.dilated(system))
 }
 
 trait HttpClientSpecSupport {
