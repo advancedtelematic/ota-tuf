@@ -50,7 +50,7 @@ class KeyGeneratorLeaderSpec extends TufKeyserverSpec with TestKitBase with Data
     system.terminate()
   }
 
-  private val timeout = Timeout(Span(20, Seconds))
+  private val timeout = Timeout(Span(30, Seconds))
 
   private val interval = Interval(Span(300, Milliseconds))
 
