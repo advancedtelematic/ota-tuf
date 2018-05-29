@@ -14,7 +14,7 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, MetaPath, RoleKeys, RootRole, TargetCustom, TargetsRole, TufRole, TufRoleOps}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetName, TargetVersion, TufKeyPair, TufPrivateKey, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetFilename, TargetName, TargetVersion, TufKeyPair, TufPrivateKey, ValidTargetFilename}
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
 import com.advancedtelematic.tuf.cli.DataType._
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoConfig, RepoName}
@@ -29,9 +29,11 @@ import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{RoleNotFound, TargetsResponse}
 import java.nio.file.attribute.PosixFilePermission._
+
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import cats.data.{NonEmptyList, ValidatedNel}
 import com.advancedtelematic.libtuf.data.RootRoleValidation
+
 import scala.async.Async._
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
@@ -132,6 +134,15 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       newRoot = unsignedRoot.addRoleKeys(RoleType.ROOT, keys:_*)
       path <- writeUnsignedRole(newRoot)
     } yield path
+
+  def deleteTarget(filename: TargetFilename): Try[Path] = for {
+    targetsRole <- readUnsignedRole[TargetsRole]
+    newTargets <- if(targetsRole.targets.contains(filename))
+      Success(targetsRole.copy(targets = targetsRole.targets - filename))
+    else
+      Failure(new IllegalArgumentException(s"Target $filename not found in unsigned targets.json"))
+    path <- writeUnsignedRole(newTargets)
+  } yield path
 
   def addTarget(name: TargetName, version: TargetVersion, length: Int, checksum: Refined[String, ValidChecksum],
                 hardwareIds: List[HardwareIdentifier], url: Option[URI], format: TargetFormat): Try[Path] = {

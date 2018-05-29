@@ -35,11 +35,13 @@ import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.Json
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
+
 import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 import slick.jdbc.MySQLProfile.api._
 import RoleChecksumHeader._
+import akka.http.scaladsl.util.FastFuture
 import eu.timepit.refined.api.Refined
 
 
@@ -129,7 +131,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
         version <- clientItem.version
       } yield TargetCustom(name, version, clientItem.hardwareIds, clientItem.targetFormat, uri = Option(clientItem.uri.toURI))
 
-      addTargetItem(namespace, TargetItem(repoId, filename, Option(clientItem.uri), clientItem.checksum, clientItem.length, custom))
+      addTargetItem(namespace, TargetItem(repoId, filename, Option(clientItem.uri), clientItem.checksum, clientItem.length, custom, StorageMethod.Unmanaged))
     }
 
   private def addTargetFromContent(namespace: Namespace, filename: TargetFilename, repoId: RepoId): Route = {
@@ -190,6 +192,13 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       filenameCommentRepo.persist(repoId, filename, commentRequest.comment)
     }
 
+  def deleteTargetItem(repoId: RepoId, filename: TargetFilename): Route = complete {
+    for {
+      _ <- targetStore.delete(repoId, filename)
+      _ <- signedRoleGeneration.deleteTargetItem(repoId, filename)
+    } yield StatusCodes.NoContent
+  }
+
   private def modifyRepoRoutes(repoId: RepoId) =
     namespaceValidation(repoId) { namespace =>
       pathPrefix("root") {
@@ -229,6 +238,9 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
           } ~
           get {
             complete(targetStore.retrieve(repoId, filename))
+          } ~
+          delete {
+            deleteTargetItem(repoId, filename)
           }
         } ~
         (pathEnd & put & entity(as[SignedPayload[TargetsRole]])) { signedPayload =>

@@ -4,6 +4,7 @@ import java.io.File
 import java.nio.file.{FileAlreadyExistsException, Files}
 import java.nio.file.attribute.PosixFilePermission._
 import java.nio.file.attribute.PosixFilePermissions
+
 import akka.Done
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri
@@ -17,6 +18,7 @@ import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{Targ
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
+import scala.util.Try
 
 object LocalTargetStoreEngine {
   private val _log = LoggerFactory.getLogger(this.getClass)
@@ -37,8 +39,6 @@ object LocalTargetStoreEngine {
 
 class LocalTargetStoreEngine(root: File)(implicit val system: ActorSystem, val mat: Materializer) extends TargetStoreEngine {
   import system.dispatcher
-
-  val log = LoggerFactory.getLogger(this.getClass)
 
   override def store(repoId: RepoId, filename: TargetFilename, fileData: Source[ByteString, Any]): Future[TargetStoreResult] = {
     val sink = localFileSink(repoId, filename, fileData)
@@ -63,6 +63,13 @@ class LocalTargetStoreEngine(root: File)(implicit val system: ActorSystem, val m
       }
 
       Future.successful(TargetBytes(source, size))
+    }
+  }
+
+  override def delete(repoId: RepoId, filename: TargetFilename): Future[Unit] = Future.fromTry {
+    Try {
+      val storePath = root.toPath.resolve(storageFilename(repoId, filename))
+      Files.delete(storePath)
     }
   }
 

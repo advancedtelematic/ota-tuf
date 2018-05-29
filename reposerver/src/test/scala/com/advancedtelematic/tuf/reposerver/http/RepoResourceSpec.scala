@@ -3,6 +3,7 @@ package com.advancedtelematic.tuf.reposerver.http
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+import eu.timepit.refined.refineV
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
@@ -18,7 +19,7 @@ import cats.syntax.show._
 import com.advancedtelematic.libats.codecs.CirceCodecs._
 import com.advancedtelematic.libats.codecs.{DeserializationException, RefinementError}
 import com.advancedtelematic.libats.data.DataType.HashMethod
-import com.advancedtelematic.libats.data.ErrorRepresentation
+import com.advancedtelematic.libats.data.{ErrorCode, ErrorRepresentation}
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libats.http.HttpCodecs._
@@ -33,9 +34,11 @@ import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, _}
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
 import com.advancedtelematic.libtuf_server.data.Messages.{PackageStorageUsage, TufTargetAdded}
 import com.advancedtelematic.libtuf_server.data.Requests._
+import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
+import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.TargetRetrieveResult
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
@@ -61,8 +64,8 @@ trait RepoSupport extends ResourceSpec with SignedRoleRepositorySupport with Sca
     RequestTargetItem(Uri("https://ats.com/testfile"), checksum, targetFormat = None, name = None, version = None, hardwareIds = Seq.empty, length = "hi".getBytes.length)
   }
 
-  def addTargetToRepo(repoId: RepoId = RepoId.generate()): RepoId = {
-    fakeKeyserverClient.createRoot(repoId).futureValue
+  def addTargetToRepo(repoId: RepoId = RepoId.generate(), keyType: KeyType = RsaKeyType): RepoId = {
+    fakeKeyserverClient.createRoot(repoId, keyType).futureValue
 
     Post(apiUri(s"repo/${repoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -103,7 +106,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     fakeKeyserverClient.createRoot(repoId).futureValue
   }
 
-  keyTypeTest("POST returns latest signed json") { keyType =>
+  test("POST returns latest signed json") {
     Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
@@ -116,7 +119,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("POST returns json with previous elements") { keyType =>
+  test("POST returns json with previous elements") {
     Post(apiUri(s"repo/${repoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
@@ -132,7 +135,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("POST returns json with valid hashes") { keyType =>
+  test("POST returns json with valid hashes") {
     Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
@@ -143,7 +146,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("POSTing a file adds uri to custom field") { keyType =>
+  test("POSTing a file adds uri to custom field") {
     val urlTestFile = testFile.copy(
       uri = Uri("https://ats.com/urlTestFile"),
       name = TargetName("myfilewithuri").some,
@@ -162,7 +165,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("fails if there is no root.json available") { keyType =>
+  test("fails if there is no root.json available") {
     val unexistingRepoId = RepoId.generate()
 
     Post(apiUri(s"repo/${unexistingRepoId.show}/targets/otherfile"), testFile) ~> routes ~> check {
@@ -170,7 +173,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("GET for each role type returns the signed json with valid signatures") { keyType =>
+  test("GET for each role type returns the signed json with valid signatures") {
     Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
@@ -185,7 +188,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("GET on timestamp.json returns a valid Timestamp role") { keyType =>
+  test("GET on timestamp.json returns a valid Timestamp role") {
     val newRepoId = addTargetToRepo()
 
     Get(apiUri(s"repo/${newRepoId.show}/timestamp.json")) ~> routes ~> check {
@@ -194,7 +197,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("GET on snapshot.json returns a valid Snapshot role") { keyType =>
+  test("GET on snapshot.json returns a valid Snapshot role") {
     val newRepoId = addTargetToRepo()
 
     Get(apiUri(s"repo/${newRepoId.show}/snapshot.json")) ~> routes ~> check {
@@ -203,7 +206,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("GET on targets.json returns a valid Targets role") { keyType =>
+  test("GET on targets.json returns a valid Targets role") {
     val newRepoId = addTargetToRepo()
 
     Get(apiUri(s"repo/${newRepoId.show}/targets.json")) ~> routes ~> check {
@@ -214,7 +217,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
   }
 
   keyTypeTest("GET on root.json returns a valid Root role") { keyType =>
-    val newRepoId = addTargetToRepo()
+    val newRepoId = addTargetToRepo(keyType = keyType)
 
     Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -222,7 +225,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("GET on root.json fails if not available on keyserver") { keyType =>
+  test("GET on root.json fails if not available on keyserver") {
     val newRepoId = RepoId.generate()
 
     Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
@@ -230,7 +233,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("GET on root.json gets json from keyserver") { keyType =>
+  test("GET on root.json gets json from keyserver") {
     val newRepoId = RepoId.generate()
 
     fakeKeyserverClient.createRoot(newRepoId).futureValue
@@ -242,7 +245,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("POST a new target updates snapshot.json") { keyType =>
+  test("POST a new target updates snapshot.json") {
     val snapshotRole =
       Get(apiUri(s"repo/${repoId.show}/snapshot.json")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
@@ -266,7 +269,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     snapshotRole.signatures.head shouldNot be(newTimestampRole.signatures.head)
   }
 
-  keyTypeTest("POST a new target updates timestamp.json") { keyType =>
+  test("POST a new target updates timestamp.json") {
     val timestampRole =
       Get(apiUri(s"repo/${repoId.show}/timestamp.json")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
@@ -290,7 +293,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     timestampRole.signatures.head shouldNot be(newTimestampRole.signatures.head)
   }
 
-  keyTypeTest("timestamp.json is refreshed if expired") { keyType =>
+  test("timestamp.json is refreshed if expired") {
     val role = Get(apiUri(s"repo/${repoId.show}/timestamp.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseAs[SignedPayload[TimestampRole]]
@@ -308,7 +311,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("snapshot.json is refreshed if expired") { keyType =>
+  test("snapshot.json is refreshed if expired") {
     val role = Get(apiUri(s"repo/${repoId.show}/snapshot.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseAs[SignedPayload[SnapshotRole]]
@@ -326,7 +329,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("targets.json is refreshed if expired") { keyType =>
+  test("targets.json is refreshed if expired") {
     val role = Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseAs[SignedPayload[TargetsRole]]
@@ -344,7 +347,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("GET on a role returns valid json before targets are added") { keyType =>
+  test("GET on a role returns valid json before targets are added") {
     val repoId = RepoId.generate()
 
     Post(apiUri(s"repo/${repoId.show}")).withHeaders(RawHeader("x-ats-namespace", repoId.show)) ~> routes ~> check {
@@ -364,7 +367,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
   }
 
   keyTypeTest("SnapshotRole includes signed jsons lengths") { keyType =>
-    val newRepoId = addTargetToRepo()
+    val newRepoId = addTargetToRepo(keyType = keyType)
 
     val targetsRole =
       Get(apiUri(s"repo/${newRepoId.show}/targets.json")) ~> routes ~> check {
@@ -390,7 +393,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("GET snapshots.json returns json with valid hashes") { keyType =>
+  test("GET snapshots.json returns json with valid hashes") {
     val newRepoId = addTargetToRepo()
 
     Post(apiUri(s"repo/${newRepoId.show}/targets/myfile"), testFile) ~> routes ~> check {
@@ -414,7 +417,71 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("Bumps version number when adding a new target") { keyType =>
+  test("fails for non existent targets") {
+    val newRepoId = addTargetToRepo()
+
+    Delete(apiUri(s"repo/${newRepoId.show}/targets/doesnotexist")) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
+    }
+  }
+
+  test("delete removes target item from targets.json") {
+    val newRepoId = addTargetToRepo()
+
+    Get(apiUri(s"repo/${newRepoId.show}/targets.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val targetsRole = responseAs[SignedPayload[TargetsRole]]
+
+      targetsRole.signed.targets shouldNot be(empty)
+    }
+
+    Delete(apiUri(s"repo/${newRepoId.show}/targets/myfile01")) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    Get(apiUri(s"repo/${newRepoId.show}/targets.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val targetsRole = responseAs[SignedPayload[TargetsRole]]
+
+      targetsRole.signed.targets should be(empty)
+    }
+  }
+
+  test("delete removes target from target store when target is managed") {
+    val repoId = addTargetToRepo()
+
+    Put(apiUri(s"repo/${repoId.show}/targets/some/target?name=bananas&version=0.0.1"), form) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    val targetFilename = refineV[ValidTargetFilename]("some/target").right.get
+
+    localStorage.retrieve(repoId, targetFilename).futureValue shouldBe a[TargetRetrieveResult]
+
+    Delete(apiUri(s"repo/${repoId.show}/targets/some/target")) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/targets/some/target")) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
+    }
+
+    localStorage.retrieve(repoId, targetFilename).failed.futureValue shouldBe Errors.TargetNotFoundError
+  }
+
+  test("delete fails for offline signed targets.json") {
+    val repoId = addTargetToRepo()
+    val root = fakeKeyserverClient.fetchRootRole(repoId).futureValue
+
+    fakeKeyserverClient.deletePrivateKey(repoId, root.signed.roles(RoleType.TARGETS).keyids.head).futureValue
+
+    Delete(apiUri(s"repo/${repoId.show}/targets/myfile01")) ~> routes ~> check {
+      status shouldBe StatusCodes.PreconditionFailed
+      responseAs[ErrorRepresentation].code shouldBe KeyserverClient.RoleKeyNotFound.code
+    }
+  }
+
+  test("Bumps version number when adding a new target") {
     val newRepoId = addTargetToRepo()
 
     Post(apiUri(s"repo/${newRepoId.show}/targets/myfile"), testFile) ~> routes ~> check {
@@ -529,7 +596,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("creating repo fails for invalid key type parameter") { keyType =>
+  test("creating repo fails for invalid key type parameter") {
     withRandomNamepace { implicit ns =>
       Post(apiUri("user_repo"))
           .withEntity(ContentTypes.`application/json`, """ { "keyType":"caesar" } """)
@@ -549,7 +616,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
   val form = Multipart.FormData(fileBodyPart)
 
 
-  keyTypeTest("uploading a target changes targets json") { keyType =>
+  test("uploading a target changes targets json") {
     val repoId = addTargetToRepo()
 
     Put(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing?name=name&version=version"), form) ~> routes ~> check {
@@ -563,7 +630,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
   }
 
   keyTypeTest("uploading a target from a uri changes targets json") { keyType =>
-    val repoId = addTargetToRepo()
+    val repoId = addTargetToRepo(keyType = keyType)
 
     Put(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing?name=name&version=version&fileUri=${fakeHttpClient.fileUri}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -575,7 +642,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("returns 404 if target does not exist") { keyType =>
+  test("returns 404 if target does not exist") {
     val repoId = addTargetToRepo()
 
     Get(apiUri(s"repo/${repoId.show}/targets/some/thing")) ~> routes ~> check {
@@ -583,7 +650,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("accept name/version, hardwareIds, targetFormat") { keyType =>
+  test("accept name/version, hardwareIds, targetFormat") {
     val repoId = addTargetToRepo()
     val targetFilename: TargetFilename = Refined.unsafeApply("target/with/desc")
 
@@ -603,7 +670,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("on updates, updatedAt in target custom is updated, createdAt is unchanged") { keyType =>
+  test("on updates, updatedAt in target custom is updated, createdAt is unchanged") {
     val repoId = addTargetToRepo()
     val targetFilename: TargetFilename = Refined.unsafeApply("target/to/update")
 
@@ -629,7 +696,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("create a repo returns 409 if repo for namespace already exists") { keyType =>
+  test("create a repo returns 409 if repo for namespace already exists") {
     val repoId = RepoId.generate()
 
     Post(apiUri(s"repo/${repoId.show}")).withHeaders(RawHeader("x-ats-namespace", repoId.show)) ~> routes ~> check {
@@ -648,7 +715,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
   }
 
   keyTypeTest("accepts an offline signed targets.json") { keyType =>
-    val repoId = addTargetToRepo()
+    val repoId = addTargetToRepo(keyType = keyType)
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
@@ -663,7 +730,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("reject putting offline signed targets.json without checksum if it exists already") { keyType =>
+  test("reject putting offline signed targets.json without checksum if it exists already") {
     val repoId = addTargetToRepo()
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
 
@@ -672,7 +739,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("getting offline target item fails if no custom url was provided when signing target") { keyType =>
+  test("getting offline target item fails if no custom url was provided when signing target") {
     val repoId = addTargetToRepo()
     val targetCustomJson =TargetCustom(TargetName("name"), TargetVersion("version"), Seq.empty, TargetFormat.BINARY.some).asJson
     val hashes: ClientHashes = Map(HashMethod.SHA256 -> Refined.unsafeApply("8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"))
@@ -690,7 +757,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("getting offline target item redirects to custom url") { keyType =>
+  test("getting offline target item redirects to custom url") {
     val repoId = addTargetToRepo()
 
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
@@ -705,7 +772,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("POST /targets fails with 412 with offline targets.json") { keyType =>
+  test("POST /targets fails with 412 with offline targets.json") {
     val repoId = RepoId.generate()
     fakeKeyserverClient.createRoot(repoId).futureValue
 
@@ -718,7 +785,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("re-generates snapshot role after storing offline target") { keyType =>
+  test("re-generates snapshot role after storing offline target") {
     val repoId = addTargetToRepo()
 
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
@@ -733,7 +800,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("re-generates timestamp role after storing offline target") { keyType =>
+  test("re-generates timestamp role after storing offline target") {
     val repoId = addTargetToRepo()
 
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
@@ -748,7 +815,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("PUT offline target fails when target does not include custom meta") { keyType =>
+  test("PUT offline target fails when target does not include custom meta") {
     val repoId = addTargetToRepo()
 
     val targets = Map(offlineTargetFilename -> ClientTargetItem(Map.empty, 0, None))
@@ -760,7 +827,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("rejects requests with invalid/missing checksums") { keyType =>
+  test("rejects requests with invalid/missing checksums") {
     val clientTargetItem = offlineTargets(offlineTargetFilename).copy(hashes = Map.empty)
     val targets = Map(offlineTargetFilename -> clientTargetItem)
     val signedPayload = buildSignedTargetsRole(repoId, targets)
@@ -771,7 +838,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("accepts requests with no uri in target custom") { keyType =>
+  test("accepts requests with no uri in target custom") {
     val repoId = addTargetToRepo()
 
     val targetCustomJson = TargetCustom(TargetName("name"), TargetVersion("version"), Seq.empty, TargetFormat.BINARY.some).asJson
@@ -786,7 +853,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
   }
 
   keyTypeTest("rejects offline targets.json with bad signatures") { keyType =>
-    val repoId = addTargetToRepo()
+    val repoId = addTargetToRepo(keyType = keyType)
 
     val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), Map.empty, 2)
 
@@ -801,7 +868,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
   }
 
   keyTypeTest("rejects offline targets.json with less signatures than the required threshold") { keyType =>
-    val repoId = addTargetToRepo()
+    val repoId = addTargetToRepo(keyType = keyType)
 
     val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), Map.empty, 2)
 
@@ -813,7 +880,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("rejects offline targets.json if public keys are not available") { keyType =>
+  test("rejects offline targets.json if public keys are not available") {
     val repoId = addTargetToRepo()
 
     val targetFilename: TargetFilename = Refined.unsafeApply("some/file/name")
@@ -831,7 +898,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("return offline targets.json even if expired") { keyType =>
+  test("return offline targets.json even if expired") {
     val repoId = addTargetToRepo()
 
     val expiredTargetsRole = TargetsRole(Instant.now().minus(1, ChronoUnit.DAYS), offlineTargets, 2)
@@ -849,7 +916,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  keyTypeTest("fake keyserver client saves instants with same precision as json codecs") { keyType =>
+  test("fake keyserver client saves instants with same precision as json codecs") {
     val newRepoId = RepoId.generate()
     fakeKeyserverClient.createRoot(newRepoId).futureValue
     val raw = fakeKeyserverClient.fetchRootRole(newRepoId).futureValue.signed

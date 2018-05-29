@@ -88,6 +88,16 @@ class TargetStore(roleKeyStore: KeyserverClient,
     }
   }
 
+  def delete(repoId: RepoId, filename: TargetFilename): Future[Unit] =
+    targetItemRepo.findByFilename(repoId, filename).flatMap { item =>
+      item.storageMethod match {
+        case Managed =>
+          engine.delete(repoId, filename)
+        case Unmanaged =>
+          FastFuture.successful(())
+      }
+    }
+
   private def redirectToUnmanaged(uri: Uri): Future[HttpResponse] = FastFuture.successful {
     HttpResponse(StatusCodes.Found, List(Location(uri)))
   }

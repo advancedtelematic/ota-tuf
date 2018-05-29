@@ -34,6 +34,8 @@ trait TargetStoreEngine {
 
   def retrieve(repoId: RepoId, filename: TargetFilename): Future[TargetRetrieveResult]
 
+  def delete(repoId: RepoId, filename: TargetFilename): Future[Unit]
+
   protected def write(fileData: Source[ByteString, Any],
                       writeSink: Sink[ByteString, Future[(Uri, Long)]])
                      (implicit system: ActorSystem, mat: Materializer): Future[TargetStoreResult] = {

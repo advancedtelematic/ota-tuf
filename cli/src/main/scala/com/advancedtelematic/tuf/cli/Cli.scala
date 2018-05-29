@@ -8,7 +8,7 @@ import java.time.temporal.ChronoUnit
 
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, HardwareIdentifier, KeyId, KeyType, TargetFormat, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, HardwareIdentifier, KeyId, KeyType, TargetFilename, TargetFormat, TargetName, TargetVersion}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.slf4j.LoggerFactory
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -36,6 +36,7 @@ case object MoveOffline extends Command
 case object GetTargets extends Command
 case object InitTargets extends Command
 case object AddTarget extends Command
+case object DeleteTarget extends Command
 case object SignTargets extends Command
 case object SignRoot extends Command
 case object PullTargets extends Command
@@ -60,6 +61,7 @@ case class Config(command: Command,
                   version: Option[Int] = None,
                   expires: Instant = Instant.now().plus(1, ChronoUnit.DAYS),
                   length: Int = -1,
+                  targetFilename: Option[TargetFilename] = None,
                   targetName: Option[TargetName] = None,
                   targetFormat: TargetFormat = TargetFormat.BINARY,
                   targetVersion: Option[TargetVersion] = None,
@@ -236,6 +238,16 @@ object Cli extends App with VersionInfo {
               .action((expires, c) => c.copy(expires = expires))
               .required()
           ),
+        cmd("delete")
+          .action { (_, c) =>
+            c.copy(command = DeleteTarget)
+          }.children(
+          opt[TargetFilename]("filename")
+            .required()
+            .action { (arg, c) =>
+              c.copy(targetFilename = arg.some)
+            }
+        ),
         cmd("add")
           .action { (_, c) =>
             c.copy(command = AddTarget)
@@ -408,6 +420,12 @@ object Cli extends App with VersionInfo {
             config.targetUri,
             config.targetFormat)
           .map(p => log.info(s"added target to $p"))
+          .toFuture
+
+      case DeleteTarget =>
+        tufRepo
+          .deleteTarget(config.targetFilename.get)
+          .map(p => log.info(s"deleted target ${config.targetFilename.get} in $p"))
           .toFuture
 
       case SignTargets =>
