@@ -5,12 +5,12 @@ import java.nio.file.Files
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+import eu.timepit.refined.refineV
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole, TargetCustom, TargetsRole, TufRole}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.KeyType
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey, ValidTargetFilename}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, TufRepo}
@@ -21,8 +21,10 @@ import com.advancedtelematic.tuf.cli.repo.TufRepo.{RoleMissing, RootPullError}
 
 import scala.concurrent.Future
 import io.circe.syntax._
-import scala.util.Success
+
+import scala.util.{Failure, Success}
 import cats.syntax.option._
+import org.scalatest.path
 
 class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
 
@@ -184,6 +186,30 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
 
     role.expires.isAfter(now) shouldBe true
     role.version shouldBe 20
+  }
+
+  test("fails if target does not exist") {
+    val repo = initRepo()
+
+    val targetFilename = refineV[ValidTargetFilename]("fake-one-1.2.3").right.get
+
+    val path = repo.deleteTarget(targetFilename)
+
+    path.failed.get shouldBe a[IllegalArgumentException]
+  }
+
+  test("deletes an existing target targets") {
+    val repo = initRepo()
+
+    val targetFilename = refineV[ValidTargetFilename]("fake-one-1.2.3").right.get
+
+    repo.addTarget(TargetName("fake-one"), TargetVersion("1.2.3"), 100, Refined.unsafeApply("03aa3f5e2779b625a455651b54866447f995a2970d164581b4073044435359ed"), List.empty, Some(URI.create("https://ats.com")), TargetFormat.BINARY).get
+
+    val path = repo.deleteTarget(targetFilename).get
+
+    val role = parseFile(path.toFile).flatMap(_.as[TargetsRole]).valueOr(throw _)
+
+    role.targets.keys shouldNot contain(targetFilename)
   }
 
   test("adds a target to an existing targets") {

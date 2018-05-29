@@ -82,8 +82,14 @@ class S3TargetStoreEngine(credentials: S3Credentials)(implicit val system: Actor
       TargetRedirect(Uri(signedUri.toURI.toString))
     }
   }
-}
 
+  override def delete(repoId: RepoId, filename: TargetFilename): Future[Unit] = Future {
+    blocking {
+      val storagePath = storageFilename(repoId, filename)
+      s3client.deleteObject(bucketId, storagePath.toString)
+    }
+  }
+}
 
 class S3Credentials(accessKey: String, secretKey: String, val bucketId: String, val region: Regions)
   extends AWSCredentials with AWSCredentialsProvider {

@@ -43,6 +43,13 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
 
   def persist(targetItem: TargetItem): Future[TargetItem] = db.run(persistAction(targetItem))
 
+  def delete(repoId: RepoId, filename: TargetFilename): Future[Unit] = db.run {
+    targetItems
+      .filter(_.repoId === repoId).filter(_.filename === filename)
+      .delete
+      .map(_ => ())
+  }
+
   protected [db] def resetAction(repoId: RepoId): DBIO[Unit] =
     targetItems.filter(_.repoId === repoId).delete.map(_ => ())
 
