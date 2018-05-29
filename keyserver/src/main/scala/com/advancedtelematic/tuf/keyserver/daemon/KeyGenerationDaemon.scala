@@ -6,7 +6,7 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Route
 import com.advancedtelematic.tuf.keyserver.{Settings, VersionInfo}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
-import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
+import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig, SlickEncryptionConfig}
 import com.advancedtelematic.libats.http.BootApp
 import com.advancedtelematic.libats.http.monitoring.{MetricsSupport, VaultHealthCheck}
 import com.advancedtelematic.libats.slick.monitoring.{DatabaseMetrics, DbHealthResource}
@@ -17,7 +17,8 @@ object KeyGenerationDaemon extends BootApp
   with BootMigrations
   with DatabaseConfig
   with MetricsSupport
-  with DatabaseMetrics {
+  with DatabaseMetrics
+  with SlickEncryptionConfig {
 
   import com.advancedtelematic.libats.http.LogDirectives._
   import com.advancedtelematic.libats.http.VersionDirectives._
