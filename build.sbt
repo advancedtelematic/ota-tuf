@@ -22,11 +22,11 @@ lazy val commonDeps = libraryDependencies ++= {
 }
 
 lazy val serverDependencies = libraryDependencies ++= {
-  lazy val akkaV = "2.5.9"
-  lazy val akkaHttpV = "10.0.11"
+  lazy val akkaV = "2.5.13"
+  lazy val akkaHttpV = "10.1.1"
   lazy val libatsV = libatsVersion.value
   lazy val slickV = "3.2.0"
-  lazy val catsV = "1.0.1"
+  lazy val catsV = "1.1.0"
 
   Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaV,
@@ -43,7 +43,7 @@ lazy val serverDependencies = libraryDependencies ++= {
     "com.advancedtelematic" %% "libats-slick" % libatsV,
     "com.typesafe.slick" %% "slick" % slickV,
     "com.typesafe.slick" %% "slick-hikaricp" % slickV,
-    "org.mariadb.jdbc" % "mariadb-java-client" % "2.2.1",
+    "org.mariadb.jdbc" % "mariadb-java-client" % "2.2.5",
 
     "org.typelevel" %% "cats-core" % catsV withSources(),
     "org.typelevel" %% "cats-kernel" % catsV,
@@ -59,7 +59,7 @@ lazy val commonSettings = Seq(
   resolvers += "ATS Releases" at "http://nexus.advancedtelematic.com:8081/content/repositories/releases",
   resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content/repositories/snapshots",
   resolvers += "version99 Empty loggers" at "http://version99.qos.ch",
-  libatsVersion := "0.1.2-6-gfd91fc3",
+  libatsVersion := "0.1.2-8-g487aa53",
   buildInfoOptions += BuildInfoOption.ToMap,
   buildInfoOptions += BuildInfoOption.BuildTime,
   dependencyCheckAssemblyAnalyzerEnabled := Some(false)) ++
