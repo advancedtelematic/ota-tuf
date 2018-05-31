@@ -39,6 +39,7 @@ lazy val serverDependencies = libraryDependencies ++= {
     "com.advancedtelematic" %% "libats-http" % libatsV,
     "com.advancedtelematic" %% "libats-messaging" % libatsV,
     "com.advancedtelematic" %% "libats-metrics-akka" % libatsV,
+    "com.advancedtelematic" %% "libats-metrics-prometheus" % libatsV,
     "com.advancedtelematic" %% "libats-slick" % libatsV,
     "com.typesafe.slick" %% "slick" % slickV,
     "com.typesafe.slick" %% "slick-hikaricp" % slickV,
@@ -58,7 +59,7 @@ lazy val commonSettings = Seq(
   resolvers += "ATS Releases" at "http://nexus.advancedtelematic.com:8081/content/repositories/releases",
   resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content/repositories/snapshots",
   resolvers += "version99 Empty loggers" at "http://version99.qos.ch",
-  libatsVersion := "0.1.2-3-gc9ce507",
+  libatsVersion := "0.1.2-6-gfd91fc3",
   buildInfoOptions += BuildInfoOption.ToMap,
   buildInfoOptions += BuildInfoOption.BuildTime,
   dependencyCheckAssemblyAnalyzerEnabled := Some(false)) ++
