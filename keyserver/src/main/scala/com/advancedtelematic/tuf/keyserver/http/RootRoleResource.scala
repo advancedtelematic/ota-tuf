@@ -40,7 +40,7 @@ class RootRoleResource()
           val f = keyGenerationRequests.forceRetry(repoId).map(_ => StatusCodes.OK)
           complete(f)
         } ~
-        (post & entity(as[ClientRootGenRequest])) { (genRequest: ClientRootGenRequest) =>
+        (post & entity(as[ClientRootGenRequest])) { genRequest =>
           require(genRequest.threshold > 0, "threshold must be greater than 0")
 
           val f = keyGenerationRequests
