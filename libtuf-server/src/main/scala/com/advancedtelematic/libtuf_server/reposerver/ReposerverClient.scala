@@ -1,10 +1,9 @@
 package com.advancedtelematic.libtuf_server.reposerver
 
 import akka.http.scaladsl.model._
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, SignedPayload, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyType, RepoId, SignedPayload, TargetName, TargetVersion}
 import io.circe.{Decoder, Encoder, Json}
 import akka.actor.ActorSystem
-import RepoId._
 import akka.http.scaladsl.marshalling.Marshal
 import akka.http.scaladsl.model.Uri.{Path, Query}
 import akka.http.scaladsl.model.Uri.Path.Slash
@@ -17,17 +16,17 @@ import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{RawError, RemoteServiceError}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-
 import scala.concurrent.{ExecutionContext, Future}
 import io.circe.generic.semiauto._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.HttpCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
+import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest
 import com.advancedtelematic.libtuf_server.http.{ServiceHttpClient, ServiceHttpClientSupport}
-
+import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.{KeysNotReady, NotFound, RootNotInKeyserver}
 import scala.reflect.ClassTag
+import scala.util.{Failure, Success}
 
 object ReposerverClient {
   import com.advancedtelematic.libats.codecs.CirceCodecs._
@@ -55,9 +54,16 @@ object ReposerverClient {
 trait ReposerverClient {
   protected def ReposerverError(msg: String) = RawError(ErrorCode("reposerver_remote_error"), StatusCodes.BadGateway, msg)
 
-  def createRoot(namespace: Namespace): Future[RepoId]
+  def createRoot(namespace: Namespace, keyType: KeyType): Future[RepoId]
 
   def fetchRoot(namespace: Namespace): Future[SignedPayload[RootRole]]
+
+  def repoExists(namespace: Namespace)(implicit ec: ExecutionContext): Future[Boolean] =
+    fetchRoot(namespace).transform {
+      case Success(_) | Failure(KeysNotReady) => Success(true)
+      case Failure(NotFound) | Failure(RootNotInKeyserver) => Success(false)
+      case Failure(t) => Failure(t)
+    }
 
   def addTarget(namespace: Namespace, fileName: String, uri: Uri, checksum: Checksum, length: Int,
                 targetFormat: TargetFormat, name: Option[TargetName] = None, version: Option[TargetVersion] = None,
@@ -88,13 +94,16 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
   private def apiUri(path: Path) =
     reposerverUri.withPath(Path("/api") / "v1" ++ Slash(path))
 
-  override def createRoot(namespace: Namespace): Future[RepoId] = {
-    val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("user_repo")))
-    execHttpWithNamespace[RepoId](namespace, req) {
-      case error if error.status == StatusCodes.Conflict =>
-        Future.failed(RepoConflict)
+  override def createRoot(namespace: Namespace, keyType: KeyType): Future[RepoId] =
+    Marshal(CreateRepositoryRequest(keyType)).to[RequestEntity].flatMap { entity =>
+      val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("user_repo")), entity = entity)
+      execHttpWithNamespace[RepoId](namespace, req) {
+        case error if error.status == StatusCodes.Conflict =>
+          Future.failed(RepoConflict)
+        case error if error.status == StatusCodes.Locked =>
+          Future.failed(KeysNotReady)
+      }
     }
-  }
 
   override def fetchRoot(namespace: Namespace): Future[SignedPayload[RootRole]] = {
     val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("user_repo/root.json")))

@@ -30,32 +30,36 @@ class ReposerverHttpClientSpec extends TufReposerverSpec
 
   keyTypeTest("creates a root") { keyType =>
     val ns = genNs
-    client.createRoot(ns).futureValue shouldBe a[RepoId]
+    client.createRoot(ns, keyType).futureValue shouldBe a[RepoId]
+    client.repoExists(ns).futureValue shouldBe true
   }
 
   keyTypeTest("fetches a root") { keyType =>
     val ns = genNs
-    client.createRoot(ns).futureValue
-    client.fetchRoot(ns).futureValue.signed shouldBe a[RootRole]
+    client.createRoot(ns, keyType).futureValue
+    val signed = client.fetchRoot(ns).futureValue.signed
+    signed shouldBe a[RootRole]
+    signed.keys.head._2.keytype shouldBe keyType
   }
 
   keyTypeTest("fails if role not on keyserver") { keyType =>
     val ns = genNs
-    val repoId = client.createRoot(ns).futureValue
+    val repoId = client.createRoot(ns, keyType).futureValue
     fakeKeyserverClient.deleteRepo(repoId)
     client.fetchRoot(ns).failed.futureValue shouldBe ReposerverClient.RootNotInKeyserver
+    client.repoExists(ns).futureValue shouldBe false
   }
 
   keyTypeTest("fails if keys not ready") { keyType =>
     val ns = genNs
-    val repoId = client.createRoot(ns).futureValue
+    val repoId = client.createRoot(ns, keyType).futureValue
     fakeKeyserverClient.forceKeyGenerationPending(repoId)
     client.fetchRoot(ns).failed.futureValue shouldBe ReposerverClient.KeysNotReady
   }
 
   keyTypeTest("can add target") { keyType =>
     val ns = genNs
-    client.createRoot(ns).futureValue shouldBe a[RepoId]
+    client.createRoot(ns, keyType).futureValue shouldBe a[RepoId]
     client.addTarget(ns, "filename", Uri("http://example.com"),
                      Sha256Digest.digest("hi".getBytes), 42, BINARY).futureValue shouldBe(())
   }
@@ -66,7 +70,7 @@ class ReposerverHttpClientSpec extends TufReposerverSpec
     val text = "some string".getBytes
     Files.write(tempFile, text)
 
-    val repoId = client.createRoot(ns).futureValue
+    val repoId = client.createRoot(ns, keyType).futureValue
     val content = FileIO.fromPath(tempFile)
 
     client.addTargetFromContent(ns, "myfilename", None, Sha256Digest.digest("hi".getBytes), text.length, BINARY, content, TargetName("fakename"), TargetVersion("0.0.0")).futureValue shouldBe(())
@@ -80,7 +84,7 @@ class ReposerverHttpClientSpec extends TufReposerverSpec
 
   keyTypeTest("can't add target if keys are not in keyserver") { keyType =>
     val ns = genNs
-    val repoId = client.createRoot(ns).futureValue
+    val repoId = client.createRoot(ns, keyType).futureValue
     fakeKeyserverClient.forceKeyGenerationPending(repoId)
 
     client.addTarget(ns, "filename", Uri("http://example.com"),
