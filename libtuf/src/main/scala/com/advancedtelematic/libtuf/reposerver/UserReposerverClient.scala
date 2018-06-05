@@ -6,7 +6,7 @@ import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TufKeyPair}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, JsonSignedPayload, SignedPayload, TufKeyPair}
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpResponse
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{RoleChecksumNotValid, RoleNotFound, TargetsResponse}

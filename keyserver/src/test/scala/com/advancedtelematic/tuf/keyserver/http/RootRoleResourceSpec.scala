@@ -9,7 +9,7 @@ import cats.syntax.show._
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TufPrivateKey, _}
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequestStatus}
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequestStatus, SignedRootRole}
 import io.circe.{Encoder, Json}
 import org.scalatest.Inspectors
 import org.scalatest.concurrent.PatienceConfiguration
@@ -18,11 +18,12 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.ErrorCodes
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepository, KeyRepositorySupport}
+import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepository, KeyRepositorySupport, SignedRootRoleSupport}
 import eu.timepit.refined.api.Refined
 import org.scalatest.time.{Millis, Seconds, Span}
 import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import KeyRepository.KeyNotFound
+import cats.syntax.either._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -35,6 +36,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
   with PatienceConfiguration
   with HttpResponseTestOps
   with KeyTypeSpecSupport
+  with SignedRootRoleSupport
   with Inspectors {
 
   implicit val ec = ExecutionContext.global
@@ -255,7 +257,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     Post(apiUri(s"root/${repoId.show}/targets"), toSignPayload) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
-      val signedPayload = responseAs[SignedPayload[Json]]
+      val signedPayload = responseAs[JsonSignedPayload]
 
       signedPayload.signatures shouldNot be(empty)
 
@@ -369,6 +371,67 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
+  keyTypeTest("rejects offline signed root when it was signed with invalid encoder") { keyType =>
+    val repoId = RepoId.generate()
+    generateRootRole(repoId, keyType).futureValue
+
+    val lastRoot = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[RootRole]
+    }
+
+    val lastRootKeyId = lastRoot.roles(RoleType.ROOT).keyids.head
+    val lastRootKey = keyRepo.find(lastRootKeyId).futureValue
+
+    val newRootWithField = lastRoot.asJson.mapObject(_.add("some_field", Json.fromString("some_value")))
+
+    val oldSignature = TufCrypto.signPayload(lastRootKey.privateKey, newRootWithField)
+    val oldClientSig = ClientSignature(lastRootKeyId, oldSignature.method, oldSignature.sig)
+    val payload = JsonSignedPayload(Seq(oldClientSig), newRootWithField)
+
+    Post(apiUri(s"root/${repoId.show}/unsigned"), payload) ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+      val error = responseAs[ErrorRepresentation]
+
+      error.code shouldBe ErrorCodes.KeyServer.InvalidRootRole
+      error.cause.flatMap(_.as[List[String]].toOption) should contain(List("an incompatible encoder was used to encode root.json"))
+    }
+  }
+
+  keyTypeTest("signatures are valid when root was signed with different format") { keyType =>
+    val repoId = RepoId.generate()
+    generateRootRole(repoId, keyType).futureValue
+
+    val lastRoot = Get(apiUri(s"root/${repoId.show}/unsigned")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[RootRole]
+    }
+
+    val lastRootKeyId = lastRoot.roles(RoleType.ROOT).keyids.head
+    val lastRootKey = keyRepo.find(lastRootKeyId).futureValue
+
+    val newRootWithField = lastRoot.asJson.mapObject(_.add("some_field", Json.fromString("some_value")))
+
+    val oldSignature = TufCrypto.signPayload(lastRootKey.privateKey, newRootWithField)
+    val oldClientSig = ClientSignature(lastRootKeyId, oldSignature.method, oldSignature.sig)
+
+    val payload = SignedPayload(Seq(oldClientSig), newRootWithField.as[RootRole].valueOr(throw _), newRootWithField)
+
+    val signedRootRole = SignedRootRole(repoId, payload, lastRoot.expires, lastRoot.version)
+
+    signedRootRoleRepo.persist(signedRootRole).futureValue
+
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val signedRoot = responseAs[SignedPayload[RootRole]]
+      TufCrypto.isValid(signedRoot.signatures.head, lastRootKey.publicKey, signedRoot.json) shouldBe true
+
+      val jsonPayload = responseAs[JsonSignedPayload]
+      TufCrypto.isValid(jsonPayload.signatures.head, lastRootKey.publicKey, jsonPayload.signed) shouldBe true
+    }
+  }
+
+
   keyTypeTest("supports multiple offline signed root.json updates") { keyType =>
     val repoId = RepoId.generate()
     generateRootRole(repoId, keyType).futureValue
@@ -384,13 +447,13 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
       val newRoot = lastRoot.withRoleKeys(RoleType.ROOT, keyPair.pubkey, lastRoot.keys(lastKeyId))
 
-      val oldSignature = TufCrypto.signPayload(lastKey, newRoot)
+      val oldSignature = TufCrypto.signPayload(lastKey, newRoot.asJson)
       val oldClientSig = ClientSignature(lastKeyId, oldSignature.method, oldSignature.sig)
 
-      val newSignature = TufCrypto.signPayload(keyPair.privkey, newRoot)
+      val newSignature = TufCrypto.signPayload(keyPair.privkey, newRoot.asJson)
       val newClientSig = ClientSignature(keyPair.pubkey.id, newSignature.method, newSignature.sig)
 
-      (keyPair, SignedPayload(Seq(oldClientSig, newClientSig), newRoot))
+      (keyPair, SignedPayload(Seq(oldClientSig, newClientSig), newRoot, newRoot.asJson))
     }
 
     val lastRoot = latestRoot()
@@ -409,7 +472,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       status shouldBe StatusCodes.NoContent
     }
 
-    Get(apiUri(s"root/${repoId.show}"), signedPayload1) ~> routes ~> check {
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseAs[SignedPayload[RootRole]] shouldBe signedPayload1
     }
@@ -480,7 +543,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     val rootKeyId = rootRole.roles(RoleType.ROOT).keyids.head
     val clientSignature = clientSignWithKey(rootKeyId, "not a root role")
-    val signedPayload = SignedPayload(Seq(clientSignature), rootRole)
+    val signedPayload = JsonSignedPayload(Seq(clientSignature), rootRole.asJson)
 
     Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
@@ -497,7 +560,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       responseAs[RootRole]
     }
 
-    val signedPayload = SignedPayload(Seq.empty, rootRole)
+    val signedPayload = JsonSignedPayload(Seq.empty, rootRole.asJson)
 
     Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
@@ -619,7 +682,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
     val rootRole = oldRootRole.withRoleKeys(RoleType.ROOT, keyPair.pubkey)
 
-    val signedPayload = SignedPayload(List(signWithKeyPair(keyPair.pubkey.id, keyPair.privkey, rootRole)), rootRole)
+    val signedPayload = JsonSignedPayload(List(signWithKeyPair(keyPair.pubkey.id, keyPair.privkey, rootRole)), rootRole.asJson)
 
     Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
@@ -667,7 +730,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       status shouldBe StatusCodes.NoContent
     }
 
-    val newRoot = signedPayload.signed
+    val newRoot = signedPayload.signed.as[RootRole].right.get
 
     val snapshotKeyId = newRoot.roleKeys(RoleType.SNAPSHOT).head.id
     keyRepo.find(snapshotKeyId).futureValue shouldBe a[Key]
@@ -683,19 +746,19 @@ class RootRoleResourceSpec extends TufKeyserverSpec
   }
 
   def signWithKeyPair(keyId: KeyId, priv: TufPrivateKey, role: RootRole): ClientSignature = {
-    val signature = TufCrypto.signPayload(priv, role)
+    val signature = TufCrypto.signPayload(priv, role.asJson)
     ClientSignature(keyId, signature.method, signature.sig)
   }
 
   def clientSignWithKey[T: Encoder](keyId: KeyId, payload: T): ClientSignature = {
     val key = keyRepo.find(keyId).futureValue
-    val signature = TufCrypto.signPayload(key.privateKey, payload)
+    val signature = TufCrypto.signPayload(key.privateKey, payload.asJson)
     ClientSignature(keyId, signature.method, signature.sig)
   }
 
-  def signPayloadWithKey[T: Encoder](keyId: KeyId, payloadToSign: T): SignedPayload[T] = {
+  def signPayloadWithKey[T : Encoder](keyId: KeyId, payloadToSign: T): JsonSignedPayload = {
     val clientSignature = clientSignWithKey(keyId, payloadToSign)
-    SignedPayload(Seq(clientSignature), payloadToSign)
+    JsonSignedPayload(Seq(clientSignature), payloadToSign.asJson)
   }
 
   def generateRootRole(repoId: RepoId, keyType: KeyType, threshold: Int = 1): Future[Seq[Key]] = {

@@ -14,6 +14,8 @@ import com.advancedtelematic.tuf.keyserver.http._
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.RootRoleValidation
+import io.circe.Json
+import io.circe.syntax._
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
@@ -27,46 +29,59 @@ extends KeyRepositorySupport with SignedRootRoleSupport {
   private val roleSigning = new RoleSigning()
 
   def findByVersion(repoId: RepoId, version: Int): Future[SignedPayload[RootRole]] =
-    signedRootRoleRepo.findByVersion(repoId, version)
+    signedRootRoleRepo.findByVersion(repoId, version).map(_.content)
 
   def findForSign(repoId: RepoId): Future[RootRole] =
     find(repoId).map(prepareForSign)
 
-  def find(repoId: RepoId): Future[SignedPayload[RootRole]] =
+  def findLatest(repoId: RepoId): Future[SignedPayload[RootRole]] =
+    find(repoId).map(_.content)
+
+  protected def find(repoId: RepoId): Future[SignedRootRole] =
     signedRootRoleRepo.findLatest(repoId)
 
   def findAndPersist(repoId: RepoId): Future[SignedPayload[RootRole]] =
-    find(repoId).recoverWith {
+    find(repoId).map(_.content).recoverWith {
       case SignedRootRoleRepository.MissingSignedRole =>
-        signDefault(repoId).flatMap(persist(repoId, _))
+        signDefault(repoId).flatMap { rootRole =>
+          val signedRootRole = SignedRootRole.fromSignedPayload(repoId, rootRole)
+          signedRootRoleRepo.persist(signedRootRole).map(_ => signedRootRole.content)
+        }
     }
 
-  def persistUserSigned(repoId: RepoId, signed: SignedPayload[RootRole]): Future[ValidatedNel[String, SignedPayload[RootRole]]] = async {
-    val oldSignedRoot = await(signedRootRoleRepo.findLatest(repoId))
-
-    RootRoleValidation.newRootIsValid(signed, oldSignedRoot) match {
-      case Valid(_) =>
+  def persistUserSigned(repoId: RepoId, offlinePayload: JsonSignedPayload): Future[ValidatedNel[String, SignedRootRole]] = for {
+    oldSignedRoot <- signedRootRoleRepo.findLatest(repoId).map(_.content)
+    offlineSignedParsedV = userSignedJsonIsValid(offlinePayload, oldSignedRoot)
+    userSignedIsValid <- offlineSignedParsedV match {
+      case Valid(offlineSignedParsed) =>
         val oldKeyIds = oldSignedRoot.signed.keys.keys.toSet
-        val newOnlineKeys = signed.signed.roleKeys(RoleType.SNAPSHOT, RoleType.TIMESTAMP).map(_.id).toSet
+        val newOnlineKeys = offlineSignedParsed.signed.roleKeys(RoleType.SNAPSHOT, RoleType.TIMESTAMP).map(_.id).toSet
         val keysToDelete = oldKeyIds -- newOnlineKeys
+        val signedRootRole = SignedRootRole.fromSignedPayload(repoId, offlineSignedParsed)
 
-        await(signedRootRoleRepo.persistAndDeleteRepoKeys(keyRepo)(repoId, signed, keysToDelete))
-        Valid(signed)
-      case r@Invalid(_) => r
+        signedRootRoleRepo.persistAndDeleteRepoKeys(keyRepo)(signedRootRole, keysToDelete).map(_ => Valid(signedRootRole))
+
+      case r@Invalid(_) =>
+        FastFuture.successful(r)
+    }
+  } yield userSignedIsValid
+
+  private def userSignedJsonIsValid(offlinePayload: JsonSignedPayload, existingSignedRoot: SignedPayload[RootRole]): ValidatedNel[String, SignedPayload[RootRole]] = {
+    RootRoleValidation.rootRawJsonIsValid(offlinePayload).andThen { offlineSignedParsed =>
+      RootRoleValidation.newRootIsValid(offlineSignedParsed, existingSignedRoot)
     }
   }
-
-  def persist(repoId: RepoId, signedRoot: SignedPayload[RootRole]): Future[SignedPayload[RootRole]] =
-    signedRootRoleRepo.persist(repoId, signedRoot).map(_ => signedRoot)
 
   private def signDefault(repoId: RepoId): Future[SignedPayload[RootRole]] = async {
     val default = await(createDefault(repoId))
     val keys = default.roleKeys(RoleType.ROOT)
-    await(roleSigning.signWithKeys(default, keys))
+    val payloadJson = default.asJson
+    val signatures = await(roleSigning.signWithKeys(payloadJson, keys))
+    SignedPayload(signatures, default, payloadJson)
   }
 
-  private def prepareForSign(signedPayload: SignedPayload[RootRole]): RootRole =
-    signedPayload.signed.copy(expires = Instant.now.plus(DEFAULT_ROLE_EXPIRE), version = signedPayload.signed.version + 1)
+  private def prepareForSign(signedRootRole: SignedRootRole): RootRole =
+    signedRootRole.content.signed.copy(expires = Instant.now.plus(DEFAULT_ROLE_EXPIRE), version = signedRootRole.version + 1)
 
   private def ensureReadyForGenerate(repoId: RepoId): Future[Unit] =
     keyRepo.repoKeys(repoId).flatMap {

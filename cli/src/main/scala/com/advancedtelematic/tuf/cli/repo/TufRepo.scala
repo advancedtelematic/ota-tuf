@@ -14,7 +14,7 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, MetaPath, RoleKeys, RootRole, TargetCustom, TargetsRole, TufRole, TufRoleOps}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetFilename, TargetName, TargetVersion, TufKeyPair, TufPrivateKey, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, HardwareIdentifier, KeyId, KeyType, RoleType, JsonSignedPayload, SignedPayload, TargetFilename, TargetName, TargetVersion, TufKeyPair, TufPrivateKey, ValidTargetFilename}
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
 import com.advancedtelematic.tuf.cli.DataType._
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoConfig, RepoName}
@@ -29,6 +29,7 @@ import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{RoleNotFound, TargetsResponse}
 import java.nio.file.attribute.PosixFilePermission._
+import com.advancedtelematic.libtuf.data.TufCodecs._
 
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import cats.data.{NonEmptyList, ValidatedNel}
@@ -40,6 +41,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
 import scala.util.{Failure, Success, Try}
 import shapeless.{:: => _, Path => _, _}
+import cats.syntax.validated._
 
 object TufRepo {
   import CliCodecs._
@@ -63,7 +65,7 @@ object TufRepo {
   case class RootPullError(errors: NonEmptyList[String]) extends Throwable("Could not validate a valid root.json chain:\n" + errors.toList.mkString("\n")) with NoStackTrace
 
   implicit class RootValidationTryConversion(value: ValidatedNel[String, SignedPayload[RootRole]]) {
-    def toTry =
+    def toTry: Try[SignedPayload[RootRole]] =
       value.fold(
         errors => Failure(RootPullError(errors)),
         signedPayload => Success(signedPayload)
@@ -281,7 +283,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     def signatures(payload: T): Try[List[ClientSignature]] =
       keys.toList.traverse { key =>
         keyStorage.readKeyPair(key).map { case (pub, priv) =>
-          TufCrypto.signPayload(priv, payload).toClient(pub.id)
+          TufCrypto.signPayload(priv, payload.asJson).toClient(pub.id)
         }
       }
 
@@ -291,7 +293,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       withIncreasedVersion = versionL().set(unsigned)(newV)
       newUnsigned = expiresL().set(withIncreasedVersion)(Instant.now().plus(DEFAULT_TARGET_EXPIRE_TIME))
       sigs <- signatures(newUnsigned)
-      signedRole = SignedPayload(sigs, newUnsigned)
+      signedRole = SignedPayload(sigs, newUnsigned, newUnsigned.asJson)
       path <- writeSignedRole(signedRole)
     } yield path
   }
@@ -321,7 +323,7 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
     }
   }
 
-  def readSignedRole[T](implicit decoder: Decoder[SignedPayload[T]], ev: TufRole[T]): Try[SignedPayload[T]] = {
+  def readSignedRole[T : Encoder : Decoder](implicit ev: TufRole[T]): Try[SignedPayload[T]] = {
     val path = rolesPath.resolve(ev.toMetaPath.value)
     withExistingRolePath[T, SignedPayload[T]](path) { p =>
       parseFile(p.toFile).flatMap(_.as[SignedPayload[T]]).toTry
@@ -376,9 +378,9 @@ class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: ExecutionCont
       newRootRoleMap = oldRootRole.roles ++ Map(RoleType.ROOT -> newRootRoleKeys, RoleType.TARGETS -> newTargetsRoleKeys)
       newExpireTime = oldRootRole.expires.plus(DEFAULT_ROOT_EXPIRE_TIME)
       newRootRole = oldRootRole.copy(keys = newKeySet, roles = newRootRoleMap, version = oldRootRole.version + 1, newExpireTime)
-      newRootSignature = TufCrypto.signPayload(newRootPrivKey, newRootRole).toClient(newRootPubKey.id)
-      newRootOldSignature = TufCrypto.signPayload(oldRootPrivKey, newRootRole).toClient(oldRootPubKeyId)
-      newSignedRoot = SignedPayload(Seq(newRootSignature, newRootOldSignature), newRootRole)
+      newRootSignature = TufCrypto.signPayload(newRootPrivKey, newRootRole.asJson).toClient(newRootPubKey.id)
+      newRootOldSignature = TufCrypto.signPayload(oldRootPrivKey, newRootRole.asJson).toClient(oldRootPubKeyId)
+      newSignedRoot = SignedPayload(Seq(newRootSignature, newRootOldSignature), newRootRole, newRootRole.asJson)
       _ = log.debug(s"pushing ${newSignedRoot.asJson.spaces2}")
       _ <- repoClient.pushSignedRoot(newSignedRoot)
       _ <- writeSignedRole(newSignedRoot).toFuture

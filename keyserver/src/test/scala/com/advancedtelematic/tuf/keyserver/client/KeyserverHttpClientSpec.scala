@@ -3,7 +3,7 @@ package com.advancedtelematic.tuf.keyserver.client
 import java.security.interfaces.RSAPublicKey
 
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{EcPrime256KeyType, Ed25519TufKey, KeyId, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
+import com.advancedtelematic.libtuf.data.TufDataType.{EcPrime256KeyType, Ed25519TufKey, KeyId, KeyType, RepoId, RoleType, RsaKeyType, JsonSignedPayload, SignedPayload, ValidKeyId}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.Errors.RemoteServiceError
 import com.advancedtelematic.libtuf_server.keyserver.{KeyserverClient, KeyserverHttpClient}
@@ -17,6 +17,8 @@ import org.scalatest.time.{Millis, Seconds, Span}
 
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
+import io.circe.syntax._
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 
 class KeyserverHttpClientSpec extends TufKeyserverSpec
   with ResourceSpec
@@ -65,14 +67,14 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
     // change type of one of the RSA keys to Ed25519:
     val key = Ed25519TufKey(payload.signed.keys.values.head.keyval)
     val signedCopy = payload.signed.copy(keys = payload.signed.keys.updated(kid, key))
-    payload.copy(signed = signedCopy)
+    payload.updated(signed = signedCopy)
   }
 
   def manipulateSignedKey(payload: SignedPayload[RootRole], keyType: KeyType): SignedPayload[RootRole] = {
     val kid: KeyId = refineV[ValidKeyId]("0" * 64).right.get
     val key = EcPrime256KeyType.crypto.convertPublic(payload.signed.keys.values.head.keyval)
     val signedCopy = payload.signed.copy(keys = payload.signed.keys.updated(kid, key))
-    payload.copy(signed = signedCopy)
+    payload.updated(signed = signedCopy)
   }
 
   keyTypeTest("creates a root") { keyType =>
@@ -98,8 +100,9 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
       _ <- createAndProcessRoot(repoId, keyType)
       _ <- client.fetchRootRole(repoId)
       unsigned <- client.fetchUnsignedRoot(repoId)
-      signed ← client.sign(repoId, RoleType.ROOT, unsigned)
-      updated <- client.updateRoot(repoId, signed)
+      signedJsonPayload ← client.sign(repoId, RoleType.ROOT, unsigned.asJson)
+      root = SignedPayload(signedJsonPayload.signatures, unsigned, signedJsonPayload.signed)
+      updated <- client.updateRoot(repoId, root)
     } yield updated
 
     f.futureValue shouldBe (())
@@ -155,7 +158,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
       sig <- client.sign(repoId, RoleType.TARGETS, Json.Null)
     } yield sig
 
-    f.futureValue shouldBe a[SignedPayload[_]]
+    f.futureValue shouldBe a[JsonSignedPayload]
   }
 
   keyTypeTest("signing with removed key produces RoleKeyNotFound error ") { keyType =>
@@ -171,7 +174,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
     f.failed.futureValue shouldBe KeyserverClient.RoleKeyNotFound
   }
 
-  keyTypeTest("fetches root role by version ") { keyType =>
+  keyTypeTest("fetches root role by version") { keyType =>
     val repoId = RepoId.generate()
 
     val f = for {

@@ -7,7 +7,7 @@ import cats.syntax.either._
 import eu.timepit.refined._
 import com.advancedtelematic.libats.data.DataType.{Namespace, ValidChecksum}
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RepoId, RoleType, RsaKeyType, JsonSignedPayload, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util._
 import org.scalatest.time.{Seconds, Span}
@@ -16,6 +16,7 @@ import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.RoleChecksumNotValid
 import com.advancedtelematic.libtuf.reposerver.UserReposerverHttpClient
 import org.scalatest.BeforeAndAfter
+import io.circe.syntax._
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 
@@ -34,7 +35,6 @@ class UserReposerverClientSpec(keyType: KeyType) extends TufReposerverSpec
   val repoId = RepoId.generate()
 
   val client = new UserReposerverHttpClient(URI.create("http://test-reposerver"), testClient, token = None)
-
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -68,8 +68,8 @@ class UserReposerverClientSpec(keyType: KeyType) extends TufReposerverSpec
 
   test("accepts a new targets role") {
     val targets = TargetsRole(Instant.now, Map.empty, 20)
-    val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets).futureValue
-    client.pushTargets(signedTargets, None).futureValue
+    val signedPayload = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets.asJson).futureValue
+    client.pushTargets(SignedPayload(signedPayload.signatures, targets, targets.asJson), None).futureValue
   }
 
   test("moves key offline") {
@@ -85,24 +85,24 @@ class UserReposerverClientSpec(keyType: KeyType) extends TufReposerverSpec
 
   test("returns specific exception when previous checksum is not valid") {
     val targets = TargetsRole(Instant.now, Map.empty, 20)
-    val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets).futureValue
+    val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets.asJson).futureValue
     val invalidChecksum = refineV[ValidChecksum]("11c3599621d7edc417c795363767754b431404e8f9fd6fb85f78b2b45423b00b").valueOr(err => throw new Exception(err))
-    client.pushTargets(signedTargets, Option(invalidChecksum)).failed.futureValue shouldBe RoleChecksumNotValid
+    client.pushTargets(SignedPayload(signedTargets.signatures, targets, targets.asJson), Option(invalidChecksum)).failed.futureValue shouldBe RoleChecksumNotValid
   }
 
   test("returns specific exception when no previous checksum is present at all") {
     val targets = TargetsRole(Instant.now, Map.empty, 20)
-    val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets).futureValue
-    client.pushTargets(signedTargets, None).failed.futureValue shouldBe RoleChecksumNotValid
+    val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets.asJson).futureValue
+    client.pushTargets(SignedPayload(signedTargets.signatures, targets, targets.asJson), None).failed.futureValue shouldBe RoleChecksumNotValid
   }
 
   test("can update with proper checksum header") {
     val targetsResponse = client.targets().futureValue
 
     val targets = TargetsRole(Instant.now, Map.empty, targetsResponse.targets.signed.version + 1)
-    val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets).futureValue
+    val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets.asJson).futureValue
 
-    client.pushTargets(signedTargets, targetsResponse.checksum).futureValue shouldBe (())
+    client.pushTargets(SignedPayload(signedTargets.signatures, targets, targets.asJson), targetsResponse.checksum).futureValue shouldBe (())
   }
 
   test("can pull targets") {

@@ -23,20 +23,9 @@ class RootRoleKeyEdit()
     _ <- keyRepo.delete(keyId)
   } yield ()
 
-  def findAllKeyPairs2(repoId: RepoId, roleType: RoleType): Future[Seq[TufKeyPair]] = async {
-    val root = await(signedRootRole.find(repoId)).signed
-    val targetKeyIds = root.roleKeys(roleType).map(_.id)
-
-    val keys = await {
-      keyRepo.findAll(targetKeyIds).map(_.map(_.toTufKeyPair))
-    }
-
-    await { keys.toList.traverse(Future.fromTry) }
-  }
-
   def findAllKeyPairs(repoId: RepoId, roleType: RoleType): Future[Seq[TufKeyPair]] =
     for {
-      rootRole <- signedRootRole.find(repoId)
+      rootRole <- signedRootRole.findLatest(repoId)
       targetKeyIds = rootRole.signed.roleKeys(roleType).map(_.id)
       dbKeys <- keyRepo.findAll(targetKeyIds)
       keyPairsT = dbKeys.map(_.toTufKeyPair)

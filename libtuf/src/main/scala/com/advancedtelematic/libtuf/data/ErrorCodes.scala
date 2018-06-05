@@ -10,5 +10,6 @@ object ErrorCodes {
     val PrivateKeysNotFound = ErrorCode("private_keys_not_found")
     val KeyGenerationFailed = ErrorCode("key_generation_failed")
     val InvalidRootRole = ErrorCode("invalid_root_role")
+    val SignedRootRoleDecodingFailed = ErrorCode("signed_root_role_decoding_failed")
   }
 }

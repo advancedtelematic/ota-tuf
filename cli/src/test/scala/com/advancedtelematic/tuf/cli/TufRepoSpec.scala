@@ -10,7 +10,7 @@ import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole, TargetCustom, TargetsRole, TufRole}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RoleType, JsonSignedPayload, SignedPayload, TargetFormat, TargetName, TargetVersion, TufKey, ValidTargetFilename}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, TufRepo}
@@ -22,9 +22,8 @@ import com.advancedtelematic.tuf.cli.repo.TufRepo.{RoleMissing, RootPullError}
 import scala.concurrent.Future
 import io.circe.syntax._
 
-import scala.util.{Failure, Success}
+import scala.util.Success
 import cats.syntax.option._
-import org.scalatest.path
 
 class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
 
@@ -404,7 +403,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
     val oldRoot = repo.pullRoot(reposerverClient, skipLocalValidation = true).futureValue
 
     val newUnsignedRoot = oldRoot.signed.copy(version = oldRoot.signed.version + 1)
-    reposerverClient.setRoot(SignedPayload(Seq.empty, newUnsignedRoot))
+    reposerverClient.setRoot(SignedPayload(Seq.empty, newUnsignedRoot, newUnsignedRoot.asJson))
 
     val error = repo.pullRoot(reposerverClient, skipLocalValidation = false).failed.futureValue
 
@@ -422,7 +421,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
     val oldRoot = repo.pullRoot(reposerverClient, skipLocalValidation = true).futureValue
 
     val newUnsignedRoot = oldRoot.signed.copy(version = oldRoot.signed.version + 10)
-    reposerverClient.setRoot(SignedPayload(Seq.empty, newUnsignedRoot))
+    reposerverClient.setRoot(SignedPayload(Seq.empty, newUnsignedRoot, newUnsignedRoot.asJson))
 
     val error = repo.pullRoot(reposerverClient, skipLocalValidation = false).failed.futureValue
 

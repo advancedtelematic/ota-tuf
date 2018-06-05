@@ -5,7 +5,7 @@ import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNel
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, TargetCustom, TargetsRole, TufRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, SignedPayload, TargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, JsonSignedPayload, SignedPayload, TargetFilename}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, StorageMethod, TargetItem}
 import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import io.circe.Encoder
@@ -35,7 +35,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
       targetItemsValidated = validatedPayloadSig.andThen(_ => validatedPayloadTargets(repoId, signedPayload, existingTargets))
       signedRoleValidated <- targetItemsValidated match {
         case Valid(items) =>
-          val signedTargetRole = SignedRole.withChecksum(repoId, RoleType.TARGETS, signedPayload, signedPayload.signed.version, signedPayload.signed.expires)
+          val signedTargetRole = SignedRole.withChecksum(repoId, RoleType.TARGETS, signedPayload.asJsonSignedPayload, signedPayload.signed.version, signedPayload.signed.expires)
 
           signedRoleGeneration.regenerateSignedDependent(repoId, signedTargetRole, signedPayload.signed.expires)
             .flatMap(dependent => signedRoleRepo.storeAll(targetItemRepo)(repoId: RepoId, signedTargetRole :: dependent, items))
@@ -89,7 +89,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
     TufCrypto.payloadSignatureIsValid(rootRole, signedPayload)
   }
 
-  def saveTargetRole(namespace: Namespace, signedTargetPayload: SignedPayload[TargetsRole], repoId: RepoId, checksum: Option[RoleChecksum]) =
+  def saveTargetRole(namespace: Namespace, signedTargetPayload: SignedPayload[TargetsRole], repoId: RepoId, checksum: Option[RoleChecksum]): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole)]] =
     signedRoleRepo.find(repoId, RoleType.TARGETS).flatMap { existingRole =>
       updateSignedTarget(repoId, namespace, signedTargetPayload, existingRole, checksum)
     }.recoverWith {

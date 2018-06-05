@@ -4,11 +4,11 @@ import java.io.{StringReader, StringWriter}
 import java.security
 import java.security.interfaces.RSAPublicKey
 import java.security.spec.{PKCS8EncodedKeySpec, X509EncodedKeySpec}
-import java.security.{Signature => _, _}
+import java.security.{Signature ⇒ _, _}
 
 import org.bouncycastle.jce.ECNamedCurveTable
 import org.bouncycastle.jce.spec.ECParameterSpec
-import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, EcPrime256KeyType, EcPrime256TufKey, EcPrime256TufKeyPair, EcPrime256TufPrivateKey, Ed25519KeyType, Ed25519TufKey, Ed25519TufKeyPair, Ed25519TufPrivateKey, KeyId, KeyType, RSATufKey, RSATufKeyPair, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, SignedPayload, TufKey, TufKeyPair, TufPrivateKey, ValidKeyId, ValidSignature}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, EcPrime256KeyType, EcPrime256TufKey, EcPrime256TufKeyPair, EcPrime256TufPrivateKey, Ed25519KeyType, Ed25519TufKey, Ed25519TufKeyPair, Ed25519TufPrivateKey, KeyId, KeyType, RSATufKey, RSATufKeyPair, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, JsonSignedPayload, SignedPayload, TufKey, TufKeyPair, TufPrivateKey, ValidKeyId, ValidSignature}
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
 import org.bouncycastle.util.encoders.{Base64, Hex}
@@ -87,8 +87,8 @@ object TufCrypto {
 
   lazy val ecPrime256Crypto = new ECPrime256Crypto()
 
-  def signPayload[T : Encoder](key: TufPrivateKey, payload: T): Signature = {
-    val bytes = payload.asJson.canonical.getBytes
+  def signPayload(key: TufPrivateKey, payload: Json): Signature = {
+    val bytes = payload.canonical.getBytes
     sign(key.keytype, key.keyval, bytes)
   }
 
@@ -118,9 +118,9 @@ object TufCrypto {
     signer.verify(decodedSig)
   }
 
-  def isValid[T : Encoder](signature: ClientSignature, publicKey: PublicKey, value: T): Boolean = {
+  def isValid(signature: ClientSignature, publicKey: PublicKey, value: Json): Boolean = {
     val sig = Signature(signature.sig, signature.method)
-    TufCrypto.isValid(sig, publicKey, value.asJson.canonical.getBytes)
+    TufCrypto.isValid(sig, publicKey, value.canonical.getBytes)
   }
 
   implicit class PublicKeyOps(key: PublicKey) {

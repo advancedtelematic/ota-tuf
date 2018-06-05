@@ -6,7 +6,7 @@ import java.nio.file.Path
 import cats.data.Validated.{Invalid, Valid}
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.SignedPayload
+import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, SignedPayload}
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future

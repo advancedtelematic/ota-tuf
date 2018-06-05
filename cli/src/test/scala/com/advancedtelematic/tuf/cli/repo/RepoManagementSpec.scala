@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path, Paths}
 import java.time.Instant
 
 import io.circe.jawn._
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RsaKeyType, JsonSignedPayload, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName}
 import com.advancedtelematic.tuf.cli.{CliSpec, KeyTypeSpecSupport, RandomNames}
 import cats.syntax.either._
@@ -119,15 +119,16 @@ class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
 
     repo.genKeys(KeyName("targets"), keyType).get
 
-    val rootRole = SignedPayload(Seq.empty,
-      RootRole(Map.empty, Map.empty, 2, expires = Instant.now()))
+    val rootRole = RootRole(Map.empty, Map.empty, 2, expires = Instant.now())
 
-    repo.writeSignedRole(rootRole).get
+    val signedPayload = SignedPayload(Seq.empty,rootRole, rootRole.asJson)
+
+    repo.writeSignedRole(signedPayload).get
 
     RepoManagement.export(repo, KeyName("targets"), tempPath) shouldBe a[Success[_]]
     val repoFromExported = RepoManagement.initialize(randomName, randomRepoPath, tempPath).get
 
-    repoFromExported.readSignedRole[RootRole].get.asJson shouldBe rootRole.asJson
+    repoFromExported.readSignedRole[RootRole].get.asJson shouldBe signedPayload.asJson
   }
 
   keyTypeZipTest("can export zip file ") { (zip, keyType) =>

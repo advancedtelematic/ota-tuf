@@ -11,12 +11,12 @@ import com.advancedtelematic.libats.http.Errors.{RawError, RemoteServiceError}
 import com.advancedtelematic.libats.http.{ServiceHttpClient, ServiceHttpClientSupport}
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, RsaKeyType, SignedPayload, TufKeyPair}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, RsaKeyType, JsonSignedPayload, SignedPayload, TufKeyPair}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType._
-import io.circe.{Decoder, Encoder, Json}
+import com.advancedtelematic.libtuf.data.ClientCodecs._
+import io.circe.Json
 import scala.concurrent.Future
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.ClientCodecs._
 
 object KeyserverClient {
   val KeysNotReady = RawError(ErrorCode("keys_not_ready"), StatusCodes.Locked, "Keys not ready in remote keyserver")
@@ -30,7 +30,7 @@ object KeyserverClient {
 trait KeyserverClient {
   def createRoot(repoId: RepoId, keyType: KeyType = RsaKeyType): Future[Json]
 
-  def sign[T : Decoder : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]]
+  def sign(repoId: RepoId, roleType: RoleType, payload: Json): Future[JsonSignedPayload]
 
   def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]]
 
@@ -73,9 +73,9 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
     }
   }
 
-  override def sign[T : Decoder : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]] = {
+  override def sign(repoId: RepoId, roleType: RoleType, payload: Json): Future[JsonSignedPayload] = {
     val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show / roleType.show))
-    execJsonHttp[SignedPayload[T], T](req, payload) {
+    execJsonHttp[JsonSignedPayload, Json](req, payload) {
       case RemoteServiceError(_, StatusCodes.PreconditionFailed, _, _, _, _) =>
         Future.failed(RoleKeyNotFound)
     }
@@ -99,7 +99,10 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
 
   override def updateRoot(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = {
     val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show / "unsigned"))
-    execJsonHttp[Unit, SignedPayload[RootRole]](req, signedPayload)()
+    execJsonHttp[Unit, SignedPayload[RootRole]](req, signedPayload) {
+      case remoteError if remoteError.status == StatusCodes.BadRequest =>
+        Future.failed(remoteError)
+    }
   }
 
   override def deletePrivateKey(repoId: RepoId, keyId: KeyId): Future[Unit] = {

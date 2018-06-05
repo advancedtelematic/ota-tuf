@@ -152,15 +152,6 @@ protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: Ex
         .update(signedRole)
     }
 
-  def findAll(roleTypes: RoleType*): Source[SignedRole, NotUsed] =
-    Source.fromPublisher {
-      db.stream {
-        signedRoles
-          .filter(_.roleType.inSet(roleTypes))
-          .result
-      }
-    }
-
   def find(repoId: RepoId, roleType: RoleType): Future[SignedRole] =
     db.run {
       signedRoles

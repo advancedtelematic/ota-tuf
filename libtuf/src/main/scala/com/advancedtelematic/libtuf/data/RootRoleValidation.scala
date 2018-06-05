@@ -6,18 +6,31 @@ import cats.implicits._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RoleType, SignedPayload, TufKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RoleType, JsonSignedPayload, SignedPayload, TufKey}
+import io.circe.Json
+import io.circe.syntax._
+import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 
 object RootRoleValidation {
   private sealed trait RootRoleValidatedSig
   private case class ValidSignature(keyId: KeyId) extends RootRoleValidatedSig
   private case class InvalidSignature(msg: String) extends RootRoleValidatedSig
 
+  def rootRawJsonIsValid(signedPayloadJson: JsonSignedPayload): ValidatedNel[String, SignedPayload[RootRole]] = {
+    val parsedE = signedPayloadJson.signed.as[RootRole].leftMap(_.message)
+
+    Validated.fromEither(parsedE).toValidatedNel.andThen { parsed: RootRole =>
+      Validated.condNel(signedPayloadJson.signed.canonical == parsed.asJson.canonical, parsed, "an incompatible encoder was used to encode root.json")
+    }.map { parsed =>
+      SignedPayload(signedPayloadJson.signatures, parsed, signedPayloadJson.signed)
+    }
+  }
+
   def newRootIsValid(newSignedRoot: SignedPayload[RootRole], oldRoot: SignedPayload[RootRole]): ValidatedNel[String, SignedPayload[RootRole]] = {
     val validationWithOldRoot = validateThresholdWithRole(newSignedRoot, oldRoot.signed)
     val validationWithNewRoot = validateThresholdWithRole(newSignedRoot, newSignedRoot.signed)
 
-    val newRoleValidation: ValidatedNel[String, SignedPayload[RootRole]] =
+    val newRoleValidation =
       (validateVersionBump(oldRoot.signed, newSignedRoot.signed), validationWithOldRoot, validationWithNewRoot)
         .mapN { (_, _, _) => newSignedRoot }
 
@@ -69,7 +82,7 @@ object RootRoleValidation {
     publicKeys.toList.map { case (keyId, tufKey) =>
       roleSignatures.get(keyId) match {
         case Some(sig) =>
-          if (TufCrypto.isValid(sig, tufKey.keyval, signedPayload.signed))
+          if (TufCrypto.isValid(sig, tufKey.keyval, signedPayload.json))
             ValidSignature(keyId)
           else
             InvalidSignature(s"Invalid signature for key $keyId in root.json version ${signedPayload.signed.version}")

@@ -6,6 +6,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenId
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.ErrorCodes
+import com.advancedtelematic.libats.http.Errors.Error
 
 object Errors {
   val KeysNotReady = RawError(ErrorCodes.KeyServer.KeysNotReady, StatusCodes.Locked, "A key generation request exists")

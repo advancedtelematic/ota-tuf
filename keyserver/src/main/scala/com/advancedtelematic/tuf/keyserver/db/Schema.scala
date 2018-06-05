@@ -6,12 +6,16 @@ import java.time.Instant
 import com.advancedtelematic.libats.slick.db.SlickEncryptedColumn.EncryptedColumn
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, SignedPayload, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, JsonSignedPayload, SignedPayload, TufPrivateKey}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.data.TufCodecs._
+import io.circe.Json
+import cats.syntax.either._
+
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 
 object Schema {
   import com.advancedtelematic.libats.slick.codecs.SlickRefined._
@@ -52,17 +56,20 @@ object Schema {
 
   protected [db] val keys = TableQuery[KeyTable]
 
-  implicit val signedPayloadRootRoleMapper = circeMapper[SignedPayload[RootRole]]
-
-  class SignedRootRoleTable(tag: Tag) extends Table[(RepoId, Instant, Int, SignedPayload[RootRole])](tag, "signed_root_roles") {
+  class SignedRootRoleTable(tag: Tag) extends Table[SignedRootRole](tag, "signed_root_roles") {
     def repoId = column[RepoId]("repo_id")
     def expiresAt = column[Instant]("expires_at")
     def version = column[Int]("version")
-    def signedPayload = column[SignedPayload[RootRole]]("signed_payload")
+    def content = column[JsonSignedPayload]("signed_payload")
 
     def pk = primaryKey("pk_signed_root_roles", (repoId, version))
 
-    override def * = (repoId, expiresAt, version, signedPayload)
+    private def content_parsed = content <>
+      ({ c => SignedPayload(c.signatures, c.signed.as[RootRole].valueOr(throw _), c.signed) },
+        (x: SignedPayload[RootRole]) => Some(JsonSignedPayload(x.signatures, x.json))
+      )
+
+    override def * = (repoId, content_parsed, expiresAt, version) <> ((SignedRootRole.apply _).tupled, SignedRootRole.unapply)
   }
 
   protected [db] val signedRootRoles = TableQuery[SignedRootRoleTable]
