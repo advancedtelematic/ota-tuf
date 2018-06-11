@@ -43,11 +43,15 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
 
   def persist(targetItem: TargetItem): Future[TargetItem] = db.run(persistAction(targetItem))
 
-  def delete(repoId: RepoId, filename: TargetFilename): Future[Unit] = db.run {
-    targetItems
-      .filter(_.repoId === repoId).filter(_.filename === filename)
-      .delete
+  def deleteItemAndComments(filenameComments: FilenameCommentRepository)(repoId: RepoId, filename: TargetFilename): Future[Unit] = db.run {
+    filenameComments.deleteAction(repoId, filename)
+      .andThen {
+        targetItems
+          .filter(_.repoId === repoId).filter(_.filename === filename)
+          .delete
+      }
       .map(_ => ())
+      .transactionally
   }
 
   protected [db] def resetAction(repoId: RepoId): DBIO[Unit] =
@@ -147,8 +151,6 @@ protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: Ex
         .filter(_.roleType === signedRole.roleType)
         .update(signedRole)
     }
-
-
 
   def findAll(roleTypes: RoleType*): Source[SignedRole, NotUsed] =
     Source.fromPublisher {
@@ -261,4 +263,8 @@ protected [db] class FilenameCommentRepository()(implicit db: Database, ec: Exec
       .result
       .failIfEmpty(CommentNotFound)
   }
+
+  def deleteAction(repoId: RepoId, filename: TargetFilename) =
+    filenameComments.filter(_.repoId === repoId).filter(_.filename === filename)
+      .delete
 }
