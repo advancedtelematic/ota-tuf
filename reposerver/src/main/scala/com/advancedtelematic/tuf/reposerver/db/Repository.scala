@@ -56,6 +56,13 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
   protected [db] def createAction(targetItem: TargetItem): DBIO[TargetItem] =
     (targetItems += targetItem).map(_ => targetItem)
 
+  def deleteOtherFilenamesAction(repoId: RepoId, keep: Seq[TargetFilename]): DBIO[Unit] = {
+    targetItems
+      .filter(_.repoId === repoId).filterNot(_.filename inSet keep)
+      .delete
+      .map(_ => ())
+  }
+
   protected [db] def persistAction(targetItem: TargetItem): DBIO[TargetItem] = {
     val findQ = targetItems.filter(_.repoId === targetItem.repoId).filter(_.filename === targetItem.filename)
     val now = Instant.now
@@ -169,10 +176,12 @@ protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: Ex
         .failIfNone(SignedRoleNotFound)
     }
 
-  def storeAll(targetItemRepo: TargetItemRepository)(repoId: RepoId, signedRoles: List[SignedRole], items: Seq[TargetItem]): Future[Unit] = db.run {
-    targetItemRepo.resetAction(repoId)
-      .andThen(DBIO.sequence(signedRoles.map(sr => persistAction(sr, forceVersion = false))))
-      .andThen(DBIO.sequence(items.map(targetItemRepo.createAction)))
+  def storeExactly(targetItemRepo: TargetItemRepository)(repoId: RepoId, signedRoles: List[SignedRole], items: Seq[TargetItem]): Future[Unit] = db.run {
+    val keepRepoFilenames = items.filter(_.repoId == repoId).map(_.filename)
+
+    DBIO.sequence(signedRoles.map(sr => persistAction(sr, forceVersion = false)))
+      .andThen(DBIO.sequence(items.map(targetItemRepo.persistAction)))
+      .andThen(targetItemRepo.deleteOtherFilenamesAction(repoId, keepRepoFilenames))
       .map(_ => ())
       .transactionally
   }
