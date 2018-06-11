@@ -38,7 +38,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
           val signedTargetRole = SignedRole.withChecksum(repoId, RoleType.TARGETS, signedPayload, signedPayload.signed.version, signedPayload.signed.expires)
 
           signedRoleGeneration.regenerateSignedDependent(repoId, signedTargetRole, signedPayload.signed.expires)
-            .flatMap(dependent => signedRoleRepo.storeAll(targetItemRepo)(repoId: RepoId, signedTargetRole :: dependent, items))
+            .flatMap(dependent => signedRoleRepo.storeExactly(targetItemRepo)(repoId: RepoId, signedTargetRole :: dependent, items))
             .map(_ => (existingTargets, signedTargetRole).validNel)
         case i @ Invalid(_) =>
           FastFuture.successful(i)

@@ -1186,6 +1186,76 @@ class RepoResourceCommentSpec extends TufReposerverSpec with ResourceSpec with P
     }
   }
 
+  test("get existing comment list for different versions") {
+    val repoId = RepoId.generate()
+    fakeKeyserverClient.createRoot(repoId, RsaKeyType).futureValue
+    val repoIdS = repoId.show
+
+    Post(apiUri(s"repo/$repoIdS/targets/raspberrypi_rocko-ce15f3986223be401205d13dda6e8d7aefeae1c02a769043ba11d1268ccd77dd"), testFile) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Put(apiUri(s"repo/$repoIdS/comments/raspberrypi_rocko-ce15f3986223be401205d13dda6e8d7aefeae1c02a769043ba11d1268ccd77dd"),
+                        CommentRequest(TargetComment("comment1"))) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    val testFile2 = {
+      val checksum = Sha256Digest.digest("lo".getBytes)
+      RequestTargetItem(Uri("https://ats.com/testfile"), checksum, targetFormat = None, name = None, version = None,
+                            hardwareIds = Seq.empty, length = "lo".getBytes.length)
+    }
+
+    Post(apiUri(s"repo/$repoIdS/targets/raspberrypi_rocko-d359911e6fb67476e379a55870d1a180acc3a78d6d463b5281ccd9ca861519dc"), testFile2) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Put(apiUri(s"repo/$repoIdS/comments/raspberrypi_rocko-d359911e6fb67476e379a55870d1a180acc3a78d6d463b5281ccd9ca861519dc"),
+                          CommentRequest(TargetComment("comment2"))) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Get(apiUri(s"repo/$repoIdS/comments")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      entityAs[Seq[FilenameComment]].length shouldBe 2
+    }
+  }
+
+  keyTypeTest("updating targets.json doesn't kill comments") { keyType =>
+    val repoId = addTargetToRepo(keyType = keyType)
+    val repoIdS = repoId.show
+
+    val signedPayload = buildSignedTargetsRole(repoId, offlineTargets, version = 2)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+      header("x-ats-role-checksum").map(_.value) should contain(makeRoleChecksumHeader(repoId).value)
+    }
+
+    Put(apiUri(s"repo/$repoIdS/comments/$offlineTargetFilename"),
+      CommentRequest(TargetComment("comment1"))) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Get(apiUri(s"repo/$repoIdS/comments/$offlineTargetFilename")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      entityAs[CommentRequest] shouldBe CommentRequest(TargetComment("comment1"))
+    }
+
+    val signedPayload2 = buildSignedTargetsRole(repoId, offlineTargets, version = 3)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload2).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+      header("x-ats-role-checksum").map(_.value) should contain(makeRoleChecksumHeader(repoId).value)
+    }
+
+    Get(apiUri(s"repo/$repoIdS/comments/$offlineTargetFilename")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      entityAs[CommentRequest] shouldBe CommentRequest(TargetComment("comment1"))
+    }
+
+  }
+
 }
 
 object JsonErrors {

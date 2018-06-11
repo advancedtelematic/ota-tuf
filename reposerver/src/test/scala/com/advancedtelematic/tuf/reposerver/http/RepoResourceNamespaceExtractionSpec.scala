@@ -3,14 +3,14 @@ package com.advancedtelematic.tuf.reposerver.http
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server.Route
 import com.advancedtelematic.libats.http.ErrorHandler
-import com.advancedtelematic.libtuf.data.TufDataType.RepoId
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetFormat, TargetName, TargetVersion}
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.prop.Whenever
 import org.scalatest.{BeforeAndAfterAll, Inspectors}
 import cats.syntax.show._
 import com.advancedtelematic.libats.auth.NamespaceDirectives
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
-import com.advancedtelematic.libtuf_server.data.Requests.{CommentRequest, TargetComment}
+import com.advancedtelematic.libtuf_server.data.Requests.{CommentRequest, FilenameComment, TargetComment}
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
@@ -76,18 +76,79 @@ class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
 
   test("allow when user repo belongs to user namespace") {
     withNamespace("mynamespace02") { implicit ns =>
-      Post(s"/user_repo").namespaced ~> Route.seal(routes) ~> check {
+      Post("/user_repo").namespaced ~> Route.seal(routes) ~> check {
         status shouldBe StatusCodes.OK
         responseAs[RepoId]
       }
 
-      Post(s"/user_repo/targets/myfile", testFile).namespaced ~> Route.seal(routes) ~> check {
+      Post("/user_repo/targets/myfile", testFile).namespaced ~> Route.seal(routes) ~> check {
         status shouldBe StatusCodes.OK
       }
 
-
-      Put(s"/user_repo/comments/myfile", CommentRequest(TargetComment("comment"))).namespaced ~> Route.seal(routes) ~> check {
+      Put("/user_repo/comments/myfile", CommentRequest(TargetComment("comment"))).namespaced ~> Route.seal(routes) ~> check {
         status shouldBe StatusCodes.OK
+      }
+
+      Get("/user_repo/comments/myfile").namespaced ~> Route.seal(routes) ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      val testFile2 = {
+        val checksum = Sha256Digest.digest("lo".getBytes)
+        // is the problem that name and version are None here?
+        RequestTargetItem(Uri.Empty, checksum, targetFormat = None, name = None, version = None, hardwareIds = Seq.empty, length = "lo".getBytes.length)
+      }
+
+      Post("/user_repo/targets/myfile2", testFile).namespaced ~> Route.seal(routes) ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      Put("/user_repo/comments/myfile2", CommentRequest(TargetComment("comment2"))).namespaced ~> Route.seal(routes) ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      Get("/user_repo/comments").namespaced ~> Route.seal(routes) ~> check {
+        status shouldBe StatusCodes.OK
+        entityAs[Seq[FilenameComment]].length shouldBe 2
+      }
+
+    }
+  }
+
+  test("comments continue to exist when new target item gets added") {
+    def testFile(name: String, version: String) = {
+      val content = "lo"
+      val checksum = Sha256Digest.digest(content.getBytes)
+      // is the problem that name and version are None here?
+      RequestTargetItem(Uri.Empty, checksum, targetFormat = Some(TargetFormat.OSTREE), name = Some(TargetName(name)), version = Some(TargetVersion(version)),
+        hardwareIds = Seq.empty, length = content.getBytes.length)
+    }
+
+    withNamespace("comments") { implicit ns =>
+      Post("/user_repo").namespaced ~> Route.seal(routes) ~> check {
+        status shouldBe StatusCodes.OK
+        responseAs[RepoId]
+      }
+
+      Post("/user_repo/targets/file_1", testFile("file", "1")).namespaced ~> Route.seal(routes) ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      Put("/user_repo/comments/file_1", CommentRequest(TargetComment("comment1"))).namespaced ~> Route.seal(routes) ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      Post("/user_repo/targets/file_2", testFile("file", "2")).namespaced ~> Route.seal(routes) ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      Put("/user_repo/comments/file_2", CommentRequest(TargetComment("comment2"))).namespaced ~> Route.seal(routes) ~> check {
+        status shouldBe StatusCodes.OK
+      }
+
+      Get("/user_repo/comments").namespaced ~> Route.seal(routes) ~> check {
+        status shouldBe StatusCodes.OK
+        entityAs[Seq[FilenameComment]].length shouldBe 2
       }
 
     }
