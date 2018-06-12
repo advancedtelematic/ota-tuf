@@ -189,7 +189,9 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
 
   def addComment(repoId: RepoId, filename: TargetFilename, commentRequest: CommentRequest): Route =
     complete {
-      filenameCommentRepo.persist(repoId, filename, commentRequest.comment)
+      targetItemRepo.findByFilename(repoId, filename).flatMap { _ =>
+        filenameCommentRepo.persist(repoId, filename, commentRequest.comment)
+      }
     }
 
   def deleteTargetItem(repoId: RepoId, filename: TargetFilename): Route = complete {

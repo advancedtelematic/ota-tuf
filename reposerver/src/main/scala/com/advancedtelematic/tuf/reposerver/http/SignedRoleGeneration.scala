@@ -9,7 +9,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, SignedPayload, TargetFilename}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
-import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepository, SignedRoleRepositorySupport, TargetItemRepositorySupport}
+import com.advancedtelematic.tuf.reposerver.db.{FilenameCommentRepository, SignedRoleRepository, SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Json}
 import slick.jdbc.MySQLProfile.api._
@@ -20,6 +20,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import cats.syntax.either._
 import cats.syntax.flatMap
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
+import com.advancedtelematic.tuf.reposerver.db.Schema.filenameComments
 import org.slf4j.LoggerFactory
 
 class SignedRoleGeneration(keyserverClient: KeyserverClient)
@@ -162,13 +163,13 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
 
 protected class TargetRoleGeneration(roleSigningClient: KeyserverClient)
                           (implicit val db: Database, val ec: ExecutionContext)
-  extends TargetItemRepositorySupport {
+  extends TargetItemRepositorySupport with FilenameCommentRepository.Support {
 
   def addTargetItem(targetItem: TargetItem): Future[TargetItem] =
     targetItemRepo.persist(targetItem)
 
   def deleteTargetItem(repoId: RepoId, filename: TargetFilename): Future[Unit] =
-    targetItemRepo.delete(repoId, filename)
+    targetItemRepo.deleteItemAndComments(filenameCommentRepo)(repoId, filename)
 
   def generate(repoId: RepoId, expireAt: Instant, version: Int): Future[TargetsRole] = {
     targetItemRepo.findFor(repoId).map { targetItems =>
