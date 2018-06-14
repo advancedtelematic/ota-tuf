@@ -14,7 +14,7 @@ import com.typesafe.config.ConfigFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.LogDirectives._
-import com.advancedtelematic.libats.http.monitoring.MetricsSupport
+import com.advancedtelematic.libats.http.monitoring.{BootMetrics, MetricsSupport}
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.metrics.{AkkaHttpRequestMetrics, InfluxdbMetricsReporterSupport}
 import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
@@ -30,12 +30,14 @@ trait Settings {
   lazy val vaultMount = Path(_config.getString("vault.mount"))
 }
 
+
 object Boot extends BootApp
   with Directives
   with Settings
   with VersionInfo
   with DatabaseConfig
   with MetricsSupport
+  with BootMetrics
   with DatabaseMetrics
   with SlickEncryptionConfig
   with InfluxdbMetricsReporterSupport
