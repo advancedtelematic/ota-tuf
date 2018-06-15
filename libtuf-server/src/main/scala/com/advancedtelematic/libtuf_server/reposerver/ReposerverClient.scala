@@ -21,9 +21,9 @@ import scala.concurrent.{ExecutionContext, Future}
 import io.circe.generic.semiauto._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.HttpCodecs._
+import com.advancedtelematic.libats.http.{ServiceHttpClient, ServiceHttpClientSupport}
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest
-import com.advancedtelematic.libtuf_server.http.{ServiceHttpClient, ServiceHttpClientSupport}
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.{KeysNotReady, NotFound, RootNotInKeyserver}
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
