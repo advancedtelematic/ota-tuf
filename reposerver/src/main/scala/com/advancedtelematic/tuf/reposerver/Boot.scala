@@ -67,7 +67,7 @@ object Boot extends BootApp
 
   lazy val keyStoreClient = KeyserverHttpClient(keyServerUri)
 
-  val messageBusPublisher = MessageBus.publisher(system, config).valueOr(throw _)
+  val messageBusPublisher = MessageBus.publisher(system, config)
 
   val targetStoreEngine = if(useS3) new S3TargetStoreEngine(s3Credentials) else LocalTargetStoreEngine(targetStoreRoot)
 
