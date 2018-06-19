@@ -26,8 +26,7 @@ object ClientDataType {
 
   case class ClientTargetItem(hashes: ClientHashes,
                               length: Long, custom: Option[Json]) {
-    def customParsed[T](implicit decoder: Decoder[T]): Option[T] =
-      custom.flatMap(c => decoder.decodeJson(c).toOption)
+    def customParsed[T : Decoder]: Option[T] = custom.flatMap(_.as[T].toOption)
   }
 
   case class RoleKeys(keyids: Seq[KeyId], threshold: Int)

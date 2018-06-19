@@ -7,6 +7,7 @@ import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufDataType.{EcPrime256KeyType, _}
 import io.circe._
 import cats.syntax.functor._
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole, VersionedRole}
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 
 import scala.util.Try
@@ -28,8 +29,18 @@ object TufCodecs {
   implicit val clientSignatureEncoder: Encoder[ClientSignature] = deriveEncoder
   implicit val clientSignatureDecoder: Decoder[ClientSignature] = deriveDecoder
 
-  implicit def signedPayloadEncoder[T : Encoder]: Encoder[SignedPayload[T]] = deriveEncoder
-  implicit def signedPayloadDecoder[T : Encoder : Decoder]: Decoder[SignedPayload[T]] = deriveDecoder
+  implicit def signedPayloadEncoder[T : Encoder]: Encoder[SignedPayload[T]] = jsonSignedPayloadEncoder.contramap[SignedPayload[T]] { e =>
+    JsonSignedPayload(e.signatures, e.json)
+  }
+
+  implicit def signedPayloadDecoder[T : Encoder : Decoder]: Decoder[SignedPayload[T]] = jsonSignedPayloadDecoder.emapTry { e =>
+    e.signed.as[T].map { ee =>
+      SignedPayload[T](e.signatures, ee, e.signed)
+    }.toTry
+  }
+
+  implicit val jsonSignedPayloadEncoder: Encoder[JsonSignedPayload] = deriveEncoder
+  implicit val jsonSignedPayloadDecoder: Decoder[JsonSignedPayload] = deriveDecoder
 
   implicit val rsaKeyTypeEncoder: Encoder[RsaKeyType.type] = Encoder[String].contramap(_ ⇒ "RSA")
   implicit val rsaKeyTypeDecoder: Decoder[RsaKeyType.type] = Decoder[String].emap(str ⇒ Either.cond(str == "RSA", RsaKeyType, s"Unknown KeyType: $str"))

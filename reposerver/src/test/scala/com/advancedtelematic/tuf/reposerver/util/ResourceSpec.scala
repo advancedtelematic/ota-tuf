@@ -37,6 +37,7 @@ import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufRepose
 import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStoreEngine, TargetStore}
 
 import scala.concurrent.Promise
+import cats.syntax.either._
 
 class FakeKeyserverClient extends KeyserverClient {
 
@@ -114,19 +115,21 @@ class FakeKeyserverClient extends KeyserverClient {
     }
   }
 
-  override def sign[T: Decoder : Encoder](repoId: RepoId, roleType: RoleType, payload: T): Future[SignedPayload[T]] = {
+  override def sign(repoId: RepoId, roleType: RoleType, payload: Json): Future[JsonSignedPayload] = {
     val okey = keys.asScala.get(repoId).flatMap(_.get(roleType))
     val fkey = okey.map(FastFuture.successful).getOrElse(FastFuture.failed(RoleKeyNotFound))
 
     fkey.map { tufKeyPair =>
       val signature = TufCrypto.signPayload(tufKeyPair.privkey, payload).toClient(tufKeyPair.pubkey.id)
-      SignedPayload(List(signature), payload)
+      JsonSignedPayload(List(signature), payload)
     }
   }
 
   override def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]] =
     fetchUnsignedRoot(repoId).flatMap { unsigned =>
-      sign(repoId, RoleType.ROOT, unsigned)
+      sign(repoId, RoleType.ROOT, unsigned.asJson).map { signedPayload =>
+        SignedPayload(signedPayload.signatures, unsigned, signedPayload.signed)
+      }
     }
 
   override def fetchUnsignedRoot(repoId: RepoId): Future[RootRole] = {

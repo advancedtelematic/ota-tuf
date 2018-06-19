@@ -4,16 +4,20 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 import akka.http.scaladsl.util.FastFuture
+import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, SignedPayload, TargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, JsonSignedPayload, TargetFilename}
+import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
 import com.advancedtelematic.tuf.reposerver.db.{FilenameCommentRepository, SignedRoleRepository, SignedRoleRepositorySupport, TargetItemRepositorySupport}
+import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepository.SignedRoleNotFound
+import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepository, SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Json}
+import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
-import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepository.SignedRoleNotFound
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
@@ -30,7 +34,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
 
   val targetRoleGeneration = new TargetRoleGeneration(keyserverClient)
 
-  def regenerateSignedRoles(repoId: RepoId): Future[SignedPayload[Json]] = {
+  def regenerateSignedRoles(repoId: RepoId): Future[JsonSignedPayload] = {
     async {
       await(fetchRootRole(repoId))
 
@@ -62,7 +66,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
     List(signedSnapshot, signedTimestamp)
   }
 
-  def addTargetItem(targetItem: TargetItem): Future[SignedPayload[Json]] =
+  def addTargetItem(targetItem: TargetItem): Future[JsonSignedPayload] =
     targetRoleGeneration.addTargetItem(targetItem).flatMap(_ ⇒ regenerateSignedRoles(targetItem.repoId))
 
   def deleteTargetItem(repoId: RepoId, filename: TargetFilename): Future[Unit] = for {
@@ -72,7 +76,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
   } yield ()
 
   def signRole[T <: VersionedRole : TufRole : Decoder : Encoder](repoId: RepoId, role: T): Future[SignedRole] = {
-    keyserverClient.sign(repoId, role.roleType, role).map { signedRole =>
+    keyserverClient.sign(repoId, role.roleType, role.asJson).map { signedRole =>
       SignedRole.withChecksum(repoId, role.roleType, signedRole, role.version, role.expires)
     }
   }
@@ -84,7 +88,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
 
   private def fetchRootRole(repoId: RepoId): Future[SignedRole] =
     keyserverClient.fetchRootRole(repoId).map { rootRole =>
-      SignedRole.withChecksum(repoId, RoleType.ROOT, rootRole, rootRole.signed.version, rootRole.signed.expires)
+      SignedRole.withChecksum(repoId, RoleType.ROOT, rootRole.asJsonSignedPayload, rootRole.signed.version, rootRole.signed.expires)
     }
 
   private def findAndCacheRole(repoId: RepoId, roleType: RoleType): Future[SignedRole] = {

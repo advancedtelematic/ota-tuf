@@ -10,6 +10,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import slick.jdbc.MySQLProfile.api._
+
 import scala.concurrent.{ExecutionContext, Future}
 import SlickMappings._
 
@@ -139,25 +140,21 @@ object SignedRootRoleRepository {
 }
 
 protected[db] class SignedRootRoleRepository()(implicit db: Database, ec: ExecutionContext) {
-  import Schema.signedPayloadRootRoleMapper
   import Schema.signedRootRoles
   import SignedRootRoleRepository.{MissingSignedRole, RootRoleExists}
 
-  def persist(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = db.run {
-    persistAction(repoId, signedPayload)
+  def persist(signedRootRole: SignedRootRole): Future[Unit] = db.run {
+    persistAction(signedRootRole)
   }
 
-  def persistAndDeleteRepoKeys(keyRepository: KeyRepository)(repoId: RepoId, signedPayload: SignedPayload[RootRole], keysToDelete: Set[KeyId]): Future[Unit] = db.run {
-    keyRepository.deleteRepoKeys(repoId, keysToDelete).andThen(persistAction(repoId, signedPayload).transactionally)
+  def persistAndDeleteRepoKeys(keyRepository: KeyRepository)(signedRootRole: SignedRootRole, keysToDelete: Set[KeyId]): Future[Unit] = db.run {
+    keyRepository.deleteRepoKeys(signedRootRole.repoId, keysToDelete).andThen(persistAction(signedRootRole).transactionally)
   }
 
-  protected [db] def persistAction(repoId: RepoId, signedPayload: SignedPayload[RootRole]): DBIO[Unit] = {
-    val expires = signedPayload.signed.expires
-
-    val io = (signedRootRoles += ((repoId, expires, signedPayload.signed.version, signedPayload)))
+  protected [db] def persistAction(signedRootRole: SignedRootRole): DBIO[Unit] = {
+    (signedRootRoles += signedRootRole)
       .handleIntegrityErrors(RootRoleExists)
-
-    io.map(_ => ())
+      .map(_ => ())
   }
 
   def nextVersion(repoId: RepoId): Future[Int] = db.run {
@@ -170,24 +167,22 @@ protected[db] class SignedRootRoleRepository()(implicit db: Database, ec: Execut
       .map(_.getOrElse(0) + 1)
   }
 
-  def findLatest(repoId: RepoId): Future[SignedPayload[RootRole]] =
+  def findLatest(repoId: RepoId): Future[SignedRootRole] =
     db.run {
       signedRootRoles
         .filter(_.repoId === repoId)
         .sortBy(_.version.desc)
         .take(1)
-        .map(_.signedPayload)
         .result
         .failIfNotSingle(MissingSignedRole)
     }
 
-  def findByVersion(repoId: RepoId, version: Int): Future[SignedPayload[RootRole]] =
+  def findByVersion(repoId: RepoId, version: Int): Future[SignedRootRole] =
     db.run {
       signedRootRoles
         .filter(_.repoId === repoId)
         .filter(_.version === version)
         .sortBy(_.version.desc)
-        .map(_.signedPayload)
         .result
         .failIfNotSingle(MissingSignedRole)
     }

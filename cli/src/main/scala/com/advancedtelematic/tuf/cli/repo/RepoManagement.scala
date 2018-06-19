@@ -11,14 +11,16 @@ import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName, TreehubConfig}
 import com.advancedtelematic.tuf.cli.repo.TufRepo.{MissingCredentialsZipFile, RepoAlreadyInitialized, TreehubConfigError}
+import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.cli.CliCodecs._
 import com.advancedtelematic.tuf.cli.CliUtil
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder}
 import org.slf4j.LoggerFactory
+
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
 import scala.io.Source

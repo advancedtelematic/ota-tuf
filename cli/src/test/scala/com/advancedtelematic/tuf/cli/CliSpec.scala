@@ -11,7 +11,7 @@ import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyId, KeyType, RoleType, RsaKeyType, SignedPayload, TufKeyPair}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyId, KeyType, RoleType, RsaKeyType, JsonSignedPayload, SignedPayload, TufKeyPair}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
@@ -21,6 +21,7 @@ import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
 import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{RoleNotFound, TargetsResponse}
 import eu.timepit.refined.api.Refined
 import org.scalactic.source.Position
+import io.circe.syntax._
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
@@ -78,8 +79,8 @@ class FakeUserReposerverClient(keyType: KeyType) extends UserReposerverClient {
           RoleType.TARGETS -> RoleKeys(Seq(targetsPubKey.id), 1)
         ), 1, Instant.now.plus(1, ChronoUnit.HOURS))
 
-      val sig = TufCrypto.signPayload(oldPair.privkey, unsignedRoot).toClient(oldPair.pubkey.id)
-      val signedRoot = SignedPayload(Seq(sig), unsignedRoot)
+      val sig = TufCrypto.signPayload(oldPair.privkey, unsignedRoot.asJson).toClient(oldPair.pubkey.id)
+      val signedRoot = SignedPayload(Seq(sig), unsignedRoot, unsignedRoot.asJson)
 
       rootRoles.put(signedRoot.signed.version, signedRoot)
       Future.successful(signedRoot)
@@ -104,8 +105,8 @@ class FakeUserReposerverClient(keyType: KeyType) extends UserReposerverClient {
   }
 
   override def targets(): Future[TargetsResponse] = Future.successful {
-    val sig = TufCrypto.signPayload(targetsPair.privkey, unsignedTargets).toClient(targetsPubKey.id)
-    val signedPayload = SignedPayload(Seq(sig), unsignedTargets)
+    val sig = TufCrypto.signPayload(targetsPair.privkey, unsignedTargets.asJson).toClient(targetsPubKey.id)
+    val signedPayload = SignedPayload(Seq(sig), unsignedTargets, unsignedTargets.asJson)
     TargetsResponse(signedPayload, Option(Refined.unsafeApply("095c33175e5af42691c1b41d388c8ce842c7fbb792fcc6514b5436f7f80420db")))
   }
 
@@ -125,8 +126,8 @@ class FakeUserReposerverClient(keyType: KeyType) extends UserReposerverClient {
     Future.successful(oldPair).filter(_.pubkey.id == keyId)
 
   def sign(rootRole: RootRole): SignedPayload[RootRole] = {
-    val sig = TufCrypto.signPayload(oldPair.privkey, rootRole).toClient(oldPair.pubkey.id)
-    SignedPayload(Seq(sig), rootRole)
+    val sig = TufCrypto.signPayload(oldPair.privkey, rootRole.asJson).toClient(oldPair.pubkey.id)
+    SignedPayload(Seq(sig), rootRole, rootRole.asJson)
   }
 
   def setRoot(signedPayload: SignedPayload[RootRole]): Unit = {

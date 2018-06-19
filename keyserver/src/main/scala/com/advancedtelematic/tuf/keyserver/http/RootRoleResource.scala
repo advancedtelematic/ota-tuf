@@ -80,7 +80,7 @@ class RootRoleResource()
           val f = signedRootRoles.findForSign(repoId)
           complete(f)
         } ~
-        (post & entity(as[SignedPayload[RootRole]])) { signedPayload =>
+        (post & entity(as[JsonSignedPayload])) { signedPayload =>
           val f: Future[ToResponseMarshallable] =
             signedRootRoles.persistUserSigned(repoId, signedPayload).map {
               case Valid(_) =>

@@ -45,7 +45,8 @@ class SignedRootRolesSpec extends TufKeyserverSpec with DatabaseSpec
     async {
       await(keyGenRepo.persist(rootKeyGenRequest))
       await(keyGenerationOp(rootKeyGenRequest))
-      val signed = await(signedRootRoles.findAndPersist(repoId))
+      await(signedRootRoles.findAndPersist(repoId))
+      val signed = await(signedRootRoles.findLatest(repoId))
 
       val rootKeyId = signed.signed.roles(RoleType.ROOT).keyids.head
       val publicKey = signed.signed.keys(rootKeyId).keyval
@@ -58,11 +59,10 @@ class SignedRootRolesSpec extends TufKeyserverSpec with DatabaseSpec
     }.futureValue
   }
 
-  keyTypeTest("persists signed payload when finding ") { keyType =>
+  keyTypeTest("persists signed payload when finding") { keyType =>
     val repoId = RepoId.generate()
     val rootKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
       repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType.crypto.defaultKeySize, keyType)
-
 
     async {
       await(keyGenRepo.persist(rootKeyGenRequest))
@@ -70,7 +70,8 @@ class SignedRootRolesSpec extends TufKeyserverSpec with DatabaseSpec
 
       val signed = await(signedRootRoles.findAndPersist(repoId))
 
-      await(signedRootRoleRepo.findLatest(repoId)).asJson shouldBe signed.asJson
+      await(signedRootRoleRepo.findLatest(repoId)).content.signed.asJson shouldBe signed.signed.asJson
+      await(signedRootRoleRepo.findLatest(repoId)).content.asJson shouldBe signed.asJson
     }.futureValue
   }
 }

@@ -4,7 +4,7 @@ import java.time.Instant
 
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.libats.data.DataType.{Checksum, HashMethod, ValidChecksum}
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, SignedPayload}
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, JsonSignedPayload}
 import io.circe.Json
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libats.test.DatabaseSpec
@@ -27,7 +27,7 @@ class SignedRoleRepositorySpec extends TufReposerverSpec with DatabaseSpec with 
     val repo = new SignedRoleRepository()
 
     val checksum = Checksum(HashMethod.SHA256, refineV[ValidChecksum]("41b3b0f27a091fe87c3e0f23b4194a8f5f54b1a3c275d0633cb1da1596cc4a6f").right.get)
-    val role = SignedRole(RepoId.generate(), RoleType.TARGETS, SignedPayload(Seq.empty, Json.Null), checksum, 0, 1, Instant.now)
+    val role = SignedRole(RepoId.generate(), RoleType.TARGETS, JsonSignedPayload(Seq.empty, Json.Null), checksum, 0, 1, Instant.now)
 
     val ex = async {
       await(repo.persist(role))

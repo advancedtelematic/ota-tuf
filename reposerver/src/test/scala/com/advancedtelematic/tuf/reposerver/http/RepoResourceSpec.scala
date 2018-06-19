@@ -7,7 +7,6 @@ import eu.timepit.refined.refineV
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
-import akka.http.scaladsl.server.{MalformedRequestContentRejection, RejectionHandler}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.stream.scaladsl.Sink
 import akka.stream.testkit.scaladsl.TestSink
@@ -17,7 +16,6 @@ import cats.syntax.either._
 import cats.syntax.option._
 import cats.syntax.show._
 import com.advancedtelematic.libats.codecs.CirceCodecs._
-import com.advancedtelematic.libats.codecs.{DeserializationException, RefinementError}
 import com.advancedtelematic.libats.data.DataType.HashMethod
 import com.advancedtelematic.libats.data.{ErrorCode, ErrorRepresentation}
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
@@ -75,7 +73,8 @@ trait RepoSupport extends ResourceSpec with SignedRoleRepositorySupport with Sca
 
   def buildSignedTargetsRole(repoId: RepoId, targets: Map[TargetFilename, ClientTargetItem], version: Int = 2): SignedPayload[TargetsRole] = {
     val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), targets, version)
-    fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targetsRole).futureValue
+    val signedPayload = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targetsRole.asJson).futureValue
+    SignedPayload(signedPayload.signatures, targetsRole, targetsRole.asJson)
   }
 
   def createOfflineTargets(filename: TargetFilename = offlineTargetFilename) = {
@@ -110,7 +109,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
-      val signedPayload = responseAs[SignedPayload[Json]]
+      val signedPayload = responseAs[JsonSignedPayload]
       signaturesShouldBeValid(repoId, RoleType.TARGETS, signedPayload)
 
       val signed = signedPayload.signed
@@ -127,7 +126,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     Post(apiUri(s"repo/${repoId.show}/targets/myfile02"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
-      val signed = responseAs[SignedPayload[Json]].signed
+      val signed = responseAs[JsonSignedPayload].signed
 
       val targetsRole = signed.as[TargetsRole].valueOr(throw _)
       targetsRole.targets("myfile01".refineTry[ValidTargetFilename].get).length shouldBe 2
@@ -139,7 +138,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
-      val signed = responseAs[SignedPayload[Json]].signed
+      val signed = responseAs[JsonSignedPayload].signed
 
       val targetsRole = signed.as[TargetsRole].valueOr(throw _)
       targetsRole.targets("myfile".refineTry[ValidTargetFilename].get).hashes(HashMethod.SHA256) shouldBe testFile.checksum.hash
@@ -156,7 +155,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     Post(apiUri(s"repo/${repoId.show}/targets/myfilewithuri"), urlTestFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
-      val signed = responseAs[SignedPayload[Json]].signed
+      val signed = responseAs[JsonSignedPayload].signed
 
       val targetsRole = signed.as[TargetsRole].valueOr(throw _)
       val item = targetsRole.targets("myfilewithuri".refineTry[ValidTargetFilename].get)
@@ -182,7 +181,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       Get(apiUri(s"repo/${repoId.show}/$roleType.json")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
 
-        val signedPayload = responseAs[SignedPayload[Json]]
+        val signedPayload = responseAs[JsonSignedPayload]
         signaturesShouldBeValid(repoId, roleType, signedPayload)
       }
     }
@@ -193,7 +192,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
 
     Get(apiUri(s"repo/${newRepoId.show}/timestamp.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      signaturesShouldBeValid(newRepoId, RoleType.TIMESTAMP, responseAs[SignedPayload[TimestampRole]])
+      signaturesShouldBeValid(newRepoId, RoleType.TIMESTAMP, responseAs[SignedPayload[TimestampRole]].asJsonSignedPayload)
     }
   }
 
@@ -202,7 +201,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
 
     Get(apiUri(s"repo/${newRepoId.show}/snapshot.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      signaturesShouldBeValid(newRepoId, RoleType.SNAPSHOT, responseAs[SignedPayload[SnapshotRole]])
+      signaturesShouldBeValid(newRepoId, RoleType.SNAPSHOT, responseAs[SignedPayload[SnapshotRole]].asJsonSignedPayload)
     }
   }
 
@@ -212,7 +211,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     Get(apiUri(s"repo/${newRepoId.show}/targets.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       header("x-ats-role-checksum") shouldBe defined
-      signaturesShouldBeValid(newRepoId, RoleType.TARGETS, responseAs[SignedPayload[TargetsRole]])
+      signaturesShouldBeValid(newRepoId, RoleType.TARGETS, responseAs[SignedPayload[TargetsRole]].asJsonSignedPayload)
     }
   }
 
@@ -221,7 +220,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
 
     Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      signaturesShouldBeValid(newRepoId, RoleType.ROOT, responseAs[SignedPayload[RootRole]])
+      signaturesShouldBeValid(newRepoId, RoleType.ROOT, responseAs[SignedPayload[RootRole]].asJsonSignedPayload)
     }
   }
 
@@ -240,7 +239,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
 
     Get(apiUri(s"repo/${newRepoId.show}/root.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      signaturesShouldBeValid(newRepoId, RoleType.ROOT, responseAs[SignedPayload[RootRole]])
+      signaturesShouldBeValid(newRepoId, RoleType.ROOT, responseAs[SignedPayload[RootRole]].asJsonSignedPayload)
       header("x-ats-tuf-repo-id").get.value() shouldBe newRepoId.uuid.toString
     }
   }
@@ -299,7 +298,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       responseAs[SignedPayload[TimestampRole]]
     }
 
-    val newRole = SignedRole.withChecksum(repoId, RoleType.TIMESTAMP, role, role.signed.version, Instant.now.minus(1, ChronoUnit.DAYS))
+    val newRole = SignedRole.withChecksum(repoId, RoleType.TIMESTAMP, role.asJsonSignedPayload, role.signed.version, Instant.now.minus(1, ChronoUnit.DAYS))
     signedRoleRepo.update(newRole).futureValue
 
     Get(apiUri(s"repo/${repoId.show}/timestamp.json")) ~> routes ~> check {
@@ -317,7 +316,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       responseAs[SignedPayload[SnapshotRole]]
     }
 
-    val newRole = SignedRole.withChecksum(repoId, RoleType.SNAPSHOT, role, role.signed.version, Instant.now.minus(1, ChronoUnit.DAYS))
+    val newRole = SignedRole.withChecksum(repoId, RoleType.SNAPSHOT, role.asJsonSignedPayload, role.signed.version, Instant.now.minus(1, ChronoUnit.DAYS))
     signedRoleRepo.update(newRole).futureValue
 
     Get(apiUri(s"repo/${repoId.show}/snapshot.json")) ~> routes ~> check {
@@ -335,7 +334,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       responseAs[SignedPayload[TargetsRole]]
     }
 
-    val newRole = SignedRole.withChecksum(repoId, RoleType.TARGETS, role, role.signed.version, Instant.now.minus(1, ChronoUnit.DAYS))
+    val newRole = SignedRole.withChecksum(repoId, RoleType.TARGETS, role.asJsonSignedPayload, role.signed.version, Instant.now.minus(1, ChronoUnit.DAYS))
     signedRoleRepo.update(newRole).futureValue
 
     Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
@@ -555,7 +554,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       Post(apiUri("user_repo/targets/myfile"), testFile).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.OK
 
-        val signedPayload = responseAs[SignedPayload[Json]]
+        val signedPayload = responseAs[JsonSignedPayload]
         signaturesShouldBeValid(newRepoId, RoleType.TARGETS, signedPayload)
       }
     }
@@ -571,7 +570,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       Post(apiUri("user_repo/targets/myfile"), testFile).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.OK
 
-        val signedPayload = responseAs[SignedPayload[Json]]
+        val signedPayload = responseAs[JsonSignedPayload]
         signaturesShouldBeValid(newRepoId, RoleType.TARGETS, signedPayload)
       }
 
@@ -579,7 +578,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
         status shouldBe StatusCodes.OK
 
         val signedPayload = responseAs[SignedPayload[RootRole]]
-        signaturesShouldBeValid(newRepoId, RoleType.ROOT, signedPayload)
+        signaturesShouldBeValid(newRepoId, RoleType.ROOT, signedPayload.asJsonSignedPayload)
       }
     }
   }
@@ -857,9 +856,9 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
 
     val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), Map.empty, 2)
 
-    val invalidSignedPayload = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, "something else signed").futureValue
+    val invalidSignedPayload = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, "something else signed".asJson).futureValue
 
-    val signedPayload = SignedPayload(invalidSignedPayload.signatures, targetsRole)
+    val signedPayload = JsonSignedPayload(invalidSignedPayload.signatures, targetsRole.asJson)
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
@@ -872,7 +871,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
 
     val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), Map.empty, 2)
 
-    val signedPayload = SignedPayload(Seq.empty, targetsRole)
+    val signedPayload = JsonSignedPayload(Seq.empty, targetsRole.asJson)
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
@@ -889,8 +888,8 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), targets, 2)
 
     val Ed25519TufKeyPair(pub, sec) = TufCrypto.generateKeyPair(Ed25519KeyType, 256)
-    val signature = TufCrypto.signPayload(sec, targetsRole).toClient(pub.id)
-    val signedPayload = SignedPayload(List(signature), targetsRole)
+    val signature = TufCrypto.signPayload(sec, targetsRole.asJson).toClient(pub.id)
+    val signedPayload = JsonSignedPayload(List(signature), targetsRole.asJson)
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
@@ -902,7 +901,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     val repoId = addTargetToRepo()
 
     val expiredTargetsRole = TargetsRole(Instant.now().minus(1, ChronoUnit.DAYS), offlineTargets, 2)
-    val signedPayload = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, expiredTargetsRole).futureValue
+    val signedPayload = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, expiredTargetsRole.asJson).futureValue
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
@@ -945,7 +944,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  def signaturesShouldBeValid[T : Encoder](repoId: RepoId, roleType: RoleType, signedPayload: SignedPayload[T]): Assertion = {
+  def signaturesShouldBeValid(repoId: RepoId, roleType: RoleType, signedPayload: JsonSignedPayload): Assertion = {
     val signature = signedPayload.signatures.head
     val signed = signedPayload.signed
 

@@ -8,10 +8,12 @@ import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import eu.timepit.refined.api.{Refined, Validate}
-import io.circe.Encoder
+import io.circe.{Decoder, Encoder, Json}
 import TufCrypto.PublicKeyOps
 import com.advancedtelematic.libats.data.DataType.HashMethod.HashMethod
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
+import io.circe.syntax._
+
 
 object TufDataType {
   final case class ValidHardwareIdentifier()
@@ -81,13 +83,43 @@ object TufDataType {
   }
 
   implicit class SignatureToClientSignatureOps(value: Signature) {
-    def toClient(keyId: KeyId): ClientSignature =
-      ClientSignature(keyId, value.method, value.sig)
+    def toClient(keyId: KeyId): ClientSignature = ClientSignature(keyId, value.method, value.sig)
   }
 
-  case class SignedPayload[T : Encoder](signatures: Seq[ClientSignature], signed: T)
+  object SignedPayload {
+    def apply[T : Encoder](signatures: Seq[ClientSignature], signed: T, json: Json): SignedPayload[T] =
+      new SignedPayload(signatures, signed, json)
+  }
 
-  sealed trait KeyType { self =>
+  class SignedPayload[T : Encoder](val signatures: Seq[ClientSignature], val signed: T, val json: Json) {
+    def asJsonSignedPayload: JsonSignedPayload = JsonSignedPayload(signatures, json)
+
+    def updated(signatures: Seq[ClientSignature] = signatures, signed: T = signed): SignedPayload[T] =
+      new SignedPayload[T](signatures, signed, signed.asJson)
+
+
+    override def toString: String = s"SignedPayload($signatures, $signed, ${json.asJson.noSpaces})"
+
+    def canEqual(other: Any): Boolean = other.isInstanceOf[SignedPayload[T]]
+
+    override def equals(other: Any): Boolean = other match {
+      case that: SignedPayload[_] ⇒
+        (that canEqual this) &&
+          signatures == that.signatures &&
+          signed == that.signed &&
+          json == that.json
+      case _ ⇒ false
+    }
+
+    override def hashCode(): Int = {
+      val state = Seq(signatures, signed, json)
+      state.map(_.hashCode()).foldLeft(0)((a, b) ⇒ 31 * a + b)
+    }
+  }
+
+  case class JsonSignedPayload(signatures: Seq[ClientSignature], signed: Json)
+
+  sealed trait KeyType {
     type Pub <: TufKey
     type Priv <: TufPrivateKey
     type Pair <: TufKeyPair

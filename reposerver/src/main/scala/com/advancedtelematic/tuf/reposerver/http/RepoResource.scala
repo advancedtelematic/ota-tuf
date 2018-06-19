@@ -38,10 +38,11 @@ import org.slf4j.LoggerFactory
 
 import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 import slick.jdbc.MySQLProfile.api._
 import RoleChecksumHeader._
 import akka.http.scaladsl.util.FastFuture
+import com.advancedtelematic.libtuf.data.TufCodecs
 import eu.timepit.refined.api.Refined
 
 
@@ -111,6 +112,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
     case MalformedRequestContentRejection(msg, _) => complete((StatusCodes.BadRequest, msg))
   }.result()
 
+
   private def createRepo(namespace: Namespace, repoId: RepoId): Route =
     handleRejections(malformedRequestContentRejectionHandler) {
       entity(as[CreateRepositoryRequest]) { request =>
@@ -118,7 +120,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       }
     } ~ createRepo(namespace, repoId, defaultKeyType)
 
-  private def addTargetItem(namespace: Namespace, item: TargetItem): Future[SignedPayload[Json]] =
+  private def addTargetItem(namespace: Namespace, item: TargetItem): Future[JsonSignedPayload] =
     for {
       result <- signedRoleGeneration.addTargetItem(item)
       _ <- tufTargetsPublisher.targetAdded(namespace, item)
@@ -157,18 +159,16 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
     }
   }
 
+  private def withRepoIdHeader(repoId: RepoId) = respondWithHeader(RawHeader("x-ats-tuf-repo-id", repoId.uuid.toString))
+
   private def findRootByVersion(repoId: RepoId, version: Int): Route = {
-    respondWithHeader(RawHeader("x-ats-tuf-repo-id", repoId.uuid.toString)) { // TODO: Can be refactored ?
-      complete(keyserverClient.fetchRootRole(repoId, version))
-    }
+    complete(keyserverClient.fetchRootRole(repoId, version))
   }
 
   private def findRole(repoId: RepoId, roleType: RoleType): Route = {
     onSuccess(signedRoleGeneration.findRole(repoId, roleType)) { signedRole =>
       respondWithCheckSum(signedRole.checksum.hash) {
-        respondWithHeader(RawHeader("x-ats-tuf-repo-id", repoId.uuid.toString)) {
-          complete(signedRole.content)
-        }
+        complete(signedRole.content)
       }
     }
   }
@@ -222,10 +222,10 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
            }
          }
       } ~
-      (get & path(IntNumber ~ ".root.json")) { version ⇒
+      (get & path(IntNumber ~ ".root.json") & withRepoIdHeader(repoId)) { version ⇒
         findRootByVersion(repoId, version)
       } ~
-      (get & path(JsonRoleTypeMetaPath)) { roleType =>
+      (get & path(JsonRoleTypeMetaPath) & withRepoIdHeader(repoId)) { roleType =>
         findRole(repoId, roleType)
       } ~
       pathPrefix("targets") {

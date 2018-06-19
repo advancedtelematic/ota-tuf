@@ -1,6 +1,5 @@
 package com.advancedtelematic.tuf.keyserver.roles
 
-import com.advancedtelematic.libats.slick.db.SlickEncryptedColumn.EncryptedColumn
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RepoId, RoleType, Signature, TufKeyPair}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
@@ -51,19 +50,19 @@ class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceCo
   }
 
   roleSignTest("signs a payload with a key ") { (_, dbKey) =>
-    val signature = roleSigning.signForClient(payload)(dbKey.toTufKey).futureValue
+    val signature = roleSigning.signForClient(payload.asJson)(dbKey.toTufKey).futureValue
     new String(Base64.decode(signature.sig.value)) shouldBe a[String]
   }
 
   roleSignTest("generates valid signatures") { (keyPair, dbKey) =>
-    val clientSignature = roleSigning.signForClient(payload)(dbKey.toTufKey).futureValue
+    val clientSignature = roleSigning.signForClient(payload.asJson)(dbKey.toTufKey).futureValue
     val signature = Signature(clientSignature.sig, clientSignature.method)
 
     TufCrypto.isValid(signature, keyPair.pubkey.keyval, payload.asJson.canonical.getBytes) shouldBe true
   }
 
   roleSignTest("generates valid signatures when verifying with canonical representation") { (keyPair, dbKey) =>
-    val clientSignature = roleSigning.signForClient(payload)(dbKey.toTufKey).futureValue
+    val clientSignature = roleSigning.signForClient(payload.asJson)(dbKey.toTufKey).futureValue
     val signature = Signature(clientSignature.sig, clientSignature.method)
 
     val canonicalJson = """{"arrayMapProp":[{"aaa":0,"bbb":1}],"mapProp":{"aa":0,"bb":1},"propertyA":"some A","propertyB":"some B"}""".getBytes
