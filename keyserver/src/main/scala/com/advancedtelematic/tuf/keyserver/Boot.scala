@@ -24,10 +24,6 @@ trait Settings {
 
   val host = _config.getString("server.host")
   val port = _config.getInt("server.port")
-
-  lazy val vaultAddr = Uri(_config.getString("vault.address"))
-  lazy val vaultToken = _config.getString("vault.token")
-  lazy val vaultMount = Path(_config.getString("vault.mount"))
 }
 
 
