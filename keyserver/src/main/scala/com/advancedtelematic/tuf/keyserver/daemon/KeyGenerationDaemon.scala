@@ -8,7 +8,7 @@ import com.advancedtelematic.tuf.keyserver.{Settings, VersionInfo}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig, SlickEncryptionConfig}
 import com.advancedtelematic.libats.http.BootApp
-import com.advancedtelematic.libats.http.monitoring.{MetricsSupport, VaultHealthCheck}
+import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.slick.monitoring.{DatabaseMetrics, DbHealthResource}
 
 object KeyGenerationDaemon extends BootApp
@@ -32,7 +32,7 @@ object KeyGenerationDaemon extends BootApp
   system.actorOf(KeyGeneratorLeader.props(), "keygen-leader")
 
   val routes: Route = (versionHeaders(version) & logResponseMetrics(projectName)) {
-    DbHealthResource(versionMap, dependencies = Seq(new VaultHealthCheck(vaultAddr, vaultToken))).route
+    DbHealthResource(versionMap).route
   }
 
   Http().bindAndHandle(routes, host, port)
