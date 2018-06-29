@@ -36,7 +36,7 @@ import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
-import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.TargetRetrieveResult
+import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{TargetBytes, TargetRetrieveResult}
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
@@ -455,7 +455,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
 
     val targetFilename = refineV[ValidTargetFilename]("some/target").right.get
 
-    localStorage.retrieve(repoId, targetFilename).futureValue shouldBe a[TargetRetrieveResult]
+    localStorage.retrieve(repoId, targetFilename).futureValue shouldBe a[TargetBytes]
 
     Delete(apiUri(s"repo/${repoId.show}/targets/some/target")) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
@@ -715,7 +715,15 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
 
   keyTypeTest("accepts an offline signed targets.json") { keyType =>
     val repoId = addTargetToRepo(keyType = keyType)
-    val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
+
+    Put(apiUri(s"repo/${repoId.show}/targets/old/target?name=bananas&version=0.0.1"), form) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    val targetFilename = refineV[ValidTargetFilename]("old/target").right.get
+    localStorage.retrieve(repoId, targetFilename).futureValue shouldBe a[TargetRetrieveResult]
+
+    val signedPayload = buildSignedTargetsRole(repoId, offlineTargets, version = 3)
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
@@ -727,6 +735,9 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       val targets = responseAs[SignedPayload[TargetsRole]].signed.targets
       targets.keys should contain(offlineTargetFilename)
     }
+
+    // check that previous target has been deleted
+    localStorage.retrieve(repoId, targetFilename).failed.futureValue shouldBe Errors.TargetNotFoundError
   }
 
   test("reject putting offline signed targets.json without checksum if it exists already") {

@@ -5,6 +5,7 @@ import PredefinedFromStringUnmarshallers.CsvSeq
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server._
+import cats.data.{Validated, ValidatedNel}
 import cats.data.Validated.{Invalid, Valid}
 import cats.implicits._
 import com.advancedtelematic.libats.data.RefinedUtils._
@@ -38,12 +39,9 @@ import org.slf4j.LoggerFactory
 
 import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 import slick.jdbc.MySQLProfile.api._
 import RoleChecksumHeader._
-import akka.http.scaladsl.util.FastFuture
-import com.advancedtelematic.libtuf.data.TufCodecs
-import eu.timepit.refined.api.Refined
 
 
 class TufTargetsPublisher(messageBus: MessageBusPublisher)(implicit ec: ExecutionContext) {
@@ -53,7 +51,7 @@ class TufTargetsPublisher(messageBus: MessageBusPublisher)(implicit ec: Executio
   def newTargetsAdded(namespace: Namespace, allTargets: Map[TargetFilename, ClientTargetItem], existing: Seq[TargetItem]): Future[Unit] = {
     newTargetsFromExisting(allTargets, existing.map(_.filename)).toList.traverse_ { case (filename, checksum, clientTargetItem) =>
       messageBus.publish(TufTargetAdded(namespace, filename, checksum,
-        clientTargetItem.length, clientTargetItem.customParsed[TargetCustom]))
+                                        clientTargetItem.length, clientTargetItem.customParsed[TargetCustom]))
     }
   }
 
@@ -201,6 +199,37 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
     } yield StatusCodes.NoContent
   }
 
+  def toValidatedNel[A](future: Future[A]): Future[ValidatedNel[Throwable, A]] = {
+    future.map(Validated.valid).recover { case e =>
+      Validated.invalidNel(e)
+    }
+  }
+
+  private def deleteOutdated(previousTargetItems: Seq[TargetItem], newFilenames: Iterable[TargetFilename]): Future[ValidatedNel[Throwable,Unit]] = {
+    val previousMap = previousTargetItems.map(targetItem => (targetItem.filename, targetItem)).toMap
+    val outdated = (previousMap -- newFilenames).values
+    val results = outdated.map(targetStore.delete)
+
+    results.toList.foldMap(toValidatedNel)
+  }
+
+  def newTargetsAdded(repoId: RepoId, namespace: Namespace, signedPayload: SignedPayload[TargetsRole], checksum: Option[RoleChecksum]): Future[ValidatedNel[Throwable, SignedRole]] = {
+    // get the items before they get removed from the DB
+    val previousTargetItemsF: Future[Seq[TargetItem]] = targetItemRepo.findFor(repoId)
+
+    previousTargetItemsF.flatMap { previousTargetItems: Seq[TargetItem] =>
+      offlineSignedRoleStorage.saveTargetRole(namespace, signedPayload, repoId, checksum).flatMap {
+        case Valid((targetItems, newSignedRole)) =>
+          tufTargetsPublisher.newTargetsAdded(namespace, signedPayload.signed.targets, targetItems).flatMap { _ =>
+            deleteOutdated(previousTargetItems, signedPayload.signed.targets.keys).map { validatedNel =>
+              validatedNel.map(_ => newSignedRole)
+            }
+          }
+        case Invalid(errors) => Future(Invalid(errors.map(new Throwable(_))))
+      }
+    }
+  }
+
   private def modifyRepoRoutes(repoId: RepoId) =
     namespaceValidation(repoId) { namespace =>
       pathPrefix("root") {
@@ -247,14 +276,13 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
         } ~
         (pathEnd & put & entity(as[SignedPayload[TargetsRole]])) { signedPayload =>
           extractRoleChecksumHeader { checksum =>
-            onSuccess(offlineSignedRoleStorage.saveTargetRole(namespace, signedPayload, repoId, checksum)) {
-              case Valid((targetItems, newSignedRole)) =>
-                tufTargetsPublisher.newTargetsAdded(namespace, signedPayload.signed.targets, targetItems)
+            onSuccess(newTargetsAdded(repoId, namespace, signedPayload, checksum)) {
+              case Valid(newSignedRole) =>
                 respondWithCheckSum(newSignedRole.checksum.hash) {
                   complete(StatusCodes.NoContent)
                 }
               case Invalid(errors) =>
-                complete(StatusCodes.BadRequest -> Json.obj("errors" -> errors.asJson))
+                complete(StatusCodes.BadRequest -> Json.obj("errors" -> errors.map(_.getMessage).asJson))
             }
           }
         }
