@@ -1,30 +1,29 @@
 package com.advancedtelematic.tuf.keyserver.roles
 
+import java.time.temporal.ChronoUnit
 import java.time.{Duration, Instant}
 
-import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNel
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
+import com.advancedtelematic.libtuf.data.RootManipulationOps._
+import com.advancedtelematic.libtuf.data.RootRoleValidation
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.tuf.keyserver.db._
 import com.advancedtelematic.tuf.keyserver.http._
-import slick.jdbc.MySQLProfile.api._
-import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.RootRoleValidation
-import io.circe.Json
 import io.circe.syntax._
+import slick.jdbc.MySQLProfile.api._
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 
-class SignedRootRoles()
+class SignedRootRoles(defaultRoleExpire: Duration = Duration.ofDays(365))
                      (implicit val db: Database, val ec: ExecutionContext)
 extends KeyRepositorySupport with SignedRootRoleSupport {
 
-  private val DEFAULT_ROLE_EXPIRE = Duration.ofDays(365)
   private val rootRoleGeneration = new KeyGenerationRequests()
   private val roleSigning = new RoleSigning()
 
@@ -37,16 +36,32 @@ extends KeyRepositorySupport with SignedRootRoleSupport {
   def findLatest(repoId: RepoId): Future[SignedPayload[RootRole]] =
     find(repoId).map(_.content)
 
+  def findFreshAndPersist(repoId: RepoId): Future[SignedPayload[RootRole]] = {
+    findAndPersist(repoId).flatMap { signedRole =>
+      if (signedRole.expiresAt.isBefore(Instant.now.plus(1, ChronoUnit.HOURS))) {
+        val versionedRole = signedRole.content.signed
+        val nextVersion = versionedRole.version + 1
+        val nextExpires = Instant.now.plus(defaultRoleExpire)
+        val newRole = versionedRole.copy(expires = nextExpires, version = nextVersion)
+        signRootRole(newRole).flatMap(persistSignedPayload(repoId)).map(_.content)
+      } else {
+        FastFuture.successful(signedRole.content)
+      }
+    }
+  }
+
+  private def persistSignedPayload(repoId: RepoId)(signedPayload: SignedPayload[RootRole]): Future[SignedRootRole] = {
+    val signedRootRole = SignedRootRole.fromSignedPayload(repoId, signedPayload)
+    signedRootRoleRepo.persist(signedRootRole).map(_ => signedRootRole)
+  }
+
   protected def find(repoId: RepoId): Future[SignedRootRole] =
     signedRootRoleRepo.findLatest(repoId)
 
-  def findAndPersist(repoId: RepoId): Future[SignedPayload[RootRole]] =
-    find(repoId).map(_.content).recoverWith {
+  private def findAndPersist(repoId: RepoId): Future[SignedRootRole] =
+    find(repoId).recoverWith {
       case SignedRootRoleRepository.MissingSignedRole =>
-        signDefault(repoId).flatMap { rootRole =>
-          val signedRootRole = SignedRootRole.fromSignedPayload(repoId, rootRole)
-          signedRootRoleRepo.persist(signedRootRole).map(_ => signedRootRole.content)
-        }
+        signDefault(repoId).flatMap(persistSignedPayload(repoId))
     }
 
   def persistUserSigned(repoId: RepoId, offlinePayload: JsonSignedPayload): Future[ValidatedNel[String, SignedRootRole]] = for {
@@ -72,16 +87,18 @@ extends KeyRepositorySupport with SignedRootRoleSupport {
     }
   }
 
-  private def signDefault(repoId: RepoId): Future[SignedPayload[RootRole]] = async {
-    val default = await(createDefault(repoId))
-    val keys = default.roleKeys(RoleType.ROOT)
-    val payloadJson = default.asJson
+  private def signDefault(repoId: RepoId): Future[SignedPayload[RootRole]] =
+    createDefault(repoId).flatMap(signRootRole)
+
+  private def signRootRole(role: RootRole): Future[SignedPayload[RootRole]] = async {
+    val keys = role.roleKeys(RoleType.ROOT)
+    val payloadJson = role.asJson
     val signatures = await(roleSigning.signWithKeys(payloadJson, keys))
-    SignedPayload(signatures, default, payloadJson)
+    SignedPayload(signatures, role, payloadJson)
   }
 
   private def prepareForSign(signedRootRole: SignedRootRole): RootRole =
-    signedRootRole.content.signed.copy(expires = Instant.now.plus(DEFAULT_ROLE_EXPIRE), version = signedRootRole.version + 1)
+    signedRootRole.content.signed.copy(expires = Instant.now.plus(defaultRoleExpire), version = signedRootRole.version + 1)
 
   private def ensureReadyForGenerate(repoId: RepoId): Future[Unit] =
     keyRepo.repoKeys(repoId).flatMap {
@@ -108,7 +125,7 @@ extends KeyRepositorySupport with SignedRootRoleSupport {
     assert(clientKeys.nonEmpty, "no keys for new default root")
     assert(roles.nonEmpty, "no roles for new default root")
 
-    RootRole(clientKeys, roles, expires = Instant.now.plus(DEFAULT_ROLE_EXPIRE), version = 1)
+    RootRole(clientKeys, roles, expires = Instant.now.plus(defaultRoleExpire), version = 1)
   }
 }
 

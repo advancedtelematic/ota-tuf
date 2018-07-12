@@ -1,5 +1,8 @@
 package com.advancedtelematic.tuf.keyserver.http
 
+import java.time.{Duration, Instant}
+import java.time.temporal.ChronoUnit
+
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.RouteTest
 import com.advancedtelematic.tuf.util.{KeyTypeSpecSupport, ResourceSpec, RootGenerationSpecSupport, TufKeyserverSpec}
@@ -24,7 +27,9 @@ import org.scalatest.time.{Millis, Seconds, Span}
 import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import KeyRepository.KeyNotFound
 import cats.syntax.either._
+import com.advancedtelematic.tuf.keyserver.roles.SignedRootRoles
 
+import scala.async.Async.await
 import scala.concurrent.{ExecutionContext, Future}
 
 
@@ -709,6 +714,47 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
       responseAs[ErrorRepresentation].code.code shouldBe "missing_entity"
       status shouldBe StatusCodes.NotFound
+    }
+  }
+
+  keyTypeTest("GET returns renewed root if old one expired ") { keyType =>
+    val repoId = RepoId.generate()
+
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(1, keyType)) ~> routes ~> check {
+      status shouldBe StatusCodes.Accepted
+      processKeyGenerationRequest(repoId).futureValue
+    }
+
+    val signedRootRoles = new SignedRootRoles(defaultRoleExpire = Duration.ofMillis(1))
+
+    signedRootRoles.findFreshAndPersist(repoId).futureValue
+
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val signed = responseAs[SignedPayload[RootRole]].signed
+      signed.version shouldBe 3
+      signed.expires.isAfter(Instant.now.plus(30, ChronoUnit.DAYS)) shouldBe true
+    }
+  }
+
+  keyTypeTest("GET returns 412 if root is expired and keys are offline") { keyType =>
+    val repoId = RepoId.generate()
+
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(1, keyType)) ~> routes ~> check {
+      status shouldBe StatusCodes.Accepted
+      processKeyGenerationRequest(repoId).futureValue
+    }
+
+    val signedRootRoles = new SignedRootRoles(defaultRoleExpire = Duration.ofMillis(1))
+
+    val role = signedRootRoles.findFreshAndPersist(repoId).futureValue
+
+    val keyIds = role.signed.roleKeys(RoleType.ROOT).map(_.id)
+    Future.sequence(keyIds.map(keyRepo.delete)).futureValue
+
+    Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
+      status shouldBe StatusCodes.PreconditionFailed
+      responseAs[ErrorRepresentation].code shouldBe Errors.PrivateKeysNotFound.code
     }
   }
 
