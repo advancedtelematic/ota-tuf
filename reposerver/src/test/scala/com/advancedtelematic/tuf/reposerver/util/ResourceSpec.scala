@@ -47,7 +47,7 @@ class FakeKeyserverClient extends KeyserverClient {
 
   private val keys = new ConcurrentHashMap[RepoId, Map[RoleType, TufKeyPair]]()
 
-  private val rootRoles = new ConcurrentHashMap[RepoId, RootRole]()
+  private val rootRoles = new ConcurrentHashMap[RepoId, SignedPayload[RootRole]]()
 
   private val pendingRequests = new ConcurrentHashMap[RepoId, Boolean]()
 
@@ -102,7 +102,7 @@ class FakeKeyserverClient extends KeyserverClient {
   }.toList
 
   def deleteRepo(repoId: RepoId): Option[RootRole] =
-    keys.asScala.remove(repoId).flatMap(_ => rootRoles.asScala.remove(repoId))
+    keys.asScala.remove(repoId).flatMap(_ => rootRoles.asScala.remove(repoId).map(_.signed))
 
   override def createRoot(repoId: RepoId, keyType: KeyType): Future[Json] = {
     if (keys.contains(repoId)) {
@@ -110,8 +110,11 @@ class FakeKeyserverClient extends KeyserverClient {
     } else {
       generateKeys(repoId, keyType)
       val rootRole = generateRoot(repoId, keyType)
-      rootRoles.put(repoId, rootRole)
-      FastFuture.successful(rootRole.asJson)
+      sign(repoId, RoleType.ROOT, rootRole.asJson).map { jsonSignedPayload =>
+        val signedPayload = SignedPayload(jsonSignedPayload.signatures, rootRole, jsonSignedPayload.signed)
+        rootRoles.put(repoId, signedPayload)
+        rootRole.asJson
+      }
     }
   }
 
@@ -126,13 +129,6 @@ class FakeKeyserverClient extends KeyserverClient {
   }
 
   override def fetchRootRole(repoId: RepoId): Future[SignedPayload[RootRole]] =
-    fetchUnsignedRoot(repoId).flatMap { unsigned =>
-      sign(repoId, RoleType.ROOT, unsigned.asJson).map { signedPayload =>
-        SignedPayload(signedPayload.signatures, unsigned, signedPayload.signed)
-      }
-    }
-
-  override def fetchUnsignedRoot(repoId: RepoId): Future[RootRole] = {
     Future.fromTry {
       Try {
         if(pendingRequests.asScala.getOrElse(repoId, false))
@@ -143,12 +139,14 @@ class FakeKeyserverClient extends KeyserverClient {
         case _: NoSuchElementException => throw RootRoleNotFound
       }
     }
-  }
 
-  override def updateRoot(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[Unit] = FastFuture.successful {
-    rootRoles.computeIfPresent(repoId, (t: RepoId, u: RootRole) => {
-      assert(u != null, "fake keyserver, Role does not exist")
-      signedPayload.signed
+  override def fetchUnsignedRoot(repoId: RepoId): Future[RootRole] =
+    fetchRootRole(repoId).map(_.signed)
+
+  override def updateRoot(repoId: RepoId, newRoot: SignedPayload[RootRole]): Future[Unit] = FastFuture.successful {
+    rootRoles.computeIfPresent(repoId, (t: RepoId, oldRoot: SignedPayload[RootRole]) => {
+      assert(oldRoot != null, "fake keyserver, Role does not exist")
+      newRoot
     })
   }
 
