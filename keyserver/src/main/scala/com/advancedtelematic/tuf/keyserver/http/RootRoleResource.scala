@@ -50,7 +50,7 @@ class RootRoleResource()
           complete(f)
         } ~
         get {
-          val f = signedRootRoles.findAndPersist(repoId)
+          val f = signedRootRoles.findFreshAndPersist(repoId)
           complete(f)
         }
       } ~
@@ -61,7 +61,7 @@ class RootRoleResource()
         path(KeyIdPath) { keyId =>
           delete {
             val f = signedRootRoles
-              .findAndPersist(repoId)
+              .findFreshAndPersist(repoId)
               .flatMap(_ => rootRoleKeyEdit.deletePrivateKey(repoId, keyId))
               .map(_ ⇒ StatusCodes.NoContent)
 

@@ -1,27 +1,28 @@
 package com.advancedtelematic.tuf.keyserver.http
 
 
-import scala.async.Async._
-import com.advancedtelematic.tuf.util.{KeyTypeSpecSupport, TufKeyserverSpec}
+import java.time.temporal.ChronoUnit
+import java.time.{Duration, Instant}
+
 import com.advancedtelematic.libats.test.DatabaseSpec
-import org.scalatest.Inspectors
-import io.circe.syntax._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.TufDataType._
-import com.advancedtelematic.tuf.keyserver.daemon.DefaultKeyGenerationOp
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest}
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
-import com.advancedtelematic.tuf.keyserver.roles.SignedRootRoles
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.RepoId
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, _}
+import com.advancedtelematic.tuf.keyserver.daemon.DefaultKeyGenerationOp
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport, SignedRootRoleSupport}
+import com.advancedtelematic.tuf.keyserver.roles.SignedRootRoles
+import com.advancedtelematic.tuf.util.{KeyTypeSpecSupport, TufKeyserverSpec}
+import io.circe.syntax._
+import org.scalatest.Inspectors
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}
-import com.advancedtelematic.libtuf.data.RootManipulationOps._
-import scala.concurrent.ExecutionContext
-import com.advancedtelematic.tuf.keyserver.db.KeyRepository.KeyNotFound
+
+import scala.async.Async._
+import scala.concurrent.{ExecutionContext, Future}
 
 class SignedRootRolesSpec extends TufKeyserverSpec with DatabaseSpec
   with Inspectors with PatienceConfiguration
@@ -45,7 +46,7 @@ class SignedRootRolesSpec extends TufKeyserverSpec with DatabaseSpec
     async {
       await(keyGenRepo.persist(rootKeyGenRequest))
       await(keyGenerationOp(rootKeyGenRequest))
-      await(signedRootRoles.findAndPersist(repoId))
+      await(signedRootRoles.findFreshAndPersist(repoId))
       val signed = await(signedRootRoles.findLatest(repoId))
 
       val rootKeyId = signed.signed.roles(RoleType.ROOT).keyids.head
@@ -68,10 +69,70 @@ class SignedRootRolesSpec extends TufKeyserverSpec with DatabaseSpec
       await(keyGenRepo.persist(rootKeyGenRequest))
       await(keyGenerationOp(rootKeyGenRequest))
 
-      val signed = await(signedRootRoles.findAndPersist(repoId))
+      val signed = await(signedRootRoles.findFreshAndPersist(repoId))
 
       await(signedRootRoleRepo.findLatest(repoId)).content.signed.asJson shouldBe signed.signed.asJson
       await(signedRootRoleRepo.findLatest(repoId)).content.asJson shouldBe signed.asJson
     }.futureValue
   }
+
+  keyTypeTest("returns renewed root.json when old one expired") { keyType =>
+
+    val expiredSignedRootRoles = new SignedRootRoles(Duration.ofMillis(1))
+    val repoId = RepoId.generate()
+    val rootKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
+      repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType.crypto.defaultKeySize, keyType)
+
+    async {
+      await(keyGenRepo.persist(rootKeyGenRequest))
+      await(keyGenerationOp(rootKeyGenRequest))
+      val oldRole = await(expiredSignedRootRoles.findFreshAndPersist(repoId))
+
+      oldRole.signed.expires.isBefore(Instant.now.plus(1, ChronoUnit.HOURS)) shouldBe true
+
+      val signedRootRole = await(signedRootRoles.findFreshAndPersist(repoId))
+
+      signedRootRole.signed.expires.isAfter(Instant.now.plus(30, ChronoUnit.DAYS)) shouldBe true
+
+    }.futureValue
+  }
+
+  keyTypeTest("persists renewed root.json when old one expired") { keyType =>
+
+    val expiredSignedRootRoles = new SignedRootRoles(Duration.ofMillis(1))
+    val repoId = RepoId.generate()
+    val rootKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
+      repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType.crypto.defaultKeySize, keyType)
+
+    async {
+      await(keyGenRepo.persist(rootKeyGenRequest))
+      await(keyGenerationOp(rootKeyGenRequest))
+      await(expiredSignedRootRoles.findFreshAndPersist(repoId))
+      val signedRootRole = await(signedRootRoles.findFreshAndPersist(repoId))
+
+      signedRootRole.signed.expires.isAfter(Instant.now.plus(30, ChronoUnit.DAYS)) shouldBe true
+
+      await(signedRootRoleRepo.findLatest(repoId)).content.asJson shouldBe signedRootRole.asJson
+
+    }.futureValue
+  }
+
+  keyTypeTest("fails renewing root.json when keys not online") { keyType =>
+    val expiredSignedRootRoles = new SignedRootRoles(Duration.ofMillis(1))
+    val repoId = RepoId.generate()
+    val rootKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
+      repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType.crypto.defaultKeySize, keyType)
+
+    async {
+      await(keyGenRepo.persist(rootKeyGenRequest))
+      await(keyGenerationOp(rootKeyGenRequest))
+      val role = await(expiredSignedRootRoles.findFreshAndPersist(repoId))
+
+      val keyIds = role.signed.roleKeys(RoleType.ROOT).map(_.id)
+      await(Future.sequence(keyIds.map(keyRepo.delete)))
+
+      await(signedRootRoles.findFreshAndPersist(repoId))
+    }.failed.futureValue shouldBe Errors.PrivateKeysNotFound
+  }
+
 }
