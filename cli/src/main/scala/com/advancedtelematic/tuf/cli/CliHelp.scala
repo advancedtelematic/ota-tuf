@@ -55,6 +55,10 @@ object CliHelp {
           |- The Server could not return a valid checksum when pulling targets.
           |""".stripMargin)
       ex
+
+    case ex: MissingTargetKeyname =>
+      log.info("Missing argument: target key name required to move repo server keyname offline")
+      ex
   }
 
   val explainErrorHandler: PartialFunction[Throwable, Future[Unit]] = {

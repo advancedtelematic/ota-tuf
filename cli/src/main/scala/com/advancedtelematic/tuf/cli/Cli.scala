@@ -1,52 +1,29 @@
 package com.advancedtelematic.tuf.cli
 
 import java.net.URI
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Path, Paths}
 import java.security.Security
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-import io.circe.syntax._
-import com.advancedtelematic.libtuf.data.TufCodecs._
+import cats.syntax.either._
+import cats.syntax.option._
+import com.advancedtelematic.libats.data.DataType.ValidChecksum
+import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, HardwareIdentifier, KeyId, KeyType, TargetFilename, TargetFormat, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.reposerver.UserTufServerClient.RoleChecksumNotValid
+import com.advancedtelematic.libtuf.reposerver.{UserDirectorHttpClient, UserReposerverClient}
+import com.advancedtelematic.tuf.cli.Commands._
+import com.advancedtelematic.tuf.cli.DataType._
+import com.advancedtelematic.tuf.cli.TryToFuture._
+import com.advancedtelematic.tuf.cli.client.{UserDirectorHttpClient, UserReposerverHttpClient}
+import com.advancedtelematic.tuf.cli.repo.{DirectorRepo, RepoServerRepo, TufRepo}
+import eu.timepit.refined.api.Refined
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.slf4j.LoggerFactory
-import com.advancedtelematic.libtuf.data.ClientCodecs._
-import cats.syntax.option._
-import eu.timepit.refined.api.Refined
-import TryToFuture._
-import com.advancedtelematic.libats.data.DataType.ValidChecksum
-import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
-import com.advancedtelematic.tuf.cli.client.UserReposerverHttpClient
-import com.advancedtelematic.tuf.cli.repo.{RepoManagement, TufRepo}
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
-import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
-import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.RoleChecksumNotValid
-import cats.syntax.either._
-
-sealed trait Command
-case object Help extends Command
-case object GenKeys extends Command
-case object InitRepo extends Command
-case object MoveOffline extends Command
-case object GetTargets extends Command
-case object InitTargets extends Command
-case object AddTarget extends Command
-case object DeleteTarget extends Command
-case object SignTargets extends Command
-case object SignRoot extends Command
-case object PullTargets extends Command
-case object PushTargets extends Command
-case object PullRoot extends Command
-case object PushRoot extends Command
-case object AddRootKey extends Command
-case object RemoveRootKey extends Command
-case object Export extends Command
-case object VerifyRoot extends Command
 
 case class Config(command: Command,
                   home: Path = Paths.get("tuf"),
@@ -76,17 +53,16 @@ case class Config(command: Command,
 
 
 object Cli extends App with VersionInfo {
+
   import CliReads._
 
   Security.addProvider(new BouncyCastleProvider)
 
   val PROGRAM_NAME = "garage-sign"
 
-  import ExecutionContext.Implicits.global
-
   lazy private val log = LoggerFactory.getLogger(this.getClass)
 
-  val parser = new scopt.OptionParser[Config](PROGRAM_NAME) {
+  lazy val parser = new scopt.OptionParser[Config](PROGRAM_NAME) {
     head(projectName, projectVersion)
 
     help("help").text("prints this usage text")
@@ -371,113 +347,16 @@ object Cli extends App with VersionInfo {
   }
 
   def execute(config: Config): Unit = {
-    Files.createDirectories(config.home)
+    import ExecutionContext.Implicits.global
 
-    lazy val repoPath = config.home.resolve(config.repoName.value)
+    val repoPath = config.home.resolve(config.repoName.value)
 
-    lazy val tufRepo = new TufRepo(config.repoName, repoPath)
-
-    lazy val repoServer = UserReposerverHttpClient.forRepo(tufRepo)
-
-    val f: Future[_] = config.command match {
-      case GenKeys =>
-        tufRepo.genKeys(config.rootKey, config.keyType, config.keySize).toFuture
-
-      case InitRepo =>
-        RepoManagement.initialize(config.repoName, repoPath, config.credentialsPath, config.reposerverUrl)
-          .map(_ => log.info(s"Finished init for ${config.repoName.value} using ${config.credentialsPath}"))
-          .toFuture
-
-      case MoveOffline =>
-        repoServer
-          .flatMap { client =>
-            tufRepo.moveRootOffline(client,
-              config.rootKey,
-              config.oldRootKey,
-              config.keyNames.head,
-              config.oldKeyId)
-          }
-          .map(_ => log.info(s"root keys are offline, root.json saved to $repoPath"))
-
-      case GetTargets =>
-        repoServer
-          .flatMap(_.targets())
-          .map { targetsResponse => log.info(targetsResponse.targets.asJson.spaces2) }
-
-      case InitTargets =>
-        tufRepo
-          .initTargets(config.version.get, config.expires)
-          .map(p => log.info(s"Wrote empty targets to $p"))
-          .toFuture
-
-      case AddTarget =>
-        tufRepo
-          .addTarget(config.targetName.get,
-            config.targetVersion.get,
-            config.length,
-            config.checksum.get,
-            config.hardwareIds,
-            config.targetUri,
-            config.targetFormat)
-          .map(p => log.info(s"added target to $p"))
-          .toFuture
-
-      case DeleteTarget =>
-        tufRepo
-          .deleteTarget(config.targetFilename.get)
-          .map(p => log.info(s"deleted target ${config.targetFilename.get} in $p"))
-          .toFuture
-
-      case SignTargets =>
-        tufRepo
-          .signTargets(config.keyNames, config.version)
-          .map(p => log.info(s"signed targets.json to $p"))
-          .toFuture
-
-      case PullTargets =>
-        repoServer.zip(tufRepo.readSignedRole[RootRole].toFuture)
-          .flatMap { case (r, rootRole) => tufRepo.pullTargets(r, rootRole.signed) }
-          .map(_ => log.info("Pulled targets"))
-
-      case PushTargets =>
-        repoServer
-          .flatMap(tufRepo.pushTargets)
-          .map(_ => log.info("Pushed targets"))
-
-      case PullRoot =>
-        repoServer.flatMap(client => tufRepo.pullRoot(client, config.force))
-          .map(_ => log.info("Pulled root.json"))
-
-      case PushRoot =>
-        repoServer.flatMap(client => tufRepo.pushRoot(client))
-          .map(_ => log.info("Pushed root.json"))
-
-      case SignRoot =>
-        tufRepo.signRoot(config.keyNames).toFuture
-          .map(p => log.info(s"signed root.json saved to $p"))
-
-      case AddRootKey =>
-        tufRepo.addRootKeys(config.keyNames).toFuture
-          .map(p => log.info(s"keys added to unsigned root.json saved to $p"))
-
-      case RemoveRootKey =>
-        tufRepo.keyIdsByName(config.keyNames).flatMap { keyIds =>
-          tufRepo.removeRootKeys(config.keyIds ++ keyIds)
-        }.map(p => log.info(s"keys removed from unsigned root.json saved to $p")).toFuture
-
-      case Export =>
-        RepoManagement.export(tufRepo, config.keyNames.head, config.exportPath).toFuture
-
-      case VerifyRoot =>
-        CliUtil.verifyRootFile(config.inputPath)
-
-      case Help =>
-        parser.showUsage()
-        Future.successful(())
-    }
+    val tufRepo: RepoServerRepo = new RepoServerRepo(config.repoName, repoPath)
+    val repoServer: Future[UserReposerverClient] = UserReposerverHttpClient.forRepo(tufRepo)
+    val executor = new ReposerverExecutor(config, repoServer, tufRepo)
 
     try
-      Await.result(f.recoverWith(CliHelp.explainErrorHandler), Duration.Inf)
+      Await.result(executor.dispatch(config.command).recoverWith(CliHelp.explainErrorHandler), Duration.Inf)
     catch {
       case ex @ RoleChecksumNotValid =>
         log.error("Could not push targets", ex)
