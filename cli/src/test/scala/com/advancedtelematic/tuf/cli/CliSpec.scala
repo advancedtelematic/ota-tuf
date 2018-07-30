@@ -11,14 +11,16 @@ import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyId, KeyType, RoleType, RsaKeyType, JsonSignedPayload, SignedPayload, TufKeyPair}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, JsonSignedPayload, KeyId, KeyType, RoleType, RsaKeyType, SignedPayload, TufKey, TufKeyPair}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{FunSuite, Matchers}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.reposerver.UserReposerverClient
-import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{RoleNotFound, TargetsResponse}
+import com.advancedtelematic.libtuf.reposerver.{UserDirectorClient, UserTufServerClient, UserReposerverClient}
+import com.advancedtelematic.libtuf.reposerver.UserTufServerClient.{RoleNotFound, TargetsResponse}
+import com.advancedtelematic.tuf.cli.DataType.KeyName
+import com.advancedtelematic.tuf.cli.repo.{DirectorRepo, RepoServerRepo, TufRepo}
 import eu.timepit.refined.api.Refined
 import org.scalactic.source.Position
 import io.circe.syntax._
@@ -29,17 +31,11 @@ import scala.util.{Failure, Success, Try}
 trait KeyTypeSpecSupport {
   self: FunSuite =>
 
-  def keyTypeClientTest(name: String)(fn: (FakeUserReposerverClient, KeyType) => Any)(implicit pos: Position): Unit = {
-    test(name + " Ed25519")(fn(FakeUserReposerverClient(Ed25519KeyType), Ed25519KeyType))
-    test(name + " RSA")(fn(FakeUserReposerverClient(RsaKeyType), RsaKeyType))
-  }
-
   def keyTypeTest(name: String)(fn: KeyType => Any)(implicit pos: Position): Unit = {
     test(name + " Ed25519")(fn(Ed25519KeyType))
     test(name + " RSA")(fn(RsaKeyType))
   }
 }
-
 
 abstract class CliSpec extends FunSuite with Matchers with ScalaFutures {
   Security.addProvider(new BouncyCastleProvider)
@@ -47,21 +43,21 @@ abstract class CliSpec extends FunSuite with Matchers with ScalaFutures {
   override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(10, Seconds))
 }
 
-object FakeUserReposerverClient {
-  def apply(keyType: KeyType): FakeUserReposerverClient = new FakeUserReposerverClient(keyType)
-}
+import scala.concurrent.ExecutionContext.Implicits.global
 
-class FakeUserReposerverClient(keyType: KeyType) extends UserReposerverClient {
-  import scala.concurrent.ExecutionContext.Implicits.global
+abstract class FakeUserClient(keyType: KeyType) extends UserTufServerClient {
 
-  private val oldPair = keyType.crypto.generateKeyPair(keyType.crypto.defaultKeySize)
+  protected val oldPair = keyType.crypto.generateKeyPair(keyType.crypto.defaultKeySize)
 
-  private val targetsPair = keyType.crypto.generateKeyPair(keyType.crypto.defaultKeySize)
-  private var targetsPubKey = targetsPair.pubkey
+  protected val targetsPair = keyType.crypto.generateKeyPair(keyType.crypto.defaultKeySize)
+  protected val pairs = Set(oldPair, targetsPair)
+  protected var targetsPubKey = targetsPair.pubkey
 
-  private var unsignedTargets = TargetsRole(Instant.now.plus(1, ChronoUnit.DAYS), Map.empty, 1)
+  protected val rootRoles = new ConcurrentHashMap[Int, SignedPayload[RootRole]]()
 
-  private val rootRoles = new ConcurrentHashMap[Int, SignedPayload[RootRole]]()
+  override def fetchKeyPair(keyId: KeyId): Future[TufKeyPair] = {
+    Future.successful(pairs.filter(_.pubkey.id == keyId).head)
+  }
 
   override def root(version: Option[Int] = None): Future[SignedPayload[RootRole]] = {
     if (version.isDefined)
@@ -96,13 +92,48 @@ class FakeUserReposerverClient(keyType: KeyType) extends UserReposerverClient {
       Future.failed(new RuntimeException(s"[test] key not found $keyId"))
   }
 
-  override def pushSignedRoot(signedRoot: SignedPayload[RootRole]) = {
+  override def pushSignedRoot(signedRoot: SignedPayload[RootRole]): Future[Unit] = {
     if (signedRoot.isValidFor(oldPair.pubkey)) {
       rootRoles.put(signedRoot.signed.version, signedRoot)
       Future.successful(())
     } else
       Future.failed(new RuntimeException("[test] invalid signatures for root role"))
   }
+
+  def sign(rootRole: RootRole): SignedPayload[RootRole] = {
+    val sig = TufCrypto.signPayload(oldPair.privkey, rootRole.asJson).toClient(oldPair.pubkey.id)
+    SignedPayload(Seq(sig), rootRole, rootRole.asJson)
+  }
+
+  def setRoot(signedPayload: SignedPayload[RootRole]): Unit = {
+    rootRoles.put(signedPayload.signed.version, signedPayload)
+  }
+}
+
+abstract class FakeUserClientOffline[R <: TufRepo](keyType: KeyType) extends FakeUserClient(keyType) {
+
+  def moveOffline(repo: R, keyType: KeyType): Future[(TufKey, TufKey, SignedPayload[RootRole])]
+
+}
+
+class FakeUserDirectorClient(keyType: KeyType) extends FakeUserClientOffline[DirectorRepo](keyType) with UserDirectorClient {
+
+  def moveOffline(repo: DirectorRepo, keyType: KeyType): Future[(TufKey, TufKey, SignedPayload[RootRole])] = {
+    val oldRootName = KeyName(s"oldroot${repo.name.value}")
+    val newRootName = KeyName(s"newroot${repo.name.value}")
+
+    val pub = repo.genKeys(newRootName, keyType).get.pubkey
+
+    repo.moveRootOffline(this, newRootName, oldRootName, None).map { s => (pub, targetsPubKey, s) }
+  }
+}
+
+object FakeUserDirectorClient {
+  def apply(keyType: KeyType): FakeUserDirectorClient = new FakeUserDirectorClient(keyType)
+}
+
+class FakeUserReposerverClient(keyType: KeyType) extends FakeUserClientOffline[RepoServerRepo](keyType) with UserReposerverClient {
+  private var unsignedTargets = TargetsRole(Instant.now.plus(1, ChronoUnit.DAYS), Map.empty, 1)
 
   override def targets(): Future[TargetsResponse] = Future.successful {
     val sig = TufCrypto.signPayload(targetsPair.privkey, unsignedTargets.asJson).toClient(targetsPubKey.id)
@@ -122,15 +153,19 @@ class FakeUserReposerverClient(keyType: KeyType) extends UserReposerverClient {
         Failure(new RuntimeException("[test] invalid signatures for targets role"))
     }.toFuture
 
-  override def fetchKeyPair(keyId: KeyId): Future[TufKeyPair] =
-    Future.successful(oldPair).filter(_.pubkey.id == keyId)
+  def moveOffline(repo: RepoServerRepo, keyType: KeyType): Future[(TufKey, TufKey, SignedPayload[RootRole])] = {
+    val oldRootName = KeyName(s"oldroot${repo.name.value}")
+    val newRootName = KeyName(s"newroot${repo.name.value}")
+    val newTargetsName = KeyName(s"targets${repo.name.value}")
 
-  def sign(rootRole: RootRole): SignedPayload[RootRole] = {
-    val sig = TufCrypto.signPayload(oldPair.privkey, rootRole.asJson).toClient(oldPair.pubkey.id)
-    SignedPayload(Seq(sig), rootRole, rootRole.asJson)
+    val pub = repo.genKeys(newRootName, keyType).get.pubkey
+    val pubT = repo.genKeys(newTargetsName, keyType).get.pubkey
+
+    repo.moveRootOffline(this, newRootName, oldRootName, newTargetsName, None).map { s => (pub, pubT, s) }
   }
 
-  def setRoot(signedPayload: SignedPayload[RootRole]): Unit = {
-    rootRoles.put(signedPayload.signed.version, signedPayload)
-  }
+}
+
+object FakeUserReposerverClient {
+  def apply(keyType: KeyType): FakeUserReposerverClient = new FakeUserReposerverClient(keyType)
 }
