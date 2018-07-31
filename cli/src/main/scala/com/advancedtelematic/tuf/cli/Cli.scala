@@ -28,6 +28,7 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 case class Config(command: Command,
                   home: Path = Paths.get("tuf"),
                   credentialsPath: Path = Paths.get("credentials.zip"),
+                  repoType: Option[TufServerType] = RepoServer.some,
                   repoName: RepoName = RepoName("default-repo"),
                   rootKey: KeyName = KeyName("default-key"),
                   keyType: KeyType = Ed25519KeyType,
@@ -93,7 +94,14 @@ object Cli extends App with VersionInfo {
             c.copy(credentialsPath = path)
           }
           .text("path to credentials file, credentials.zip")
-          .required()
+          .required(),
+        opt[TufServerType]("servertype")
+          .abbr("t")
+          .action { (tufServerType, c) =>
+            c.copy(repoType = tufServerType.some)
+          }
+          .text("repo type, reposerver or director")
+          .optional()
       )
 
     cmd("key").children(
@@ -121,7 +129,7 @@ object Cli extends App with VersionInfo {
       }
       .text(
         """Move root keys to offline keys
-          | Deletes online root and target keys from server
+          | Deletes online root keys from director or root and target keys for from repo server
           | Downloads and signs a new root.json with new offline keys
           | Push the new root
         """.stripMargin)
@@ -133,8 +141,7 @@ object Cli extends App with VersionInfo {
             c.copy(rootKey = keyName)
           },
         opt[KeyName]("new-targets")
-          .text("new targets key to add to root.json, must exist")
-          .required()
+          .text("new targets key to add to root.json, must exist (only for repo server)")
           .action { (keyName: KeyName, c) =>
             c.copy(keyNames = List(keyName))
           },
@@ -198,6 +205,7 @@ object Cli extends App with VersionInfo {
       )
 
     cmd("targets")
+      .text("(only for repo server)")
       .action { (_, c) =>
         c.copy(command = InitTargets)
       }
@@ -351,9 +359,23 @@ object Cli extends App with VersionInfo {
 
     val repoPath = config.home.resolve(config.repoName.value)
 
-    val tufRepo: RepoServerRepo = new RepoServerRepo(config.repoName, repoPath)
-    val repoServer: Future[UserReposerverClient] = UserReposerverHttpClient.forRepo(tufRepo)
-    val executor = new ReposerverExecutor(config, repoServer, tufRepo)
+    val repoType: TufServerType =
+      if (config.command == InitRepo)
+        // a required param for this command
+        config.repoType.get
+      else
+        TufRepo.readConfigFile(repoPath).map(_.repoServerType).getOrElse(RepoServer)
+
+    val executor = repoType match {
+      case Director =>
+        val tufRepo: DirectorRepo = new DirectorRepo(config.repoName, repoPath)
+        val repoServer: Future[UserDirectorHttpClient] = UserDirectorHttpClient.forRepo(tufRepo)
+        new DirectorExecutor(config, repoServer, tufRepo)
+      case RepoServer =>
+        val tufRepo: RepoServerRepo = new RepoServerRepo(config.repoName, repoPath)
+        val repoServer: Future[UserReposerverClient] = UserReposerverHttpClient.forRepo(tufRepo)
+        new ReposerverExecutor(config, repoServer, tufRepo)
+    }
 
     try
       Await.result(executor.dispatch(config.command).recoverWith(CliHelp.explainErrorHandler), Duration.Inf)
