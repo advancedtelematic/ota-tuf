@@ -3,24 +3,24 @@ package com.advancedtelematic.libtuf.reposerver
 import java.net.URI
 
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
+import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, JsonSignedPayload, SignedPayload, TufKeyPair}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TufKeyPair}
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpResponse
-import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.{RoleChecksumNotValid, RoleNotFound, TargetsResponse}
+import com.advancedtelematic.libtuf.reposerver.UserTufServerClient.{RoleChecksumNotValid, RoleNotFound, TargetsResponse}
+import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import io.circe.Decoder
+import scalaj.http.{Http, HttpRequest}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.util.control.NoStackTrace
-import scalaj.http.{Http, HttpRequest}
-import eu.timepit.refined._
-import com.advancedtelematic.libats.data.ErrorRepresentation
 
-object UserReposerverClient {
+object UserTufServerClient {
   case class TargetsResponse(targets: SignedPayload[TargetsRole], checksum: Option[Refined[String, ValidChecksum]])
 
   case object RoleChecksumNotValid extends Exception("could not overwrite targets, trying to update an older version of role. Did you run `targets pull` ?") with NoStackTrace
@@ -28,7 +28,7 @@ object UserReposerverClient {
   case class RoleNotFound(msg: String) extends Exception(s"role not found: $msg") with NoStackTrace
 }
 
-trait UserReposerverClient {
+trait UserTufServerClient {
   def root(version: Option[Int] = None): Future[SignedPayload[RootRole]]
 
   def fetchKeyPair(keyId: KeyId): Future[TufKeyPair]
@@ -36,27 +36,23 @@ trait UserReposerverClient {
   def deleteKey(keyId: KeyId): Future[Unit]
 
   def pushSignedRoot(signedRoot: SignedPayload[RootRole]): Future[Unit]
+}
 
+trait UserDirectorClient extends UserTufServerClient
+
+trait UserReposerverClient extends UserTufServerClient {
   def targets(): Future[TargetsResponse]
 
   def pushTargets(targetsRole: SignedPayload[TargetsRole], previousChecksum: Option[Refined[String, ValidChecksum]]): Future[Unit]
 }
 
-class UserReposerverHttpClient(reposerverUri: URI,
-                               httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]],
-                               token: Option[String])(implicit ec: ExecutionContext)
-  extends SHttpjServiceClient(httpClient) with UserReposerverClient {
+abstract class UserHttpClient(uri: URI, httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]])
+                             (implicit ec: ExecutionContext) extends SHttpjServiceClient(httpClient) {
 
-  override protected def execHttp[T : ClassTag : Decoder](request: HttpRequest)(errorHandler: PartialFunction[(Int, ErrorRepresentation), Future[T]]) =
-    token match {
-      case Some(t) =>
-        super.execHttp(request.header("Authorization", s"Bearer $t"))(errorHandler)
-      case None =>
-        super.execHttp(request)(errorHandler)
-    }
+  protected def uriPath: String
 
-  private def apiUri(path: String): String =
-    URI.create(reposerverUri.toString + "/api/v1/user_repo/" + path).toString
+  protected def apiUri(path: String): String =
+    URI.create(uri.toString + uriPath + path).toString
 
   def root(version: Option[Int] = None): Future[SignedPayload[RootRole]] = {
     val filename = version match {
@@ -69,7 +65,28 @@ class UserReposerverHttpClient(reposerverUri: URI,
     }.map(_.body)
   }
 
-  override def fetchKeyPair(keyId: KeyId): Future[TufKeyPair] = {
+  def pushSignedRoot(signedRoot: SignedPayload[RootRole]): Future[Unit] = {
+    val req = Http(apiUri("root")).method("POST")
+    execJsonHttp[Unit, SignedPayload[RootRole]](req, signedRoot)()
+  }
+}
+
+class UserReposerverHttpClient(uri: URI,
+                               httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]],
+                               token: Option[String])(implicit ec: ExecutionContext)
+  extends UserHttpClient(uri, httpClient) with UserReposerverClient {
+
+  override protected def execHttp[T : ClassTag : Decoder](request: HttpRequest)(errorHandler: PartialFunction[(Int, ErrorRepresentation), Future[T]]) =
+    token match {
+      case Some(t) =>
+        super.execHttp(request.header("Authorization", s"Bearer $t"))(errorHandler)
+      case None =>
+        super.execHttp(request)(errorHandler)
+    }
+
+  protected def uriPath: String = "/api/v1/user_repo/"
+
+  def fetchKeyPair(keyId: KeyId): Future[TufKeyPair] = {
     val req = Http(apiUri("root/private_keys/" + keyId.value))
     execHttp[TufKeyPair](req)().map(_.body)
   }
@@ -77,11 +94,6 @@ class UserReposerverHttpClient(reposerverUri: URI,
   def deleteKey(keyId: KeyId): Future[Unit] = {
     val req = Http(apiUri("root/private_keys/" + keyId.value)).method("DELETE")
     execHttp[Unit](req)().map(_.body)
-  }
-
-  def pushSignedRoot(signedRoot: SignedPayload[RootRole]): Future[Unit] = {
-    val req = Http(apiUri("root")).method("POST")
-    execJsonHttp[Unit, SignedPayload[RootRole]](req, signedRoot)()
   }
 
   def targets(): Future[TargetsResponse] = {
@@ -103,5 +115,31 @@ class UserReposerverHttpClient(reposerverUri: URI,
       case (428, _) =>
         Future.failed(RoleChecksumNotValid)
     }
+  }
+}
+
+class UserDirectorHttpClient(uri: URI, httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]],
+                             token: Option[String])(implicit ec: ExecutionContext)
+  extends UserHttpClient(uri, httpClient) with UserDirectorClient {
+
+  protected def uriPath: String = "/api/v1/admin/repo/"
+
+  override protected def execHttp[T : ClassTag : Decoder](request: HttpRequest)(errorHandler: PartialFunction[(Int, ErrorRepresentation), Future[T]]) = {
+    token match {
+      case Some(t) =>
+        super.execHttp(request.header("Authorization", s"Bearer $t"))(errorHandler)
+      case None =>
+        super.execHttp(request)(errorHandler)
+    }
+  }
+
+  def fetchKeyPair(keyId: KeyId): Future[TufKeyPair] = {
+    val req = Http(apiUri("private_keys/" + keyId.value))
+    execHttp[TufKeyPair](req)().map(_.body)
+  }
+
+  def deleteKey(keyId: KeyId): Future[Unit] = {
+    val req = Http(apiUri("private_keys/" + keyId.value)).method("DELETE")
+    execHttp[Unit](req)().map(_.body)
   }
 }

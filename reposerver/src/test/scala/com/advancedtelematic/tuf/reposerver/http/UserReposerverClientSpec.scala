@@ -7,13 +7,13 @@ import cats.syntax.either._
 import eu.timepit.refined._
 import com.advancedtelematic.libats.data.DataType.{Namespace, ValidChecksum}
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RepoId, RoleType, RsaKeyType, JsonSignedPayload, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util._
 import org.scalatest.time.{Seconds, Span}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
-import com.advancedtelematic.libtuf.reposerver.UserReposerverClient.RoleChecksumNotValid
+import com.advancedtelematic.libtuf.reposerver.UserTufServerClient.RoleChecksumNotValid
 import com.advancedtelematic.libtuf.reposerver.UserReposerverHttpClient
 import org.scalatest.BeforeAndAfter
 import io.circe.syntax._

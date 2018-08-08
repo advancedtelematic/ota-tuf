@@ -16,7 +16,13 @@ object DataType {
 
   case class AuthConfig(server: URI, client_id: String, client_secret: String)
 
-  case class RepoConfig(reposerver: URI, auth: Option[AuthConfig], treehub: TreehubConfig)
+  sealed trait TufServerType
+
+  case object RepoServer extends TufServerType
+  case object Director extends TufServerType
+
+  case class RepoConfig(reposerver: URI, auth: Option[AuthConfig], treehub: TreehubConfig,
+                        repoServerType: TufServerType = RepoServer)
 
   case class AuthPlusToken(value: String) extends AnyVal
 }

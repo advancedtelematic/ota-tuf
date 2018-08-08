@@ -42,14 +42,16 @@ pulled/pushed.
 
 == Rotate Root Keys
 
+=== Rotate Repo Server Root Keys
+
 1. Initialize a local ota-plus cache using credentials.zip downloaded
 from ATS Garage:
 
-    garage-sign init --repo myrepo --credentials credentials.zip --reposerver <reposerver uri>
+    garage-sign init --repo myrepo --servertype reposerver --credentials credentials.zip --reposerver <reposerver uri>
 +
 or
 +
-    garage-sign init --repo myrepo --credentials credentials.zip
+    garage-sign init --repo myrepo --servertype reposerver --credentials credentials.zip
 
 2. Generate new root and target keys
 
@@ -94,6 +96,53 @@ the server, with the new `root.json`.
 
     garage-sign targets push --repo myrepo
 
+==== Exporting credentials
+
+After <<Rotate Root Keys>>, you will need the new `root.json` and keys
+to sign targets using `targets-sign`. If the user signing the new
+targets is not the same as the user rotating the root keys, you'll
+need to export the new credentials:
+
+    garage-sign  export-credentials --repo myrepo --target-key-name targets --to creds_export.zip
+
+=== Rotate Director Root Keys
+
+Target keys and meta data are managed by the director even in the offline case, so they don't
+need to be dealt with here.
+
+1. Initialize a local ota-plus cache using credentials.zip downloaded
+from ATS Garage:
+
+    garage-sign init --repo myrepo --servertype director --credentials credentials.zip --reposerver <reposerver uri>
++
+or
++
+    garage-sign init --repo myrepo --servertype director --credentials credentials.zip
+
+2. Generate new root and target keys
+
+    garage-sign key generate --repo myrepo --name myrepo-root --type ed25519
+
+3. Rotate Root Keys
+
+    garage-sign move-offline --repo myrepo --new-root myrepo-root \
+    --old-root-alias old-root
+
+4. Check repository
+
+    tree tuf/myrepo/
+
+    tuf/myrepo
+    ├── auth.json
+    ├── keys
+    │   ├── myrepo-root.pub
+    │   ├── myrepo-root.sec
+    │   ├── old-root.pub
+    │   └── old-root.sec
+    └── roles
+        └── root.json
+
+    cat tuf/myrepo/root.json
 
 == Managing an offline root.json
 
@@ -103,12 +152,3 @@ This can be done by pulling a root with `root pull`, editing the root
 using the `root key` commands, or directly editing the unsigned root
 file, and signing the new root with `root sign`. The resulting root
 can then be pushed to the server with `root push`.
-
-== Exporting credentials
-
-After <<Rotate Root Keys>>, you will need the new `root.json` and keys
-to sign targets using `targets-sign`. If the user signing the new
-targets is not the same as the user rotating the root keys, you'll
-need to export the new credentials:
-
-    garage-sign  export-credentials --repo myrepo --target-key-name targets --to creds_export.zip

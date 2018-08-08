@@ -10,12 +10,15 @@ import scopt.Read
 import shapeless._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, RepoConfig, TreehubConfig}
+import com.advancedtelematic.tuf.cli.DataType._
 import io.circe.{Decoder, Json}
 
 object CliCodecs {
-  import io.circe.generic.semiauto._
+  import io.circe.generic.extras.semiauto._
   import com.advancedtelematic.libats.codecs.CirceUri._
+  import io.circe.generic.extras.Configuration
+
+  implicit val config: Configuration = Configuration.default.withDefaults
 
   implicit val authConfigDecoder = deriveDecoder[AuthConfig]
   implicit val authConfigEncoder = deriveEncoder[AuthConfig]
@@ -29,6 +32,9 @@ object CliCodecs {
   }
 
   implicit val treehubConfigEncoder = deriveEncoder[TreehubConfig]
+
+  implicit val repoServerTypeEncoder = deriveEnumerationEncoder[TufServerType]
+  implicit val repoServerTypeDecoder = deriveEnumerationDecoder[TufServerType]
 
   implicit val repoConfigEncoder = deriveEncoder[RepoConfig]
   implicit val repoConfigDecoder = deriveDecoder[RepoConfig]
@@ -54,4 +60,10 @@ object CliReads {
   implicit val instantRead: Read[Instant] = Read.stringRead.map(Instant.parse)
 
   implicit val targetFormatRead: Read[TargetFormat] = Read.stringRead.map(_.toUpperCase).map(TargetFormat.withName)
+
+  implicit val repoServerTypeRead: Read[TufServerType] = Read.reads {
+    case "reposerver" => RepoServer
+    case "director" => Director
+    case str => throw new IllegalArgumentException(s"Invalid repo server type: $str valid: reposerver or director")
+  }
 }
