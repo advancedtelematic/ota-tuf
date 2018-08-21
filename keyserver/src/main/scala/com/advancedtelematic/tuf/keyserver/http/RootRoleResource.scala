@@ -10,10 +10,9 @@ import com.advancedtelematic.tuf.keyserver.roles._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
-import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.libtuf_server.data.Marshalling._
-import com.advancedtelematic.libats.http.UUIDKeyPath.UUIDKeyPathOp
+import com.advancedtelematic.libats.http.UUIDKeyAkka._
 import com.advancedtelematic.libtuf.data.ErrorCodes
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe._
