@@ -20,6 +20,9 @@ object Messages {
     length: Long,
     custom: Option[TargetCustom])
 
+  implicit val tufTargetAddedEncoder: Encoder[TufTargetAdded] = deriveEncoder
+  implicit val tufTargetAddedDecoder: Decoder[TufTargetAdded] = deriveDecoder
+
   implicit val tufTargetAddedMessageLike = MessageLike[TufTargetAdded](_.namespace.get)
 
   final case class PackageStorageUsage(namespace: String, timestamp: Instant, byteCount: Long)
