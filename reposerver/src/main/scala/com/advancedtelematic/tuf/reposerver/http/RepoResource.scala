@@ -83,7 +83,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       'hardwareIds.as(CsvSeq[HardwareIdentifier]).?(immutable.Seq.empty[HardwareIdentifier]),
       'targetFormat.as[TargetFormat].?
     ).tmap { case (name, version, hardwareIds, targetFormat) =>
-      TargetCustom(name, version, hardwareIds, targetFormat)
+      TargetCustom(name, version, hardwareIds, targetFormat.orElse(Some(TargetFormat.BINARY)))
     }
 
   private val TargetFilenamePath = Segments.flatMap {
@@ -126,10 +126,11 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
 
   private def addTarget(namespace: Namespace, filename: TargetFilename, repoId: RepoId, clientItem: RequestTargetItem): Route =
     complete {
+      val targetFormat = clientItem.targetFormat.orElse(Some(TargetFormat.BINARY))
       val custom = for {
         name <- clientItem.name
         version <- clientItem.version
-      } yield TargetCustom(name, version, clientItem.hardwareIds, clientItem.targetFormat, uri = Option(clientItem.uri.toURI))
+      } yield TargetCustom(name, version, clientItem.hardwareIds, targetFormat, uri = Option(clientItem.uri.toURI))
 
       addTargetItem(namespace, TargetItem(repoId, filename, Option(clientItem.uri), clientItem.checksum, clientItem.length, custom, StorageMethod.Unmanaged))
     }
