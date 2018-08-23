@@ -8,15 +8,17 @@ import akka.stream.ActorMaterializer
 import cats.syntax.show._
 import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{RawError, RemoteServiceError}
-import com.advancedtelematic.libats.http.{ServiceHttpClient, ServiceHttpClientSupport}
-import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, RsaKeyType, JsonSignedPayload, SignedPayload, TufKeyPair}
-import com.advancedtelematic.libtuf.data.TufDataType.RoleType._
+import com.advancedtelematic.libats.http.ServiceHttpClientSupport
+import com.advancedtelematic.libats.http.tracing.Tracing.RequestTracing
+import com.advancedtelematic.libats.http.tracing.TracingHttpClient
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import io.circe.Json
-import scala.concurrent.Future
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType.{RoleType, _}
+import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, KeyId, KeyType, RepoId, RsaKeyType, SignedPayload, TufKeyPair}
+import io.circe.Json
+
+import scala.concurrent.Future
 
 object KeyserverClient {
   val KeysNotReady = RawError(ErrorCode("keys_not_ready"), StatusCodes.Locked, "Keys not ready in remote keyserver")
@@ -48,15 +50,17 @@ trait KeyserverClient {
 }
 
 object KeyserverHttpClient extends ServiceHttpClientSupport {
-  def apply(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer): KeyserverHttpClient =
+  def apply(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer, tracing: RequestTracing): KeyserverHttpClient =
     new KeyserverHttpClient(uri, defaultHttpClient)
 }
 
 class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResponse])
-                         (implicit system: ActorSystem, mat: ActorMaterializer) extends ServiceHttpClient(httpClient) with KeyserverClient {
-  import io.circe.syntax._
-  import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+                         (implicit system: ActorSystem, mat: ActorMaterializer, tracing: RequestTracing)
+  extends TracingHttpClient(httpClient) with KeyserverClient {
+
   import KeyserverClient._
+  import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+  import io.circe.syntax._
 
   private def apiUri(path: Path) =
     uri.withPath(Empty / "api" / "v1" ++ Slash(path))

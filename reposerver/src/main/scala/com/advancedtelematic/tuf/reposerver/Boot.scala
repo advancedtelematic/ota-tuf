@@ -4,24 +4,25 @@ import java.security.Security
 
 import akka.event.Logging
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.Uri
+import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.{Directives, Route}
-import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
-import cats.syntax.either._
 import com.advancedtelematic.libats.http.BootApp
-import com.typesafe.config.ConfigFactory
-import org.bouncycastle.jce.provider.BouncyCastleProvider
-import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.LogDirectives._
+import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.monitoring.{MetricsSupport, ServiceHealthCheck}
-import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
+import com.advancedtelematic.libats.http.tracing.Tracing
+import com.advancedtelematic.libats.http.tracing.Tracing.RequestTracing
 import com.advancedtelematic.libats.messaging.MessageBus
+import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
+import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.libtuf.data.TufDataType.RsaKeyType
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverHttpClient
 import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
 import com.advancedtelematic.tuf.reposerver.target_store._
 import com.amazonaws.regions.Regions
+import com.typesafe.config.ConfigFactory
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 
 trait Settings {
   private lazy val _config = ConfigFactory.load()
@@ -62,21 +63,25 @@ object Boot extends BootApp
 
   log.info(s"Starting $version on http://$host:$port")
 
-  lazy val keyStoreClient = KeyserverHttpClient(keyServerUri)
+  def keyStoreClient(implicit requestTracing: RequestTracing) = KeyserverHttpClient(keyServerUri)
 
   val messageBusPublisher = MessageBus.publisher(system, config)
 
   val targetStoreEngine = if(useS3) new S3TargetStoreEngine(s3Credentials) else LocalTargetStoreEngine(targetStoreRoot)
 
-  val targetStore = TargetStore(keyStoreClient,  targetStoreEngine, messageBusPublisher)
+  def targetStore(implicit requestTracing: RequestTracing) = TargetStore(keyStoreClient,  targetStoreEngine, messageBusPublisher)
 
   val keyserverHealthCheck = new ServiceHealthCheck(keyServerUri)
 
+  implicit val tracing = Tracing.fromConfig(config, "reposerver")
+
   val routes: Route =
     (versionHeaders(version) & logResponseMetrics(projectName) & logRequestResult(("reposerver", Logging.DebugLevel))) {
-      new TufReposerverRoutes(keyStoreClient, NamespaceValidation.withDatabase, targetStore,
-        messageBusPublisher,
-        Seq(keyserverHealthCheck)).routes
+      tracing.traceRequests { implicit requestTracing =>
+        new TufReposerverRoutes(keyStoreClient, NamespaceValidation.withDatabase, targetStore,
+          messageBusPublisher,
+          Seq(keyserverHealthCheck)).routes
+      }
     }
 
   Http().bindAndHandle(routes, host, port)
