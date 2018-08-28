@@ -149,7 +149,8 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     val urlTestFile = testFile.copy(
       uri = Uri("https://ats.com/urlTestFile"),
       name = TargetName("myfilewithuri").some,
-      version = TargetVersion("0.1.0").some
+      version = TargetVersion("0.1.0").some,
+      targetFormat = None
     )
 
     Post(apiUri(s"repo/${repoId.show}/targets/myfilewithuri"), urlTestFile) ~> routes ~> check {
@@ -161,6 +162,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       val item = targetsRole.targets("myfilewithuri".refineTry[ValidTargetFilename].get)
 
       item.customParsed[TargetCustom].flatMap(_.uri).map(_.toString) should contain(urlTestFile.uri.toString())
+      item.customParsed[TargetCustom].flatMap(_.targetFormat).get shouldBe TargetFormat.BINARY
     }
   }
 
@@ -665,6 +667,23 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       custom.map(_.name) should contain(TargetName("somename"))
       custom.map(_.version) should contain(TargetVersion("someversion"))
       custom.map(_.hardwareIds.map(_.value)) should contain(Seq("1", "2", "3"))
+      custom.flatMap(_.targetFormat) should contain(TargetFormat.BINARY)
+    }
+  }
+
+  test("Missing targetFormat gets set to BINARY") {
+    val repoId = addTargetToRepo()
+    val targetFilename: TargetFilename = Refined.unsafeApply("target/with/desc")
+
+    Put(apiUri(s"repo/${repoId.show}/targets/${targetFilename.value}?name=somename&version=someversion&hardwareIds=1,2,3"), form) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+
+      val custom = responseAs[SignedPayload[TargetsRole]].signed.targets(targetFilename).customParsed[TargetCustom]
+
       custom.flatMap(_.targetFormat) should contain(TargetFormat.BINARY)
     }
   }
