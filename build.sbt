@@ -41,6 +41,7 @@ lazy val serverDependencies = libraryDependencies ++= {
     "com.advancedtelematic" %% "libats-metrics-akka" % libatsV,
     "com.advancedtelematic" %% "libats-metrics-prometheus" % libatsV,
     "com.advancedtelematic" %% "libats-slick" % libatsV,
+    "com.advancedtelematic" %% "libats-logging" % libatsV,
     "com.typesafe.slick" %% "slick" % slickV,
     "com.typesafe.slick" %% "slick-hikaricp" % slickV,
     "org.mariadb.jdbc" % "mariadb-java-client" % "2.2.5",
@@ -59,7 +60,7 @@ lazy val commonSettings = Seq(
   resolvers += "ATS Releases" at "http://nexus.advancedtelematic.com:8081/content/repositories/releases",
   resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content/repositories/snapshots",
   resolvers += "version99 Empty loggers" at "http://version99.qos.ch",
-  libatsVersion := "0.1.2-31-g233bf75",
+  libatsVersion := "0.1.2-43-g377c317",
   buildInfoOptions += BuildInfoOption.ToMap,
   buildInfoOptions += BuildInfoOption.BuildTime,
   dependencyCheckAssemblyAnalyzerEnabled := Some(false)) ++
@@ -75,6 +76,7 @@ lazy val libtuf = (project in file("libtuf"))
   .configs(commonConfigs:_*)
   .settings(commonSettings)
   .settings(Publish.settings)
+
 
 lazy val libtuf_server = (project in file("libtuf-server"))
   .enablePlugins(BuildInfoPlugin, Versioning.Plugin)
