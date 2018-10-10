@@ -10,7 +10,7 @@ import cats.data.Validated.Valid
 import cats.data.ValidatedNel
 import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, TargetCustom, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, JsonSignedPayload, SignedPayload, TargetFilename, TargetFormat, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, SignedPayload, TargetFilename, TargetFormat, ValidTargetFilename}
 import com.advancedtelematic.tuf.reposerver.util._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.codecs.CirceCodecs._
@@ -59,7 +59,7 @@ class OfflineSignedRoleStorageSpec extends TufReposerverSpec with DatabaseSpec w
 
   val signedRoleGeneration = new SignedRoleGeneration(keyserver)
 
-  def storeOffline(repoId: RepoId, targets: Map[TargetFilename, ClientTargetItem], version: Int): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole)]] = {
+  def storeOffline(repoId: RepoId, targets: Map[TargetFilename, ClientTargetItem], version: Int): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole[TargetsRole])]] = {
     val targetsRole = TargetsRole(Instant.now.plusSeconds(3600), targets, version)
     val payload = keyserver.sign(repoId, RoleType.TARGETS, targetsRole.asJson).futureValue
     subject.store(repoId, SignedPayload(payload.signatures, targetsRole, targetsRole.asJson))

@@ -6,13 +6,13 @@ import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, JsonSignedPayload, TargetFilename, TargetName, TargetVersion}
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
-import io.circe.Json
+import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, TargetFilename}
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.StorageMethod._
 import SlickMappings._
 import com.advancedtelematic.libtuf_server.data.Requests.TargetComment
+import com.advancedtelematic.tuf.reposerver.db.DBDataType.DbSignedRole
 
 object Schema {
   import com.advancedtelematic.libats.slick.codecs.SlickRefined._
@@ -39,7 +39,7 @@ object Schema {
 
   protected [db] val targetItems = TableQuery[TargetItemTable]
 
-  class SignedRoleTable(tag: Tag) extends Table[SignedRole](tag, "signed_roles") {
+  class SignedRoleTable(tag: Tag) extends Table[DbSignedRole](tag, "signed_roles") {
     def repoId = column[RepoId]("repo_id")
     def roleType = column[RoleType]("role_type")
     def content = column[JsonSignedPayload]("content")
@@ -50,7 +50,7 @@ object Schema {
 
     def pk = primaryKey("signed_role_pk", (repoId, roleType))
 
-    override def * = (repoId, roleType, content, checksum, length, version, expiresAt) <> ((SignedRole.apply _).tupled, SignedRole.unapply)
+    override def * = (repoId, roleType, content, checksum, length, version, expiresAt) <> ((DbSignedRole.apply _).tupled, DbSignedRole.unapply)
   }
 
   protected [db] val signedRoles = TableQuery[SignedRoleTable]

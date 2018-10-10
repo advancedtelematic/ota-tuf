@@ -68,7 +68,7 @@ object TufRepo {
 
   case class TargetsPullError(msg: String) extends Exception(s"Could not pull targets from server $msg") with NoStackTrace
 
-  case class RoleMissing[T](rolePath: String)(implicit ev: TufRole[T]) extends Throwable(s"Missing role ${ev.toMetaPath.toString()} at $rolePath") with NoStackTrace
+  case class RoleMissing[T](rolePath: String)(implicit ev: TufRole[T]) extends Throwable(s"Missing role ${ev.metaPath.toString()} at $rolePath") with NoStackTrace
 
   case class RootPullError(errors: NonEmptyList[String]) extends Throwable("Could not validate a valid root.json chain:\n" + errors.toList.mkString("\n")) with NoStackTrace
 
@@ -242,14 +242,14 @@ abstract class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: Exec
   }
 
   def readUnsignedRole[T : Decoder](implicit ev: TufRole[T]): Try[T] = {
-    val path = rolesPath.resolve("unsigned").resolve(ev.toMetaPath.value)
+    val path = rolesPath.resolve("unsigned").resolve(ev.metaPath.value)
     withExistingRolePath[T, T](path) { p =>
       parseFile(p.toFile).flatMap(_.as[T]).toTry
     }
   }
 
   def readSignedRole[T : Encoder : Decoder](implicit ev: TufRole[T]): Try[SignedPayload[T]] = {
-    val path = rolesPath.resolve(ev.toMetaPath.value)
+    val path = rolesPath.resolve(ev.metaPath.value)
     withExistingRolePath[T, SignedPayload[T]](path) { p =>
       parseFile(p.toFile).flatMap(_.as[SignedPayload[T]]).toTry
     }
@@ -268,10 +268,10 @@ abstract class TufRepo(val name: RepoName, val repoPath: Path)(implicit ec: Exec
   }
 
   def writeUnsignedRole[T : TufRole : Encoder](role: T): Try[Path] =
-    writeRole(rolesPath.resolve("unsigned"), role.toMetaPath, role)
+    writeRole(rolesPath.resolve("unsigned"), role.metaPath, role)
 
   def writeSignedRole[T : TufRole : Encoder](signedPayload: SignedPayload[T]): Try[Path] =
-    writeRole(rolesPath, signedPayload.signed.toMetaPath, signedPayload)
+    writeRole(rolesPath, signedPayload.signed.metaPath, signedPayload)
 
   private def writeRole[T : Encoder](path: Path, metaPath: MetaPath, payload: T): Try[Path] = Try {
     val rolePath = path.resolve(metaPath.value)

@@ -5,8 +5,8 @@ import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNel
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, TargetCustom, TargetsRole, TufRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, JsonSignedPayload, SignedPayload, TargetFilename}
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, StorageMethod, TargetItem}
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, SignedPayload, TargetFilename}
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{StorageMethod, TargetItem}
 import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import io.circe.Encoder
 import cats.implicits._
@@ -19,7 +19,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
-import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepository.SignedRoleNotFound
+import com.advancedtelematic.tuf.reposerver.db.DbSignedRoleRepository.SignedRoleNotFound
 import com.advancedtelematic.tuf.reposerver.http.RoleChecksumHeader.RoleChecksum
 
 class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
@@ -28,17 +28,17 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
 
   private val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
 
-  def store(repoId: RepoId, signedPayload: SignedPayload[TargetsRole]): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole)]] =
+  def store(repoId: RepoId, signedPayload: SignedPayload[TargetsRole]): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole[TargetsRole])]] =
     for {
       validatedPayloadSig <- payloadSignatureIsValid(repoId, signedPayload)
       existingTargets <- targetItemRepo.findFor(repoId)
       targetItemsValidated = validatedPayloadSig.andThen(_ => validatedPayloadTargets(repoId, signedPayload, existingTargets))
       signedRoleValidated <- targetItemsValidated match {
         case Valid(items) =>
-          val signedTargetRole = SignedRole.withChecksum(repoId, RoleType.TARGETS, signedPayload.asJsonSignedPayload, signedPayload.signed.version, signedPayload.signed.expires)
+          val signedTargetRole = SignedRole.withChecksum[TargetsRole](repoId, signedPayload.asJsonSignedPayload, signedPayload.signed.version, signedPayload.signed.expires)
 
           signedRoleGeneration.regenerateSignedDependent(repoId, signedTargetRole, signedPayload.signed.expires)
-            .flatMap(dependent => signedRoleRepo.storeAll(targetItemRepo)(repoId: RepoId, signedTargetRole :: dependent, items))
+            .flatMap { case (targets, timestamps) => signedRoleRepository.storeAll(targetItemRepo)(repoId: RepoId, List(signedTargetRole, targets, timestamps), items) }
             .map(_ => (existingTargets, signedTargetRole).validNel)
         case i @ Invalid(_) =>
           FastFuture.successful(i)
@@ -89,8 +89,8 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
     TufCrypto.payloadSignatureIsValid(rootRole, signedPayload)
   }
 
-  def saveTargetRole(namespace: Namespace, signedTargetPayload: SignedPayload[TargetsRole], repoId: RepoId, checksum: Option[RoleChecksum]): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole)]] =
-    signedRoleRepo.find(repoId, RoleType.TARGETS).flatMap { existingRole =>
+  def saveTargetRole(namespace: Namespace, signedTargetPayload: SignedPayload[TargetsRole], repoId: RepoId, checksum: Option[RoleChecksum]): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole[TargetsRole])]] =
+    signedRoleRepository.find[TargetsRole](repoId).flatMap { existingRole =>
       updateSignedTarget(repoId, namespace, signedTargetPayload, existingRole, checksum)
     }.recoverWith {
       case SignedRoleNotFound =>
@@ -98,7 +98,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
     }
 
   private def updateSignedTarget(repoId: RepoId, namespace: Namespace, signedTargetPayload: SignedPayload[TargetsRole],
-                                 existingRole: SignedRole, checksumOpt: Option[RoleChecksum]) =
+                                 existingRole: SignedRole[TargetsRole], checksumOpt: Option[RoleChecksum]) =
     checksumOpt match {
       case Some(checksum) if existingRole.checksum.hash == checksum =>
         store(repoId, signedTargetPayload)
