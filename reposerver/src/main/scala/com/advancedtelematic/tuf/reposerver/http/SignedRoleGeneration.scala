@@ -8,24 +8,77 @@ import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, JsonSignedPayload, TargetFilename}
-import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
-import com.advancedtelematic.tuf.reposerver.db.{FilenameCommentRepository, SignedRoleRepository, SignedRoleRepositorySupport, TargetItemRepositorySupport}
+import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, RoleType, TargetFilename}
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, SignedRoleNotDbLOL, TargetItem}
+import com.advancedtelematic.tuf.reposerver.db.FilenameCommentRepository
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepository.SignedRoleNotFound
 import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepository, SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import io.circe.syntax._
-import io.circe.{Decoder, Encoder, Json}
-import org.slf4j.LoggerFactory
+import io.circe.{Decoder, Encoder}
 import slick.jdbc.MySQLProfile.api._
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 import cats.syntax.either._
-import cats.syntax.flatMap
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
-import com.advancedtelematic.tuf.reposerver.db.Schema.filenameComments
 import org.slf4j.LoggerFactory
+import shapeless._
+
+// TODO:SM How to not use SinedRole all the time, if we need the signed version ?
+// Create separate SignedRole[T] with the same attributes but not linked to db ?
+// Do we already have that?
+// THERE IS A MIX OF EVERYTHING
+
+private class RoleSigner {
+  def apply[T : TufRole](v: T): SignedRoleNotDbLOL[T] = ???
+}
+
+object RoleRefresh {
+  type SignFn[T : TufRole] = T => SignedRoleNotDbLOL[T]
+}
+
+class RoleRefresh(signFn: RoleSigner) {
+    def refreshTargets(existing: TargetsRole, snapshotRole: SnapshotRole, timestampRole: TimestampRole): (SignedRoleNotDbLOL[TargetsRole], SignedRoleNotDbLOL[SnapshotRole], TimestampRole) = {
+    val newTargetsRole = refreshRole(existing)
+    val signedTargets = signFn(newTargetsRole)
+    val (snapshotRole, timestampRole) = refreshSnapshots(snapshotRole, signedTargets, timestampRole)
+    (signedTargets, snapshotRole, timestampRole)
+  }
+
+  // TODO:SM Extract generate to other site, use same code
+  def refreshSnapshots(existing: SignedRoleNotDbLOL[SnapshotRole], targetsRole: SignedRoleNotDbLOL[TargetsRole], timestampRole: TimestampRole): (SignedRoleNotDbLOL[SnapshotRole], TimestampRole) = {
+    val refreshed = refreshRole(existing)
+
+    val newMeta: Map[MetaPath, MetaItem] = existing.meta + targetsRole.asMetaRole
+
+    val newSnapshot = SnapshotRole(newMeta, refreshed.expiresAt, refreshed.version)
+
+    val signedSnapshot = signFn(newSnapshot)
+
+    val timestampRole = refreshTimestamp(signedSnapshot, timestampRole)
+
+    (signedSnapshot, timestampRole)
+  }
+
+  def refreshTimestamp(snapshotRole: SignedRoleNotDbLOL[SnapshotRole], timestampRole: TimestampRole): TimestampRole = {
+    val refreshed = refreshRole(timestampRole)
+    TimestampRole(Map(snapshotRole.asMetaRole), refreshed.expires, refreshed.version)
+  }
+
+  private def refreshRole[T](existing: T)(implicit tufRole: TufRole[T]): T = {
+    val nextExpires = Instant.now.plus(1, ChronoUnit.DAYS)
+    tufRole.refreshRole(existing, _ + 1, nextExpires)
+  }
+}
+
+// TODO:SM How to use this?
+abstract class RoleGeneration {
+  def generateTargets: Future[(TargetsRole, SnapshotRole, TimestampRole)]
+
+  def generateSnapshots(): Future[(SnapshotRole, TimestampRole)]
+
+  def generateTimestamp(): Future[TimestampRole]
+}
 
 class SignedRoleGeneration(keyserverClient: KeyserverClient)
                           (implicit val db: Database, val ec: ExecutionContext) extends SignedRoleRepositorySupport {
@@ -34,7 +87,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
 
   val targetRoleGeneration = new TargetRoleGeneration(keyserverClient)
 
-  def regenerateSignedRoles(repoId: RepoId): Future[JsonSignedPayload] = {
+  def regenerateAllSignedRoles(repoId: RepoId): Future[JsonSignedPayload] = {
     async {
       await(fetchRootRole(repoId))
 
@@ -67,12 +120,12 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
   }
 
   def addTargetItem(targetItem: TargetItem): Future[JsonSignedPayload] =
-    targetRoleGeneration.addTargetItem(targetItem).flatMap(_ ⇒ regenerateSignedRoles(targetItem.repoId))
+    targetRoleGeneration.addTargetItem(targetItem).flatMap(_ ⇒ regenerateAllSignedRoles(targetItem.repoId))
 
   def deleteTargetItem(repoId: RepoId, filename: TargetFilename): Future[Unit] = for {
     _ <- ensureTargetsCanBeSigned(repoId)
     _ <- targetRoleGeneration.deleteTargetItem(repoId, filename)
-    _ <- regenerateSignedRoles(repoId)
+    _ <- regenerateAllSignedRoles(repoId)
   } yield ()
 
   def signRole[T <: VersionedRole : TufRole : Decoder : Encoder](repoId: RepoId, role: T): Future[SignedRole] = {
@@ -97,19 +150,22 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
       .recoverWith { case SignedRoleNotFound => generateAndCacheRole(repoId, roleType) }
   }
 
-  private def findFreshRole[T <: VersionedRole : TufRole : Decoder : Encoder](repoId: RepoId, roleType: RoleType, updateRoleFn: (T, Instant, Int) => T): Future[SignedRole] = {
+  private def generateRoleAndDependenciesZZZZ(): Future[SignedRole] = {
+    val versionedRole = role.content.signed.as[T].valueOr(throw _)
+    val nextVersion = versionedRole.version + 1
+    val nextExpires = Instant.now.plus(1, ChronoUnit.DAYS)
+    val newRole = updateRoleFn(versionedRole, nextExpires, nextVersion)
+
+    signRole(repoId, newRole).flatMap(sr => signedRoleRepo.persist(sr))
+  }
+
+  private def findFreshRole[T <: VersionedRole : TufRole : Decoder : Encoder](repoId: RepoId, roleType: RoleType, refreshFn: => T): Future[SignedRole] = {
     signedRoleRepo.find(repoId, roleType).flatMap { role =>
       val futureRole =
         if (role.expireAt.isBefore(Instant.now.plus(1, ChronoUnit.HOURS))) {
-          val versionedRole = role.content.signed.as[T].valueOr(throw _)
-          val nextVersion = versionedRole.version + 1
-          val nextExpires = Instant.now.plus(1, ChronoUnit.DAYS)
-          val newRole = updateRoleFn(versionedRole, nextExpires, nextVersion)
-
-          signRole(repoId, newRole).flatMap(sr => signedRoleRepo.persist(sr))
-        } else {
+          FastFuture.successful(refreshFn())
+        } else
           FastFuture.successful(role)
-        }
 
       futureRole.recoverWith {
         case KeyserverClient.RoleKeyNotFound =>
@@ -123,21 +179,26 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
   }
 
   private def generateAndCacheRole(repoId: RepoId, roleType: RoleType): Future[SignedRole] = {
-    regenerateSignedRoles(repoId)
+    regenerateAllSignedRoles(repoId)
       .recoverWith { case err => log.warn("Could not generate signed roles", err) ; FastFuture.failed(SignedRoleNotFound) }
       .flatMap(_ => signedRoleRepo.find(repoId, roleType))
   }
+
+  val refresher = new RoleRefresh(???)
 
   def findRole(repoId: RepoId, roleType: RoleType): Future[SignedRole] = {
     roleType match {
       case RoleType.ROOT =>
         fetchRootRole(repoId)
       case r @ RoleType.SNAPSHOT =>
-        findFreshRole[SnapshotRole](repoId, r, (role, expires, version) => role.copy(expires = expires, version = version))
+
+
+
+        findFreshRole[SnapshotRole](repoId, r, refresher.refreshSnapshots())
       case r @ RoleType.TIMESTAMP =>
-        findFreshRole[TimestampRole](repoId, r, (role, expires, version) => role.copy(expires = expires, version = version))
+        findFreshRole[TimestampRole](repoId, r)
       case r @ RoleType.TARGETS =>
-        findFreshRole[TargetsRole](repoId, r, (role, expires, version) => role.copy(expires = expires, version = version))
+        findFreshRole[TargetsRole](repoId, r)
       case _ =>
         findAndCacheRole(repoId, roleType)
     }
