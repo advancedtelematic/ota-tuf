@@ -14,7 +14,7 @@ import com.advancedtelematic.tuf.reposerver.db.FilenameCommentRepository
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepository.SignedRoleNotFound
 import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepository, SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import io.circe.syntax._
-import io.circe.{Decoder, Encoder, Json}
+import io.circe.{Decoder, Encoder}
 import slick.jdbc.MySQLProfile.api._
 
 import scala.async.Async._
