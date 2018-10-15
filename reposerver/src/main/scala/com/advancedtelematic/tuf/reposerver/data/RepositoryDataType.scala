@@ -8,13 +8,11 @@ import com.advancedtelematic.libats.data.DataType.Checksum
 import com.advancedtelematic.libtuf.data.ClientDataType.{MetaItem, MetaPath, _}
 import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, TargetFilename}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import io.circe.{Encoder, Json}
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
-import com.advancedtelematic.libtuf.data.TufCodecs
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
-import shapeless.T
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 
 object RepositoryDataType {
   object StorageMethod extends Enumeration {
@@ -28,7 +26,14 @@ object RepositoryDataType {
 
   case class SignedRole(repoId: RepoId, roleType: RoleType, content: JsonSignedPayload, checksum: Checksum, length: Long, version: Int, expireAt: Instant)
 
-  case class SignedRoleNotDbLOL[T : TufRole](content: JsonSignedPayload, checksum: Checksum, length: Long, version: Int, expiresAt: Instant)
+//  case class SignedRoleNotDbLOL[T : TufRole](content: JsonSignedPayload, checksum: Checksum, length: Long, version: Int, expiresAt: Instant) {}
+
+  // TODO:SM Surely there is a better way?
+  // Maybe we could actually merge SignedRole and SignedRoleNotDBLOL ? make SignedRole[T] ?
+//  implicit class SignedRoleAsLol(signedRole: SignedRole) {
+//    def asLOL[T : TufRole]: SignedRoleNotDbLOL[T] =
+//      SignedRoleNotDbLOL[T](signedRole.content, signedRole.checksum, signedRole.length, signedRole.version, signedRole.expireAt)
+//  }
 
   implicit class SignedRoleMetaItemOps(signedRole: SignedRole) {
     def asMetaRole: (MetaPath, MetaItem) = {
@@ -38,12 +43,12 @@ object RepositoryDataType {
   }
 
   // TODO:SM Duplicated
-  implicit class SignedRoleMetaItemOps2[T](signedRole: SignedRoleNotDbLOL[T])(implicit tufRole: TufRole[T]) {
-    def asMetaRole: (MetaPath, MetaItem) = {
-      val hashes = Map(signedRole.checksum.method -> signedRole.checksum.hash)
-      tufRole.toMetaPath -> MetaItem(hashes, signedRole.length, signedRole.version)
-    }
-  }
+//  implicit class SignedRoleMetaItemOps2[T](signedRole: SignedRoleNotDbLOL[T])(implicit tufRole: TufRole[T]) {
+//    def asMetaRole: (MetaPath, MetaItem) = {
+//      val hashes = Map(signedRole.checksum.method -> signedRole.checksum.hash)
+//      tufRole.toMetaPath -> MetaItem(hashes, signedRole.length, signedRole.version)
+//    }
+//  }
 
 
   implicit class JavaUriToAkkaUriConversion(value: URI) {

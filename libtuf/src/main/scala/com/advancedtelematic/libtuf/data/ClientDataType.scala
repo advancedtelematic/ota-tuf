@@ -8,7 +8,7 @@ import cats.syntax.show._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, RoleType, TargetFilename, TargetName, TargetVersion, TufKey}
 import eu.timepit.refined.api.{Refined, Validate}
-import io.circe.{Decoder, Json}
+import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libats.data.DataType.HashMethod.HashMethod
@@ -48,12 +48,17 @@ object ClientDataType {
     def roleType = ev.roleType
 
     def toMetaPath: MetaPath = ev.toMetaPath
+
+    def version: Int = ev.version(value)
+
+    def expires: Instant = ev.expires(value)
   }
 
   implicit class RoleTypeOps(value: RoleType) {
     def toMetaPath: MetaPath = (value.show + ".json").refineTry[ValidMetaPath].get
   }
 
+  // TODO:SM includ encoder/decoder here
   trait TufRole[T] {
     def roleType: RoleType
 
@@ -62,6 +67,10 @@ object ClientDataType {
     def toMetaPath: MetaPath = roleType.toMetaPath
 
     def checksumPath: String = toMetaPath.value + ".checksum"
+
+    def version(v: T): Int
+
+    def expires(v: T): Instant
 
     def refreshRole(v: T, versionBump: Int => Int, expiresAt: Instant): T
   }
@@ -73,13 +82,21 @@ object ClientDataType {
   }
 
   object TufRole {
-    // TODO: Probably can use shapeless lens here?
-    private def apply[T <: VersionedRole](r: RoleType)(updateFn: (T, Int, Instant) => T) = new TufRole[T] {
-      override def roleType = r
+    private def apply[T <: VersionedRole](r: RoleType)
+                                         (updateFn: (T, Int, Instant) => T): TufRole[T] =
+      new TufRole[T] {
+        override def roleType: RoleType = r
 
-      override def refreshRole(v: T, version: Int => Int, expiresAt: Instant): T =
-        updateFn(v, version(v.version), expiresAt)
-    }
+        override def refreshRole(v: T, version: Int => Int, expiresAt: Instant): T =
+          updateFn(v, version(v.version), expiresAt)
+
+        override def version(v: T): Int = v.version
+
+        override def expires(v: T): Instant = v.expires
+      }
+
+
+    import ClientCodecs._
 
     implicit val targetsTufRole = apply[TargetsRole](RoleType.TARGETS)((r, v, e) => r.copy(version = v, expires = e))
     implicit val snapshotTufRole = apply[SnapshotRole](RoleType.SNAPSHOT)((r, v, e) => r.copy(version = v, expires = e))
