@@ -4,7 +4,6 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 import akka.http.scaladsl.util.FastFuture
-import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
@@ -19,7 +18,6 @@ import slick.jdbc.MySQLProfile.api._
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
-import cats.syntax.either._
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import org.slf4j.LoggerFactory
 
@@ -82,7 +80,9 @@ class RoleRefresh(signFn: RoleSigner)(implicit ec: ExecutionContext) {
 
   // TODO:SM Extract generate to other site, use same code,
   // TODO:SM this gets weird, wtf is up with this return type?
-  def refreshSnapshots(existingSnapshots: SignedRoleNotDbLOL[SnapshotRole], existingTimestamps: SignedRoleNotDbLOL[TimestampRole], newTargets: SignedRoleNotDbLOL[TargetsRole]): Future[(SignedRoleNotDbLOL[SnapshotRole], List[SignedRoleNotDbLOL[_]])] = async {
+  def refreshSnapshots(existingSnapshots: SignedRoleNotDbLOL[SnapshotRole],
+                       existingTimestamps: SignedRoleNotDbLOL[TimestampRole],
+                       newTargets: SignedRoleNotDbLOL[TargetsRole]): Future[(SignedRoleNotDbLOL[SnapshotRole], List[SignedRoleNotDbLOL[_]])] = async {
     val refreshed = refreshRole[SnapshotRole](existingSnapshots)
 
     val newMeta: Map[MetaPath, MetaItem] = existingSnapshots.role.meta + newTargets.asSignedRole.asMetaRole
@@ -95,7 +95,8 @@ class RoleRefresh(signFn: RoleSigner)(implicit ec: ExecutionContext) {
     (signedSnapshot, List(timestampRole))
   }
 
-  def refreshTimestamps(existingTimestamps: SignedRoleNotDbLOL[TimestampRole], newSnapshots: SignedRoleNotDbLOL[SnapshotRole]): Future[SignedRoleNotDbLOL[TimestampRole]] = async {
+  def refreshTimestamps(existingTimestamps: SignedRoleNotDbLOL[TimestampRole],
+                        newSnapshots: SignedRoleNotDbLOL[SnapshotRole]): Future[SignedRoleNotDbLOL[TimestampRole]] = async {
     val refreshed = refreshRole[TimestampRole](existingTimestamps)
     val newTimestamp = TimestampRole(Map(newSnapshots.asSignedRole.asMetaRole), refreshed.expires, refreshed.version)
     val signedTimestamps = await(signFn(newTimestamp))

@@ -3,7 +3,6 @@ package com.advancedtelematic.tuf.reposerver.data
 import java.net.URI
 import java.time.Instant
 
-import cats.syntax.either._
 import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libats.data.DataType.Checksum
 import com.advancedtelematic.libtuf.data.ClientDataType.{MetaItem, MetaPath, _}
@@ -39,8 +38,6 @@ object RepositoryDataType {
       SignedRole(repoId, implicitly[TufRole[T]].roleType, content, checksum, length, version, expiresAt)
   }
 
-  // TODO:SM Surely there is a better way?
-  // Maybe we could actually merge SignedRole and SignedRoleNotDBLOL ? make SignedRole[T] ?
   implicit class SignedRoleAsLol(signedRole: SignedRole) {
     def asLOL[T : TufRole]: SignedRoleNotDbLOL[T] =
       SignedRoleNotDbLOL[T](signedRole.repoId, signedRole.content, signedRole.checksum, signedRole.length, signedRole.version, signedRole.expireAt)
