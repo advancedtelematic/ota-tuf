@@ -83,10 +83,9 @@ class RoleRefresh(signFn: RoleSigner)(implicit ec: ExecutionContext) {
   // TODO:SM Extract generate to other site, use same code,
   // TODO:SM this gets weird, wtf is up with this return type?
   def refreshSnapshots(existingSnapshots: SignedRoleNotDbLOL[SnapshotRole], existingTimestamps: SignedRoleNotDbLOL[TimestampRole], newTargets: SignedRoleNotDbLOL[TargetsRole]): Future[(SignedRoleNotDbLOL[SnapshotRole], List[SignedRoleNotDbLOL[_]])] = async {
-    val parsed = existingSnapshots.content.signed.as[SnapshotRole].valueOr(throw _)
     val refreshed = refreshRole[SnapshotRole](existingSnapshots)
 
-    val newMeta: Map[MetaPath, MetaItem] = parsed.meta + newTargets.asSignedRole.asMetaRole
+    val newMeta: Map[MetaPath, MetaItem] = existingSnapshots.role.meta + newTargets.asSignedRole.asMetaRole
     val newSnapshot = SnapshotRole(newMeta, refreshed.expires, refreshed.version)
 
     val signedSnapshot = await(signFn(newSnapshot))
@@ -164,7 +163,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
   }
 
   private def ensureTargetsCanBeSigned(repoId: RepoId): Future[SignedRole] = async {
-    val rootRole = await(signedRoleRepo.find(repoId, RoleType.TARGETS)).content.signed.as[TargetsRole].valueOr(throw _)
+    val rootRole = await(signedRoleRepo.find(repoId, RoleType.TARGETS)).asLOL[TargetsRole].role
     await(signRole(repoId, rootRole))
   }
 

@@ -31,7 +31,7 @@ object RepositoryDataType {
     def role(implicit dec: Decoder[T]): T = content.signed.as[T] match {
       case Left(err) =>
         val tufRole = implicitly[TufRole[T]]
-        throw new IllegalArgumentException(s"Could not decode a role saved in database as ${tufRole.roleType} but unparseable as such a type: $err")
+        throw new IllegalArgumentException(s"Could not decode a role saved in database as ${tufRole.roleType} but not parseable as such a type: $err")
       case Right(p) => p
     }
 

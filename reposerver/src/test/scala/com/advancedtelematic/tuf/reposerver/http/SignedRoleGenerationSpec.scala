@@ -3,7 +3,6 @@ package com.advancedtelematic.tuf.reposerver.http
 import java.time.Instant
 
 import akka.http.scaladsl.util.FastFuture
-import cats.syntax.either._
 import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{TimestampRole, _}
@@ -42,7 +41,7 @@ class SignedRoleGenerationSpec extends TufReposerverSpec with DatabaseSpec with 
 
     val renewedSnapshots = signedRoleGeneration.findRole(repoId, RoleType.SNAPSHOT).futureValue
     val renewedTimestampsDb = signedRoleRepo.find(repoId, RoleType.TIMESTAMP).futureValue
-    val (_, renewedSnapshotsHash) = renewedTimestampsDb.content.signed.as[TimestampRole].valueOr(throw _).meta(RoleType.SNAPSHOT.toMetaPath).hashes.head
+    val (_, renewedSnapshotsHash) = renewedTimestampsDb.asLOL[TimestampRole].role.meta(RoleType.SNAPSHOT.toMetaPath).hashes.head
 
     renewedSnapshots.checksum shouldNot be(oldSnapshots.checksum)
     renewedSnapshots.version shouldBe oldSnapshots.version + 1
@@ -63,10 +62,10 @@ class SignedRoleGenerationSpec extends TufReposerverSpec with DatabaseSpec with 
     val renewedTargets = signedRoleGeneration.findRole(repoId, RoleType.TARGETS).futureValue
     val renewedSnapshots = signedRoleRepo.find(repoId, RoleType.SNAPSHOT).futureValue
     val renewedTimestamps = signedRoleGeneration.findRole(repoId, RoleType.TIMESTAMP).futureValue
-    val (_, renewedSnapshotsHash) = renewedTimestamps.content.signed.as[TimestampRole].valueOr(throw _).meta(RoleType.SNAPSHOT.toMetaPath).hashes.head
+    val (_, renewedSnapshotsHash) = renewedTimestamps.asLOL[TimestampRole].role.meta(RoleType.SNAPSHOT.toMetaPath).hashes.head
 
     // TODO:SM This is the part that should be somehow abstracted and clean because a SignedRole should always be parseable to a Role
-    val renewedSnaphotsParsed = renewedSnapshots.content.signed.as[SnapshotRole].valueOr(throw _)
+    val renewedSnaphotsParsed = renewedSnapshots.asLOL[SnapshotRole].role
     val (_, renewedTargetsHash) = renewedSnaphotsParsed.meta(RoleType.TARGETS.toMetaPath).hashes.head
 
     renewedTargetsHash shouldBe renewedTargets.checksum.hash
