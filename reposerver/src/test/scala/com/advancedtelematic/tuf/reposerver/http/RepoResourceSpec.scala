@@ -301,13 +301,15 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       responseAs[SignedPayload[TimestampRole]]
     }
 
-    val newRole = SignedRole.withChecksum[TimestampRole](repoId, role.asJsonSignedPayload, role.signed.version, Instant.now.minus(1, ChronoUnit.DAYS))
+    val expiredInstant = Instant.now.minus(1, ChronoUnit.DAYS)
+    val expiredJsonPayload = JsonSignedPayload(role.signatures, role.asJsonSignedPayload.signed.deepMerge(Json.obj("expires" -> expiredInstant.asJson)))
+
+    val newRole = SignedRole.withChecksum[TimestampRole](repoId, expiredJsonPayload, role.signed.version, expiredInstant)
     signedRoleRepository.update(newRole).futureValue
 
     Get(apiUri(s"repo/${repoId.show}/timestamp.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       val updatedRole = responseAs[SignedPayload[TimestampRole]].signed
-
       updatedRole.version shouldBe role.signed.version + 1
       updatedRole.expires.isAfter(Instant.now) shouldBe true
     }
@@ -319,7 +321,10 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       responseAs[SignedPayload[SnapshotRole]]
     }
 
-    val newRole = SignedRole.withChecksum[SnapshotRole](repoId, role.asJsonSignedPayload, role.signed.version, Instant.now.minus(1, ChronoUnit.DAYS))
+    val expiredInstant = Instant.now.minus(1, ChronoUnit.DAYS)
+    val expiredJsonPayload = JsonSignedPayload(role.signatures, role.asJsonSignedPayload.signed.deepMerge(Json.obj("expires" -> expiredInstant.asJson)))
+
+    val newRole = SignedRole.withChecksum[SnapshotRole](repoId, expiredJsonPayload, role.signed.version, expiredInstant)
     signedRoleRepository.update(newRole).futureValue
 
     Get(apiUri(s"repo/${repoId.show}/snapshot.json")) ~> routes ~> check {
@@ -337,7 +342,10 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       responseAs[SignedPayload[TargetsRole]]
     }
 
-    val newRole = SignedRole.withChecksum[TargetsRole](repoId, role.asJsonSignedPayload, role.signed.version, Instant.now.minus(1, ChronoUnit.DAYS))
+    val expiredInstant = Instant.now.minus(1, ChronoUnit.DAYS)
+    val expiredJsonPayload = JsonSignedPayload(role.signatures, role.asJsonSignedPayload.signed.deepMerge(Json.obj("expires" -> expiredInstant.asJson)))
+
+    val newRole = SignedRole.withChecksum[TargetsRole](repoId, expiredJsonPayload, role.signed.version, expiredInstant)
     signedRoleRepository.update(newRole).futureValue
 
     Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
