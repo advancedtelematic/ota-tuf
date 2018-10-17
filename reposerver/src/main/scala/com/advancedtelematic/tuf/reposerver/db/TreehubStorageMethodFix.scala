@@ -21,7 +21,7 @@ class TreehubStorageMethodFix(implicit
                               val mat: Materializer,
                               val system: ActorSystem,
                               val ec: ExecutionContext
-                             ) extends SignedRoleRepositorySupport {
+                             ) {
 
   import Schema.targetItems
 

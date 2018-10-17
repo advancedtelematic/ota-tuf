@@ -214,7 +214,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
     results.toList.foldMap(toValidatedNel)
   }
 
-  def newTargetsAdded(repoId: RepoId, namespace: Namespace, signedPayload: SignedPayload[TargetsRole], checksum: Option[RoleChecksum]): Future[ValidatedNel[Throwable, SignedRole]] = {
+  def newTargetsAdded(repoId: RepoId, namespace: Namespace, signedPayload: SignedPayload[TargetsRole], checksum: Option[RoleChecksum]): Future[ValidatedNel[Throwable, SignedRole[TargetsRole]]] = {
     // get the items before they get removed from the DB
     val previousTargetItemsF: Future[Seq[TargetItem]] = targetItemRepo.findFor(repoId)
 

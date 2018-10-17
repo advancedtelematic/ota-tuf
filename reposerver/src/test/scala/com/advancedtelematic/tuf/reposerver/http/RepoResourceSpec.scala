@@ -17,7 +17,7 @@ import cats.syntax.option._
 import cats.syntax.show._
 import com.advancedtelematic.libats.codecs.CirceCodecs._
 import com.advancedtelematic.libats.data.DataType.HashMethod
-import com.advancedtelematic.libats.data.{ErrorCode, ErrorRepresentation}
+import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libats.http.HttpCodecs._
@@ -36,13 +36,14 @@ import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
+import com.advancedtelematic.tuf.reposerver.db.SignedRoleDbTestUtil._
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{TargetBytes, TargetRetrieveResult}
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import eu.timepit.refined.api.Refined
 import io.circe.syntax._
-import io.circe.{Decoder, Encoder, Json, ParsingFailure}
+import io.circe.{Decoder, Encoder, Json}
 import org.scalatest.concurrent.{PatienceConfiguration, ScalaFutures}
 import org.scalatest.prop.Whenever
 import org.scalatest.time.{Seconds, Span}
@@ -55,7 +56,7 @@ trait RepoSupport extends ResourceSpec with SignedRoleRepositorySupport with Sca
   implicit val ec = executor
 
   def makeRoleChecksumHeader(repoId: RepoId) =
-    RoleChecksumHeader(signedRoleRepo.find(repoId, RoleType.TARGETS).futureValue.checksum.hash)
+    RoleChecksumHeader(signedRoleRepository.find[TargetsRole](repoId).futureValue.checksum.hash)
 
   val testFile = {
     val checksum = Sha256Digest.digest("hi".getBytes)
@@ -300,13 +301,15 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       responseAs[SignedPayload[TimestampRole]]
     }
 
-    val newRole = SignedRole.withChecksum(repoId, RoleType.TIMESTAMP, role.asJsonSignedPayload, role.signed.version, Instant.now.minus(1, ChronoUnit.DAYS))
-    signedRoleRepo.update(newRole).futureValue
+    val expiredInstant = Instant.now.minus(1, ChronoUnit.DAYS)
+    val expiredJsonPayload = JsonSignedPayload(role.signatures, role.asJsonSignedPayload.signed.deepMerge(Json.obj("expires" -> expiredInstant.asJson)))
+
+    val newRole = SignedRole.withChecksum[TimestampRole](repoId, expiredJsonPayload, role.signed.version, expiredInstant)
+    signedRoleRepository.update(newRole).futureValue
 
     Get(apiUri(s"repo/${repoId.show}/timestamp.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       val updatedRole = responseAs[SignedPayload[TimestampRole]].signed
-
       updatedRole.version shouldBe role.signed.version + 1
       updatedRole.expires.isAfter(Instant.now) shouldBe true
     }
@@ -318,8 +321,11 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       responseAs[SignedPayload[SnapshotRole]]
     }
 
-    val newRole = SignedRole.withChecksum(repoId, RoleType.SNAPSHOT, role.asJsonSignedPayload, role.signed.version, Instant.now.minus(1, ChronoUnit.DAYS))
-    signedRoleRepo.update(newRole).futureValue
+    val expiredInstant = Instant.now.minus(1, ChronoUnit.DAYS)
+    val expiredJsonPayload = JsonSignedPayload(role.signatures, role.asJsonSignedPayload.signed.deepMerge(Json.obj("expires" -> expiredInstant.asJson)))
+
+    val newRole = SignedRole.withChecksum[SnapshotRole](repoId, expiredJsonPayload, role.signed.version, expiredInstant)
+    signedRoleRepository.update(newRole).futureValue
 
     Get(apiUri(s"repo/${repoId.show}/snapshot.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -336,8 +342,11 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       responseAs[SignedPayload[TargetsRole]]
     }
 
-    val newRole = SignedRole.withChecksum(repoId, RoleType.TARGETS, role.asJsonSignedPayload, role.signed.version, Instant.now.minus(1, ChronoUnit.DAYS))
-    signedRoleRepo.update(newRole).futureValue
+    val expiredInstant = Instant.now.minus(1, ChronoUnit.DAYS)
+    val expiredJsonPayload = JsonSignedPayload(role.signatures, role.asJsonSignedPayload.signed.deepMerge(Json.obj("expires" -> expiredInstant.asJson)))
+
+    val newRole = SignedRole.withChecksum[TargetsRole](repoId, expiredJsonPayload, role.signed.version, expiredInstant)
+    signedRoleRepository.update(newRole).futureValue
 
     Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -387,10 +396,10 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
       val signed = responseAs[SignedPayload[SnapshotRole]].signed
 
       val targetLength = targetsRole.asJson.canonical.length
-      signed.meta(RoleType.TARGETS.toMetaPath).length shouldBe targetLength
+      signed.meta(RoleType.TARGETS.metaPath).length shouldBe targetLength
 
       val rootLength = rootRole.asJson.canonical.length
-      signed.meta(RoleType.ROOT.toMetaPath).length shouldBe rootLength
+      signed.meta(RoleType.ROOT.metaPath).length shouldBe rootLength
     }
   }
 
@@ -411,7 +420,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
         status shouldBe StatusCodes.OK
         val snapshotRole = responseAs[SignedPayload[SnapshotRole]].signed
 
-        val hash = snapshotRole.meta(RoleType.TARGETS.toMetaPath).hashes(targetsCheckSum.method)
+        val hash = snapshotRole.meta(RoleType.TARGETS.metaPath).hashes(targetsCheckSum.method)
 
         hash shouldBe targetsCheckSum.hash
       }

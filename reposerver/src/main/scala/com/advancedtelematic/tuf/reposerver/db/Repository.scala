@@ -16,10 +16,13 @@ import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
+import com.advancedtelematic.libtuf.data.ClientDataType.TufRole
 import com.advancedtelematic.libtuf_server.data.Requests.TargetComment
 import com.advancedtelematic.libtuf_server.data.TufSlickMappings._
+import com.advancedtelematic.tuf.reposerver.db.DBDataType.DbSignedRole
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport.MissingNamespaceException
 import com.advancedtelematic.tuf.reposerver.http.Errors
+
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
 import slick.jdbc.MySQLProfile.api._
@@ -107,24 +110,47 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
 }
 
 trait SignedRoleRepositorySupport extends DatabaseSupport {
-  lazy val signedRoleRepo = new SignedRoleRepository()
+  lazy val signedRoleRepository = new SignedRoleRepository()
 }
 
-object SignedRoleRepository {
-  val SignedRoleNotFound = MissingEntity[SignedRole]()
+protected [db] class SignedRoleRepository()(implicit val db: Database, val ec: ExecutionContext) {
+  import DBDataType._
+
+  private val signedRoleRepository = new DbSignedRoleRepository()
+
+  def persistAll(signedRoles: List[SignedRole[_]]): Future[Seq[DbSignedRole]] =
+    signedRoleRepository.persistAll(signedRoles.map(_.asDbSignedRole))
+
+  def persist[T : TufRole](signedRole: SignedRole[T], forceVersion: Boolean = false): Future[DbSignedRole] =
+    signedRoleRepository.persist(signedRole.asDbSignedRole, forceVersion)
+
+  def find[T](repoId: RepoId)(implicit tufRole: TufRole[T]): Future[SignedRole[T]] =
+    signedRoleRepository.find(repoId, tufRole.roleType).map(_.asSignedRole)
+
+  def storeAll(targetItemRepo: TargetItemRepository)(repoId: RepoId, signedRoles: List[SignedRole[_]], items: Seq[TargetItem]): Future[Unit] =
+    signedRoleRepository.storeAll(targetItemRepo)(repoId, signedRoles.map(_.asDbSignedRole), items)
+}
+
+
+object DbSignedRoleRepository {
+  val SignedRoleNotFound = MissingEntity[DbSignedRole]()
   def InvalidVersionBumpError(oldVersion: Int, newVersion: Int) =
     RawError(ErrorCode("invalid_version_bump"), StatusCodes.Conflict, s"Cannot bump version from $oldVersion to $newVersion")
 }
 
-protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: ExecutionContext) {
-  import SignedRoleRepository.InvalidVersionBumpError
+protected[db] class DbSignedRoleRepository()(implicit val db: Database, val ec: ExecutionContext) {
+  import DbSignedRoleRepository.InvalidVersionBumpError
   import Schema.signedRoles
-  import SignedRoleRepository.SignedRoleNotFound
+  import DbSignedRoleRepository.SignedRoleNotFound
 
-  def persist(signedRole: SignedRole, forceVersion: Boolean = false): Future[SignedRole] =
+  import shapeless._
+
+  import DBDataType._
+
+  def persist(signedRole: DbSignedRole, forceVersion: Boolean = false): Future[DbSignedRole] =
     db.run(persistAction(signedRole, forceVersion))
 
-  protected [db] def persistAction(signedRole: SignedRole, forceVersion: Boolean): DBIO[SignedRole] = {
+  protected [db] def persistAction(signedRole: DbSignedRole, forceVersion: Boolean): DBIO[DbSignedRole] = {
     signedRoles
       .filter(_.repoId === signedRole.repoId)
       .filter(_.roleType === signedRole.roleType)
@@ -140,19 +166,11 @@ protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: Ex
       .map(_ => signedRole)
   }
 
-  def persistAll(signedRoles: List[SignedRole]): Future[Seq[SignedRole]] = db.run {
+  def persistAll(signedRoles: List[DbSignedRole]): Future[Seq[DbSignedRole]] = db.run {
     DBIO.sequence(signedRoles.map(sr => persistAction(sr, forceVersion = false))).transactionally
   }
 
-  def update(signedRole: SignedRole): Future[Int] =
-    db.run {
-      signedRoles
-        .filter(_.repoId === signedRole.repoId)
-        .filter(_.roleType === signedRole.roleType)
-        .update(signedRole)
-    }
-
-  def find(repoId: RepoId, roleType: RoleType): Future[SignedRole] =
+  def find(repoId: RepoId, roleType: RoleType): Future[DbSignedRole] =
     db.run {
       signedRoles
         .filter(_.repoId === repoId)
@@ -162,7 +180,7 @@ protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: Ex
         .failIfNone(SignedRoleNotFound)
     }
 
-  def storeAll(targetItemRepo: TargetItemRepository)(repoId: RepoId, signedRoles: List[SignedRole], items: Seq[TargetItem]): Future[Unit] = db.run {
+  def storeAll(targetItemRepo: TargetItemRepository)(repoId: RepoId, signedRoles: List[DbSignedRole], items: Seq[TargetItem]): Future[Unit] = db.run {
     targetItemRepo.resetAction(repoId)
       .andThen(DBIO.sequence(signedRoles.map(sr => persistAction(sr, forceVersion = false))))
       .andThen(DBIO.sequence(items.map(targetItemRepo.createAction)))
@@ -170,7 +188,7 @@ protected[db] class SignedRoleRepository()(implicit val db: Database, val ec: Ex
       .transactionally
   }
 
-  private def ensureVersionBumpIsValid(signedRole: SignedRole)(oldSignedRole: Option[SignedRole]): DBIO[Unit] =
+  private def ensureVersionBumpIsValid(signedRole: DbSignedRole)(oldSignedRole: Option[DbSignedRole]): DBIO[Unit] =
     oldSignedRole match {
       case Some(sr) if signedRole.roleType != RoleType.ROOT && sr.version != signedRole.version - 1 =>
         DBIO.failed(InvalidVersionBumpError(sr.version, signedRole.version))

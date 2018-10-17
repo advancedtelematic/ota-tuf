@@ -13,7 +13,6 @@ import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libats.data.DataType.HashMethod.HashMethod
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
 
-
 object ClientDataType {
   type ClientHashes = Map[HashMethod, Refined[String, ValidChecksum]]
 
@@ -42,14 +41,16 @@ object ClientDataType {
 
   case class MetaItem(hashes: ClientHashes, length: Long, version: Int)
 
-  implicit class TufRoleOps[T](value: T)(implicit ev: TufRole[T]) {
-    def roleType = ev.roleType
+  implicit class TufRoleOps[T](value: T)(implicit tufRole: TufRole[T]) {
+    def metaPath: MetaPath = tufRole.metaPath
 
-    def toMetaPath: MetaPath = ev.toMetaPath
+    def version: Int = tufRole.version(value)
+
+    def expires: Instant = tufRole.expires(value)
   }
 
   implicit class RoleTypeOps(value: RoleType) {
-    def toMetaPath: MetaPath = (value.show + ".json").refineTry[ValidMetaPath].get
+    def metaPath: MetaPath = (value.show + ".json").refineTry[ValidMetaPath].get
   }
 
   trait TufRole[T] {
@@ -57,9 +58,15 @@ object ClientDataType {
 
     def typeStr: String = roleType.show.capitalize
 
-    def toMetaPath: MetaPath = roleType.toMetaPath
+    def metaPath: MetaPath = roleType.metaPath
 
-    def checksumPath: String = toMetaPath.value + ".checksum"
+    def checksumPath: String = metaPath.value + ".checksum"
+
+    def version(v: T): Int
+
+    def expires(v: T): Instant
+
+    def refreshRole(v: T, versionBump: Int => Int, expiresAt: Instant): T
   }
 
   sealed trait VersionedRole {
@@ -69,14 +76,23 @@ object ClientDataType {
   }
 
   object TufRole {
-    private def apply[T <: VersionedRole](r: RoleType) = new TufRole[T] {
-      override def roleType = r
-    }
+    private def apply[T <: VersionedRole](r: RoleType)
+                                         (updateFn: (T, Int, Instant) => T): TufRole[T] =
+      new TufRole[T] {
+        override def roleType: RoleType = r
 
-    implicit val targetsTufRole = apply[TargetsRole](RoleType.TARGETS)
-    implicit val snapshotTufRole = apply[SnapshotRole](RoleType.SNAPSHOT)
-    implicit val timestampTufRole = apply[TimestampRole](RoleType.TIMESTAMP)
-    implicit val rootTufRole = apply[RootRole](RoleType.ROOT)
+        override def refreshRole(v: T, version: Int => Int, expiresAt: Instant): T =
+          updateFn(v, version(v.version), expiresAt)
+
+        override def version(v: T): Int = v.version
+
+        override def expires(v: T): Instant = v.expires
+      }
+
+    implicit val targetsTufRole = apply[TargetsRole](RoleType.TARGETS)((r, v, e) => r.copy(version = v, expires = e))
+    implicit val snapshotTufRole = apply[SnapshotRole](RoleType.SNAPSHOT)((r, v, e) => r.copy(version = v, expires = e))
+    implicit val timestampTufRole = apply[TimestampRole](RoleType.TIMESTAMP)((r, v, e) => r.copy(version = v, expires = e))
+    implicit val rootTufRole = apply[RootRole](RoleType.ROOT)((r, v, e) => r.copy(version = v, expires = e))
   }
 
   case class RootRole(keys: Map[KeyId, TufKey],

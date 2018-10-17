@@ -87,7 +87,7 @@ object RepoManagement {
 
     def copyRole[T : TufRole : Encoder : Decoder](repo: TufRepo, dest: ZipOutputStream): Try[Unit] = {
       repo.readSignedRole[T].map { role =>
-        dest.putNextEntry(new ZipEntry(role.signed.toMetaPath.value))
+        dest.putNextEntry(new ZipEntry(role.signed.metaPath.value))
         dest.write(role.asJson.spaces2.getBytes)
         dest.closeEntry()
       }
@@ -194,7 +194,7 @@ protected object ZipRepoInitialization {
     } yield ()
 
     def writeRoot(src: ZipFile): Try[Unit] = for {
-      rootIs <- Try(src.getInputStream(src.getEntry(TufRole.rootTufRole.toMetaPath.value)))
+      rootIs <- Try(src.getInputStream(src.getEntry(TufRole.rootTufRole.metaPath.value)))
       rootRole <- CliUtil.readJsonFrom[SignedPayload[RootRole]](rootIs)
       _ <- tufRepo.writeSignedRole(rootRole)
     } yield ()
