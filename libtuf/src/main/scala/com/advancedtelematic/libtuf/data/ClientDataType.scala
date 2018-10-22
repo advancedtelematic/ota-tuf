@@ -105,7 +105,8 @@ object ClientDataType {
 
   case class TargetsRole(expires: Instant,
                          targets: Map[TargetFilename, ClientTargetItem],
-                         version: Int) extends VersionedRole {
+                         version: Int,
+                         custom: Option[Json] = None) extends VersionedRole {
     override val _type: String = "Targets"
   }
 

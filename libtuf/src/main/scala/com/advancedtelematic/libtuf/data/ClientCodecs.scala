@@ -40,7 +40,7 @@ object ClientCodecs {
   implicit val rootRoleEncoder: Encoder[RootRole] = deriveEncoder[RootRole].encodeRoleType
   implicit val rootRoleDecoder: Decoder[RootRole] = deriveDecoder[RootRole].validateRoleType
 
-  implicit val targetsRoleEncoder: Encoder[TargetsRole] = deriveEncoder[TargetsRole].encodeRoleType
+  implicit val targetsRoleEncoder: Encoder[TargetsRole] = deriveEncoder[TargetsRole].encodeRoleType.mapJson(_.dropNullValues)
   implicit val targetsRoleDecoder: Decoder[TargetsRole] = deriveDecoder[TargetsRole].validateRoleType
 
   implicit val snapshotRoleEncoder: Encoder[SnapshotRole] = deriveEncoder[SnapshotRole].encodeRoleType
@@ -48,6 +48,11 @@ object ClientCodecs {
 
   implicit val timestampRoleEncoder: Encoder[TimestampRole] = deriveEncoder[TimestampRole].encodeRoleType
   implicit val timestampRoleDecoder: Decoder[TimestampRole] = deriveDecoder[TimestampRole].validateRoleType
+
+  // TODO: Remove after https://github.com/circe/circe/pull/983/files is merged
+  implicit private class JsonDropNullValues(value: Json) {
+    def dropNullValues: Json = value.mapObject(_.filter { case (_, v) => !v.isNull })
+  }
 
   implicit private class EncodeRoleTypeOp[T](encoder: Encoder[T])(implicit tr: TufRole[T]) {
     def encodeRoleType: Encoder[T] = encoder.mapJson(_.deepMerge(Json.obj("_type" -> Json.fromString(tr.typeStr))))
