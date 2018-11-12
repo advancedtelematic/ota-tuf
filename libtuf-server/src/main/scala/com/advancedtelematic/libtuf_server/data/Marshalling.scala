@@ -5,6 +5,7 @@ import akka.http.scaladsl.unmarshalling.Unmarshaller
 import com.advancedtelematic.libtuf.data.TufDataType.{RoleType, TargetFormat, ValidKeyId}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libats.data.RefinedUtils._
+import com.advancedtelematic.libtuf.data.ClientDataType.ValidDelegatedRoleName
 
 import scala.util.Try
 
@@ -18,5 +19,10 @@ object Marshalling {
   val JsonRoleTypeMetaPath = PathMatchers.Segment.flatMap { str =>
     val (roleTypeStr, _) = str.splitAt(str.indexOf(".json"))
     Try(RoleType.withName(roleTypeStr.toUpperCase)).toOption
+  }
+
+  val DelegatedRoleUriPath = PathMatchers.Segment.flatMap { str =>
+    val (roleTypeStr, _) = str.splitAt(str.indexOf(".json"))
+    roleTypeStr.refineTry[ValidDelegatedRoleName].toOption
   }
 }

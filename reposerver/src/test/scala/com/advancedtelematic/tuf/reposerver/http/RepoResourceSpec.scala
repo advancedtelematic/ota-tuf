@@ -3,13 +3,9 @@ package com.advancedtelematic.tuf.reposerver.http
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-import eu.timepit.refined.refineV
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
-import akka.http.scaladsl.testkit.ScalatestRouteTest
-import akka.stream.scaladsl.Sink
-import akka.stream.testkit.scaladsl.TestSink
 import akka.util.ByteString
 import cats.data.NonEmptyList
 import cats.syntax.either._
@@ -20,81 +16,35 @@ import com.advancedtelematic.libats.data.DataType.HashMethod
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libats.http.Errors.RawError
-import com.advancedtelematic.libats.http.HttpCodecs._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.RoleTypeOps
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientHashes, ClientTargetItem, RootRole, SnapshotRole, TargetCustom, TargetsRole, TimestampRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientHashes, ClientTargetItem, RoleTypeOps, RootRole, SnapshotRole, TargetCustom, TargetsRole, TimestampRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, _}
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
-import com.advancedtelematic.libtuf_server.data.Messages.{PackageStorageUsage, TufTargetAdded}
 import com.advancedtelematic.libtuf_server.data.Requests._
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
-import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
-import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleDbTestUtil._
+import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{TargetBytes, TargetRetrieveResult}
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps._
 import com.advancedtelematic.tuf.reposerver.util._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import eu.timepit.refined.api.Refined
+import eu.timepit.refined.refineV
 import io.circe.syntax._
-import io.circe.{Decoder, Encoder, Json}
-import org.scalatest.concurrent.{PatienceConfiguration, ScalaFutures}
+import io.circe.Json
+import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.prop.Whenever
 import org.scalatest.time.{Seconds, Span}
-import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors, Suite}
+import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
 
 import scala.concurrent.Future
 
-
-trait RepoSupport extends ResourceSpec with SignedRoleRepositorySupport with ScalaFutures with ScalatestRouteTest { this: Suite ⇒
-  implicit val ec = executor
-
-  def makeRoleChecksumHeader(repoId: RepoId) =
-    RoleChecksumHeader(signedRoleRepository.find[TargetsRole](repoId).futureValue.checksum.hash)
-
-  val testFile = {
-    val checksum = Sha256Digest.digest("hi".getBytes)
-    RequestTargetItem(Uri("https://ats.com/testfile"), checksum, targetFormat = None, name = None, version = None, hardwareIds = Seq.empty, length = "hi".getBytes.length)
-  }
-
-  def addTargetToRepo(repoId: RepoId = RepoId.generate(), keyType: KeyType = RsaKeyType): RepoId = {
-    fakeKeyserverClient.createRoot(repoId, keyType).futureValue
-
-    Post(apiUri(s"repo/${repoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      repoId
-    }
-  }
-
-  def buildSignedTargetsRole(repoId: RepoId, targets: Map[TargetFilename, ClientTargetItem], version: Int = 2): SignedPayload[TargetsRole] = {
-    val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), targets, version)
-    val signedPayload = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targetsRole.asJson).futureValue
-    SignedPayload(signedPayload.signatures, targetsRole, targetsRole.asJson)
-  }
-
-  def createOfflineTargets(filename: TargetFilename = offlineTargetFilename) = {
-    val targetCustomJson =
-      TargetCustom(TargetName("name"), TargetVersion("version"), Seq.empty, TargetFormat.BINARY.some)
-        .asJson
-        .deepMerge(Json.obj("uri" -> Uri("https://ats.com").asJson))
-
-    val hashes: ClientHashes = Map(HashMethod.SHA256 -> Refined.unsafeApply("8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"))
-
-    Map(filename -> ClientTargetItem(hashes, 0, targetCustomJson.some))
-  }
-
-  val offlineTargetFilename: TargetFilename = Refined.unsafeApply("some/file/name")
-
-  val offlineTargets = createOfflineTargets(offlineTargetFilename)
-}
-
-class RepoResourceSpec extends TufReposerverSpec with RepoSupport
+class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration with SignedRoleRepositorySupport {
 
   val repoId = RepoId.generate()
@@ -104,6 +54,14 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
   override def beforeAll(): Unit = {
     super.beforeAll()
     fakeKeyserverClient.createRoot(repoId).futureValue
+  }
+
+  def signaturesShouldBeValid(repoId: RepoId, roleType: RoleType, signedPayload: JsonSignedPayload): Assertion = {
+    val signature = signedPayload.signatures.head
+    val signed = signedPayload.signed
+
+    val isValid = TufCrypto.isValid(signature, fakeKeyserverClient.publicKey(repoId, roleType), signed)
+    isValid shouldBe true
   }
 
   test("POST returns latest signed json") {
@@ -742,7 +700,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
   }
 
   keyTypeTest("accepts an offline signed targets.json") { keyType =>
-    val repoId = addTargetToRepo(keyType = keyType)
+    implicit val repoId = addTargetToRepo(keyType = keyType)
 
     Put(apiUri(s"repo/${repoId.show}/targets/old/target?name=bananas&version=0.0.1"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -753,7 +711,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
 
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets, version = 3)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
       header("x-ats-role-checksum").map(_.value) should contain(makeRoleChecksumHeader(repoId).value)
     }
@@ -778,14 +736,14 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
   }
 
   test("getting offline target item fails if no custom url was provided when signing target") {
-    val repoId = addTargetToRepo()
+    implicit val repoId = addTargetToRepo()
     val targetCustomJson =TargetCustom(TargetName("name"), TargetVersion("version"), Seq.empty, TargetFormat.BINARY.some).asJson
     val hashes: ClientHashes = Map(HashMethod.SHA256 -> Refined.unsafeApply("8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"))
     val offlineTargets = Map(offlineTargetFilename -> ClientTargetItem(hashes, 0, targetCustomJson.some))
 
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
@@ -796,11 +754,11 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
   }
 
   test("getting offline target item redirects to custom url") {
-    val repoId = addTargetToRepo()
+    implicit val repoId = addTargetToRepo()
 
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
@@ -810,7 +768,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  test("POST /targets fails with 412 with offline targets.json") {
+  test("POST /targets, creating a target fails with 412 when targets.json is offline") {
     val repoId = RepoId.generate()
     fakeKeyserverClient.createRoot(repoId).futureValue
 
@@ -824,11 +782,11 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
   }
 
   test("re-generates snapshot role after storing offline target") {
-    val repoId = addTargetToRepo()
+    implicit val repoId = addTargetToRepo()
 
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
@@ -839,11 +797,11 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
   }
 
   test("re-generates timestamp role after storing offline target") {
-    val repoId = addTargetToRepo()
+    implicit val repoId = addTargetToRepo()
 
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
@@ -854,14 +812,14 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
   }
 
   test("PUT offline target fails when target does not include custom meta") {
-    val repoId = addTargetToRepo()
+    implicit val repoId = addTargetToRepo()
 
     val targets = Map(offlineTargetFilename -> ClientTargetItem(Map.empty, 0, None))
     val signedPayload = buildSignedTargetsRole(repoId, targets)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
-      responseAs[JsonErrors].head should include("target item error some/file/name: new offline signed target items must contain custom metadata")
+      responseAs[ErrorRepresentation].firstErrorCause.get should include("target item error some/file/name: new offline signed target items must contain custom metadata")
     }
   }
 
@@ -870,14 +828,14 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     val targets = Map(offlineTargetFilename -> clientTargetItem)
     val signedPayload = buildSignedTargetsRole(repoId, targets)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum(repoId) ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
-      responseAs[JsonErrors].head should include("Invalid/Missing Checksum")
+      responseAs[ErrorRepresentation].firstErrorCause.get should include("Invalid/Missing Checksum")
     }
   }
 
   test("accepts requests with no uri in target custom") {
-    val repoId = addTargetToRepo()
+    implicit val repoId = addTargetToRepo()
 
     val targetCustomJson = TargetCustom(TargetName("name"), TargetVersion("version"), Seq.empty, TargetFormat.BINARY.some).asJson
 
@@ -885,13 +843,13 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     val targets = Map(offlineTargetFilename -> ClientTargetItem(hashes, 0, targetCustomJson.some))
     val signedPayload = buildSignedTargetsRole(repoId, targets)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
   }
 
   keyTypeTest("rejects offline targets.json with bad signatures") { keyType =>
-    val repoId = addTargetToRepo(keyType = keyType)
+    implicit val repoId = addTargetToRepo(keyType = keyType)
 
     val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), Map.empty, 2)
 
@@ -899,27 +857,27 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
 
     val signedPayload = JsonSignedPayload(invalidSignedPayload.signatures, targetsRole.asJson)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
-      responseAs[JsonErrors].head should include("Invalid signature for key")
+      responseAs[ErrorRepresentation].firstErrorCause.get should include("Invalid signature for key")
     }
   }
 
   keyTypeTest("rejects offline targets.json with less signatures than the required threshold") { keyType =>
-    val repoId = addTargetToRepo(keyType = keyType)
+    implicit val repoId = addTargetToRepo(keyType = keyType)
 
     val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), Map.empty, 2)
 
     val signedPayload = JsonSignedPayload(Seq.empty, targetsRole.asJson)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
-      responseAs[JsonErrors].head should include("Valid signature count must be >= threshold")
+      responseAs[ErrorRepresentation].firstErrorCause.get should include("Valid signature count must be >= threshold")
     }
   }
 
   test("rejects offline targets.json if public keys are not available") {
-    val repoId = addTargetToRepo()
+    implicit val repoId = addTargetToRepo()
 
     val targetFilename: TargetFilename = Refined.unsafeApply("some/file/name")
     val targets = Map(targetFilename -> ClientTargetItem(Map.empty, 0, None))
@@ -930,19 +888,19 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     val signature = TufCrypto.signPayload(sec, targetsRole.asJson).toClient(pub.id)
     val signedPayload = JsonSignedPayload(List(signature), targetsRole.asJson)
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
-      responseAs[JsonErrors].head should include(s"key ${pub.id} required for role validation not found in root role")
+      responseAs[ErrorRepresentation].firstErrorCause.get should include(s"key ${pub.id} required for role validation not found in authoritative role")
     }
   }
 
   test("return offline targets.json even if expired") {
-    val repoId = addTargetToRepo()
+    implicit val repoId = addTargetToRepo()
 
     val expiredTargetsRole = TargetsRole(Instant.now().minus(1, ChronoUnit.DAYS), offlineTargets, 2)
     val signedPayload = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, expiredTargetsRole.asJson).futureValue
 
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
@@ -983,346 +941,47 @@ class RepoResourceSpec extends TufReposerverSpec with RepoSupport
     }
   }
 
-  def signaturesShouldBeValid(repoId: RepoId, roleType: RoleType, signedPayload: JsonSignedPayload): Assertion = {
-    val signature = signedPayload.signatures.head
-    val signed = signedPayload.signed
+  test("returns same json as pushed to the server when Decoder adds fields") {
+    import io.circe.{parser => circe_parser}
+    import cats.syntax.either._
+    import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 
-    val isValid = TufCrypto.isValid(signature, fakeKeyserverClient.publicKey(repoId, roleType), signed)
-    isValid shouldBe true
-  }
+    val str = """
+                | {
+                |  "_type": "Targets",
+                |  "expires": "2018-12-13T15:37:21Z",
+                |  "targets": {
+                |    "myfile01": {
+                |      "hashes": {
+                |        "sha256": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"
+                |      },
+                |      "length": 2,
+                |      "custom": null
+                |    }
+                |  },
+                |  "version": 2
+                |}
+              """.stripMargin
 
-}
+    val oldJson = circe_parser.parse(str).valueOr(throw _)
 
-// Test for message publishing in separate class
-// because MemoryMessageBus maintains queue and supports only single subscriber.
-//
-class RepoResourceTufTargetSpec(keyType: KeyType) extends TufReposerverSpec
-  with ResourceSpec with PatienceConfiguration with RepoSupport {
+    implicit val repoId = addTargetToRepo()
 
-  override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
+    val signedPayload = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, oldJson).futureValue
 
-  test("publishes messages to bus on adding target") {
-    val repoId = RepoId.generate()
-    val source = memoryMessageBus.subscribe[TufTargetAdded]()
-
-    withNamespace(s"default-${repoId.show}") { implicit ns =>
-      Post(apiUri(s"repo/${repoId.show}"), CreateRepositoryRequest(keyType)).namespaced ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-      }
-
-      Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-      }
-
-      source.runWith(Sink.head).futureValue shouldBe a[TufTargetAdded]
-    }
-  }
-
-}
-
-class RsaRepoResourceTufTargetSpec extends RepoResourceTufTargetSpec(RsaKeyType)
-class Ed25519RepoResourceTufTargetSpec extends RepoResourceTufTargetSpec(Ed25519KeyType)
-
-class RepoResourceTufTargetInitialJsonSpec(keyType: KeyType) extends TufReposerverSpec
-  with ResourceSpec with PatienceConfiguration with RepoSupport {
-
-  override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
-
-  test("publishes messages to bus on creating first target by uploading target.json") {
-    val sink = memoryMessageBus.subscribe[TufTargetAdded]().runWith(TestSink.probe[TufTargetAdded])
-    val repoId = RepoId.generate()
-
-    withNamespace(s"default-${repoId.show}") { implicit ns =>
-      Post(apiUri(s"repo/${repoId.show}")).namespaced ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-      }
-
-      val signedPayload = buildSignedTargetsRole(repoId, offlineTargets)
-
-      Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload) ~> routes ~> check {
-        status shouldBe StatusCodes.NoContent
-        header("x-ats-role-checksum").map(_.value) should contain(makeRoleChecksumHeader(repoId).value)
-      }
-
-      sink.requestNext()
-    }
-  }
-}
-
-class RsaRepoResourceTufTargetInitialJsonSpec extends RepoResourceTufTargetInitialJsonSpec(RsaKeyType)
-class Ed25519RepoResourceTufTargetInitialJsonSpec extends RepoResourceTufTargetInitialJsonSpec(Ed25519KeyType)
-
-class RepoResourceTufTargetJsonSpec(keyType: KeyType) extends TufReposerverSpec
-  with ResourceSpec with PatienceConfiguration with RepoSupport {
-
-  override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
-
-  test("publishes messages to bus for new target entries") {
-    val sink = memoryMessageBus.subscribe[TufTargetAdded]().runWith(TestSink.probe[TufTargetAdded])
-
-    val repoId = addTargetToRepo()
-    // check for target item
-    sink.requestNext()
-
-    val signedPayload1 = buildSignedTargetsRole(repoId, offlineTargets, version = 2)
-
-    // 2nd target item
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload1).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
-      status shouldBe StatusCodes.NoContent
-      header("x-ats-role-checksum").map(_.value) should contain(makeRoleChecksumHeader(repoId).value)
-    }
-
-    sink.requestNext()
-
-    val targetRole = Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      val targetR = responseAs[SignedPayload[TargetsRole]].signed
-      targetR.targets.keys should contain(offlineTargetFilename)
-      header("x-ats-role-checksum").map(_.value) should contain(makeRoleChecksumHeader(repoId).value)
-      targetR
-    }
-
-    // 3rd target item
-    val hashes: ClientHashes = Map(HashMethod.SHA256 -> Refined.unsafeApply("8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"))
-    val targetCustomJson = TargetCustom(TargetName("name"), TargetVersion("version"), Seq.empty, TargetFormat.BINARY.some)
-                              .asJson
-                              .deepMerge(Json.obj("uri" -> Uri("https://ats.com").asJson))
-    val offlineTargetFilename2: TargetFilename = Refined.unsafeApply("another/file/name")
-    val offlineTargets2 = targetRole.targets.updated(offlineTargetFilename2, ClientTargetItem(hashes, 0, Some(targetCustomJson)))
-    val signedPayload2 = buildSignedTargetsRole(repoId, offlineTargets2, targetRole.version + 1)
-
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload2).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
-      header("x-ats-role-checksum").map(_.value) should contain(makeRoleChecksumHeader(repoId).value)
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
-    sink.requestNext()
-  }
-
-}
-
-class RsaRepoResourceTufTargetJsonSpec extends RepoResourceTufTargetJsonSpec(RsaKeyType)
-
-class EdRepoResourceTufTargetJsonSpec extends RepoResourceTufTargetJsonSpec(Ed25519KeyType)
-
-class RepoResourceTufTargetStoreSpec(keyType: KeyType) extends TufReposerverSpec
-    with ResourceSpec with Inspectors with Whenever with PatienceConfiguration {
-
-  override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
-
-  val testEntity = HttpEntity(ByteString("""
-                                           |Like all the men of the Library, in my younger days I traveled;
-                                           |I have journeyed in quest of a book, perhaps the catalog of catalogs.
-                                           |""".stripMargin))
-
-  val fileBodyPart = BodyPart("file", testEntity, Map("filename" -> "babel.txt"))
-
-  val form = Multipart.FormData(fileBodyPart)
-
-  test("publishes usage messages to bus") {
-    val repoId = RepoId.generate()
-    val source = memoryMessageBus.subscribe[PackageStorageUsage]()
-
-    withNamespace(s"default-${repoId.show}") { implicit ns =>
-      Post(apiUri(s"repo/${repoId.show}"), CreateRepositoryRequest(keyType)).namespaced ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-      }
-
-      Put(apiUri(s"repo/${repoId.show}/targets/some/file?name=pkgname&version=pkgversion&desc=wat"), form).namespaced ~> routes ~> check {
-        status shouldBe StatusCodes.OK
-      }
-
-      val messages = source.take(2).runWith(Sink.seq).futureValue
-      messages.head shouldBe a[PackageStorageUsage]
-      messages.last shouldBe a[TufTargetAdded]
-    }
-  }
-}
-
-class RsaRepoResourceTufTargetStoreSpec extends RepoResourceTufTargetStoreSpec(RsaKeyType)
-
-class EdRepoResourceTufTargetStoreSpec extends RepoResourceTufTargetStoreSpec(Ed25519KeyType)
-
-class RepoResourceCommentSpec extends TufReposerverSpec with ResourceSpec with PatienceConfiguration with RepoSupport
-{
-
-  override implicit def patienceConfig: PatienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))
-
-  test("set comment for existing repo id and package") {
-    val repoId = addTargetToRepo()
-
-    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
+    Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
+      val newJson = responseAs[Json]
+      newJson.canonical shouldBe signedPayload.asJson.canonical
     }
   }
 
-  test("set comment for existing repo id and non-existing package") {
-    val repoId = RepoId.generate()
-    fakeKeyserverClient.createRoot(repoId).futureValue
-
-    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
-      status shouldBe StatusCodes.NotFound
-    }
+  implicit class ErrorRepresentationOps(value: ErrorRepresentation) {
+    def firstErrorCause: Option[String] =
+      value.cause.flatMap(_.as[NonEmptyList[String]].toOption).map(_.head)
   }
-
-  test("set comment for non-existing repo id and non-existing package") {
-    val repoId = RepoId.generate()
-
-    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
-      status shouldBe StatusCodes.NotFound
-    }
-  }
-
-  test("get existing comment") {
-    val repoId = addTargetToRepo()
-
-    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("ಠ_ಠ"))) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-    }
-
-    Get(apiUri(s"repo/${repoId.show}/comments/myfile01")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      entityAs[CommentRequest] shouldBe CommentRequest(TargetComment("ಠ_ಠ"))
-    }
-  }
-
-  test("getting comment of deleted package fails") {
-    val repoId = addTargetToRepo()
-
-    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("ಠ_ಠ"))) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-    }
-
-    Get(apiUri(s"repo/${repoId.show}/comments/myfile01")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      entityAs[CommentRequest] shouldBe CommentRequest(TargetComment("ಠ_ಠ"))
-    }
-
-    Delete(apiUri(s"repo/${repoId.show}/targets/myfile01")) ~> routes ~> check {
-      status shouldBe StatusCodes.NoContent
-    }
-
-    Get(apiUri(s"repo/${repoId.show}/comments/myfile01")) ~> routes ~> check {
-      status shouldBe StatusCodes.NotFound
-    }
-  }
-
-  test("trying to get missing comment for existing repo id and package returns 404") {
-    val repoId = addTargetToRepo()
-
-    Get(apiUri(s"repo/${repoId.show}/comments/myfile01")) ~> routes ~> check {
-      status shouldBe StatusCodes.NotFound
-    }
-  }
-
-  test("trying to get non-existing comment list for existing repo id") {
-    val repoId = addTargetToRepo()
-
-    Get(apiUri(s"repo/${repoId.show}/comments")) ~> routes ~> check {
-      status shouldBe StatusCodes.NotFound
-    }
-  }
-
-  test("trying to get comment list for non-existing repo id") {
-    val repoId = RepoId.generate()
-
-    Get(apiUri(s"repo/${repoId.show}/comments")) ~> routes ~> check {
-      status shouldBe StatusCodes.NotFound
-    }
-  }
-
-  test("get existing comment list") {
-    val repoId = addTargetToRepo()
-
-    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-    }
-
-    Get(apiUri(s"repo/${repoId.show}/comments")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      entityAs[Seq[FilenameComment]] shouldBe List(FilenameComment("myfile01".refineTry[ValidTargetFilename].get,
-        TargetComment("comment")))
-    }
-  }
-
-  test("get existing comment list for different versions") {
-    val repoId = RepoId.generate()
-    fakeKeyserverClient.createRoot(repoId, RsaKeyType).futureValue
-    val repoIdS = repoId.show
-
-    Post(apiUri(s"repo/$repoIdS/targets/raspberrypi_rocko-ce15f3986223be401205d13dda6e8d7aefeae1c02a769043ba11d1268ccd77dd"), testFile) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-    }
-
-    Put(apiUri(s"repo/$repoIdS/comments/raspberrypi_rocko-ce15f3986223be401205d13dda6e8d7aefeae1c02a769043ba11d1268ccd77dd"),
-                        CommentRequest(TargetComment("comment1"))) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-    }
-
-    val testFile2 = {
-      val checksum = Sha256Digest.digest("lo".getBytes)
-      RequestTargetItem(Uri("https://ats.com/testfile"), checksum, targetFormat = None, name = None, version = None,
-                            hardwareIds = Seq.empty, length = "lo".getBytes.length)
-    }
-
-    Post(apiUri(s"repo/$repoIdS/targets/raspberrypi_rocko-d359911e6fb67476e379a55870d1a180acc3a78d6d463b5281ccd9ca861519dc"), testFile2) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-    }
-
-    Put(apiUri(s"repo/$repoIdS/comments/raspberrypi_rocko-d359911e6fb67476e379a55870d1a180acc3a78d6d463b5281ccd9ca861519dc"),
-                          CommentRequest(TargetComment("comment2"))) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-    }
-
-    Get(apiUri(s"repo/$repoIdS/comments")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      entityAs[Seq[FilenameComment]].length shouldBe 2
-    }
-  }
-
-  keyTypeTest("updating targets.json doesn't kill comments") { keyType =>
-    val repoId = addTargetToRepo(keyType = keyType)
-    val repoIdS = repoId.show
-
-    val signedPayload = buildSignedTargetsRole(repoId, offlineTargets, version = 2)
-
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
-      status shouldBe StatusCodes.NoContent
-      header("x-ats-role-checksum").map(_.value) should contain(makeRoleChecksumHeader(repoId).value)
-    }
-
-    Put(apiUri(s"repo/$repoIdS/comments/$offlineTargetFilename"),
-      CommentRequest(TargetComment("comment1"))) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-    }
-
-    Get(apiUri(s"repo/$repoIdS/comments/$offlineTargetFilename")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      entityAs[CommentRequest] shouldBe CommentRequest(TargetComment("comment1"))
-    }
-
-    val signedPayload2 = buildSignedTargetsRole(repoId, offlineTargets, version = 3)
-
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload2).withHeaders(makeRoleChecksumHeader(repoId)) ~> routes ~> check {
-      status shouldBe StatusCodes.NoContent
-      header("x-ats-role-checksum").map(_.value) should contain(makeRoleChecksumHeader(repoId).value)
-    }
-
-    Get(apiUri(s"repo/$repoIdS/comments/$offlineTargetFilename")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      entityAs[CommentRequest] shouldBe CommentRequest(TargetComment("comment1"))
-    }
-
-  }
-
-}
-
-object JsonErrors {
-  import io.circe.generic.semiauto._
-  implicit val jsonErrorsEncoder: Encoder[JsonErrors] = deriveEncoder
-  implicit val jsonErrorsDecoder: Decoder[JsonErrors] = deriveDecoder
-}
-
-case class JsonErrors(errors: NonEmptyList[String]) {
-  def head: String = errors.head
 }

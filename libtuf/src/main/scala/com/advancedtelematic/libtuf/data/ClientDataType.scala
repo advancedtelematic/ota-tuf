@@ -5,7 +5,7 @@ import java.time.Instant
 
 import cats.syntax.show._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, RoleType, TargetFilename, TargetName, TargetVersion, TufKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, RoleType, TargetFilename, TargetName, TargetVersion, TufKey, ValidTargetFilename}
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.{Decoder, Json}
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
@@ -103,9 +103,36 @@ object ClientDataType {
     override val _type: String = "Root"
   }
 
+  case class ValidDelegatedPathPattern()
+  type DelegatedPathPattern = Refined[String, ValidDelegatedPathPattern]
+
+  implicit val validDelegatedPathPattern: Validate.Plain[String, ValidDelegatedPathPattern] =
+    Validate.fromPredicate(
+      f => f.nonEmpty && f.length < 254 && !f.contains(".."),
+      _ => "DelegatedPathPattern cannot be empty or bigger than 254 chars or contain `..`",
+      ValidDelegatedPathPattern()
+    )
+
+  case class ValidDelegatedRoleName()
+  type DelegatedRoleName = Refined[String, ValidDelegatedRoleName]
+
+  implicit val validDelegatedRoleName: Validate.Plain[String, ValidDelegatedRoleName] =
+    Validate.fromPredicate(
+      f => f.nonEmpty && f.length < 50,
+      _ => "DelegatedRoleName cannot be empty or longer than 50 characters",
+      ValidDelegatedRoleName()
+    )
+
+  case class Delegation(name: DelegatedRoleName, keyids: List[KeyId], paths: List[DelegatedPathPattern],
+                        threshold: Int = 1,
+                        terminating: Boolean = false)
+
+  case class Delegations(keys: Map[KeyId, TufKey], roles: List[Delegation])
+
   case class TargetsRole(expires: Instant,
                          targets: Map[TargetFilename, ClientTargetItem],
                          version: Int,
+                         delegations: Option[Delegations] = None,
                          custom: Option[Json] = None) extends VersionedRole {
     override val _type: String = "Targets"
   }
