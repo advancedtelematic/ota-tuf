@@ -167,31 +167,31 @@ object TufCrypto {
   def generateKeyPair[T <: KeyType](keyType: T, keySize: Int): TufKeyPair =
     keyType.crypto.generateKeyPair(keySize)
 
-  def payloadSignatureIsValid[T : TufRole : Encoder](rootRole: RootRole, signedPayload: SignedPayload[T]): ValidatedNel[String, SignedPayload[T]] = {
-    val signedPayloadRoleType = implicitly[TufRole[T]].roleType
+  def payloadSignatureIsValid[T : Encoder](rootRole: RootRole, signedPayload: SignedPayload[T])
+                                          (implicit tufRole: TufRole[T]): ValidatedNel[String, SignedPayload[T]] = {
+    val publicKeys = rootRole.keys.filterKeys(keyId => rootRole.roles(tufRole.roleType).keyids.contains(keyId))
+    val threshold = rootRole.roles(tufRole.roleType).threshold
+    payloadSignatureIsValid(publicKeys, threshold, signedPayload)
+  }
 
-    val publicKeys = rootRole.keys.filterKeys(keyId => rootRole.roles(signedPayloadRoleType).keyids.contains(keyId))
-
+  def payloadSignatureIsValid[T : Encoder](pubKeys: Map[KeyId, TufKey],
+                                           threshold: Int,
+                                           signedPayload: SignedPayload[T]): ValidatedNel[String, SignedPayload[T]] = {
     val sigsByKeyId = signedPayload.signatures.map(s => s.keyid -> s).toMap
 
     val validSignatureCount: ValidatedNel[String, List[KeyId]] =
       sigsByKeyId.par.map { case (keyId, sig) =>
-        publicKeys.get(keyId)
-          .toRight(s"key ${sig.keyid} required for role validation not found in root role")
-          .ensure(s"Invalid signature for key ${sig.keyid}") { key =>
-            signedPayload.isValidFor(key)
-          }
+        pubKeys.get(keyId)
+          .toRight(s"key ${sig.keyid} required for role validation not found in authoritative role")
+          .ensure(s"Invalid signature for key ${sig.keyid}") { key => signedPayload.isValidFor(key) }
           .map(_.id)
           .toValidatedNel
       }.toList.sequence
-
-    val threshold = rootRole.roles(signedPayloadRoleType).threshold
 
     validSignatureCount.ensure(NonEmptyList.of(s"Valid signature count must be >= threshold ($threshold)")) { validSignatures =>
       validSignatures.size >= threshold && threshold > 0
     }.map(_ => signedPayload)
   }
-
 }
 
 protected [crypt] object ECCrypto {

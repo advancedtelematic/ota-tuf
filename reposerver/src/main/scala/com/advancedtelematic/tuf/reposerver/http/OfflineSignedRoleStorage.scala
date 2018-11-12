@@ -8,9 +8,10 @@ import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, Targe
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, SignedPayload, TargetFilename}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{StorageMethod, TargetItem}
 import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
+import com.advancedtelematic.tuf.reposerver.db.DbSignedRoleRepository.SignedRoleNotFound
 import io.circe.Encoder
 import cats.implicits._
-import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
+import com.advancedtelematic.libats.data.DataType.{Checksum}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
@@ -19,12 +20,15 @@ import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
-import com.advancedtelematic.tuf.reposerver.db.DbSignedRoleRepository.SignedRoleNotFound
 import com.advancedtelematic.tuf.reposerver.http.RoleChecksumHeader.RoleChecksum
+import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
+import org.slf4j.LoggerFactory
 
 class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
                                         (implicit val db: Database, val ec: ExecutionContext)
   extends SignedRoleRepositorySupport with TargetItemRepositorySupport{
+
+  private val _log = LoggerFactory.getLogger(this.getClass)
 
   private val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
 
@@ -89,22 +93,52 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
     TufCrypto.payloadSignatureIsValid(rootRole, signedPayload)
   }
 
-  def saveTargetRole(namespace: Namespace, signedTargetPayload: SignedPayload[TargetsRole], repoId: RepoId, checksum: Option[RoleChecksum]): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole[TargetsRole])]] =
-    signedRoleRepository.find[TargetsRole](repoId).flatMap { existingRole =>
-      updateSignedTarget(repoId, namespace, signedTargetPayload, existingRole, checksum)
-    }.recoverWith {
-      case SignedRoleNotFound =>
-        store(repoId, signedTargetPayload)
-    }
+  def saveTargetRole(targetStore: TargetStore)
+                    (repoId: RepoId, signedTargetPayload: SignedPayload[TargetsRole],
+                    checksum: Option[RoleChecksum]): Future[(Seq[TargetItem], SignedRole[TargetsRole])] = async {
+    await(ensureChecksumIsValidForSave(repoId: RepoId, checksum))
 
-  private def updateSignedTarget(repoId: RepoId, namespace: Namespace, signedTargetPayload: SignedPayload[TargetsRole],
-                                 existingRole: SignedRole[TargetsRole], checksumOpt: Option[RoleChecksum]) =
-    checksumOpt match {
-      case Some(checksum) if existingRole.checksum.hash == checksum =>
-        store(repoId, signedTargetPayload)
-      case Some(_) =>
-        Future.failed(Errors.RoleChecksumMismatch) // TODO: Should be 412?
-      case None =>
-        Future.failed(Errors.RoleChecksumNotProvided)
+    // get the items before they get removed from the DB
+    val previousTargetItems = await(targetItemRepo.findFor(repoId))
+    val saveResult = await(store(repoId, signedTargetPayload))
+
+    saveResult match {
+      case Valid((items, signedPayload)) =>
+        await(deleteOutdatedTargets(targetStore)(previousTargetItems, signedTargetPayload.signed.targets.keys))
+        items -> signedPayload
+      case Invalid(errors) =>
+        throw Errors.InvalidOfflineTargets(errors)
     }
+  }
+
+  private def deleteOutdatedTargets(targetStore: TargetStore)
+                                   (previousTargetItems: Seq[TargetItem], newFilenames: Iterable[TargetFilename]): Future[Unit] = {
+    val previousMap = previousTargetItems.map(targetItem => (targetItem.filename, targetItem)).toMap
+    val outdated = (previousMap -- newFilenames).values
+    val results = outdated.map(targetStore.delete)
+
+    Future.sequence(results)
+      .map(_ => ())
+      .recover { case ex =>
+        _log.warn("Could not delete outdated targets", ex)
+        ()
+      }
+  }
+
+  private def ensureChecksumIsValidForSave(repoId: RepoId, checksumOpt: Option[RoleChecksum]): Future[Unit] = {
+    val existingRoleF = signedRoleRepository.find[TargetsRole](repoId)
+      .map(_.some)
+      .recover {  case SignedRoleNotFound => None }
+
+    existingRoleF.zip(FastFuture.successful(checksumOpt)).flatMap {
+      case (None, _) =>
+        FastFuture.successful(())
+      case (Some(existing), Some(checksum)) if existing.checksum.hash == checksum =>
+        FastFuture.successful(())
+      case (Some(_), Some(_)) =>
+        FastFuture.failed(Errors.RoleChecksumMismatch) // TODO: Should be 412?
+      case (Some(_), None) =>
+        FastFuture.failed(Errors.RoleChecksumNotProvided)
+    }
+  }
 }

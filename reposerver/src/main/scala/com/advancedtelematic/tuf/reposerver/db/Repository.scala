@@ -16,16 +16,21 @@ import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
-import com.advancedtelematic.libtuf.data.ClientDataType.TufRole
+import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, TufRole}
 import com.advancedtelematic.libtuf_server.data.Requests.TargetComment
 import com.advancedtelematic.libtuf_server.data.TufSlickMappings._
-import com.advancedtelematic.tuf.reposerver.db.DBDataType.DbSignedRole
+import com.advancedtelematic.tuf.reposerver.db.DBDataType.{DbDelegation, DbSignedRole}
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport.MissingNamespaceException
 import com.advancedtelematic.tuf.reposerver.http.Errors
+import shapeless.ops.function.FnToProduct
+import shapeless.{Generic, HList}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
 import slick.jdbc.MySQLProfile.api._
+import slick.lifted.AbstractTable
+
+import scala.concurrent.java8.FuturesConvertersImpl.P
 
 
 trait DatabaseSupport {
@@ -276,4 +281,24 @@ protected [db] class FilenameCommentRepository()(implicit db: Database, ec: Exec
   def deleteAction(repoId: RepoId, filename: TargetFilename) =
     filenameComments.filter(_.repoId === repoId).filter(_.filename === filename)
       .delete
+}
+
+trait DelegationRepositorySupport extends DatabaseSupport {
+  lazy val delegationsRepo = new DelegationRepository()
+}
+
+protected [db] class DelegationRepository()(implicit db: Database, ec: ExecutionContext) {
+
+  def find(repoId: RepoId, roleName: DelegatedRoleName): Future[DbDelegation] = db.run {
+    Schema.delegations.filter(_.repoId === repoId).filter(_.roleName === roleName).result.failIfNotSingle(Errors.DelegationNotFound)
+  }
+
+  def persist[P <: Product, H <: HList](args: P)(implicit
+                                                 gen0: Generic.Aux[P, H],
+                                                 gen1: Generic.Aux[DbDelegation, H]): Future[DbDelegation] = db.run {
+    persistAction(gen1.from(gen0.to(args)))
+  }
+
+  protected [db] def persistAction(value: DbDelegation): DBIO[DbDelegation] =
+    (Schema.delegations += value).map(_ => value)
 }
