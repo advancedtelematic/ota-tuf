@@ -8,6 +8,7 @@ import java.time.temporal.ChronoUnit
 
 import cats.syntax.either._
 import cats.syntax.option._
+import ch.qos.logback.classic.{Level, Logger}
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, HardwareIdentifier, KeyId, KeyType, TargetFilename, TargetFormat, TargetName, TargetVersion}
@@ -50,7 +51,8 @@ case class Config(command: Command,
                   inputPath: Path = Paths.get("empty"),
                   exportPath: Path = Paths.get(""),
                   force: Boolean = false,
-                  reposerverUrl: Option[URI] = None)
+                  reposerverUrl: Option[URI] = None,
+                  verbose: Boolean = false)
 
 
 object Cli extends App with VersionInfo {
@@ -77,6 +79,10 @@ object Cli extends App with VersionInfo {
     }
     .text("required for all subcommands")
 
+    opt[Unit]("verbose").action { (_, c) =>
+      c.copy(verbose = true)
+    }
+
     version("version")
 
     cmd("init")
@@ -100,7 +106,7 @@ object Cli extends App with VersionInfo {
           .action { (tufServerType, c) =>
             c.copy(repoType = tufServerType.some)
           }
-          .text("repo type, reposerver or director")
+          .text("repo server type, 'reposerver' or 'director'")
           .optional()
       )
 
@@ -349,6 +355,10 @@ object Cli extends App with VersionInfo {
 
   parser.parse(args, default) match {
     case Some(c) =>
+      if (c.verbose) {
+        setLoggingLevel(Level.DEBUG)
+      }
+
       execute(c)
     case None =>
       sys.exit(-1)
@@ -360,11 +370,12 @@ object Cli extends App with VersionInfo {
     val repoPath = config.home.resolve(config.repoName.value)
 
     val repoType: TufServerType =
-      if (config.command == InitRepo)
+      if (config.command == InitRepo) {
         // a required param for this command
         config.repoType.get
-      else
+      } else {
         TufRepo.readConfigFile(repoPath).map(_.repoServerType).getOrElse(RepoServer)
+      }
 
     val executor = repoType match {
       case Director =>
@@ -388,4 +399,11 @@ object Cli extends App with VersionInfo {
         sys.exit(3)
     }
   }
+
+  def setLoggingLevel(level: Level): Unit = {
+    val logger: Logger = LoggerFactory.getLogger("com.advancedtelematic").asInstanceOf[Logger]
+    logger.setLevel(level)
+  }
+
+
 }
