@@ -9,7 +9,7 @@ import ClientCodecs._
 import io.circe.syntax._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 
-class TufClientCodecsSpec extends FunSuite with ScalaFutures with Matchers {
+class TufClientCodecsSpec extends LibtufSpec with ScalaFutures  {
 
   test("can decode targets.json without delegations") {
     val result = circeParser.parse(

@@ -4,31 +4,28 @@ import java.io.{StringReader, StringWriter}
 import java.security
 import java.security.interfaces.RSAPublicKey
 import java.security.spec.{PKCS8EncodedKeySpec, X509EncodedKeySpec}
-import java.security.{Signature ⇒ _, _}
+import java.security.{KeyFactory, Signature => _, _}
 
-import org.bouncycastle.jce.ECNamedCurveTable
-import org.bouncycastle.jce.spec.ECParameterSpec
-import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, EcPrime256KeyType, EcPrime256TufKey, EcPrime256TufKeyPair, EcPrime256TufPrivateKey, Ed25519KeyType, Ed25519TufKey, Ed25519TufKeyPair, Ed25519TufPrivateKey, KeyId, KeyType, RSATufKey, RSATufKeyPair, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, JsonSignedPayload, SignedPayload, TufKey, TufKeyPair, TufPrivateKey, ValidKeyId, ValidSignature}
-import org.bouncycastle.crypto.digests.SHA256Digest
-import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
-import org.bouncycastle.util.encoders.{Base64, Hex}
-import org.bouncycastle.openssl.{PEMKeyPair, PEMParser}
-import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
-import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
-import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
-import java.security.KeyFactory
-
-import cats.data.{NonEmptyList, ValidatedNel}
+import cats.data.Validated.{Invalid, Valid}
+import cats.data.ValidatedNel
 import cats.implicits._
-import io.circe.{Encoder, Json}
-import io.circe.syntax._
+import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.ECCrypto._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole}
-import cats.implicits._
+import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, EcPrime256KeyType, EcPrime256TufKey, EcPrime256TufKeyPair, EcPrime256TufPrivateKey, Ed25519KeyType, Ed25519TufKey, Ed25519TufKeyPair, Ed25519TufPrivateKey, KeyId, KeyType, RSATufKey, RSATufKeyPair, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, SignedPayload, TufKey, TufKeyPair, TufPrivateKey, ValidKeyId, ValidSignature}
+import io.circe.{Encoder, Json}
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
+import org.bouncycastle.crypto.digests.SHA256Digest
+import org.bouncycastle.jce.ECNamedCurveTable
+import org.bouncycastle.jce.spec.ECParameterSpec
+import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
+import org.bouncycastle.openssl.{PEMKeyPair, PEMParser}
+import org.bouncycastle.util.encoders.{Base64, Hex}
 
-import scala.util.control.NoStackTrace
 import scala.util.Try
+import scala.util.control.NoStackTrace
 
 trait TufCrypto[T <: KeyType] {
   def parsePublic(keyVal: String): Try[T#Pub]
@@ -179,18 +176,29 @@ object TufCrypto {
                                            signedPayload: SignedPayload[T]): ValidatedNel[String, SignedPayload[T]] = {
     val sigsByKeyId = signedPayload.signatures.map(s => s.keyid -> s).toMap
 
-    val validSignatureCount: ValidatedNel[String, List[KeyId]] =
+    // TODO:SM No tests for this method at all !??!?!
+    // TODO:SM Does not validate when we have only 1 valid pubkey but 2 valid signatures and threshold = 1
+    val validSignatures: List[ValidatedNel[String, KeyId]] =
       sigsByKeyId.par.map { case (keyId, sig) =>
         pubKeys.get(keyId)
           .toRight(s"key ${sig.keyid} required for role validation not found in authoritative role")
           .ensure(s"Invalid signature for key ${sig.keyid}") { key => signedPayload.isValidFor(key) }
           .map(_.id)
           .toValidatedNel
-      }.toList.sequence
+      }.toList
 
-    validSignatureCount.ensure(NonEmptyList.of(s"Valid signature count must be >= threshold ($threshold)")) { validSignatures =>
-      validSignatures.size >= threshold && threshold > 0
-    }.map(_ => signedPayload)
+    val validSignatureCount = validSignatures.count(_.isValid)
+
+    if(validSignatureCount >= threshold && threshold > 0) {
+      Valid(signedPayload)
+    } else {
+      validSignatures.sequence_ match {
+        case Valid(_) =>
+          Invalid(s"Valid signature count must be >= threshold ($threshold)").toValidatedNel
+        case Invalid(errors) =>
+          Invalid(errors)
+      }
+    }
   }
 }
 

@@ -10,7 +10,13 @@ import org.slf4j.LoggerFactory
 
 import scala.util.Try
 
-class CliKeyStorage(repo: Path) {
+object CliKeyStorage {
+  def forUser(path: Path): CliKeyStorage = new CliKeyStorage(path)
+
+  def forRepo(repoPath: Path): CliKeyStorage = new CliKeyStorage(repoPath.resolve("keys"))
+}
+
+class CliKeyStorage private (root: Path) {
   import com.advancedtelematic.libtuf.data.TufCodecs._
   import io.circe.jawn._
   import io.circe.syntax._
@@ -19,12 +25,10 @@ class CliKeyStorage(repo: Path) {
 
   private lazy val SECRET_KEY_PERMISSIONS = Set(OWNER_READ, OWNER_WRITE)
 
-  private val keysPath: Path = repo.resolve("keys")
-
   implicit private class KeyNamePath(v: KeyName) {
-    def publicKeyPath: Path = keysPath.resolve(v.publicKeyName)
+    def publicKeyPath: Path = root.resolve(v.publicKeyName)
 
-    def privateKeyPath: Path = keysPath.resolve(v.privateKeyName)
+    def privateKeyPath: Path = root.resolve(v.privateKeyName)
   }
 
   private def writePublic(keyName: KeyName, tufKey: TufKey): Try[Unit] = Try {
@@ -43,11 +47,11 @@ class CliKeyStorage(repo: Path) {
 
   private def ensureKeysDirCreated(): Try[Unit] = Try {
     val perms = PosixFilePermissions.asFileAttribute((SECRET_KEY_PERMISSIONS + OWNER_EXECUTE).asJava)
-    Files.createDirectories(keysPath, perms)
+    Files.createDirectories(root, perms)
 
-    val currentPerms = Files.getPosixFilePermissions(keysPath)
+    val currentPerms = Files.getPosixFilePermissions(root)
     if(currentPerms.asScala != Set(OWNER_READ, OWNER_WRITE, OWNER_EXECUTE))
-      log.warn(s"Permissions for $keysPath are too open")
+      log.warn(s"Permissions for $root are too open")
   }
 
   def writeKeys(name: KeyName, pub: TufKey, priv: TufPrivateKey): Try[Unit] = {
@@ -57,7 +61,7 @@ class CliKeyStorage(repo: Path) {
       _ <- ensureKeysDirCreated()
       _ <- writePublic(name, pub)
       _ <- writePrivate(name, priv)
-      _ = log.info(s"Saved keys to $repo/{${repo.relativize(name.privateKeyPath)}, ${repo.relativize(name.publicKeyPath)}}")
+      _ = log.info(s"Saved keys to $root/{${root.relativize(name.privateKeyPath)}, ${root.relativize(name.publicKeyPath)}}")
     } yield ()
   }
 

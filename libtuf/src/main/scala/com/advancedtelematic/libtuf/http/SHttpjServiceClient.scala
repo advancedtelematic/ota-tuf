@@ -1,6 +1,5 @@
 package com.advancedtelematic.libtuf.http
 
-import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libats.data
 import com.advancedtelematic.libats.data.{ErrorRepresentation}
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.{HttpResponse, HttpjClientError}
@@ -10,9 +9,14 @@ import scala.reflect.ClassTag
 import scala.util.{Success, Try}
 import scalaj.http.{HttpRequest, HttpResponse => ScalaJHttpResponse}
 import io.circe.syntax._
+import io.circe.{Decoder, Encoder, Json}
 import org.slf4j.LoggerFactory
+import scalaj.http.{HttpRequest, HttpResponse => ScalaJHttpResponse}
 
+import scala.concurrent.{ExecutionContext, Future}
+import scala.reflect.ClassTag
 import scala.util.control.NoStackTrace
+import scala.util.{Success, Try}
 
 object SHttpjServiceClient {
 

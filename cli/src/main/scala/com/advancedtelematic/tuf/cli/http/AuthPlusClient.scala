@@ -1,4 +1,4 @@
-package com.advancedtelematic.tuf.cli.client
+package com.advancedtelematic.tuf.cli.http
 
 import java.net.URI
 

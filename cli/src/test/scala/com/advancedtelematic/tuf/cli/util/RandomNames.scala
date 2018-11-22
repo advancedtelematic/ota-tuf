@@ -1,4 +1,4 @@
-package com.advancedtelematic.tuf.cli
+package com.advancedtelematic.tuf.cli.util
 
 import scala.util.Random
 

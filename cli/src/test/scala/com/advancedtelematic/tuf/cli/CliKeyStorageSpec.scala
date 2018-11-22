@@ -6,13 +6,14 @@ import PosixFilePermission._
 
 import com.advancedtelematic.tuf.cli.DataType.KeyName
 import com.advancedtelematic.tuf.cli.repo.CliKeyStorage
+import com.advancedtelematic.tuf.cli.util.{CliSpec, KeyTypeSpecSupport}
 
 import scala.collection.JavaConverters._
 
 class CliKeyStorageSpec extends CliSpec with KeyTypeSpecSupport  {
   val tempDir = Files.createTempDirectory("tuf-keys")
 
-  lazy val subject = new CliKeyStorage(tempDir)
+  lazy val subject = CliKeyStorage.forRepo(tempDir)
 
   keyTypeTest("generates a key ") { keyType =>
     val keyName = KeyName("test-key")

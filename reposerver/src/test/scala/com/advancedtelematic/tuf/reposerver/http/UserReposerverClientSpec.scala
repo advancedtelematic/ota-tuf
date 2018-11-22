@@ -12,9 +12,9 @@ import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util._
 import org.scalatest.time.{Seconds, Span}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.http.ReposerverHttpClient
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
-import com.advancedtelematic.libtuf.reposerver.UserTufServerClient.RoleChecksumNotValid
-import com.advancedtelematic.libtuf.reposerver.UserReposerverHttpClient
+import com.advancedtelematic.libtuf.http.TufServerHttpClient.RoleChecksumNotValid
 import org.scalatest.BeforeAndAfter
 import io.circe.syntax._
 
@@ -34,7 +34,7 @@ class UserReposerverClientSpec(keyType: KeyType) extends TufReposerverSpec
 
   val repoId = RepoId.generate()
 
-  val client = new UserReposerverHttpClient(URI.create("http://test-reposerver"), testClient, token = None)
+  val client = new ReposerverHttpClient(URI.create("http://test-reposerver"), testClient, token = None)
 
   override def beforeAll(): Unit = {
     super.beforeAll()

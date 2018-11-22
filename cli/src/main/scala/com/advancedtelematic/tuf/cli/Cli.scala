@@ -1,7 +1,7 @@
 package com.advancedtelematic.tuf.cli
 
 import java.net.URI
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import java.security.Security
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -11,20 +11,25 @@ import cats.syntax.option._
 import ch.qos.logback.classic.{Level, Logger}
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, HardwareIdentifier, KeyId, KeyType, TargetFilename, TargetFormat, TargetName, TargetVersion}
-import com.advancedtelematic.libtuf.reposerver.UserTufServerClient.RoleChecksumNotValid
-import com.advancedtelematic.libtuf.reposerver.{UserDirectorHttpClient, UserReposerverClient}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, TargetFilename, TargetFormat, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.http.TufServerHttpClient.RoleChecksumNotValid
+import com.advancedtelematic.libtuf.http.{DirectorClient, ReposerverClient}
 import com.advancedtelematic.tuf.cli.Commands._
 import com.advancedtelematic.tuf.cli.DataType._
+import com.advancedtelematic.tuf.cli.Errors.CliArgumentsException
+import com.advancedtelematic.tuf.cli.GenericOptionDefOps._
 import com.advancedtelematic.tuf.cli.TryToFuture._
-import com.advancedtelematic.tuf.cli.client.{UserDirectorHttpClient, UserReposerverHttpClient}
-import com.advancedtelematic.tuf.cli.repo.{DirectorRepo, RepoServerRepo, TufRepo}
+import com.advancedtelematic.tuf.cli.http.TufRepoCliClient
+import com.advancedtelematic.tuf.cli.http.TufRepoCliClient._
+import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, DirectorRepo, RepoServerRepo, TufRepo}
 import eu.timepit.refined.api.Refined
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.slf4j.LoggerFactory
+import scopt.{OptionDef, OptionParser}
 
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{Await, Future}
 
 case class Config(command: Command,
                   home: Path = Paths.get("tuf"),
@@ -32,7 +37,7 @@ case class Config(command: Command,
                   repoType: Option[TufServerType] = RepoServer.some,
                   repoName: RepoName = RepoName("default-repo"),
                   rootKey: KeyName = KeyName("default-key"),
-                  keyType: KeyType = Ed25519KeyType,
+                  keyType: KeyType = KeyType.default,
                   oldRootKey: KeyName = KeyName("default-key"),
                   keyNames: List[KeyName]= List.empty,
                   keyIds: List[KeyId]= List.empty,
@@ -48,12 +53,12 @@ case class Config(command: Command,
                   hardwareIds: List[HardwareIdentifier] = List.empty,
                   targetUri: Option[URI] = None,
                   keySize: Option[Int] = None,
+                  userKeysPath: Option[Path] = None,
                   inputPath: Path = Paths.get("empty"),
                   exportPath: Path = Paths.get(""),
                   force: Boolean = false,
                   reposerverUrl: Option[URI] = None,
                   verbose: Boolean = false)
-
 
 object Cli extends App with VersionInfo {
 
@@ -61,23 +66,40 @@ object Cli extends App with VersionInfo {
 
   Security.addProvider(new BouncyCastleProvider)
 
+  private lazy val log = LoggerFactory.getLogger(this.getClass)
+
   val PROGRAM_NAME = "garage-sign"
 
-  lazy private val log = LoggerFactory.getLogger(this.getClass)
+  lazy val repoNameOpt: OptionParser[Config] => OptionDef[RepoName, Config] = { parser =>
+    parser
+      .opt[RepoName]("repo").abbr("r").required()
+      .toConfigParam('repoName)
+      .text("name of the repository, this should be a directory in your tuf-home and can be initialized with the init command")
+  }
+
+  lazy val manyKeyNamesOpt: OptionParser[Config] => OptionDef[KeyName, Config] = { parser =>
+    parser
+      .opt[KeyName]("key-name").abbr("k")
+      .unbounded()
+      .required()
+      .action { (arg, config) => config.copy(keyNames = arg :: config.keyNames) }
+  }
+
+  lazy val keysPathOpt: OptionParser[Config] => OptionDef[Path, Config] = { parser =>
+    parser
+      .opt[Path]("keys-path").abbr("p")
+      .toConfigOptionParam('userKeysPath)
+      .text("Path where this executable will look for keys, by default it's the `user-keys` directory in `home-dir`")
+  }
 
   lazy val parser = new scopt.OptionParser[Config](PROGRAM_NAME) {
     head(projectName, projectVersion)
 
     help("help").text("prints this usage text")
 
-    opt[Path]("home-dir").abbr("h").action { (file, c) =>
-      c.copy(home = file)
-    }
+    version("version")
 
-    opt[RepoName]("repo").abbr("r").required().action { (name, c) =>
-      c.copy(repoName = name)
-    }
-    .text("required for all subcommands")
+    opt[Path]("home-dir").abbr("h").toConfigParam('home)
 
     opt[Unit]("verbose").action { (_, c) =>
       c.copy(verbose = true)
@@ -85,44 +107,62 @@ object Cli extends App with VersionInfo {
 
     version("version")
 
+    cmd("keys").children(
+      keysPathOpt(this),
+      cmd("gen")
+        .toCommand(GenUserKey)
+        .children(
+          manyKeyNamesOpt(this).maxOccurs(1)
+        )
+    ).text("manage keys not associated with a specific repository")
+
+    cmd("delegations").children(
+      cmd("init")
+        .toCommand(CreateDelegation)
+        .text("Output empty delegation metadata, which can be edited and signed"),
+      cmd("sign")
+        .toCommand(SignDelegation)
+        .children(
+          manyKeyNamesOpt(this),
+          opt[Path]("input")
+            .abbr("i").required()
+            .toConfigParam('inputPath)
+        )
+      //      cmd("push")
+      //        .text("push a delegation to the server") // TODO: Needs credentials.zip
+
+      //      pull ?
+    )
+
     cmd("init")
-      .action { (_, c) =>
-        c.copy(command = InitRepo)
-      }
+      .toCommand(InitRepo)
       .text("Initialize an empty repository")
       .children(
-        opt[URI]("reposerver").action { (arg, c) =>
-          c.copy(reposerverUrl = arg.some)
-        },
+        repoNameOpt(this),
+        opt[URI]("reposerver").toConfigOptionParam('reposerverUrl),
         opt[Path]("credentials")
           .abbr("c")
-          .action { (path, c) =>
-            c.copy(credentialsPath = path)
-          }
+          .toConfigParam('credentialsPath)
           .text("path to credentials file, credentials.zip")
           .required(),
         opt[TufServerType]("servertype")
           .abbr("t")
-          .action { (tufServerType, c) =>
-            c.copy(repoType = tufServerType.some)
-          }
           .text("repo server type, 'reposerver' or 'director'")
+          .toConfigOptionParam('repoType)
           .optional()
       )
 
     cmd("key").children(
       cmd("generate")
-        .action { (_, c) => c.copy(command = GenKeys) }
+        .toCommand(GenRepoKeys)
         .text("Generate a new key")
         .children(
-          opt[KeyName]("name").abbr("n").required().action { (name, c) =>
-            c.copy(rootKey = name)
-          },
+          repoNameOpt(this),
+          opt[KeyName]("name").abbr("n").required()
+            .toConfigParam('rootKey),
           opt[KeyType]("type")
             .abbr("t")
-            .action { (keyType, c) =>
-              c.copy(keyType = keyType)
-            }
+            .toConfigParam('keyType)
             .text("key type, ed25519 or rsa"),
           opt[Int]("keysize")
             .action { (keySize, c) => c.copy(keySize = keySize.some) }
@@ -130,9 +170,7 @@ object Cli extends App with VersionInfo {
     )
 
     cmd("move-offline")
-      .action { (_, c) =>
-        c.copy(command = MoveOffline)
-      }
+      .toCommand(MoveOffline)
       .text(
         """Move root keys to offline keys
           | Deletes online root keys from director or root and target keys for from repo server
@@ -140,35 +178,28 @@ object Cli extends App with VersionInfo {
           | Push the new root
         """.stripMargin)
       .children(
+        repoNameOpt(this),
         opt[KeyName]("new-root")
           .text("new root key to add to root.json, must exist")
           .required()
-          .action { (keyName, c) =>
-            c.copy(rootKey = keyName)
-          },
+          .toConfigParam('rootKey),
         opt[KeyName]("new-targets")
           .text("new targets key to add to root.json, must exist (only for repo server)")
-          .action { (keyName: KeyName, c) =>
-            c.copy(keyNames = List(keyName))
-          },
+          .action { (keyName: KeyName, c) => c.copy(keyNames = List(keyName)) },
         opt[KeyName]("old-root-alias")
-          .text(
-            "old root key alias, the old root key will be saved under this name")
+          .text("old root key alias, the old root key will be saved under this name")
           .required()
-          .action { (keyName, c) =>
-            c.copy(oldRootKey = keyName)
-          },
+          .toConfigParam('oldRootKey),
         opt[KeyId]("old-keyid")
           .text("key id to remove from root.json. This setting is optional and this app will try to use the last of the keys defined in the current root.json")
-          .action { (keyId, c) =>
-            c.copy(oldKeyId = keyId.some)
-          }
+          .toConfigOptionParam('oldKeyId)
       )
 
     cmd("root")
       .children(
+        repoNameOpt(this),
         cmd("pull")
-          .action { (_, c) => c.copy(command = PullRoot) }
+          .toCommand(PullRoot)
           .children(
             opt[Unit]("force")
               .action { (_, c) => c.copy(force = true) }
@@ -176,169 +207,130 @@ object Cli extends App with VersionInfo {
               .hidden()
           ),
         cmd("push")
-          .action { (_, c) => c.copy(command = PushRoot) },
+          .toCommand(PushRoot),
         cmd("key")
           .children(
             cmd("add")
-              .action { (_, c) => c.copy(command = AddRootKey) }
+              .toCommand(AddRootKey)
               .children(
-                opt[KeyName]("key-name")
-                  .unbounded()
-                  .required()
-                  .action { (arg, c) => c.copy(keyNames = arg :: c.keyNames) }
+                manyKeyNamesOpt(this)
               ),
             cmd("remove")
-              .action { (_, c) => c.copy(command = RemoveRootKey) }
+              .toCommand(RemoveRootKey)
               .children(
-                opt[KeyName]("key-name")
-                  .unbounded()
-                  .action { (arg, c) => c.copy(keyNames = arg :: c.keyNames) },
+                manyKeyNamesOpt(this),
                 opt[KeyId]("key-id")
                   .unbounded()
                   .action { (arg, c) => c.copy(keyIds = arg :: c.keyIds) },
               )
           ),
         cmd("sign")
-          .action { (_, c) => c.copy(command = SignRoot) }
+          .toCommand(SignRoot)
           .children(
-            opt[KeyName]("key-name")
-              .unbounded()
-              .action { (arg, c) =>
-                c.copy(keyNames = arg :: c.keyNames)
-              }
-              .required()
+            manyKeyNamesOpt(this)
           )
       )
 
     cmd("targets")
       .text("(only for repo server)")
-      .action { (_, c) =>
-        c.copy(command = InitTargets)
-      }
+      .toCommand(InitTargets)
       .children(
+        repoNameOpt(this),
         cmd("init")
-          .action { (_, c) =>
-            c.copy(command = InitTargets)
-          }
+          .toCommand(InitTargets)
           .children(
             opt[Int]("version")
-              .action((version, c) => c.copy(version = version.some))
+              .toConfigOptionParam('version)
               .required(),
             opt[Instant]("expires")
-              .action((expires, c) => c.copy(expires = expires))
+              .toConfigParam('expires)
               .required()
           ),
         cmd("delete")
-          .action { (_, c) =>
-            c.copy(command = DeleteTarget)
-          }.children(
-          opt[TargetFilename]("filename")
-            .required()
-            .action { (arg, c) =>
-              c.copy(targetFilename = arg.some)
-            }
-        ),
+          .toCommand(DeleteTarget)
+          .children(
+            opt[TargetFilename]("filename")
+              .required()
+              .toConfigOptionParam('targetFilename)
+          ),
         cmd("add")
-          .action { (_, c) =>
-            c.copy(command = AddTarget)
-          }
+          .toCommand(AddTarget)
           .children(
             opt[Int]("length")
               .required()
-              .action { (arg, c) =>
-                c.copy(length = arg)
-              }
+              .toConfigParam('length)
               .text("length in bytes"),
             opt[TargetName]("name")
               .required()
-              .action { (arg, c) =>
-                c.copy(targetName = arg.some)
-              },
+              .toConfigOptionParam('targetName),
             opt[TargetVersion]("version")
               .required()
-              .action { (arg, c) =>
-                c.copy(targetVersion = arg.some)
-              },
+              .toConfigOptionParam('targetVersion),
             opt[TargetFormat]("format")
               .optional()
               .text("target format [ostree|binary]")
-              .action { (arg, c) =>
-                c.copy(targetFormat = arg)
-              },
+              .toConfigParam('targetFormat),
             opt[Refined[String, ValidChecksum]]("sha256")
               .required()
-              .action { (arg, c) =>
-                c.copy(checksum = arg.some)
-              },
-            opt[Seq[HardwareIdentifier]]("hardwareids")
+              .toConfigOptionParam('checksum),
+            opt[List[HardwareIdentifier]]("hardwareids")
               .required()
-              .action { (arg, c) =>
-                c.copy(hardwareIds = arg.toList)
-              },
+              .toConfigParam('hardwareIds),
             opt[URI]("url")
-              .action { (arg, c) =>
-                c.copy(targetUri = arg.some)
-              }
+              .toConfigOptionParam('targetUri)
           ),
         cmd("sign")
-          .action { (_, c) =>
-            c.copy(command = SignTargets)
-          }
+          .toCommand(SignTargets)
           .children(
             opt[KeyName]("key-name")
-              .action { (arg, c) =>
-                c.copy(keyNames = List(arg))
-              }
+              .action { (arg, c) => c.copy(keyNames = List(arg)) }
               .required(),
             opt[Int]("version")
               .text("Ignore unsigned role version and use <version> instead")
-              .action { (arg, c) => c.copy(version = arg.some) }
+              .toConfigOptionParam('version)
           ),
         cmd("pull")
-          .action { (_, c) =>
-            c.copy(command = PullTargets)
-          },
+          .toCommand(PullTargets),
         cmd("push")
+          .toCommand(PushTargets)
           .text("""push latest targets.json to server This will fail with exit code 2 if the latest `pull`
-                  |was too long ago and did not pull the latest targets.json on the server.""".stripMargin)
-          .action { (_, c) =>
-            c.copy(command = PushTargets)
-          }
+                  |was too long ago and did not pull the latest targets.json on the server.""".stripMargin),
+        cmd("delegations")
+          .text("Manage a repository targets.json delegated targets")
+          .children(
+            //
+            //      cmd("add")
+            //        .text("add a new delegation to existing targets.json") // TODO: Needs to be on repo level?, needs credentials.zip
+
+            //      remove ?
+          )
       )
 
     cmd("export-credentials")
       .text("Export settings and keys to credentials.zip")
-      .action { (_, c) =>
-        c.copy(command = Export)
-      }
+      .toCommand(ExportRepository)
       .children(
-        opt[KeyName]("target-key-name")
-          .text("name of target keys (public and private) to export")
-          .required()
-          .action { (argc, c) =>
-            c.copy(keyNames = List(argc))
-          },
+        repoNameOpt(this),
+        manyKeyNamesOpt(this).text("name of target keys (public and private) to export"),
         opt[Path]("to")
           .text("name of ZIP file to export to")
           .required()
-          .action { (arg, c) =>
-            c.copy(exportPath = arg)
-          }
+          .toConfigParam('exportPath)
       )
 
     cmd("get-targets")
+      .toCommand(GetTargets)
       .text("get a repo targets, show on console")
       .hidden()
-      .action { (_, c) =>
-        c.copy(command = GetTargets)
-      }
+      .children(repoNameOpt(this))
 
     cmd("verify-root")
+      .toCommand(VerifyRoot)
       .text("verifies signatures for a signed root.json file")
       .hidden()
-      .action { (_, c) => c.copy(command = VerifyRoot) }
       .children(
-        opt[Path]('i', "in").action { (arg, c) => c.copy(inputPath = arg) }
+        repoNameOpt(this),
+        opt[Path]('i', "input").toConfigParam('inputPath)
       )
 
     checkConfig { c =>
@@ -349,6 +341,20 @@ object Cli extends App with VersionInfo {
           Right(())
       }
     }
+  }
+
+  def validateRepoTypeCliArguments(repoPath: Path, config: Config): Either[String, TufServerType] = {
+    val repoType =
+      if (config.command == InitRepo)
+      // a required param for this command
+        config.repoType.get
+      else
+        TufRepo.readConfigFile(repoPath).map(_.repoServerType).getOrElse(RepoServer)
+
+    if((repoType == RepoServer) && config.keyNames.isEmpty)
+      "Missing argument: target key name required to move repo server keyname offline".asLeft
+
+    repoType.asRight
   }
 
   val default = Config(command = Help)
@@ -364,38 +370,43 @@ object Cli extends App with VersionInfo {
       sys.exit(-1)
   }
 
-  def execute(config: Config): Unit = {
-    import ExecutionContext.Implicits.global
+  def buildCommandHandler(repoPath: Path, config: Config)(repoType: TufServerType): Config => Future[Unit] = {
+    val userKeyPath = config.userKeysPath.getOrElse(repoPath.resolve("user-keys"))
+    val userKeyStorage = CliKeyStorage.forUser(userKeyPath)
 
-    val repoPath = config.home.resolve(config.repoName.value)
-
-    val repoType: TufServerType =
-      if (config.command == InitRepo) {
-        // a required param for this command
-        config.repoType.get
-      } else {
-        TufRepo.readConfigFile(repoPath).map(_.repoServerType).getOrElse(RepoServer)
-      }
-
-    val executor = repoType match {
+    repoType match {
       case Director =>
-        val tufRepo: DirectorRepo = new DirectorRepo(config.repoName, repoPath)
-        val repoServer: Future[UserDirectorHttpClient] = UserDirectorHttpClient.forRepo(tufRepo)
-        new DirectorExecutor(config, repoServer, tufRepo)
+        val tufRepo = new DirectorRepo(config.repoName, repoPath)
+        lazy val repoServer = TufRepoCliClient.forRepo[DirectorClient](tufRepo)
+
+        CommandHandler.handle(tufRepo, userKeyStorage, repoServer)
       case RepoServer =>
-        val tufRepo: RepoServerRepo = new RepoServerRepo(config.repoName, repoPath)
-        val repoServer: Future[UserReposerverClient] = UserReposerverHttpClient.forRepo(tufRepo)
-        new ReposerverExecutor(config, repoServer, tufRepo)
+        val tufRepo = new RepoServerRepo(config.repoName, repoPath)
+        val repoServer = TufRepoCliClient.forRepo[ReposerverClient](tufRepo)
+
+        CommandHandler.handle(tufRepo, userKeyStorage, repoServer)
     }
+  }
+
+  def execute(config: Config): Unit = {
+    Files.createDirectories(config.home)
+    val repoPath = config.home.resolve(config.repoName.value)
+    val repoTypeE = validateRepoTypeCliArguments(repoPath, config)
+    val commandHandler = repoTypeE.map(buildCommandHandler(repoPath, config)).leftMap(CliArgumentsException).toTry.toFuture
 
     try
-      Await.result(executor.dispatch(config.command).recoverWith(CliHelp.explainErrorHandler), Duration.Inf)
+      Await.result(commandHandler.flatMap { handler => handler(config) } , Duration.Inf)
     catch {
+      case ex if CliHelp.explainError.isDefinedAt(ex) =>
+        CliHelp.explainError(ex)
+        sys.exit(1)
+
       case ex @ RoleChecksumNotValid =>
         log.error("Could not push targets", ex)
         sys.exit(2)
-      case ex: Throwable => // Already logged
-        log.debug(ex.getMessage)
+
+      case ex: Throwable =>
+        System.err.println("An error occurred", ex)
         sys.exit(3)
     }
   }
@@ -404,6 +415,4 @@ object Cli extends App with VersionInfo {
     val logger: Logger = LoggerFactory.getLogger("com.advancedtelematic").asInstanceOf[Logger]
     logger.setLevel(level)
   }
-
-
 }
