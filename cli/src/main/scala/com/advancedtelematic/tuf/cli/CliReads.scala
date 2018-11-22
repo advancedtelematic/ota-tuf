@@ -61,9 +61,11 @@ object CliReads {
 
   implicit val targetFormatRead: Read[TargetFormat] = Read.stringRead.map(_.toUpperCase).map(TargetFormat.withName)
 
-  implicit val repoServerTypeRead: Read[TufServerType] = Read.reads {
+  implicit val repoServerTypeRead: Read[TufServerType] = Read.stringRead.map(_.toLowerCase()).map {
     case "reposerver" => RepoServer
     case "director" => Director
     case str => throw new IllegalArgumentException(s"Invalid repo server type: $str valid: reposerver or director")
   }
+
+  implicit def seqToListRead[T : Read]: Read[List[T]] = Read.seqRead[T].map(_.toList)
 }

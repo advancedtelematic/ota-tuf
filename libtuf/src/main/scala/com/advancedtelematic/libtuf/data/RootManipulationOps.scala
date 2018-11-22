@@ -1,6 +1,8 @@
 package com.advancedtelematic.libtuf.data
 
-import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
+import java.time.{Duration, Instant, Period}
+
+import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RoleType, TufKey}
 
@@ -15,6 +17,9 @@ object RootManipulationOps {
     def withVersion(version: Int): RootRole =
       value.copy(version = version)
 
+    def addExpires(period: Period): RootRole =
+      value.copy(expires = value.expires.plus(period))
+
     def addRoleKeys(roleType: RoleType, newKeys: TufKey*): RootRole = {
       val existingIds = value.roles(roleType).keyids.toSet
       val existingKeys = value.keys.filterKeys(existingIds.contains).values.toSeq
@@ -27,15 +32,19 @@ object RootManipulationOps {
       withRoleKeys(roleType, newKeys:_*)
     }
 
-    def withRoleKeys(roleType: RoleType, keys: TufKey*): RootRole = {
-      val oldRoleKeys = value.roles(roleType)
-      val newRoles = value.roles + (roleType -> oldRoleKeys.copy(keyids = keys.map(_.id)))
+    def withRoleKeys(roleType: RoleType, threshold: Int, keys: TufKey*): RootRole = {
+      val newRoles = value.roles + (roleType -> RoleKeys(keys.map(_.id), threshold))
 
       val newKeys = newRoles.values.flatMap(_.keyids).toSet[KeyId].map { keyid =>
         value.keys.get(keyid).orElse(keys.find(_.id == keyid)).get
       }.map(k => k.id -> k).toMap
 
       value.copy(keys = newKeys, roles = newRoles)
+    }
+
+    def withRoleKeys(roleType: RoleType, keys: TufKey*): RootRole = {
+      val oldRoleKeys = value.roles(roleType)
+      withRoleKeys(roleType, oldRoleKeys.threshold, keys :_*)
     }
   }
 }

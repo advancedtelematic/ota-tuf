@@ -38,11 +38,11 @@ import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStoreEngine
 
 import scala.concurrent.Promise
 import cats.syntax.either._
+import scala.concurrent.ExecutionContext.Implicits.global
 
 class FakeKeyserverClient extends KeyserverClient {
 
   import KeyserverClient._
-  import scala.concurrent.ExecutionContext.Implicits.global
   import io.circe.syntax._
 
   private val keys = new ConcurrentHashMap[RepoId, Map[RoleType, TufKeyPair]]()

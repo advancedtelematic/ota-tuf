@@ -6,13 +6,13 @@ import java.time.Instant
 
 import io.circe.jawn._
 import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, JsonSignedPayload, KeyType, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
-import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, RepoServer, KeyName, RepoName}
-import com.advancedtelematic.tuf.cli.{CliSpec, KeyTypeSpecSupport, RandomNames}
+import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName, RepoServer}
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.tuf.cli.repo.TufRepo.{MissingCredentialsZipFile, RepoAlreadyInitialized}
+import com.advancedtelematic.tuf.cli.util.{CliSpec, KeyTypeSpecSupport, RandomNames}
 import io.circe.syntax._
 
 import scala.util.{Failure, Success, Try}

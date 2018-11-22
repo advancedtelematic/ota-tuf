@@ -1,4 +1,4 @@
-package com.advancedtelematic.libtuf.reposerver
+package com.advancedtelematic.libtuf.http
 
 import java.net.URI
 
@@ -8,9 +8,8 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TufKeyPair}
-import com.advancedtelematic.libtuf.http.SHttpjServiceClient
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpResponse
-import com.advancedtelematic.libtuf.reposerver.UserTufServerClient.{RoleChecksumNotValid, RoleNotFound, TargetsResponse}
+import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleChecksumNotValid, RoleNotFound, TargetsResponse}
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import io.circe.Decoder
@@ -20,7 +19,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.util.control.NoStackTrace
 
-object UserTufServerClient {
+object TufServerHttpClient {
   case class TargetsResponse(targets: SignedPayload[TargetsRole], checksum: Option[Refined[String, ValidChecksum]])
 
   case object RoleChecksumNotValid extends Exception("could not overwrite targets, trying to update an older version of role. Did you run `targets pull` ?") with NoStackTrace
@@ -28,7 +27,7 @@ object UserTufServerClient {
   case class RoleNotFound(msg: String) extends Exception(s"role not found: $msg") with NoStackTrace
 }
 
-trait UserTufServerClient {
+trait TufServerClient {
   def root(version: Option[Int] = None): Future[SignedPayload[RootRole]]
 
   def fetchKeyPair(keyId: KeyId): Future[TufKeyPair]
@@ -38,16 +37,16 @@ trait UserTufServerClient {
   def pushSignedRoot(signedRoot: SignedPayload[RootRole]): Future[Unit]
 }
 
-trait UserDirectorClient extends UserTufServerClient
-
-trait UserReposerverClient extends UserTufServerClient {
+trait ReposerverClient extends TufServerClient {
   def targets(): Future[TargetsResponse]
 
-  def pushTargets(targetsRole: SignedPayload[TargetsRole], previousChecksum: Option[Refined[String, ValidChecksum]]): Future[Unit]
+  def pushTargets(role: SignedPayload[TargetsRole], previousChecksum: Option[Refined[String, ValidChecksum]]): Future[Unit]
 }
 
-abstract class UserHttpClient(uri: URI, httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]])
-                             (implicit ec: ExecutionContext) extends SHttpjServiceClient(httpClient) {
+trait DirectorClient extends TufServerClient
+
+abstract class TufServerHttpClient(uri: URI, httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]])
+                                  (implicit ec: ExecutionContext) extends SHttpjServiceClient(httpClient) {
 
   protected def uriPath: String
 
@@ -69,12 +68,16 @@ abstract class UserHttpClient(uri: URI, httpClient: HttpRequest => Future[scalaj
     val req = Http(apiUri("root")).method("POST")
     execJsonHttp[Unit, SignedPayload[RootRole]](req, signedRoot)()
   }
+
+  def fetchKeyPair(keyId: KeyId): Future[TufKeyPair]
+
+  def deleteKey(keyId: KeyId): Future[Unit]
 }
 
-class UserReposerverHttpClient(uri: URI,
-                               httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]],
-                               token: Option[String])(implicit ec: ExecutionContext)
-  extends UserHttpClient(uri, httpClient) with UserReposerverClient {
+class ReposerverHttpClient(uri: URI,
+                           httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]],
+                           token: Option[String])(implicit ec: ExecutionContext)
+  extends TufServerHttpClient(uri, httpClient) with ReposerverClient {
 
   override protected def execHttp[T : ClassTag : Decoder](request: HttpRequest)(errorHandler: PartialFunction[(Int, ErrorRepresentation), Future[T]]) =
     token match {
@@ -118,9 +121,9 @@ class UserReposerverHttpClient(uri: URI,
   }
 }
 
-class UserDirectorHttpClient(uri: URI, httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]],
-                             token: Option[String])(implicit ec: ExecutionContext)
-  extends UserHttpClient(uri, httpClient) with UserDirectorClient {
+class DirectorHttpClient(uri: URI, httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]],
+                         token: Option[String])(implicit ec: ExecutionContext)
+  extends TufServerHttpClient(uri, httpClient) with DirectorClient {
 
   // assumes talking to the Director through the API gateway
   protected def uriPath: String = "/api/v1/director/admin/repo/"

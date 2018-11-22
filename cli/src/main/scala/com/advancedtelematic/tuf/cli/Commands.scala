@@ -3,7 +3,7 @@ package com.advancedtelematic.tuf.cli
 object Commands {
   sealed trait Command
   case object Help extends Command
-  case object GenKeys extends Command
+  case object GenRepoKeys extends Command
   case object InitRepo extends Command
   case object MoveOffline extends Command
   case object GetTargets extends Command
@@ -18,6 +18,9 @@ object Commands {
   case object PushRoot extends Command
   case object AddRootKey extends Command
   case object RemoveRootKey extends Command
-  case object Export extends Command
+  case object ExportRepository extends Command
   case object VerifyRoot extends Command
+  case object CreateDelegation extends Command
+  case object SignDelegation extends Command
+  case object GenUserKey extends Command
 }

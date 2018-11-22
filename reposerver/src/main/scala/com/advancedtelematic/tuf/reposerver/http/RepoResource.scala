@@ -213,7 +213,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
         findRole(repoId, roleType)
       } ~
       path("delegations" / DelegatedRoleUriPath) { delegatedRoleName =>
-        (put & entity(as[SignedPayload[TargetsRole]])) { payload =>
+        (put & entity(as[SignedPayload[TargetsRole]])) { payload => // TODO:SM Allow overwrite? (check version bump? allow version fetching?)
           complete(delegations.create(repoId, delegatedRoleName, payload).map(_ => StatusCodes.NoContent))
         } ~
         get {
