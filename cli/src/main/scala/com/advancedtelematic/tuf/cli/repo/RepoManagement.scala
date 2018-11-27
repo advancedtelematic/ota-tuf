@@ -173,7 +173,7 @@ protected object ZipRepoInitialization {
     def readRepoUri(src: ZipFile): Try[URI] = {
       val filename = repoServerType match {
         case RepoServer => "tufrepo.url"
-        case Director => "director.url"
+        case Director => "api-gateway.url"
       }
 
       for {
@@ -203,8 +203,8 @@ protected object ZipRepoInitialization {
       src ← Try(new ZipFile(initFilePath.toFile))
       treehubConfig <- readTreehubConfig(src)
       auth <- parseAuth(treehubConfig)
-      reposerver <- if(repoUri.isDefined) Success(repoUri.get) else readRepoUri(src)
-      _ <- TufRepo.writeConfigFiles(repoPath, reposerver, treehubConfig, auth, repoServerType)
+      serverUri <- if(repoUri.isDefined) Success(repoUri.get) else readRepoUri(src)
+      _ <- TufRepo.writeConfigFiles(repoPath, serverUri, treehubConfig, auth, repoServerType)
       _ <- writeRoot(src).recover { case ex =>
         _log.warn(s"Could not read/write root.json from credentials zip file: ${ex.getMessage}. Continuing.")
       }

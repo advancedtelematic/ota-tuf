@@ -5,12 +5,15 @@ import java.net.URI
 import com.advancedtelematic.libtuf.reposerver.{UserDirectorHttpClient => UserDirectorHttpClientClass, UserReposerverHttpClient => UserReposerverHttpClientClass}
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.tuf.cli.repo.TufRepo
+import org.slf4j.LoggerFactory
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
 trait UserHttpClient {
   type UserHttpClientType
+
+  lazy private val log = LoggerFactory.getLogger(this.getClass)
 
   def apply(reposerverUri: URI, token: Option[String])(implicit ec: ExecutionContext): UserHttpClientType
 
@@ -19,6 +22,7 @@ trait UserHttpClient {
       case Success(Some(ac)) =>
         for {
           token <- AuthPlusClient.tokenFor(ac)
+          _ = log.debug(s"client token: ${token.value}")
           repoUri <- repo.repoServerUri.toFuture
         } yield apply(repoUri, Option(token.value))
       case Success(None) =>

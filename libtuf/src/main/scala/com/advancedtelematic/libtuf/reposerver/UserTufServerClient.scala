@@ -122,7 +122,8 @@ class UserDirectorHttpClient(uri: URI, httpClient: HttpRequest => Future[scalaj.
                              token: Option[String])(implicit ec: ExecutionContext)
   extends UserHttpClient(uri, httpClient) with UserDirectorClient {
 
-  protected def uriPath: String = "/api/v1/admin/repo/"
+  // assumes talking to the Director through the API gateway
+  protected def uriPath: String = "/api/v1/director/admin/repo/"
 
   override protected def execHttp[T : ClassTag : Decoder](request: HttpRequest)(errorHandler: PartialFunction[(Int, ErrorRepresentation), Future[T]]) = {
     token match {
