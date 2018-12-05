@@ -6,17 +6,15 @@ import java.nio.file.{Files, Path}
 import java.util.zip.{ZipEntry, ZipFile, ZipOutputStream}
 
 import cats.implicits._
-import com.advancedtelematic.libtuf.data.ClientDataType.TufRoleOps
-import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole, TufRoleOps}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, SignedPayload, TufKey, TufPrivateKey}
-import com.advancedtelematic.tuf.cli.DataType._
-import com.advancedtelematic.tuf.cli.repo.TufRepo.{MissingCredentialsZipFile, RepoAlreadyInitialized, TreehubConfigError}
-import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.{SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.CliCodecs._
 import com.advancedtelematic.tuf.cli.CliUtil
+import com.advancedtelematic.tuf.cli.DataType._
+import com.advancedtelematic.tuf.cli.repo.TufRepo.{MissingCredentialsZipFile, RepoAlreadyInitialized, TreehubConfigError}
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder}
 import org.slf4j.LoggerFactory
@@ -31,10 +29,10 @@ object RepoManagement {
 
   private lazy val _log = LoggerFactory.getLogger(this.getClass)
 
-  def initialize(repoServerType: TufServerType, repoName: RepoName, repoPath: Path, initFilePath: Path, repoUri: Option[URI] = None)
+  def initialize(repoServerType: TufServerType, repoPath: Path, initFilePath: Path, repoUri: Option[URI] = None)
                 (implicit ec: ExecutionContext): Try[TufRepo[_]] =
     ensureRepoNotExists(repoPath).flatMap { _ =>
-      ZipRepoInitialization.init(repoServerType, repoName, repoPath, zipTargetKeyName, initFilePath, repoUri)
+      ZipRepoInitialization.init(repoServerType, repoPath, zipTargetKeyName, initFilePath, repoUri)
     }
 
   private def ensureRepoNotExists(repoPath: Path): Try[Unit] = {
@@ -151,10 +149,10 @@ protected object ZipRepoInitialization {
 
   private lazy val _log = LoggerFactory.getLogger(this.getClass)
 
-  def init(repoServerType: TufServerType, repoName: RepoName, repoPath: Path, zipTargetKeyName: KeyName, initFilePath: Path,
+  def init(repoServerType: TufServerType, repoPath: Path, zipTargetKeyName: KeyName, initFilePath: Path,
            repoUri: Option[URI])
           (implicit ec: ExecutionContext): Try[TufRepo[_]] = {
-    val tufRepo = TufRepo(repoServerType, repoName, repoPath)
+    val tufRepo = TufRepo(repoServerType, repoPath)
 
     tufRepo.initRepoDirs().get
 

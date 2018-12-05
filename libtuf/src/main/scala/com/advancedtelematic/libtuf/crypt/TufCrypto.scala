@@ -176,8 +176,6 @@ object TufCrypto {
                                            signedPayload: SignedPayload[T]): ValidatedNel[String, SignedPayload[T]] = {
     val sigsByKeyId = signedPayload.signatures.map(s => s.keyid -> s).toMap
 
-    // TODO:SM No tests for this method at all !??!?!
-    // TODO:SM Does not validate when we have only 1 valid pubkey but 2 valid signatures and threshold = 1
     val validSignatures: List[ValidatedNel[String, KeyId]] =
       sigsByKeyId.par.map { case (keyId, sig) =>
         pubKeys.get(keyId)

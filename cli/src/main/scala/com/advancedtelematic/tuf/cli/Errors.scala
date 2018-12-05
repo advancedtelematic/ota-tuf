@@ -6,5 +6,6 @@ import scala.util.control.NoStackTrace
 
 object Errors {
   case class CliArgumentsException(msg: String) extends Exception(msg) with NoStackTrace
+  case class CliArgumentMissing(msg: String) extends Exception(msg)
   case class CommandNotSupportedByRepositoryType(repoType: TufServerType, msg: String) extends Exception(msg) with NoStackTrace
 }

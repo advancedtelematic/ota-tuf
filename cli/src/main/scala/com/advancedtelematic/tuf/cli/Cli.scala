@@ -6,19 +6,22 @@ import java.security.Security
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+import cats.Eval
 import cats.syntax.either._
 import cats.syntax.option._
 import ch.qos.logback.classic.{Level, Logger}
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
+import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
+import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedPathPattern, DelegatedRoleName, ValidDelegatedRoleName}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, TargetFilename, TargetFormat, TargetName, TargetVersion}
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.RoleChecksumNotValid
 import com.advancedtelematic.libtuf.http.{DirectorClient, ReposerverClient}
+import com.advancedtelematic.tuf.cli.CliConfigOptionOps._
 import com.advancedtelematic.tuf.cli.Commands._
 import com.advancedtelematic.tuf.cli.DataType._
 import com.advancedtelematic.tuf.cli.Errors.CliArgumentsException
 import com.advancedtelematic.tuf.cli.GenericOptionDefOps._
-import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.tuf.cli.http.TufRepoCliClient
 import com.advancedtelematic.tuf.cli.http.TufRepoCliClient._
 import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, DirectorRepo, RepoServerRepo, TufRepo}
@@ -35,7 +38,8 @@ case class Config(command: Command,
                   home: Path = Paths.get("tuf"),
                   credentialsPath: Path = Paths.get("credentials.zip"),
                   repoType: Option[TufServerType] = RepoServer.some,
-                  repoName: RepoName = RepoName("default-repo"),
+                  repoName: Option[RepoName] = None,
+                  delegationName: DelegatedRoleName = "<empty>".refineTry[ValidDelegatedRoleName].get,
                   rootKey: KeyName = KeyName("default-key"),
                   keyType: KeyType = KeyType.default,
                   oldRootKey: KeyName = KeyName("default-key"),
@@ -54,8 +58,10 @@ case class Config(command: Command,
                   targetUri: Option[URI] = None,
                   keySize: Option[Int] = None,
                   userKeysPath: Option[Path] = None,
-                  inputPath: Path = Paths.get("empty"),
-                  exportPath: Path = Paths.get(""),
+                  inputPath: Option[Path] = None,
+                  outputPath: Option[Path] = None,
+                  delegatedPaths: List[DelegatedPathPattern] = List.empty,
+                  keyPaths: List[Path] = List.empty,
                   force: Boolean = false,
                   reposerverUrl: Option[URI] = None,
                   verbose: Boolean = false)
@@ -73,7 +79,7 @@ object Cli extends App with VersionInfo {
   lazy val repoNameOpt: OptionParser[Config] => OptionDef[RepoName, Config] = { parser =>
     parser
       .opt[RepoName]("repo").abbr("r").required()
-      .toConfigParam('repoName)
+      .action( (arg, c) => c.copy(repoName = arg.some))
       .text("name of the repository, this should be a directory in your tuf-home and can be initialized with the init command")
   }
 
@@ -126,12 +132,22 @@ object Cli extends App with VersionInfo {
           manyKeyNamesOpt(this),
           opt[Path]("input")
             .abbr("i").required()
-            .toConfigParam('inputPath)
-        )
-      //      cmd("push")
-      //        .text("push a delegation to the server") // TODO: Needs credentials.zip
-
-      //      pull ?
+            .toConfigOptionParam('inputPath)
+        ),
+      cmd("push")
+        .toCommand(PushDelegation)
+        .children(
+          repoNameOpt(this),
+          opt[DelegatedRoleName]("name").abbr("n").required().toConfigParam('delegationName),
+          opt[Path]("input").abbr("i").required().toConfigOptionParam('inputPath)
+        ).text("push a delegation to the server. Requires an initialized tuf repo"),
+      cmd("pull")
+        .toCommand(PullDelegation)
+        .children(
+          repoNameOpt(this),
+          opt[DelegatedRoleName]("name").abbr("n").required().toConfigParam('delegationName),
+          opt[Path]("output").abbr("o").toConfigOptionParam('outputPath)
+        ).text("pull a delegation from the server. Requires an initialized tuf repo")
     )
 
     cmd("init")
@@ -165,7 +181,7 @@ object Cli extends App with VersionInfo {
             .toConfigParam('keyType)
             .text("key type, ed25519 or rsa"),
           opt[Int]("keysize")
-            .action { (keySize, c) => c.copy(keySize = keySize.some) }
+            .toConfigOptionParam('keySize)
         )
     )
 
@@ -298,11 +314,18 @@ object Cli extends App with VersionInfo {
         cmd("delegations")
           .text("Manage a repository targets.json delegated targets")
           .children(
-            //
-            //      cmd("add")
-            //        .text("add a new delegation to existing targets.json") // TODO: Needs to be on repo level?, needs credentials.zip
-
-            //      remove ?
+            cmd("add")
+              .toCommand(AddTargetDelegation)
+              .text("add a new delegation to existing targets.json")
+              .children(
+                opt[DelegatedRoleName]("name").abbr("n").required()
+                    .toConfigParam('delegationName),
+                opt[DelegatedPathPattern]("prefix").abbr("p").unbounded().minOccurs(1)
+                  .action { (arg, c) => c.copy(delegatedPaths = arg :: c.delegatedPaths) },
+                opt[Path]("key").abbr("k").unbounded().minOccurs(1)
+                  .text("Path to a public key to add as delegation key")
+                  .action { (arg, c) => c.copy(keyPaths = arg :: c.keyPaths) }
+              )
           )
       )
 
@@ -312,10 +335,9 @@ object Cli extends App with VersionInfo {
       .children(
         repoNameOpt(this),
         manyKeyNamesOpt(this).text("name of target keys (public and private) to export"),
-        opt[Path]("to")
-          .text("name of ZIP file to export to")
-          .required()
-          .toConfigParam('exportPath)
+        opt[Path]("output")
+          .abbr("o")
+          .required().toConfigOptionParam('outputPath)
       )
 
     cmd("get-targets")
@@ -330,7 +352,7 @@ object Cli extends App with VersionInfo {
       .hidden()
       .children(
         repoNameOpt(this),
-        opt[Path]('i', "input").toConfigParam('inputPath)
+        opt[Path]('i', "input").toConfigOptionParam('inputPath)
       )
 
     checkConfig { c =>
@@ -343,18 +365,19 @@ object Cli extends App with VersionInfo {
     }
   }
 
-  def validateRepoTypeCliArguments(repoPath: Path, config: Config): Either[String, TufServerType] = {
+  def validateRepoTypeCliArguments(repoPath: Eval[Path], config: Config): Either[String, TufServerType] = {
     val repoType =
       if (config.command == InitRepo)
-      // a required param for this command
-        config.repoType.get
+        config.repoType.valueOrConfigError
       else
-        TufRepo.readConfigFile(repoPath).map(_.repoServerType).getOrElse(RepoServer)
+        TufRepo.readConfigFile(repoPath.value).map(_.repoServerType).getOrElse(RepoServer)
 
-    if((repoType == RepoServer) && config.keyNames.isEmpty)
-      "Missing argument: target key name required to move repo server keyname offline".asLeft
-
-    repoType.asRight
+    repoType match {
+      case RepoServer if (config.command == MoveOffline) && config.keyNames.isEmpty =>
+        "Missing argument: target key name required to move repo server offline".asLeft
+      case r =>
+        r.asRight
+    }
   }
 
   val default = Config(command = Help)
@@ -370,32 +393,37 @@ object Cli extends App with VersionInfo {
       sys.exit(-1)
   }
 
-  def buildCommandHandler(repoPath: Path, config: Config)(repoType: TufServerType): Config => Future[Unit] = {
-    val userKeyPath = config.userKeysPath.getOrElse(repoPath.resolve("user-keys"))
+  def buildCommandHandler(config: Config): Eval[Future[Unit]] = {
+    val repoPath = Eval.later(config.home.resolve(config.repoName.valueOrConfigError.value))
+    val userKeyPath = config.userKeysPath.getOrElse(config.home.resolve("user-keys"))
     val userKeyStorage = CliKeyStorage.forUser(userKeyPath)
 
-    repoType match {
-      case Director =>
-        val tufRepo = new DirectorRepo(config.repoName, repoPath)
+    validateRepoTypeCliArguments(repoPath, config) match {
+      case Right(Director) => Eval.later {
+        lazy val tufRepo = new DirectorRepo(repoPath.value)
         lazy val repoServer = TufRepoCliClient.forRepo[DirectorClient](tufRepo)
+        lazy val delegationsServer = Future.failed(CliArgumentsException(s"$repoPath is a Director repository and does not support delegations"))
 
-        CommandHandler.handle(tufRepo, userKeyStorage, repoServer)
-      case RepoServer =>
-        val tufRepo = new RepoServerRepo(config.repoName, repoPath)
-        val repoServer = TufRepoCliClient.forRepo[ReposerverClient](tufRepo)
+        CommandHandler.handle(tufRepo, repoServer, delegationsServer, userKeyStorage, config)
+      }
+      case Right(RepoServer) => Eval.later {
+        lazy val tufRepo = new RepoServerRepo(repoPath.value)
+        lazy val repoServer = TufRepoCliClient.forRepo[ReposerverClient](tufRepo)
 
-        CommandHandler.handle(tufRepo, userKeyStorage, repoServer)
+        CommandHandler.handle(tufRepo, repoServer, repoServer, userKeyStorage, config)
+      }
+
+      case Left(err) => Eval.now {
+        Future.failed(CliArgumentsException(err))
+      }
     }
   }
 
   def execute(config: Config): Unit = {
     Files.createDirectories(config.home)
-    val repoPath = config.home.resolve(config.repoName.value)
-    val repoTypeE = validateRepoTypeCliArguments(repoPath, config)
-    val commandHandler = repoTypeE.map(buildCommandHandler(repoPath, config)).leftMap(CliArgumentsException).toTry.toFuture
 
     try
-      Await.result(commandHandler.flatMap { handler => handler(config) } , Duration.Inf)
+      Await.result(buildCommandHandler(config).value, Duration.Inf)
     catch {
       case ex if CliHelp.explainError.isDefinedAt(ex) =>
         CliHelp.explainError(ex)
@@ -406,7 +434,7 @@ object Cli extends App with VersionInfo {
         sys.exit(2)
 
       case ex: Throwable =>
-        System.err.println("An error occurred", ex)
+        log.error("An error occurred", ex)
         sys.exit(3)
     }
   }

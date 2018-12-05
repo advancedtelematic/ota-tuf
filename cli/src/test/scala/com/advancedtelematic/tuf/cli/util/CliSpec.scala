@@ -9,7 +9,7 @@ import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole, TargetsRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, RoleKeys, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyId, KeyType, RoleType, RsaKeyType, SignedPayload, TufKeyPair}
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleNotFound, TargetsResponse}
 import com.advancedtelematic.libtuf.http._
@@ -21,6 +21,7 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{FunSuite, Matchers}
 import com.advancedtelematic.tuf.cli.TryToFuture._
+import com.advancedtelematic.tuf.cli.repo.TufRepo
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
@@ -51,6 +52,8 @@ trait FakeTufServerClient extends TufServerClient {
   protected var targetsPubKey = targetsPair.pubkey
 
   protected val rootRoles = new ConcurrentHashMap[Int, SignedPayload[RootRole]]()
+
+  protected val pushedDelegations = new ConcurrentHashMap[DelegatedRoleName, SignedPayload[TargetsRole]]()
 
   override def fetchKeyPair(keyId: KeyId): Future[TufKeyPair] = {
     Future.successful(pairs.filter(_.pubkey.id == keyId).head)
@@ -105,6 +108,8 @@ trait FakeTufServerClient extends TufServerClient {
   def setRoot(signedPayload: SignedPayload[RootRole]): Unit = {
     rootRoles.put(signedPayload.signed.version, signedPayload)
   }
+
+  def delegations(): List[(DelegatedRoleName, SignedPayload[TargetsRole])] = pushedDelegations.asScala.toList
 }
 
 object FakeReposerverTufServerClient {
@@ -132,4 +137,12 @@ class FakeReposerverTufServerClient(val keyType: KeyType) extends ReposerverClie
       } else
         Failure(new RuntimeException("[test] invalid signatures for targets role"))
     }.toFuture
+
+  override def pushDelegation(name: DelegatedRoleName, delegation: SignedPayload[TargetsRole]): Future[Unit] = Future.successful {
+    this.pushedDelegations.put(name, delegation)
+  }
+
+  override def pullDelegation(name: DelegatedRoleName): Future[SignedPayload[TargetsRole]] = Future.successful {
+    Option(pushedDelegations.get(name)).getOrElse(throw new IllegalArgumentException("[test] delegation not found"))
+  }
 }

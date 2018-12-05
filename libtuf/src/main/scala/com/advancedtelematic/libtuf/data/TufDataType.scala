@@ -120,6 +120,7 @@ object TufDataType {
   case class JsonSignedPayload(signatures: Seq[ClientSignature], signed: Json)
 
   object KeyType {
+    // TODO:SM Use in other places
     val default = RsaKeyType
   }
 

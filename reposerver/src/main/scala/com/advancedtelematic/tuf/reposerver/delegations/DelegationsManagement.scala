@@ -33,7 +33,7 @@ class DelegationsManagement()(implicit val db: Database, val ec: ExecutionContex
     targetsRole.delegations.flatMap(_.roles.find(_.name == delegatedRoleName)).getOrElse(throw Errors.DelegationNotDefined)
   }
 
-  // TODO Does not allow multi level delegation
+  // TODO:SM Does not allow multi level delegation
   private def validateDelegationMetadataSignatures(targetsRole: TargetsRole,
                                                    delegation: Delegation,
                                                    delegationMetadata: SignedPayload[TargetsRole]): ValidatedNel[String, SignedPayload[TargetsRole]] = {

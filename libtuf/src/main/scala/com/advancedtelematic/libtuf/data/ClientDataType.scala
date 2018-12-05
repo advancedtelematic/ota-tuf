@@ -125,7 +125,7 @@ object ClientDataType {
 
   case class Delegation(name: DelegatedRoleName, keyids: List[KeyId], paths: List[DelegatedPathPattern],
                         threshold: Int = 1,
-                        terminating: Boolean = false)
+                        terminating: Boolean = true)
 
   case class Delegations(keys: Map[KeyId, TufKey], roles: List[Delegation])
 

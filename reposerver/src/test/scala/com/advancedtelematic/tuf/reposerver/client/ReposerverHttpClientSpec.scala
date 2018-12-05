@@ -2,19 +2,18 @@ package com.advancedtelematic.tuf.reposerver.client
 
 import java.nio.file.Files
 
-import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import akka.http.scaladsl.model.Uri
 import akka.stream.scaladsl.{FileIO, Sink}
 import akka.util.ByteString
 import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetName, TargetVersion, ValidTargetFilename}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.BINARY
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetName, TargetVersion, ValidTargetFilename}
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
-import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient
-import com.advancedtelematic.libtuf_server.reposerver.ReposerverHttpClient
-import com.advancedtelematic.tuf.reposerver.util._
+import com.advancedtelematic.libtuf_server.reposerver.{ReposerverClient, ReposerverHttpClient}
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps.genNs
+import com.advancedtelematic.tuf.reposerver.util._
 import org.scalatest.concurrent.{Eventually, PatienceConfiguration}
 import org.scalatest.time.{Seconds, Span}
 
