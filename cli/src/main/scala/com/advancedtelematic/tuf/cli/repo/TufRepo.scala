@@ -2,56 +2,54 @@ package com.advancedtelematic.tuf.cli.repo
 
 import java.io._
 import java.net.URI
+import java.nio.file.attribute.PosixFilePermission._
 import java.nio.file.attribute.PosixFilePermissions
 import java.nio.file.{Files, Path}
 import java.time.{Instant, Period}
 
+import cats.data.NonEmptyList
 import cats.data.Validated.{Invalid, Valid}
-import com.advancedtelematic.libtuf.data.RootManipulationOps._
+import cats.implicits._
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
+import com.advancedtelematic.libtuf.crypt.CanonicalJson._
+import com.advancedtelematic.libtuf.crypt.KeyListToKeyMapOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, MetaPath, RoleKeys, RootRole, TargetCustom, TargetsRole, TufRole, TufRoleOps}
+import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, DelegatedPathPattern, DelegatedRoleName, Delegations, MetaPath, RootRole, TargetCustom, TargetsRole, TufRole, TufRoleOps}
+import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetFilename, TargetName, TargetVersion, TufKeyPair, TufPrivateKey, ValidTargetFilename}
-import com.advancedtelematic.tuf.cli.DataType._
-import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoConfig, RepoName}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetFilename, TargetName, TargetVersion, TufKey, TufKeyPair, TufPrivateKey, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.{ClientDataType, RootRoleValidation}
+import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleNotFound, TargetsResponse}
+import com.advancedtelematic.libtuf.http._
+import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoConfig, _}
+import com.advancedtelematic.tuf.cli.Errors.CommandNotSupportedByRepositoryType
+import com.advancedtelematic.tuf.cli.TryToFuture._
+import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
 import com.advancedtelematic.tuf.cli.{CliCodecs, CliUtil}
-import eu.timepit.refined.api.{Failed, Refined}
+import eu.timepit.refined.api.Refined
 import eu.timepit.refined.refineV
 import io.circe.jawn.parseFile
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder}
 import org.slf4j.LoggerFactory
-import com.advancedtelematic.tuf.cli.TryToFuture._
-import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
-import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleNotFound, TargetsResponse}
-import java.nio.file.attribute.PosixFilePermission._
-
-import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.crypt.CanonicalJson._
-import cats.data.NonEmptyList
-import com.advancedtelematic.libtuf.data.RootRoleValidation
+import shapeless.{:: => _, Path => _}
 
 import scala.async.Async._
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
 import scala.util.{Failure, Success, Try}
-import shapeless.{:: => _, Path => _, _}
-import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
-import cats.implicits._
-import com.advancedtelematic.libtuf.http._
-import com.advancedtelematic.tuf.cli.Errors.CommandNotSupportedByRepositoryType
 
 object TufRepo {
   import CliCodecs._
 
-  def apply(repoServerType: TufServerType, name: RepoName, repoPath: Path)(implicit ec: ExecutionContext) =
+  def apply(repoServerType: TufServerType, repoPath: Path)(implicit ec: ExecutionContext) =
     repoServerType match {
-      case RepoServer => new RepoServerRepo(name, repoPath)
-      case Director => new DirectorRepo(name, repoPath)
+      case RepoServer => new RepoServerRepo(repoPath)
+      case Director => new DirectorRepo(repoPath)
     }
 
   case object RoleChecksumNotFound extends Exception(
@@ -70,7 +68,7 @@ object TufRepo {
 
   case class RootPullError(errors: NonEmptyList[String]) extends Exception("Could not validate a valid root.json chain:\n" + errors.toList.mkString("\n")) with NoStackTrace
 
-  protected [cli] def readConfigFile(repoPath: Path): Try[RepoConfig] =
+  protected [cli] def readConfigFile(repoPath: => Path): Try[RepoConfig] =
     Try { new FileInputStream(repoPath.resolve("config.json").toFile) }
       .flatMap { is => CliUtil.readJsonFrom[RepoConfig](is) }
 
@@ -82,7 +80,7 @@ object TufRepo {
   }
 }
 
-abstract class TufRepo[S <: TufServerClient](val name: RepoName, val repoPath: Path)(implicit ec: ExecutionContext) {
+abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: ExecutionContext) {
   import TufRepo._
 
   protected[repo] lazy val keyStorage = CliKeyStorage.forRepo(repoPath)
@@ -302,6 +300,9 @@ abstract class TufRepo[S <: TufServerClient](val name: RepoName, val repoPath: P
   def addTarget(name: TargetName, version: TargetVersion, length: Int, checksum: Refined[String, ValidChecksum],
                 hardwareIds: List[HardwareIdentifier], url: Option[URI], format: TargetFormat): Try[Path]
 
+  def addTargetDelegation(name: DelegatedRoleName, key: List[TufKey],
+                          delegatedPaths: List[DelegatedPathPattern], threshold: Int): Try[Path]
+
   def signTargets(targetsKeys: Seq[KeyName], version: Option[Int] = None): Try[Path]
 
   def pullVerifyTargets(reposerverClient: S, rootRole: RootRole): Future[SignedPayload[TargetsRole]]
@@ -311,7 +312,7 @@ abstract class TufRepo[S <: TufServerClient](val name: RepoName, val repoPath: P
   def pushTargets(reposerverClient: S): Future[SignedPayload[TargetsRole]]
 }
 
-class RepoServerRepo(name: RepoName, repoPath: Path)(implicit ec: ExecutionContext) extends TufRepo[ReposerverClient](name, repoPath) {
+class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRepo[ReposerverClient](repoPath) {
 
   def initTargets(version: Int, expires: Instant): Try[Path] = {
     val emptyTargets = TargetsRole(expires, Map.empty, version)
@@ -413,9 +414,29 @@ class RepoServerRepo(name: RepoName, repoPath: Path)(implicit ec: ExecutionConte
 
   override def pullTargets(reposerverClient: ReposerverClient): Future[SignedPayload[TargetsRole]] =
     reposerverClient.targets().map(_.targets)
+
+  override def addTargetDelegation(name: DelegatedRoleName,
+                                   keys: List[TufKey],
+                                   delegatedPaths: List[DelegatedPathPattern], threshold: Int): Try[Path] = {
+    readUnsignedRole[TargetsRole].flatMap { targets =>
+      val existingDelegations = targets.delegations.getOrElse(Delegations(Map.empty, List.empty))
+      val keyMap = keys.toKeyMap
+      val newDelegation = ClientDataType.Delegation(name, keyMap.keys.toList, delegatedPaths)
+
+      val newDelegations = existingDelegations.copy(
+        keys = existingDelegations.keys ++ keyMap,
+        roles = newDelegation :: existingDelegations.roles.filter(_.name != name)
+      )
+
+      val newTargets = targets.copy(delegations = newDelegations.some)
+
+      writeUnsignedRole(newTargets)
+    }
+
+  }
 }
 
-class DirectorRepo(name: RepoName, repoPath: Path)(implicit ec: ExecutionContext) extends TufRepo[DirectorClient](name, repoPath) {
+class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRepo[DirectorClient](repoPath) {
 
   def ensureTargetsOnline(repoClient: TufServerClient, rootRole: RootRole): Future[Unit] = {
     val targetRoleKeys = rootRole.roles(RoleType.TARGETS)
@@ -471,4 +492,7 @@ class DirectorRepo(name: RepoName, repoPath: Path)(implicit ec: ExecutionContext
 
   override def pullTargets(client: DirectorClient): Future[SignedPayload[TargetsRole]] =
     Future.failed(CommandNotSupportedByRepositoryType(Director, "pullTargets"))
+
+  override def addTargetDelegation(name: DelegatedRoleName, key: List[TufKey], delegatedPaths: List[DelegatedPathPattern], threshold: Int): Try[Path] =
+    Failure(CommandNotSupportedByRepositoryType(Director, "addTargetDelegation"))
 }

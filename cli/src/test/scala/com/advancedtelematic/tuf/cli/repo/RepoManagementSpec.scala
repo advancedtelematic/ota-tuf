@@ -27,44 +27,42 @@ class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
 
   val fakeRepoUri = Some(new URI("https://test-reposerver"))
 
-  def randomName = RepoName(RandomNames() + "-repo")
-
   def randomRepoPath = Files.createTempDirectory("tuf-repo").resolve("repo")
 
   test("credentials.zip without tufrepo.url throws proper error") {
-    val repoT = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, credentialsZipNoTufRepoEd25519)
+    val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipNoTufRepoEd25519)
     repoT.failed.get shouldBe MissingCredentialsZipFile("tufrepo.url")
   }
 
   test("throws error for already initialized repos") {
     val path = randomRepoPath
 
-    val repoT = RepoManagement.initialize(RepoServer, randomName, path, credentialsZipEd25519)
+    val repoT = RepoManagement.initialize(RepoServer, path, credentialsZipEd25519)
     repoT shouldBe a[Success[_]]
 
-    val repoF = RepoManagement.initialize(RepoServer, randomName, path, credentialsZipEd25519)
+    val repoF = RepoManagement.initialize(RepoServer, path, credentialsZipEd25519)
     repoF shouldBe Failure(RepoAlreadyInitialized(path))
   }
 
   test("can initialize repo from ZIP file") {
-    val repoT = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, credentialsZipEd25519)
+    val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipEd25519)
     repoT shouldBe a[Success[_]]
   }
 
   test("can initialize repo from ZIP file specifying custom repo") {
-    val repoT = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, credentialsZipEd25519, repoUri = Some(new URI("https://ats.com")))
+    val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipEd25519, repoUri = Some(new URI("https://ats.com")))
     repoT shouldBe a[Success[_]]
     repoT.flatMap(_.repoServerUri).get.toString shouldBe "https://ats.com"
   }
 
   test("can initialize repo from ZIP file without targets keys") {
-    val repoT = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, credentialsZipNoTargets)
+    val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipNoTargets)
     repoT shouldBe a[Success[_]]
     repoT.get.repoPath.resolve("keys/targets.pub").toFile.exists() shouldBe false
   }
 
   test("can read auth config for an initialized repo") {
-    val repoT = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, credentialsZipEd25519)
+    val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipEd25519)
 
     repoT shouldBe a[Success[_]]
 
@@ -72,7 +70,7 @@ class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
   }
 
   test("skips auth when no_auth: true") {
-    val repoT = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, credentialsZipNoAuthEd25519)
+    val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipNoAuthEd25519)
 
     repoT shouldBe a[Success[_]]
 
@@ -80,7 +78,7 @@ class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
   }
 
   test("reads targets root.json from credentials.zip if present") {
-    val repoT = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, credentialsZipEd25519)
+    val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipEd25519)
     repoT shouldBe a[Success[_]]
 
     val repo = repoT.get
@@ -103,7 +101,7 @@ class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
   }
 
   keyTypeZipTest("reads targets keys from credentials.zip if present") { (zip, keyType) =>
-    val repoT = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, zip)
+    val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, zip)
     repoT shouldBe a[Success[_]]
 
     val repo = repoT.get
@@ -114,7 +112,7 @@ class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
   }
 
   keyTypeZipTest("export includes root.json") { (zip, keyType) =>
-    val repo = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, zip).get
+    val repo = RepoManagement.initialize(RepoServer, randomRepoPath, zip).get
     val tempPath = Files.createTempFile("tuf-repo-spec-export", ".zip")
 
     repo.genKeys(KeyName("targets"), keyType).get
@@ -126,39 +124,39 @@ class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
     repo.writeSignedRole(signedPayload).get
 
     RepoManagement.export(repo, KeyName("targets"), tempPath) shouldBe a[Success[_]]
-    val repoFromExported = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, tempPath).get
+    val repoFromExported = RepoManagement.initialize(RepoServer, randomRepoPath, tempPath).get
 
     repoFromExported.readSignedRole[RootRole].get.asJson shouldBe signedPayload.asJson
   }
 
   keyTypeZipTest("can export zip file ") { (zip, keyType) =>
-    val repo = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, zip).get
+    val repo = RepoManagement.initialize(RepoServer, randomRepoPath, zip).get
     repo.genKeys(KeyName("default-key"), keyType)
 
     val tempPath = Files.createTempFile("tuf-repo-spec-export", ".zip")
     RepoManagement.export(repo, KeyName("default-key"), tempPath) shouldBe Try(())
 
     // test the exported zip file by creating another repo from it:
-    val repoFromExported = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, tempPath).get
+    val repoFromExported = RepoManagement.initialize(RepoServer, randomRepoPath, tempPath).get
     repoFromExported.authConfig.get.map(_.client_id).get shouldBe "8f505046-bf38-4e17-a0bc-8a289bbd1403"
     val server = repoFromExported.treehubConfig.get.ostree.hcursor.downField("server").as[String].valueOr(throw _)
     server shouldBe "https://treehub-pub.gw.staging.atsgarage.com/api/v3"
   }
 
   keyTypeZipTest("export uses configured tuf url, not what came in the original file") { (zip, keyType) =>
-    val repo = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, zip, repoUri = Some(new URI("https://someotherrepo.com"))).get
+    val repo = RepoManagement.initialize(RepoServer, randomRepoPath, zip, repoUri = Some(new URI("https://someotherrepo.com"))).get
     repo.genKeys(KeyName("default-key"), keyType)
 
     val tempPath = Files.createTempFile("tuf-repo-spec-export", ".zip")
     RepoManagement.export(repo, KeyName("default-key"), tempPath) shouldBe Try(())
 
     // test the exported zip file by creating another repo from it:
-    val repoFromExported = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, tempPath).get
+    val repoFromExported = RepoManagement.initialize(RepoServer, randomRepoPath, tempPath).get
     repoFromExported.repoServerUri.get.toString shouldBe "https://someotherrepo.com"
   }
 
   keyTypeZipTest("creates base credentials.zip if one does not exist") { (zip, keyType) =>
-    val repo = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, zip).get
+    val repo = RepoManagement.initialize(RepoServer, randomRepoPath, zip).get
     val tempPath = Files.createTempFile("cli-export", ".zip")
 
     Files.delete(repo.repoPath.resolve("credentials.zip"))
@@ -167,7 +165,7 @@ class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
 
     RepoManagement.export(repo, KeyName("targets"), tempPath) shouldBe a[Success[_]]
 
-    val repoFromExported = RepoManagement.initialize(RepoServer, randomName, randomRepoPath, tempPath).get
+    val repoFromExported = RepoManagement.initialize(RepoServer, randomRepoPath, tempPath).get
 
     repoFromExported.repoPath.toFile.exists() shouldBe true
   }

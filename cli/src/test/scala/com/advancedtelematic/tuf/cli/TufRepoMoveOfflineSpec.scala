@@ -1,6 +1,6 @@
 package com.advancedtelematic.tuf.cli
 
-import java.nio.file.Files
+import java.nio.file.{Files, Paths}
 
 import scala.collection.JavaConverters._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole, TufRole}
@@ -16,7 +16,7 @@ import io.circe.syntax._
 
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.tuf.cli.util.TufRepoInitializerUtil._
-
+import com.advancedtelematic.tuf.cli.util.TufRepoNameOps._
 
 class TufRepoMoveOfflineSpec extends CliSpec {
 

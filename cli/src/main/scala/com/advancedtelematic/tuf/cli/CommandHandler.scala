@@ -1,32 +1,35 @@
 package com.advancedtelematic.tuf.cli
 
+import cats.implicits._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.http.TufServerClient
+import com.advancedtelematic.libtuf.http.{ReposerverClient, TufServerClient}
+import com.advancedtelematic.tuf.cli.CliConfigOptionOps._
 import com.advancedtelematic.tuf.cli.Commands._
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.tuf.cli.repo._
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
-import cats.implicits._
 
 import scala.concurrent.{ExecutionContext, Future}
 
 object CommandHandler {
   private lazy val log = LoggerFactory.getLogger(this.getClass)
 
-  def handle[S <: TufServerClient](tufRepo: TufRepo[S],
+  def handle[S <: TufServerClient](tufRepo: => TufRepo[S],
+                                   repoServer: => Future[S],
+                                   delegationsServer: => Future[ReposerverClient],
                                    userKeyStorage: CliKeyStorage,
-                                   repoServer: => Future[S])(config: Config)
+                                   config: Config)
                                   (implicit ec: ExecutionContext): Future[Unit] = config.command match {
     case Help =>
       Cli.parser.showUsage()
       Future.successful(())
 
     case InitRepo =>
-      RepoManagement.initialize(config.repoType.get, config.repoName, tufRepo.repoPath, config.credentialsPath, config.reposerverUrl)
-        .map(_ => log.info(s"Finished init for ${config.repoName.value} using ${config.credentialsPath}"))
+      RepoManagement.initialize(config.repoType.valueOrConfigError, tufRepo.repoPath, config.credentialsPath, config.reposerverUrl)
+        .map(_ => log.info(s"Finished init for ${config.repoName.valueOrConfigError.value} using ${config.credentialsPath}"))
         .toFuture
 
     case MoveOffline =>
@@ -46,16 +49,16 @@ object CommandHandler {
 
     case InitTargets =>
       tufRepo
-        .initTargets(config.version.get, config.expires)
+        .initTargets(config.version.valueOrConfigError, config.expires)
         .map(p => log.info(s"Wrote empty targets to $p"))
         .toFuture
 
     case AddTarget =>
       tufRepo
-        .addTarget(config.targetName.get,
-          config.targetVersion.get,
+        .addTarget(config.targetName.valueOrConfigError,
+          config.targetVersion.valueOrConfigError,
           config.length,
-          config.checksum.get,
+          config.checksum.valueOrConfigError,
           config.hardwareIds,
           config.targetUri,
           config.targetFormat)
@@ -64,7 +67,7 @@ object CommandHandler {
 
     case DeleteTarget =>
       tufRepo
-        .initTargets(config.version.get, config.expires)
+        .initTargets(config.version.valueOrConfigError, config.expires)
         .map(p => log.info(s"Wrote empty targets to $p"))
         .toFuture
 
@@ -88,7 +91,7 @@ object CommandHandler {
         .map(_ => log.info("Pushed targets"))
 
     case VerifyRoot =>
-      CliUtil.verifyRootFile(config.inputPath).map(_ => ())
+      CliUtil.verifyRootFile(config.inputPath.valueOrConfigError).map(_ => ())
 
     case GenRepoKeys =>
       tufRepo.genKeys(config.rootKey, config.keyType, config.keySize).toFuture.map(_ => ())
@@ -115,7 +118,7 @@ object CommandHandler {
       }.map(p => log.info(s"keys removed from unsigned root.json saved to $p")).toFuture
 
     case ExportRepository =>
-      RepoManagement.export(tufRepo, config.keyNames.head, config.exportPath).toFuture
+      RepoManagement.export(tufRepo, config.keyNames.head, config.outputPath.valueOrConfigError).toFuture
 
     case GenUserKey =>
       config.keyNames.map { keyName =>
@@ -123,13 +126,28 @@ object CommandHandler {
       }.sequence_.toFuture
 
     case CreateDelegation =>
-      Delegations.writeNew(config.exportPath).toFuture
+      Delegations.writeNew(config.outputPath.streamOrStdout).toFuture
 
     case SignDelegation =>
       config.keyNames
         .map(userKeyStorage.readKeyPair).sequence
         .flatMap { keyPairs =>
-          Delegations.signPayload(keyPairs, config.inputPath, config.exportPath)
+          Delegations.signPayload(keyPairs, config.inputPath.valueOrConfigError, config.outputPath.streamOrStdout)
         }.toFuture
+
+    case PushDelegation =>
+      delegationsServer.flatMap { server =>
+        Delegations.push(server, config.delegationName, config.inputPath.valueOrConfigError)
+      }
+
+    case AddTargetDelegation =>
+      config.keyPaths.map(CliKeyStorage.readPublicKey).sequence.flatMap { keys =>
+        tufRepo.addTargetDelegation(config.delegationName, keys, config.delegatedPaths, threshold = 1)
+      }.map(_ => ()).toFuture
+
+    case PullDelegation =>
+      delegationsServer.flatMap { server =>
+        Delegations.pull(server, config.delegationName, config.outputPath.streamOrStdout).map(_ => ())
+      }
   }
 }

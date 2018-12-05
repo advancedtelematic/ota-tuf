@@ -5,7 +5,7 @@ import java.net.URI
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TufKeyPair}
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpResponse
@@ -38,6 +38,10 @@ trait TufServerClient {
 }
 
 trait ReposerverClient extends TufServerClient {
+  def pushDelegation(name: DelegatedRoleName, delegation: SignedPayload[TargetsRole]): Future[Unit]
+
+  def pullDelegation(name: DelegatedRoleName): Future[SignedPayload[TargetsRole]]
+
   def targets(): Future[TargetsResponse]
 
   def pushTargets(role: SignedPayload[TargetsRole], previousChecksum: Option[Refined[String, ValidChecksum]]): Future[Unit]
@@ -118,6 +122,16 @@ class ReposerverHttpClient(uri: URI,
       case (428, _) =>
         Future.failed(RoleChecksumNotValid)
     }
+  }
+
+  override def pushDelegation(name: DelegatedRoleName, delegation: SignedPayload[TargetsRole]): Future[Unit] = {
+    val req = Http(apiUri(s"delegations/${name.value}.json")).method("PUT")
+    execJsonHttp[Unit, SignedPayload[TargetsRole]](req, delegation)()
+  }
+
+  override def pullDelegation(name: DelegatedRoleName): Future[SignedPayload[TargetsRole]] = {
+    val req = Http(apiUri(s"delegations/${name.value}.json"))
+    execHttp[SignedPayload[TargetsRole]](req)().map(_.body)
   }
 }
 

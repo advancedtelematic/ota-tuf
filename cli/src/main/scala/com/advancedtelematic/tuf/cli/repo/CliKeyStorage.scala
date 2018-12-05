@@ -9,18 +9,25 @@ import com.advancedtelematic.tuf.cli.DataType.KeyName
 import org.slf4j.LoggerFactory
 
 import scala.util.Try
+import com.advancedtelematic.libtuf.data.TufCodecs._
+import io.circe.syntax._
+import io.circe.jawn._
+
 
 object CliKeyStorage {
   def forUser(path: Path): CliKeyStorage = new CliKeyStorage(path)
 
   def forRepo(repoPath: Path): CliKeyStorage = new CliKeyStorage(repoPath.resolve("keys"))
+
+  def readPrivateKey(path: Path): Try[TufPrivateKey] =
+    parseFile(path.toFile).flatMap(_.as[TufPrivateKey]).toTry
+
+  def readPublicKey(path: Path): Try[TufKey] = {
+    parseFile(path.toFile).flatMap(_.as[TufKey]).toTry
+  }
 }
 
 class CliKeyStorage private (root: Path) {
-  import com.advancedtelematic.libtuf.data.TufCodecs._
-  import io.circe.jawn._
-  import io.circe.syntax._
-
   private lazy val log = LoggerFactory.getLogger(this.getClass)
 
   private lazy val SECRET_KEY_PERMISSIONS = Set(OWNER_READ, OWNER_WRITE)
@@ -71,11 +78,10 @@ class CliKeyStorage private (root: Path) {
   }
 
   def readPrivateKey(keyName: KeyName): Try[TufPrivateKey] =
-    parseFile(keyName.privateKeyPath.toFile).flatMap(_.as[TufPrivateKey]).toTry
+    CliKeyStorage.readPrivateKey(keyName.privateKeyPath)
 
-  def readPublicKey(keyName: KeyName): Try[TufKey] = {
-    parseFile(keyName.publicKeyPath.toFile).flatMap(_.as[TufKey]).toTry
-  }
+  def readPublicKey(keyName: KeyName): Try[TufKey] =
+    CliKeyStorage.readPublicKey(keyName.publicKeyPath)
 
   def readKeyPair(keyName: KeyName): Try[(TufKey, TufPrivateKey)] = for {
     pub <- readPublicKey(keyName)
