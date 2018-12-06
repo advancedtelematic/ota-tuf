@@ -13,6 +13,7 @@ import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.StorageMetho
 import SlickMappings._
 import com.advancedtelematic.libtuf_server.data.Requests.TargetComment
 import com.advancedtelematic.tuf.reposerver.db.DBDataType.{DbDelegation, DbSignedRole}
+import SlickValidatedString._
 
 object Schema {
   import com.advancedtelematic.libats.slick.codecs.SlickRefined._

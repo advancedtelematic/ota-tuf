@@ -10,7 +10,7 @@ import com.advancedtelematic.libats.data.RefinedUtils._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType
-import com.advancedtelematic.libtuf.data.ClientDataType.{Delegation, RootRole, TargetsRole, ValidDelegatedRoleName}
+import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, Delegation, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RepoId, RoleType, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.libtuf.http.ReposerverHttpClient
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
@@ -20,6 +20,7 @@ import com.advancedtelematic.tuf.reposerver.util._
 import io.circe.syntax._
 import org.scalatest.BeforeAndAfter
 import org.scalatest.time.{Seconds, Span}
+import com.advancedtelematic.libtuf.data.ValidatedString._
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 
@@ -115,7 +116,7 @@ class UserReposerverClientSpec extends TufReposerverSpec
   }
 
   test("can push and pull a delegation to/from server") {
-    val name = "delegation01".refineTry[ValidDelegatedRoleName].get
+    val name = "delegation01".unsafeApply[DelegatedRoleName]
     val delegationKey = KeyType.default.crypto.generateKeyPair()
 
     val existingTargets = client.targets().futureValue

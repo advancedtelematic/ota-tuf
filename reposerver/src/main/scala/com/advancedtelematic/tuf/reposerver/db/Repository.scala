@@ -24,6 +24,7 @@ import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport.Missi
 import com.advancedtelematic.tuf.reposerver.http.Errors
 import shapeless.ops.function.FnToProduct
 import shapeless.{Generic, HList}
+import SlickValidatedString._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace

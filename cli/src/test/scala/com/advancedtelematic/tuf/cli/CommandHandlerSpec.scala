@@ -4,14 +4,16 @@ import java.io.FileOutputStream
 import java.nio.file.Files
 import java.time.Instant
 
+import com.advancedtelematic.libtuf.data.ValidatedString._
+import com.advancedtelematic.libtuf.data.ClientDataType.DelegatedRoleName._
+import com.advancedtelematic.libtuf.data.ClientDataType.DelegatedPathPattern._
 import cats.data.Validated.Valid
 import cats.syntax.either._
 import cats.syntax.option._
-import com.advancedtelematic.libats.data.RefinedUtils._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType
-import com.advancedtelematic.libtuf.data.ClientDataType.{TargetsRole, ValidDelegatedPathPattern, ValidDelegatedRoleName}
+import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedPathPattern, DelegatedRoleName, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, SignedPayload}
 import com.advancedtelematic.tuf.cli.Commands._
@@ -88,7 +90,7 @@ class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors
 
     Files.write(in, delegation.asJson.spaces2.getBytes)
 
-    val name = "delegation01".refineTry[ValidDelegatedRoleName].get
+    val name = "delegation01".unsafeApply[DelegatedRoleName]
 
     val config = Config(PushDelegation, delegationName = name, inputPath = in.some, outputPath = out.some)
 
@@ -103,8 +105,8 @@ class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors
     val keyFile = Files.createTempFile("key01.pub", ".json")
     Files.write(keyFile, pubkey.asJson.spaces2.getBytes)
 
-    val name = "delegation02".refineTry[ValidDelegatedRoleName].get
-    val delegatedPath = "path01/*".refineTry[ValidDelegatedPathPattern].get
+    val name = "delegation02".unsafeApply[DelegatedRoleName]
+    val delegatedPath = "path01/*".unsafeApply[DelegatedPathPattern]
     val config = Config(AddTargetDelegation, delegationName = name, delegatedPaths = List(delegatedPath), keyPaths = List(keyFile))
 
     handler(config).futureValue
@@ -123,7 +125,7 @@ class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors
   test("pulls a delegation by name") {
     val out = Files.createTempFile("out", ".json")
 
-    val name = "delegation03".refineTry[ValidDelegatedRoleName].get
+    val name = "delegation03".unsafeApply[DelegatedRoleName]
     val delegation = TargetsRole(Instant.now, Map.empty, version = 1)
     val signedDelegation = SignedPayload(Seq.empty, delegation, delegation.asJson)
 

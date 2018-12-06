@@ -40,6 +40,12 @@ object ClientCodecs {
   implicit val rootRoleEncoder: Encoder[RootRole] = deriveEncoder[RootRole].encodeRoleType
   implicit val rootRoleDecoder: Decoder[RootRole] = deriveDecoder[RootRole].validateRoleType
 
+  implicit val delegatedRoleNameEncoder: Encoder[DelegatedRoleName] = ValidatedString.validatedStringEncoder
+  implicit val delegatedRoleNameDecoder: Decoder[DelegatedRoleName] = ValidatedString.validatedStringDecoder
+
+  implicit val delegatedPathPatternEncoder: Encoder[DelegatedPathPattern] = ValidatedString.validatedStringEncoder
+  implicit val delegatedPathPatternDecoder: Decoder[DelegatedPathPattern] = ValidatedString.validatedStringDecoder
+
   implicit val delegatedRoleEncoder: Encoder[Delegation] = deriveEncoder
   implicit val delegatedRoleDecoder: Decoder[Delegation] = deriveDecoder
 

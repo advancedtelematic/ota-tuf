@@ -11,8 +11,7 @@ import cats.syntax.either._
 import cats.syntax.option._
 import ch.qos.logback.classic.{Level, Logger}
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
-import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
-import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedPathPattern, DelegatedRoleName, ValidDelegatedRoleName}
+import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedPathPattern, DelegatedRoleName}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, TargetFilename, TargetFormat, TargetName, TargetVersion}
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.RoleChecksumNotValid
@@ -33,13 +32,15 @@ import scopt.{OptionDef, OptionParser}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
+import com.advancedtelematic.libtuf.data.ValidatedString._
+import DelegatedRoleName._
 
 case class Config(command: Command,
                   home: Path = Paths.get("tuf"),
                   credentialsPath: Path = Paths.get("credentials.zip"),
                   repoType: Option[TufServerType] = RepoServer.some,
                   repoName: Option[RepoName] = None,
-                  delegationName: DelegatedRoleName = "<empty>".refineTry[ValidDelegatedRoleName].get,
+                  delegationName: DelegatedRoleName = "<empty>".unsafeApply,
                   rootKey: KeyName = KeyName("default-key"),
                   keyType: KeyType = KeyType.default,
                   oldRootKey: KeyName = KeyName("default-key"),
