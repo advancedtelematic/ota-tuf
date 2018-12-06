@@ -20,7 +20,7 @@ class DelegationsManagement()(implicit val db: Database, val ec: ExecutionContex
 
     validateDelegationMetadataSignatures(targetsRole, delegation, delegationMetadata) match {
       case Valid(_) =>
-        await(delegationsRepo.persist(repoId, roleName, delegationMetadata.asJsonSignedPayload).map(_ => ()))
+        await(delegationsRepo.persist(repoId, roleName, delegationMetadata.asJsonSignedPayload))
       case Invalid(err) =>
         throw Errors.PayloadSignatureInvalid(err)
     }
@@ -33,7 +33,6 @@ class DelegationsManagement()(implicit val db: Database, val ec: ExecutionContex
     targetsRole.delegations.flatMap(_.roles.find(_.name == delegatedRoleName)).getOrElse(throw Errors.DelegationNotDefined)
   }
 
-  // TODO:SM Does not allow multi level delegation
   private def validateDelegationMetadataSignatures(targetsRole: TargetsRole,
                                                    delegation: Delegation,
                                                    delegationMetadata: SignedPayload[TargetsRole]): ValidatedNel[String, SignedPayload[TargetsRole]] = {

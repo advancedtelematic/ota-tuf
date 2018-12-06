@@ -66,12 +66,29 @@ class RepoResourceDelegationsSpec extends TufReposerverSpec
     }
   }
 
+
   test("accepts delegated role metadata when signed with known keys") {
     implicit val repoId = addTargetToRepo()
 
     addDelegationToRepo()
 
     val signedDelegation = buildSignedDelegatedTargets()
+
+    pushSignedDelegatedMetadata(signedDelegation) ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+  }
+
+  test("accepts overwrite of existing delegated role metadata") {
+    implicit val repoId = addTargetToRepo()
+
+    addDelegationToRepo()
+
+    val signedDelegation = buildSignedDelegatedTargets()
+
+    pushSignedDelegatedMetadata(signedDelegation) ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
 
     pushSignedDelegatedMetadata(signedDelegation) ~> check {
       status shouldBe StatusCodes.NoContent

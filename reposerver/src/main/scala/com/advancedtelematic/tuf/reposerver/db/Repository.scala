@@ -9,7 +9,7 @@ import akka.stream.scaladsl.Source
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity, RawError}
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, TargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, RoleType, TargetFilename}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
@@ -293,12 +293,7 @@ protected [db] class DelegationRepository()(implicit db: Database, ec: Execution
     Schema.delegations.filter(_.repoId === repoId).filter(_.roleName === roleName).result.failIfNotSingle(Errors.DelegationNotFound)
   }
 
-  def persist[P <: Product, H <: HList](args: P)(implicit
-                                                 gen0: Generic.Aux[P, H],
-                                                 gen1: Generic.Aux[DbDelegation, H]): Future[DbDelegation] = db.run {
-    persistAction(gen1.from(gen0.to(args)))
+  def persist(repoId: RepoId, roleName: DelegatedRoleName, content: JsonSignedPayload): Future[Unit] = db.run {
+    Schema.delegations.insertOrUpdate(DbDelegation(repoId, roleName, content)).map(_ => ())
   }
-
-  protected [db] def persistAction(value: DbDelegation): DBIO[DbDelegation] =
-    (Schema.delegations += value).map(_ => value)
 }
