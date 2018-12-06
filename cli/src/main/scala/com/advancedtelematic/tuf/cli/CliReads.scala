@@ -10,6 +10,7 @@ import scopt.Read
 import shapeless._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
+import com.advancedtelematic.libtuf.data.ValidatedString.{ValidatedString, ValidatedStringValidation}
 import com.advancedtelematic.tuf.cli.DataType._
 import io.circe.{Decoder, Json}
 
@@ -53,6 +54,10 @@ object CliReads {
 
   implicit def anyvalRead[T <: AnyVal](implicit gen: Generic.Aux[T, String :: HNil]): Read[T] = Read.stringRead.map { str =>
     gen.from(str :: HNil)
+  }
+
+  implicit def validatedStringRead[W <: ValidatedString](implicit validation: ValidatedStringValidation[W]): Read[W] = Read.stringRead.map { str =>
+    validation(str).valueOr(err => throw new IllegalArgumentException(err.toList.mkString(",")))
   }
 
   implicit val pathRead: Read[Path] = Read.fileRead.map(_.toPath)

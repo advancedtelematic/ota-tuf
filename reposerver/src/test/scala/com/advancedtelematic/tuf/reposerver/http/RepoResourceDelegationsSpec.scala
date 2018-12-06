@@ -3,16 +3,17 @@ package com.advancedtelematic.tuf.reposerver.http
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-import cats.syntax.option._
 import akka.http.scaladsl.model.StatusCodes
+import cats.syntax.option._
 import cats.syntax.show._
 import com.advancedtelematic.libats.data.ErrorRepresentation
-import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.{Delegation, Delegations, TargetsRole, ValidDelegatedPathPattern, ValidDelegatedRoleName}
+import com.advancedtelematic.libtuf.data.ClientDataType.DelegatedPathPattern._
+import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedPathPattern, DelegatedRoleName, Delegation, Delegations, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RepoId, RoleType, SignedPayload, TufKeyPair}
+import com.advancedtelematic.libtuf.data.ValidatedString._
 import com.advancedtelematic.tuf.reposerver.util.{RepoResourceSpecUtil, ResourceSpec, TufReposerverSpec}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.syntax._
@@ -24,10 +25,11 @@ class RepoResourceDelegationsSpec extends TufReposerverSpec
 
   lazy val keyPair = Ed25519KeyType.crypto.generateKeyPair()
 
-  val delegatedRoleName = "mydelegation".refineTry[ValidDelegatedRoleName].get
+  val delegatedRoleName = "mydelegation".unsafeApply[DelegatedRoleName]
+
 
   val delegation = {
-    val delegationPath = "mypath/*".refineTry[ValidDelegatedPathPattern].get
+    val delegationPath = "mypath/*".unsafeApply[DelegatedPathPattern]
     Delegation(delegatedRoleName, List(keyPair.pubkey.id), List(delegationPath))
   }
 
