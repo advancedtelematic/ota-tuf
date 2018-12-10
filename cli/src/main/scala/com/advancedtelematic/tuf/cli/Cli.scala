@@ -114,7 +114,7 @@ object Cli extends App with VersionInfo {
 
     version("version")
 
-    cmd("keys").children(
+    cmd("user-keys").children(
       keysPathOpt(this),
       cmd("gen")
         .toCommand(GenUserKey)
