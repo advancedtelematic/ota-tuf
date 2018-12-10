@@ -9,7 +9,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
 import com.advancedtelematic.tuf.keyserver.roles._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
+import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, SignedRootRoleRepository}
 import com.advancedtelematic.libtuf.data.TufDataType._
 import com.advancedtelematic.libtuf_server.data.Marshalling._
 import com.advancedtelematic.libats.http.UUIDKeyAkka._
@@ -52,6 +52,16 @@ class RootRoleResource()
           val f = signedRootRoles.findFreshAndPersist(repoId)
           complete(f)
         }
+      } ~
+      path("1") {
+        val f = signedRootRoles
+          .findByVersion(repoId, version = 1)
+          .recoverWith {
+            case SignedRootRoleRepository.MissingSignedRole =>
+              signedRootRoles.findFreshAndPersist(repoId)
+          }
+
+        complete(f)
       } ~
       path(IntNumber) { version =>
         complete(signedRootRoles.findByVersion(repoId, version))
