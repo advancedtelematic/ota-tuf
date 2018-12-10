@@ -226,6 +226,17 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
+  test("GET returns 200 when requesting version 1 without first requesting root.json") {
+    val repoId = RepoId.generate()
+
+    generateRepoKeys(repoId, RsaKeyType).futureValue
+
+    Get(apiUri(s"root/${repoId.show}/1")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]] shouldBe a[SignedPayload[_]]
+    }
+  }
+
   keyTypeTest("GET returns 200 with all keys if threshold > 1 ") { keyType =>
     val repoId = RepoId.generate()
 
@@ -807,16 +818,18 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     JsonSignedPayload(Seq(clientSignature), payloadToSign.asJson)
   }
 
-  def generateRootRole(repoId: RepoId, keyType: KeyType, threshold: Int = 1): Future[Seq[Key]] = {
-    val keysF = Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(threshold, keyType)) ~> routes ~> check {
+  def generateRepoKeys(repoId: RepoId, keyType: KeyType, threshold: Int = 1): Future[Seq[Key]] = {
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(threshold, keyType)) ~> routes ~> check {
       status shouldBe StatusCodes.Accepted
 
       responseAs[Seq[KeyGenId]] shouldNot be(empty)
 
       processKeyGenerationRequest(repoId)
     }
+  }
 
-    keysF.map { keys ⇒
+  def generateRootRole(repoId: RepoId, keyType: KeyType, threshold: Int = 1): Future[Seq[Key]] = {
+    generateRepoKeys(repoId, keyType, threshold).map { keys ⇒
       Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
         status shouldBe StatusCodes.OK
         responseAs[SignedPayload[RootRole]]
