@@ -51,7 +51,7 @@ class FakeKeyserverClient extends KeyserverClient {
 
   private val pendingRequests = new ConcurrentHashMap[RepoId, Boolean]()
 
-  def publicKey(repoId: RepoId, roleType: RoleType): PublicKey = keys.get(repoId)(roleType).pubkey.keyval
+  def publicKey(repoId: RepoId, roleType: RoleType): TufKey = keys.get(repoId)(roleType).pubkey
 
   def resetKeyServer(): Unit = this.synchronized {
     keys.clear()

@@ -53,8 +53,6 @@ trait TufCrypto[T <: KeyType] {
       pub ← parsePublic(publicKey)
     } yield toKeyPair(pub, priv)
 
-  def convertPublic(publicKey: PublicKey): T#Pub
-
   def signer: security.Signature
 
   def defaultKeySize: Int
@@ -93,19 +91,19 @@ object TufCrypto {
     Signature(validSignature, keyType.crypto.signatureMethod)
   }
 
-  def isValid(signature: Signature, publicKey: PublicKey, data: Array[Byte]): Boolean = {
+  def isValid(signature: Signature, publicKey: TufKey, data: Array[Byte]): Boolean = {
     val signer = signature.method match {
       case SignatureMethod.RSASSA_PSS_SHA256 ⇒ rsaCrypto.signer
       case SignatureMethod.ED25519 ⇒ ed25519Crypto.signer
       case other ⇒ throw new IllegalArgumentException(s"Unsupported signature method: $other")
     }
     val decodedSig = Base64.decode(signature.sig.value)
-    signer.initVerify(publicKey)
+    signer.initVerify(publicKey.keyval)
     signer.update(data)
     signer.verify(decodedSig)
   }
 
-  def isValid(signature: ClientSignature, publicKey: PublicKey, value: Json): Boolean = {
+  def isValid(signature: ClientSignature, publicKey: TufKey, value: Json): Boolean = {
     val sig = Signature(signature.sig, signature.method)
     TufCrypto.isValid(sig, publicKey, value.canonical.getBytes)
   }
@@ -245,8 +243,6 @@ protected [crypt] class ECPrime256Crypto extends TufCrypto[EcPrime256KeyType.typ
   override def toKeyPair(publicKey: EcPrime256TufKey, privateKey: EcPrime256TufPrivateKey): TufKeyPair =
     EcPrime256TufKeyPair(publicKey, privateKey)
 
-  override def convertPublic(publicKey: PublicKey): EcPrime256TufKey = EcPrime256TufKey(publicKey)
-
   override def generateKeyPair(keySize: Int): TufKeyPair = {
     require(validKeySize(keySize), "Key size too small")
     val keyPair = keyPairGenerator(keySize).generateKeyPair()
@@ -259,8 +255,6 @@ protected [crypt] class ED25519Crypto extends TufCrypto[Ed25519KeyType.type] {
 
   override def toKeyPair(publicKey: Ed25519TufKey, privateKey: Ed25519TufPrivateKey): TufKeyPair =
     Ed25519TufKeyPair(publicKey, privateKey)
-
-  override def convertPublic(publicKey: PublicKey): Ed25519TufKey = Ed25519TufKey(publicKey)
 
   override def parsePublic(publicKeyHex: String): Try[Ed25519TufKey] = Try {
     val spec = new X509EncodedKeySpec(Hex.decode(publicKeyHex))
@@ -337,8 +331,6 @@ protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
   override def signer: security.Signature = java.security.Signature.getInstance("SHA256withRSAandMGF1", "BC") // RSASSA-PSS
 
   override val signatureMethod: SignatureMethod = SignatureMethod.RSASSA_PSS_SHA256
-
-  override def convertPublic(publicKey: PublicKey): RSATufKey = RSATufKey(publicKey)
 
   override def toKeyPair(publicKey: RSATufKey, privateKey: RSATufPrivateKey): TufKeyPair = RSATufKeyPair(publicKey, privateKey)
 

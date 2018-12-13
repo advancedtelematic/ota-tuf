@@ -6,7 +6,7 @@ import java.time.Instant
 import com.advancedtelematic.libats.slick.db.SlickEncryptedColumn.EncryptedColumn
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, KeyType, RepoId, JsonSignedPayload, SignedPayload, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, KeyId, KeyType, RepoId, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
@@ -14,7 +14,6 @@ import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import io.circe.Json
 import cats.syntax.either._
-
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 
 object Schema {
@@ -47,8 +46,8 @@ object Schema {
     def id = column[KeyId]("key_id", O.PrimaryKey)
     def repoId = column[RepoId]("repo_id")
     def roleType = column[RoleType]("role_type")
-    def keyType = column[KeyType]("key_type")
-    def publicKey = column[PublicKey]("public_key") // TODO: Use TufKey instead, migrate, remove `key_type`, then remove KeyType Enum ?
+    def keyType = column[KeyType]("key_type") // TODO: remove `key_type`, then remove KeyType Enum ?
+    def publicKey = column[TufKey]("public_key")
     def privateKey = column[EncryptedColumn[TufPrivateKey]]("private_key")
 
     override def * = (id, repoId, roleType, keyType, publicKey, privateKey.decrypted) <> ((Key.apply _).tupled, Key.unapply)
