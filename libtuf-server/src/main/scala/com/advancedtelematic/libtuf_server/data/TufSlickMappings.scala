@@ -1,27 +1,16 @@
 package com.advancedtelematic.libtuf_server.data
 
-import java.security.PublicKey
-
-import com.advancedtelematic.libats.data.DataType.Checksum
-import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.crypt.TufCrypto.KeyOps
-import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
-import com.advancedtelematic.libtuf.data.TufDataType.{EcPrime256KeyType, Ed25519KeyType, KeyType, RoleType, RsaKeyType, JsonSignedPayload, TufKey, TufPrivateKey}
-import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libats.slick.db.{SlickCirceMapper, SlickEncryptedColumn}
-import io.circe.Json
-import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libats.codecs.CirceAts._
+import com.advancedtelematic.libats.data.DataType.Checksum
 import com.advancedtelematic.libats.slick.codecs.SlickEnumMapper
+import com.advancedtelematic.libats.slick.db.{SlickCirceMapper, SlickEncryptedColumn}
+import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
+import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.{EcPrime256KeyType, Ed25519KeyType, JsonSignedPayload, KeyType, RoleType, RsaKeyType, TufKey, TufPrivateKey}
+import slick.jdbc.MySQLProfile.api._
 
 object TufSlickMappings {
-
-  // TODO: Use getEncoded | base64 instead of pem. Add migration. Probably use TufKey if possible
-  implicit val publicKeyMapper = MappedColumnType.base[PublicKey, String](
-    {publicKey => publicKey.toPem},
-    {str => TufCrypto.parsePublicPem(str).get}
-  )
 
   implicit val keyTypeMapper = MappedColumnType.base[KeyType, String](
     {

@@ -50,7 +50,7 @@ class SignedRootRolesSpec extends TufKeyserverSpec with DatabaseSpec
       val signed = await(signedRootRoles.findLatest(repoId))
 
       val rootKeyId = signed.signed.roles(RoleType.ROOT).keyids.head
-      val publicKey = signed.signed.keys(rootKeyId).keyval
+      val publicKey = signed.signed.keys(rootKeyId)
 
       val clientSignature = signed.signatures.head
 

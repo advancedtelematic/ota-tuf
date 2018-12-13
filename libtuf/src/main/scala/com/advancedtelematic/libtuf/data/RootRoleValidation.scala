@@ -82,7 +82,7 @@ object RootRoleValidation {
     publicKeys.toList.map { case (keyId, tufKey) =>
       roleSignatures.get(keyId) match {
         case Some(sig) =>
-          if (TufCrypto.isValid(sig, tufKey.keyval, signedPayload.json))
+          if (TufCrypto.isValid(sig, tufKey, signedPayload.json))
             ValidSignature(keyId)
           else
             InvalidSignature(s"Invalid signature for key $keyId in root.json version ${signedPayload.signed.version}")

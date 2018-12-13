@@ -3,7 +3,7 @@ package com.advancedtelematic.tuf.keyserver.client
 import java.security.interfaces.RSAPublicKey
 
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{EcPrime256KeyType, Ed25519TufKey, KeyId, KeyType, RepoId, RoleType, RsaKeyType, JsonSignedPayload, SignedPayload, ValidKeyId}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, Ed25519TufKey, JsonSignedPayload, KeyId, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.Errors.RemoteServiceError
 import com.advancedtelematic.libtuf_server.keyserver.{KeyserverClient, KeyserverHttpClient}
@@ -72,7 +72,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
 
   def manipulateSignedKey(payload: SignedPayload[RootRole], keyType: KeyType): SignedPayload[RootRole] = {
     val kid: KeyId = refineV[ValidKeyId]("0" * 64).right.get
-    val key = EcPrime256KeyType.crypto.convertPublic(payload.signed.keys.values.head.keyval)
+    val key = Ed25519TufKey(payload.signed.keys.values.head.keyval)
     val signedCopy = payload.signed.copy(keys = payload.signed.keys.updated(kid, key))
     payload.updated(signed = signedCopy)
   }
@@ -205,7 +205,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
 
     async {
       val pairs = await(client.fetchTargetKeyPairs(repoId))
-      pairs.map(_.pubkey.keyval) shouldBe keys.filter(_.roleType == RoleType.TARGETS).map(_.publicKey)
+      pairs.map(_.pubkey) shouldBe keys.filter(_.roleType == RoleType.TARGETS).map(_.publicKey)
     }.futureValue
   }
 }

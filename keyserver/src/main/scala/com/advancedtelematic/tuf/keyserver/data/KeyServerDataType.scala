@@ -36,7 +36,6 @@ object KeyServerDataType {
   }
 
   object SignedRootRole {
-    import io.circe.syntax._
     import com.advancedtelematic.libtuf.data.ClientCodecs._
 
     def fromSignedPayload(repoId: RepoId, payload: SignedPayload[RootRole]): SignedRootRole = {
@@ -47,10 +46,7 @@ object KeyServerDataType {
 
   case class SignedRootRole(repoId: RepoId, content: SignedPayload[RootRole], expiresAt: Instant, version: Int)
 
-  case class Key(id: KeyId, repoId: RepoId, roleType: RoleType, keyType: KeyType, publicKey: PublicKey,
-                 privateKey: TufPrivateKey) {
-    def toTufKey: TufKey = keyType.crypto.convertPublic(publicKey)
-
-    def toTufKeyPair: Try[TufKeyPair] = keyType.crypto.castToKeyPair(toTufKey, privateKey)
+  case class Key(id: KeyId, repoId: RepoId, roleType: RoleType, keyType: KeyType, publicKey: TufKey, privateKey: TufPrivateKey) {
+    def toTufKeyPair: Try[TufKeyPair] = keyType.crypto.castToKeyPair(publicKey, privateKey)
   }
 }
