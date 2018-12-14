@@ -949,7 +949,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
     val str = """
                 | {
                 |  "_type": "Targets",
-                |  "expires": "2018-12-13T15:37:21Z",
+                |  "expires": "2219-12-13T15:37:21Z",
                 |  "targets": {
                 |    "myfile01": {
                 |      "hashes": {
