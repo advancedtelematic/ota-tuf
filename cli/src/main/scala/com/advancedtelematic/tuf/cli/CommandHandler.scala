@@ -125,6 +125,11 @@ object CommandHandler {
         userKeyStorage.genKeys(keyName, config.keyType, config.keySize)
       }.sequence_.toFuture
 
+    case IdUserKey =>
+      CliKeyStorage.readPublicKey(config.inputPath.valueOrConfigError).map { key =>
+        config.outputPath.streamOrStdout.write(key.id.value.getBytes)
+      }.toFuture
+
     case CreateDelegation =>
       Delegations.writeNew(config.outputPath.streamOrStdout).toFuture
 

@@ -228,6 +228,8 @@ protected [crypt] class ECPrime256Crypto extends TufCrypto[EcPrime256KeyType.typ
 
   def keyPairGenerator(keySize: Int): KeyPairGenerator = generator
 
+  // TODO:SM Use base64, use String encoding
+
   override def encode(keyVal: EcPrime256TufKey): Json = Json.fromString(Hex.toHexString(keyVal.keyval.getEncoded))
 
   override def encode(keyVal: EcPrime256TufPrivateKey): Json = Json.fromString(Hex.toHexString(keyVal.keyval.getEncoded))
