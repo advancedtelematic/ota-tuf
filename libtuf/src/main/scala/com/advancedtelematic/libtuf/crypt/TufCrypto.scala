@@ -11,7 +11,6 @@ import cats.data.ValidatedNel
 import cats.implicits._
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
-import com.advancedtelematic.libtuf.crypt.ECCrypto._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole}
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, EcPrime256KeyType, EcPrime256TufKey, EcPrime256TufKeyPair, EcPrime256TufPrivateKey, Ed25519KeyType, Ed25519TufKey, Ed25519TufKeyPair, Ed25519TufPrivateKey, KeyId, KeyType, RSATufKey, RSATufKeyPair, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, SignedPayload, TufKey, TufKeyPair, TufPrivateKey, ValidKeyId, ValidSignature}
@@ -21,7 +20,6 @@ import net.i2p.crypto.eddsa.{EdDSAEngine, EdDSAPrivateKey, EdDSAPublicKey}
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.jce.ECNamedCurveTable
-import org.bouncycastle.jce.spec.ECParameterSpec
 import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
 import org.bouncycastle.openssl.{PEMKeyPair, PEMParser}
 import org.bouncycastle.util.encoders.{Base64, Hex}
@@ -34,9 +32,9 @@ trait TufCrypto[T <: KeyType] {
 
   def parsePrivate(keyVal: String): Try[T#Priv]
 
-  def encode(keyVal: T#Pub): Json
+  def encode(keyVal: T#Pub): String
 
-  def encode(keyVal: T#Priv): Json
+  def encode(keyVal: T#Priv): String
 
   def generateKeyPair(keySize: Int): TufKeyPair
 
@@ -61,6 +59,15 @@ trait TufCrypto[T <: KeyType] {
   def validKeySize(size: Int): Boolean
 
   val signatureMethod: SignatureMethod
+
+  def keyId(key: TufKey): KeyId = {
+    val publicKey = key.keyval.getEncoded
+    val digest = new SHA256Digest()
+    val buf = Array.fill[Byte](digest.getDigestSize)(0)
+    digest.update(publicKey, 0, publicKey.length)
+    digest.doFinal(buf, 0)
+    Hex.toHexString(buf).refineTry[ValidKeyId].get
+  }
 }
 
 object TufCrypto {
@@ -107,17 +114,6 @@ object TufCrypto {
   def isValid(signature: ClientSignature, publicKey: TufKey, value: Json): Boolean = {
     val sig = Signature(signature.sig, signature.method)
     TufCrypto.isValid(sig, publicKey, value.canonical.getBytes)
-  }
-
-  implicit class PublicKeyOps(key: PublicKey) {
-    val id: KeyId = {
-      val publicKey = key.getEncoded
-      val digest = new SHA256Digest()
-      val buf = Array.fill[Byte](digest.getDigestSize)(0)
-      digest.update(publicKey, 0, publicKey.length)
-      digest.doFinal(buf, 0)
-      Hex.toHexString(buf).refineTry[ValidKeyId].get
-    }
   }
 
   def parsePublic[T <: KeyType](keyType: T, keyVal: String): Try[TufKey] =
@@ -179,31 +175,13 @@ object TufCrypto {
   }
 }
 
-protected [crypt] object ECCrypto {
-  sealed trait CurveId {
-    def parameterSpec: ECParameterSpec
-  }
-  case object Curve25519 extends CurveId {
-    override def parameterSpec: ECParameterSpec = {
-      val ecP = ECNamedCurveTable.getParameterSpec("curve25519")
-      new ECParameterSpec(ecP.getCurve, ecP.getG, ecP.getN, ecP.getH, ecP.getSeed)
-    }
-  }
-  case object Prime256v1 extends CurveId {
-    override def parameterSpec: ECParameterSpec = ECNamedCurveTable.getParameterSpec("prime256v1")
-  }
-
-  protected [crypt] class SignatureAlgorithm(val method: SignatureMethod, val id: String)
-  case object SHA256withECDSA extends SignatureAlgorithm(SignatureMethod.ED25519, "SHA256withECDSA")
-  case object SHA512withECDSA extends SignatureAlgorithm(SignatureMethod.ECPrime256V1, "SHA512withECDSA")
-}
-
 protected [crypt] class ECPrime256Crypto extends TufCrypto[EcPrime256KeyType.type] {
   private lazy val fac = KeyFactory.getInstance("ECDSA", "BC")
 
   private lazy val generator = {
     val generator = KeyPairGenerator.getInstance("ECDSA", "BC")
-    generator.initialize(Prime256v1.parameterSpec)
+    val paramSpec = ECNamedCurveTable.getParameterSpec("prime256v1")
+    generator.initialize(paramSpec)
     generator
   }
 
@@ -219,13 +197,13 @@ protected [crypt] class ECPrime256Crypto extends TufCrypto[EcPrime256KeyType.typ
 
   def keyPairGenerator(keySize: Int): KeyPairGenerator = generator
 
-  override def encode(keyVal: EcPrime256TufKey): Json = Json.fromString(Hex.toHexString(keyVal.keyval.getEncoded))
+  override def encode(keyVal: EcPrime256TufKey): String = Hex.toHexString(keyVal.keyval.getEncoded)
 
-  override def encode(keyVal: EcPrime256TufPrivateKey): Json = Json.fromString(Hex.toHexString(keyVal.keyval.getEncoded))
+  override def encode(keyVal: EcPrime256TufPrivateKey): String = Hex.toHexString(keyVal.keyval.getEncoded)
 
-  override def signer: security.Signature = java.security.Signature.getInstance(SHA512withECDSA.id, "BC")
+  override def signer: security.Signature = java.security.Signature.getInstance("SHA512withECDSA", "BC")
 
-  override val signatureMethod: SignatureMethod = SHA512withECDSA.method
+  override val signatureMethod: SignatureMethod = SignatureMethod.ECPrime256V1
 
   override def validKeySize(size: Int): Boolean = size == 256
 
@@ -257,11 +235,9 @@ protected [crypt] class ED25519Crypto extends TufCrypto[Ed25519KeyType.type] {
     Ed25519TufPrivateKey(new EdDSAPrivateKey(spec))
   }
 
-  override def encode(keyVal: Ed25519TufKey): Json =
-    Json.fromString(Base64.toBase64String(keyVal.keyval.getEncoded))
+  override def encode(keyVal: Ed25519TufKey): String = Base64.toBase64String(keyVal.keyval.getEncoded)
 
-  override def encode(keyVal: Ed25519TufPrivateKey): Json =
-    Json.fromString(Base64.toBase64String(keyVal.keyval.getEncoded))
+  override def encode(keyVal: Ed25519TufPrivateKey): String = Base64.toBase64String(keyVal.keyval.getEncoded)
 
   override def signer: security.Signature = {
     val spec = EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519)
@@ -317,9 +293,9 @@ protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
     pemStrWriter.toString
   }
 
-  override def encode(keyVal: RSATufKey): Json = Json.fromString(toPem(keyVal.keyval))
+  override def encode(keyVal: RSATufKey): String = toPem(keyVal.keyval)
 
-  override def encode(keyVal: RSATufPrivateKey): Json = Json.fromString(toPem(keyVal.keyval))
+  override def encode(keyVal: RSATufPrivateKey): String = toPem(keyVal.keyval)
 
   override def signer: security.Signature = java.security.Signature.getInstance("SHA256withRSAandMGF1", "BC") // RSASSA-PSS
 

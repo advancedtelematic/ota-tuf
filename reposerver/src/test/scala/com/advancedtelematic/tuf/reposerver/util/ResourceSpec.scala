@@ -82,11 +82,11 @@ class FakeKeyserverClient extends KeyserverClient {
     updateRepoKeys(repoId, RoleType.ROOT, keyType.crypto.generateKeyPair())
 
     val roles = keys.get(repoId).map { case (role, keyPair) =>
-      role -> RoleKeys(List(keyPair.pubkey.keyval.id), threshold = 1)
+      role -> RoleKeys(List(keyPair.pubkey.id), threshold = 1)
     }
 
     val clientKeys = keys.get(repoId).map { case (_, keyPair) =>
-      keyPair.pubkey.keyval.id -> keyPair.pubkey
+      keyPair.pubkey.id -> keyPair.pubkey
     }
 
     // expires truncated to seconds since circe codecs will code it that way, we cannot save it with more precision than that
