@@ -124,4 +124,4 @@ object ClientRootGenRequest {
   implicit val decoder: Decoder[ClientRootGenRequest] = io.circe.generic.semiauto.deriveDecoder
 }
 
-case class ClientRootGenRequest(threshold: Int = 1, keyType: KeyType = RsaKeyType)
+case class ClientRootGenRequest(threshold: Int = 1, keyType: KeyType = KeyType.default)

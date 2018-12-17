@@ -28,7 +28,7 @@ object KeyserverClient {
 }
 
 trait KeyserverClient {
-  def createRoot(repoId: RepoId, keyType: KeyType = RsaKeyType): Future[Json]
+  def createRoot(repoId: RepoId, keyType: KeyType = KeyType.default): Future[Json]
 
   def sign(repoId: RepoId, roleType: RoleType, payload: Json): Future[JsonSignedPayload]
 

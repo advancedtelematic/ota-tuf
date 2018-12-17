@@ -40,7 +40,7 @@ trait RepoResourceSpecUtil extends ResourceSpec with SignedRoleRepositorySupport
     RequestTargetItem(Uri("https://ats.com/testfile"), checksum, targetFormat = None, name = None, version = None, hardwareIds = Seq.empty, length = "hi".getBytes.length)
   }
 
-  def addTargetToRepo(repoId: RepoId = RepoId.generate(), keyType: KeyType = RsaKeyType): RepoId = {
+  def addTargetToRepo(repoId: RepoId = RepoId.generate(), keyType: KeyType = KeyType.default): RepoId = {
     fakeKeyserverClient.createRoot(repoId, keyType).futureValue
 
     Post(apiUri(s"repo/${repoId.show}/targets/myfile01"), testFile) ~> routes ~> check {

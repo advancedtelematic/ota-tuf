@@ -95,7 +95,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       entity(as[CreateRepositoryRequest]) { request =>
         createRepo(namespace, repoId, request.keyType)
       }
-    } ~ createRepo(namespace, repoId, defaultKeyType)
+    } ~ createRepo(namespace, repoId, KeyType.default)
 
   private def addTargetItem(namespace: Namespace, item: TargetItem): Future[JsonSignedPayload] =
     for {
