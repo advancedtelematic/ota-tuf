@@ -44,9 +44,6 @@ trait Settings {
   lazy val useS3 = _config.getString("storage.type").equals("s3")
 
   lazy val userRepoSizeLimit = _config.getInt("reposerver.sizeLimit")
-
-  // default key type for repo creation when none is given
-  val defaultKeyType = RsaKeyType
 }
 
 object Boot extends BootApp

@@ -10,6 +10,7 @@ import scopt.Read
 import shapeless._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
+import com.advancedtelematic.libtuf.data.ValidatedString.{ValidatedString, ValidatedStringValidation}
 import com.advancedtelematic.tuf.cli.DataType._
 import io.circe.{Decoder, Json}
 
@@ -55,15 +56,21 @@ object CliReads {
     gen.from(str :: HNil)
   }
 
+  implicit def validatedStringRead[W <: ValidatedString](implicit validation: ValidatedStringValidation[W]): Read[W] = Read.stringRead.map { str =>
+    validation(str).valueOr(err => throw new IllegalArgumentException(err.toList.mkString(",")))
+  }
+
   implicit val pathRead: Read[Path] = Read.fileRead.map(_.toPath)
 
   implicit val instantRead: Read[Instant] = Read.stringRead.map(Instant.parse)
 
   implicit val targetFormatRead: Read[TargetFormat] = Read.stringRead.map(_.toUpperCase).map(TargetFormat.withName)
 
-  implicit val repoServerTypeRead: Read[TufServerType] = Read.reads {
+  implicit val repoServerTypeRead: Read[TufServerType] = Read.stringRead.map(_.toLowerCase()).map {
     case "reposerver" => RepoServer
     case "director" => Director
     case str => throw new IllegalArgumentException(s"Invalid repo server type: $str valid: reposerver or director")
   }
+
+  implicit def seqToListRead[T : Read]: Read[List[T]] = Read.seqRead[T].map(_.toList)
 }

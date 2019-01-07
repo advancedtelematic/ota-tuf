@@ -1,30 +1,29 @@
-package com.advancedtelematic.tuf.cli
+package com.advancedtelematic.tuf.cli.util
 
-import TryToFuture.TryToFutureOp
 import java.security.Security
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 
-import scala.collection.JavaConverters._
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, JsonSignedPayload, KeyId, KeyType, RoleType, RsaKeyType, SignedPayload, TufKey, TufKeyPair}
+import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, RoleKeys, RootRole, TargetsRole}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyId, KeyType, RoleType, RsaKeyType, SignedPayload, TufKeyPair}
+import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleNotFound, TargetsResponse}
+import com.advancedtelematic.libtuf.http._
+import eu.timepit.refined.api.Refined
+import io.circe.syntax._
 import org.bouncycastle.jce.provider.BouncyCastleProvider
+import org.scalactic.source.Position
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{FunSuite, Matchers}
-import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.reposerver.{UserDirectorClient, UserTufServerClient, UserReposerverClient}
-import com.advancedtelematic.libtuf.reposerver.UserTufServerClient.{RoleNotFound, TargetsResponse}
-import com.advancedtelematic.tuf.cli.DataType.KeyName
-import com.advancedtelematic.tuf.cli.repo.{DirectorRepo, RepoServerRepo, TufRepo}
-import eu.timepit.refined.api.Refined
-import org.scalactic.source.Position
-import io.circe.syntax._
+import com.advancedtelematic.tuf.cli.TryToFuture._
+import com.advancedtelematic.tuf.cli.repo.TufRepo
 
+import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
@@ -43,9 +42,8 @@ abstract class CliSpec extends FunSuite with Matchers with ScalaFutures {
   override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(10, Seconds))
 }
 
-import scala.concurrent.ExecutionContext.Implicits.global
-
-abstract class FakeUserClient(keyType: KeyType) extends UserTufServerClient {
+trait FakeTufServerClient extends TufServerClient {
+  val keyType: KeyType
 
   protected val oldPair = keyType.crypto.generateKeyPair(keyType.crypto.defaultKeySize)
 
@@ -54,6 +52,8 @@ abstract class FakeUserClient(keyType: KeyType) extends UserTufServerClient {
   protected var targetsPubKey = targetsPair.pubkey
 
   protected val rootRoles = new ConcurrentHashMap[Int, SignedPayload[RootRole]]()
+
+  protected val pushedDelegations = new ConcurrentHashMap[DelegatedRoleName, SignedPayload[TargetsRole]]()
 
   override def fetchKeyPair(keyId: KeyId): Future[TufKeyPair] = {
     Future.successful(pairs.filter(_.pubkey.id == keyId).head)
@@ -108,31 +108,16 @@ abstract class FakeUserClient(keyType: KeyType) extends UserTufServerClient {
   def setRoot(signedPayload: SignedPayload[RootRole]): Unit = {
     rootRoles.put(signedPayload.signed.version, signedPayload)
   }
+
+  def delegations(): List[(DelegatedRoleName, SignedPayload[TargetsRole])] = pushedDelegations.asScala.toList
 }
 
-abstract class FakeUserClientOffline[R <: TufRepo](keyType: KeyType) extends FakeUserClient(keyType) {
-
-  def moveOffline(repo: R, keyType: KeyType): Future[(TufKey, TufKey, SignedPayload[RootRole])]
-
+object FakeReposerverTufServerClient {
+  def apply(keyType: KeyType): FakeReposerverTufServerClient = new FakeReposerverTufServerClient(keyType)
 }
 
-class FakeUserDirectorClient(keyType: KeyType) extends FakeUserClientOffline[DirectorRepo](keyType) with UserDirectorClient {
+class FakeReposerverTufServerClient(val keyType: KeyType) extends ReposerverClient with FakeTufServerClient with DirectorClient {
 
-  def moveOffline(repo: DirectorRepo, keyType: KeyType): Future[(TufKey, TufKey, SignedPayload[RootRole])] = {
-    val oldRootName = KeyName(s"oldroot${repo.name.value}")
-    val newRootName = KeyName(s"newroot${repo.name.value}")
-
-    val pub = repo.genKeys(newRootName, keyType).get.pubkey
-
-    repo.moveRootOffline(this, newRootName, oldRootName, None).map { s => (pub, targetsPubKey, s) }
-  }
-}
-
-object FakeUserDirectorClient {
-  def apply(keyType: KeyType): FakeUserDirectorClient = new FakeUserDirectorClient(keyType)
-}
-
-class FakeUserReposerverClient(keyType: KeyType) extends FakeUserClientOffline[RepoServerRepo](keyType) with UserReposerverClient {
   private var unsignedTargets = TargetsRole(Instant.now.plus(1, ChronoUnit.DAYS), Map.empty, 1)
 
   override def targets(): Future[TargetsResponse] = Future.successful {
@@ -153,19 +138,11 @@ class FakeUserReposerverClient(keyType: KeyType) extends FakeUserClientOffline[R
         Failure(new RuntimeException("[test] invalid signatures for targets role"))
     }.toFuture
 
-  def moveOffline(repo: RepoServerRepo, keyType: KeyType): Future[(TufKey, TufKey, SignedPayload[RootRole])] = {
-    val oldRootName = KeyName(s"oldroot${repo.name.value}")
-    val newRootName = KeyName(s"newroot${repo.name.value}")
-    val newTargetsName = KeyName(s"targets${repo.name.value}")
-
-    val pub = repo.genKeys(newRootName, keyType).get.pubkey
-    val pubT = repo.genKeys(newTargetsName, keyType).get.pubkey
-
-    repo.moveRootOffline(this, newRootName, oldRootName, newTargetsName, None).map { s => (pub, pubT, s) }
+  override def pushDelegation(name: DelegatedRoleName, delegation: SignedPayload[TargetsRole]): Future[Unit] = Future.successful {
+    this.pushedDelegations.put(name, delegation)
   }
 
-}
-
-object FakeUserReposerverClient {
-  def apply(keyType: KeyType): FakeUserReposerverClient = new FakeUserReposerverClient(keyType)
+  override def pullDelegation(name: DelegatedRoleName): Future[SignedPayload[TargetsRole]] = Future.successful {
+    Option(pushedDelegations.get(name)).getOrElse(throw new IllegalArgumentException("[test] delegation not found"))
+  }
 }

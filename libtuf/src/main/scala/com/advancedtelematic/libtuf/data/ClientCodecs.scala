@@ -40,6 +40,18 @@ object ClientCodecs {
   implicit val rootRoleEncoder: Encoder[RootRole] = deriveEncoder[RootRole].encodeRoleType
   implicit val rootRoleDecoder: Decoder[RootRole] = deriveDecoder[RootRole].validateRoleType
 
+  implicit val delegatedRoleNameEncoder: Encoder[DelegatedRoleName] = ValidatedString.validatedStringEncoder
+  implicit val delegatedRoleNameDecoder: Decoder[DelegatedRoleName] = ValidatedString.validatedStringDecoder
+
+  implicit val delegatedPathPatternEncoder: Encoder[DelegatedPathPattern] = ValidatedString.validatedStringEncoder
+  implicit val delegatedPathPatternDecoder: Decoder[DelegatedPathPattern] = ValidatedString.validatedStringDecoder
+
+  implicit val delegatedRoleEncoder: Encoder[Delegation] = deriveEncoder
+  implicit val delegatedRoleDecoder: Decoder[Delegation] = deriveDecoder
+
+  implicit val delegationsEncoder: Encoder[Delegations] = deriveEncoder
+  implicit val delegationsDecoder: Decoder[Delegations] = deriveDecoder[Delegations]
+
   implicit val targetsRoleEncoder: Encoder[TargetsRole] = deriveEncoder[TargetsRole].encodeRoleType.mapJson(_.dropNullValues)
   implicit val targetsRoleDecoder: Decoder[TargetsRole] = deriveDecoder[TargetsRole].validateRoleType
 
@@ -59,14 +71,11 @@ object ClientCodecs {
   }
 
   implicit private class ValidateRoleOp[T](decoder: Decoder[T])(implicit tr: TufRole[T]) {
-    def validateRoleType: Decoder[T] = {
-      decoder.validate({ c =>
-        val _type = c.downField("_type").as[String].valueOr(throw _).toLowerCase.capitalize
-
-        _type == tr.typeStr
-      },
-        s"Invalid type for role: ${tr.roleType}"
-      )
-    }
+    def validateRoleType: Decoder[T] = decoder.validate({ c =>
+      val _type = c.downField("_type").as[String].valueOr(throw _).toLowerCase.capitalize
+      _type == tr.typeStr
+    },
+      s"Invalid type for role: ${tr.roleType}"
+    )
   }
 }

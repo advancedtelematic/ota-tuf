@@ -6,7 +6,7 @@ import com.advancedtelematic.tuf.cli.DataType.RepoServer
 import io.circe.Json
 import io.circe.literal._
 
-class CliCodecsTest extends FunSuite {
+class CliCodecsSpec extends FunSuite {
 
   test("repo server type encoder") {
     assert(repoServerTypeEncoder(RepoServer) == Json.fromString("RepoServer"))

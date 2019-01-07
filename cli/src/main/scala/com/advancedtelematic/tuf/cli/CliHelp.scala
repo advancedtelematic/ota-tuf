@@ -3,39 +3,31 @@ package com.advancedtelematic.tuf.cli
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libtuf.data.ErrorCodes
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
+import com.advancedtelematic.tuf.cli.Errors.CommandNotSupportedByRepositoryType
 import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
-import org.slf4j.LoggerFactory
 import io.circe.syntax._
-
-import scala.concurrent.Future
+import org.slf4j.LoggerFactory
 
 object CliHelp {
-  lazy val log = LoggerFactory.getLogger(this.getClass)
 
-  private val showError: PartialFunction[Throwable, Throwable] = {
-    case ex =>
-      log.error("An error occurred", ex)
-      ex
-  }
+  private val _log = LoggerFactory.getLogger(this.getClass)
 
-  private val explainError: PartialFunction[Throwable, Throwable] = {
+  val explainError: PartialFunction[Throwable, Unit] = {
     case ex: HttpjClientError if ex.remoteError.code == ErrorCodes.KeyServer.InvalidRootRole =>
       val causes = for {
         errorRepr <- ex.remoteError.cause.flatMap(_.as[ErrorRepresentation].toOption)
         errorMsgs <- errorRepr.cause.flatMap(_.as[List[String]].toOption)
       } yield (errorRepr.description :: errorMsgs).mkString("\n  ")
 
-      log.debug(ex.remoteError.asJson.noSpaces)
+      System.err.println(ex.remoteError.asJson.noSpaces)
 
-      log.info(
+      System.err.println(
         s"""Server could not validate the root role:
            |  ${causes.getOrElse(ex.msg)}
           """.stripMargin)
 
-      ex
-
     case ex: TargetsPullError =>
-      log.info(
+      System.err.println(
         s"""
           | ${ex.msg}
           |
@@ -54,18 +46,8 @@ object CliHelp {
           |
           |- The Server could not return a valid checksum when pulling targets.
           |""".stripMargin)
-      ex
 
-    case ex: MissingTargetKeyname =>
-      log.info("Missing argument: target key name required to move repo server keyname offline")
-      ex
-  }
-
-  val explainErrorHandler: PartialFunction[Throwable, Future[Unit]] = {
-    case ex if explainError.isDefinedAt(ex) =>
-      Future.failed(explainError(ex))
-    case ex =>
-      showError(ex)
-      Future.failed(ex)
+    case CommandNotSupportedByRepositoryType(repoType, msg) =>
+      _log.error(s"The local repository is of type $repoType which does not support this command: $msg")
   }
 }

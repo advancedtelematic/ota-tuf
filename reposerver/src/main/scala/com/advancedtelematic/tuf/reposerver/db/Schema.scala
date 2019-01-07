@@ -4,7 +4,7 @@ import java.time.Instant
 
 import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
-import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
+import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, TargetCustom}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, TargetFilename}
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
@@ -12,7 +12,8 @@ import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.StorageMethod._
 import SlickMappings._
 import com.advancedtelematic.libtuf_server.data.Requests.TargetComment
-import com.advancedtelematic.tuf.reposerver.db.DBDataType.DbSignedRole
+import com.advancedtelematic.tuf.reposerver.db.DBDataType.{DbDelegation, DbSignedRole}
+import SlickValidatedString._
 
 object Schema {
   import com.advancedtelematic.libats.slick.codecs.SlickRefined._
@@ -79,4 +80,16 @@ object Schema {
   }
 
   protected [db] val filenameComments = TableQuery[PackageCommentTable]
+
+  class DelegationTable(tag: Tag) extends Table[DbDelegation](tag, "delegations") {
+    def repoId = column[RepoId]("repo_id")
+    def roleName = column[DelegatedRoleName]("name")
+    def content = column[JsonSignedPayload]("content")
+
+    def pk = primaryKey("delegations_pk", (repoId, roleName))
+
+    override def * = (repoId, roleName, content) <> ((DbDelegation.apply _).tupled, DbDelegation.unapply)
+  }
+
+  protected [db] val delegations = TableQuery[DelegationTable]
 }

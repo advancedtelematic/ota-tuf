@@ -4,14 +4,15 @@ import java.net.URI
 import java.time.Instant
 
 import cats.syntax.show._
-import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, RoleType, TargetFilename, TargetName, TargetVersion, TufKey}
-import eu.timepit.refined.api.{Refined, Validate}
-import io.circe.{Decoder, Json}
-import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
-import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libats.data.DataType.HashMethod.HashMethod
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
+import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
+import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, RoleType, TargetFilename, TargetName, TargetVersion, TufKey}
+import com.advancedtelematic.libtuf.data.ValidatedString.{ValidatedString, ValidatedStringValidation}
+import eu.timepit.refined.api.{Refined, Validate}
+import io.circe.{Decoder, Json}
 
 object ClientDataType {
   type ClientHashes = Map[HashMethod, Refined[String, ValidChecksum]]
@@ -103,9 +104,40 @@ object ClientDataType {
     override val _type: String = "Root"
   }
 
+  final class DelegatedPathPattern private (val value: String) extends ValidatedString
+
+  object DelegatedPathPattern {
+    implicit val delegatedPathPatternValidation = ValidatedStringValidation(new DelegatedPathPattern(_)) { v: String =>
+      cats.data.Validated.condNel(
+        v.nonEmpty && v.length < 254 && !v.contains(".."),
+        new DelegatedPathPattern(v),
+        "DelegatedPathPattern cannot be empty or bigger than 254 chars or contain `..`"
+      )
+    }
+  }
+
+  final class DelegatedRoleName private (val value: String) extends ValidatedString
+
+  object DelegatedRoleName {
+    implicit val delegatedRoleNameValidation = ValidatedStringValidation(new DelegatedRoleName(_)) { v: String =>
+      cats.data.Validated.condNel(
+        v.nonEmpty || v.length > 50,
+        new DelegatedRoleName(v),
+        "delegated role name cannot be empty or bigger than 50 characters"
+      )
+    }
+  }
+
+  case class Delegation(name: DelegatedRoleName, keyids: List[KeyId], paths: List[DelegatedPathPattern],
+                        threshold: Int = 1,
+                        terminating: Boolean = true)
+
+  case class Delegations(keys: Map[KeyId, TufKey], roles: List[Delegation])
+
   case class TargetsRole(expires: Instant,
                          targets: Map[TargetFilename, ClientTargetItem],
                          version: Int,
+                         delegations: Option[Delegations] = None,
                          custom: Option[Json] = None) extends VersionedRole {
     override val _type: String = "Targets"
   }

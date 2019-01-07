@@ -119,6 +119,10 @@ object TufDataType {
 
   case class JsonSignedPayload(signatures: Seq[ClientSignature], signed: Json)
 
+  object KeyType {
+    val default = RsaKeyType
+  }
+
   sealed trait KeyType {
     type Pub <: TufKey
     type Priv <: TufPrivateKey

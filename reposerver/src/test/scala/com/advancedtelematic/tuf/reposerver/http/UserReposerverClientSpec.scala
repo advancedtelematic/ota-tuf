@@ -2,25 +2,29 @@ package com.advancedtelematic.tuf.reposerver.http
 
 import java.net.URI
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 
-import cats.syntax.either._
-import eu.timepit.refined._
+import cats.syntax.option._
 import com.advancedtelematic.libats.data.DataType.{Namespace, ValidChecksum}
-import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libats.data.RefinedUtils._
+import com.advancedtelematic.libtuf.crypt.TufCrypto
+import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.data.ClientDataType
+import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, Delegation, RootRole, TargetsRole}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RepoId, RoleType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.libtuf.http.ReposerverHttpClient
+import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
+import com.advancedtelematic.libtuf.http.TufServerHttpClient.RoleChecksumNotValid
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util._
-import org.scalatest.time.{Seconds, Span}
-import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
-import com.advancedtelematic.libtuf.reposerver.UserTufServerClient.RoleChecksumNotValid
-import com.advancedtelematic.libtuf.reposerver.UserReposerverHttpClient
-import org.scalatest.BeforeAndAfter
 import io.circe.syntax._
+import org.scalatest.BeforeAndAfter
+import org.scalatest.time.{Seconds, Span}
+import com.advancedtelematic.libtuf.data.ValidatedString._
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 
-class UserReposerverClientSpec(keyType: KeyType) extends TufReposerverSpec
+class UserReposerverClientSpec extends TufReposerverSpec
   with ResourceSpec
   with FakeScalajHttpClient
   with RepoNamespaceRepositorySupport
@@ -34,7 +38,7 @@ class UserReposerverClientSpec(keyType: KeyType) extends TufReposerverSpec
 
   val repoId = RepoId.generate()
 
-  val client = new UserReposerverHttpClient(URI.create("http://test-reposerver"), testClient, token = None)
+  val client = new ReposerverHttpClient(URI.create("http://test-reposerver"), testClient, token = None)
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -42,7 +46,7 @@ class UserReposerverClientSpec(keyType: KeyType) extends TufReposerverSpec
   }
 
   before {
-    fakeKeyserverClient.createRoot(repoId, keyType).futureValue
+    fakeKeyserverClient.createRoot(repoId, KeyType.default).futureValue
   }
 
   after {
@@ -86,7 +90,7 @@ class UserReposerverClientSpec(keyType: KeyType) extends TufReposerverSpec
   test("returns specific exception when previous checksum is not valid") {
     val targets = TargetsRole(Instant.now, Map.empty, 20)
     val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets.asJson).futureValue
-    val invalidChecksum = refineV[ValidChecksum]("11c3599621d7edc417c795363767754b431404e8f9fd6fb85f78b2b45423b00b").valueOr(err => throw new Exception(err))
+    val invalidChecksum = "11c3599621d7edc417c795363767754b431404e8f9fd6fb85f78b2b45423b00b".refineTry[ValidChecksum].get
     client.pushTargets(SignedPayload(signedTargets.signatures, targets, targets.asJson), Option(invalidChecksum)).failed.futureValue shouldBe RoleChecksumNotValid
   }
 
@@ -110,8 +114,25 @@ class UserReposerverClientSpec(keyType: KeyType) extends TufReposerverSpec
     targetsResponse.targets.signatures shouldNot be(empty)
     targetsResponse.checksum shouldNot be(empty)
   }
+
+  test("can push and pull a delegation to/from server") {
+    val name = "delegation01".unsafeApply[DelegatedRoleName]
+    val delegationKey = KeyType.default.crypto.generateKeyPair()
+
+    val existingTargets = client.targets().futureValue
+    val delegation = Delegation(name, List(delegationKey.pubkey.id), List.empty)
+    val targets = TargetsRole(Instant.now, Map.empty, existingTargets.targets.signed.version + 1,
+      delegations = ClientDataType.Delegations(Map(delegationKey.pubkey.id -> delegationKey.pubkey), List(delegation)).some)
+    val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets.asJson).futureValue
+
+    client.pushTargets(SignedPayload(signedTargets.signatures, targets, targets.asJson), existingTargets.checksum).futureValue
+
+    val delegationTargets = TargetsRole(Instant.now.plus(1, ChronoUnit.HOURS), Map.empty, version = 1)
+    val delegationSig = TufCrypto.signPayload(delegationKey.privkey, delegationTargets.asJson)
+    val signedDelegation = SignedPayload(Seq(delegationSig.toClient(delegationKey.pubkey.id)), delegationTargets, delegationTargets.asJson)
+
+    client.pushDelegation(name, signedDelegation).futureValue shouldBe (())
+
+    client.pullDelegation(name).futureValue.asJsonSignedPayload shouldBe signedDelegation.asJsonSignedPayload
+  }
 }
-
-class RsaUserReposerverClientSpec extends UserReposerverClientSpec(RsaKeyType)
-
-class EdUserReposerverClientSpec extends UserReposerverClientSpec(Ed25519KeyType)

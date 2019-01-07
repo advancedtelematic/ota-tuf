@@ -1,67 +1,44 @@
 package com.advancedtelematic.tuf.reposerver.http
 
-import akka.http.scaladsl.unmarshalling._
-import PredefinedFromStringUnmarshallers.CsvSeq
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server._
-import cats.data.{Validated, ValidatedNel}
-import cats.data.Validated.{Invalid, Valid}
-import cats.implicits._
+import akka.http.scaladsl.unmarshalling.PredefinedFromStringUnmarshallers.CsvSeq
+import akka.http.scaladsl.unmarshalling._
 import com.advancedtelematic.libats.data.RefinedUtils._
 import com.advancedtelematic.libats.http.Errors.MissingEntity
-import com.advancedtelematic.libats.messaging.MessageBusPublisher
-import com.advancedtelematic.libtuf_server.data.Messages.TufTargetAdded
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, TargetFilename, _}
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
-import com.advancedtelematic.tuf.reposerver.db.{FilenameCommentRepository, RepoNamespaceRepositorySupport, TargetItemRepositorySupport}
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RootRole, TargetCustom, TargetsRole}
+import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
+import com.advancedtelematic.libats.http.UUIDKeyAkka._
+import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole}
+import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
 import com.advancedtelematic.libats.http.AnyvalMarshallingSupport._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libats.codecs.CirceCodecs._
-import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
+import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
-import com.advancedtelematic.libats.http.UUIDKeyAkka._
-import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
-import com.advancedtelematic.tuf.reposerver.Settings
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, TargetFilename, _}
 import com.advancedtelematic.libtuf_server.data.Marshalling._
-import com.advancedtelematic.tuf.reposerver.http.Errors.NoRepoForNamespace
 import com.advancedtelematic.libtuf_server.data.Requests.{CommentRequest, CreateRepositoryRequest, _}
+import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
+import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
+import com.advancedtelematic.tuf.reposerver.Settings
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
+import com.advancedtelematic.tuf.reposerver.db._
+import com.advancedtelematic.tuf.reposerver.delegations.DelegationsManagement
+import com.advancedtelematic.tuf.reposerver.http.Errors.NoRepoForNamespace
+import com.advancedtelematic.tuf.reposerver.http.RoleChecksumHeader._
+import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import io.circe.Json
-import io.circe.syntax._
 import org.slf4j.LoggerFactory
+import slick.jdbc.MySQLProfile.api._
 
 import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
-import slick.jdbc.MySQLProfile.api._
-import RoleChecksumHeader._
 
-
-class TufTargetsPublisher(messageBus: MessageBusPublisher)(implicit ec: ExecutionContext) {
-  def targetAdded(namespace: Namespace, item: TargetItem): Future[Unit] =
-    messageBus.publish(TufTargetAdded(namespace, item.filename, item.checksum, item.length, item.custom))
-
-  def newTargetsAdded(namespace: Namespace, allTargets: Map[TargetFilename, ClientTargetItem], existing: Seq[TargetItem]): Future[Unit] = {
-    newTargetsFromExisting(allTargets, existing.map(_.filename)).toList.traverse_ { case (filename, checksum, clientTargetItem) =>
-      messageBus.publish(TufTargetAdded(namespace, filename, checksum,
-                                        clientTargetItem.length, clientTargetItem.customParsed[TargetCustom]))
-    }
-  }
-
-  private def newTargetsFromExisting(allTargets: Map[TargetFilename, ClientTargetItem], existing: Seq[TargetFilename]) =
-    (allTargets -- existing.toSet).flatMap { case (targetFilename, clientTargetItem) =>
-      clientTargetItem.hashes.headOption.map { case (hashMethod, validChecksum) =>
-        (targetFilename, Checksum(hashMethod, validChecksum), clientTargetItem)
-      }
-    }
-}
 
 class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: NamespaceValidation,
                    targetStore: TargetStore, tufTargetsPublisher: TufTargetsPublisher)
@@ -69,10 +46,12 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   with TargetItemRepositorySupport
   with RepoNamespaceRepositorySupport
   with FilenameCommentRepository.Support
+  with SignedRoleRepositorySupport
   with Settings {
 
   private val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
   private val offlineSignedRoleStorage = new OfflineSignedRoleStorage(keyserverClient)
+  private val delegations = new DelegationsManagement()
 
   val log = LoggerFactory.getLogger(this.getClass)
 
@@ -116,7 +95,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       entity(as[CreateRepositoryRequest]) { request =>
         createRepo(namespace, repoId, request.keyType)
       }
-    } ~ createRepo(namespace, repoId, defaultKeyType)
+    } ~ createRepo(namespace, repoId, KeyType.default)
 
   private def addTargetItem(namespace: Namespace, item: TargetItem): Future[JsonSignedPayload] =
     for {
@@ -200,39 +179,14 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
     } yield StatusCodes.NoContent
   }
 
-  def toValidatedNel[A](future: Future[A]): Future[ValidatedNel[Throwable, A]] = {
-    future.map(Validated.valid).recover { case e =>
-      Validated.invalidNel(e)
-    }
-  }
+  def saveOfflineTargetsRole(repoId: RepoId, namespace: Namespace, signedPayload: SignedPayload[TargetsRole],
+                             checksum: Option[RoleChecksum]): Future[SignedRole[TargetsRole]] = for {
+    (newItems, newSignedRole) <- offlineSignedRoleStorage.saveTargetRole(targetStore)(repoId, signedPayload, checksum)
+    _ <- tufTargetsPublisher.newTargetsAdded(namespace, signedPayload.signed.targets, newItems)
+  } yield newSignedRole
 
-  private def deleteOutdated(previousTargetItems: Seq[TargetItem], newFilenames: Iterable[TargetFilename]): Future[ValidatedNel[Throwable,Unit]] = {
-    val previousMap = previousTargetItems.map(targetItem => (targetItem.filename, targetItem)).toMap
-    val outdated = (previousMap -- newFilenames).values
-    val results = outdated.map(targetStore.delete)
-
-    results.toList.foldMap(toValidatedNel)
-  }
-
-  def newTargetsAdded(repoId: RepoId, namespace: Namespace, signedPayload: SignedPayload[TargetsRole], checksum: Option[RoleChecksum]): Future[ValidatedNel[Throwable, SignedRole[TargetsRole]]] = {
-    // get the items before they get removed from the DB
-    val previousTargetItemsF: Future[Seq[TargetItem]] = targetItemRepo.findFor(repoId)
-
-    previousTargetItemsF.flatMap { previousTargetItems: Seq[TargetItem] =>
-      offlineSignedRoleStorage.saveTargetRole(namespace, signedPayload, repoId, checksum).flatMap {
-        case Valid((targetItems, newSignedRole)) =>
-          tufTargetsPublisher.newTargetsAdded(namespace, signedPayload.signed.targets, targetItems).flatMap { _ =>
-            deleteOutdated(previousTargetItems, signedPayload.signed.targets.keys).map { validatedNel =>
-              validatedNel.map(_ => newSignedRole)
-            }
-          }
-        case Invalid(errors) => Future(Invalid(errors.map(new Throwable(_))))
-      }
-    }
-  }
-
-  private def modifyRepoRoutes(repoId: RepoId) =
-    namespaceValidation(repoId) { namespace =>
+  private def modifyRepoRoutes(repoId: RepoId): Route =
+    (namespaceValidation(repoId) & withRepoIdHeader(repoId)){ namespace =>
       pathPrefix("root") {
         pathEnd {
           get {
@@ -252,11 +206,19 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
            }
          }
       } ~
-      (get & path(IntNumber ~ ".root.json") & withRepoIdHeader(repoId)) { version ⇒
+      (get & path(IntNumber ~ ".root.json")) { version ⇒
         findRootByVersion(repoId, version)
       } ~
-      (get & path(JsonRoleTypeMetaPath) & withRepoIdHeader(repoId)) { roleType =>
+      (get & path(JsonRoleTypeMetaPath)) { roleType =>
         findRole(repoId, roleType)
+      } ~
+      path("delegations" / DelegatedRoleUriPath) { delegatedRoleName =>
+        (put & entity(as[SignedPayload[TargetsRole]])) { payload =>
+          complete(delegations.create(repoId, delegatedRoleName, payload).map(_ => StatusCodes.NoContent))
+        } ~
+        get {
+          complete(delegations.find(repoId, delegatedRoleName))
+        }
       } ~
       pathPrefix("targets") {
         path(TargetFilenamePath) { filename =>
@@ -277,13 +239,10 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
         } ~
         (pathEnd & put & entity(as[SignedPayload[TargetsRole]])) { signedPayload =>
           extractRoleChecksumHeader { checksum =>
-            onSuccess(newTargetsAdded(repoId, namespace, signedPayload, checksum)) {
-              case Valid(newSignedRole) =>
-                respondWithCheckSum(newSignedRole.checksum.hash) {
-                  complete(StatusCodes.NoContent)
-                }
-              case Invalid(errors) =>
-                complete(StatusCodes.BadRequest -> Json.obj("errors" -> errors.map(_.getMessage).asJson))
+            onSuccess(saveOfflineTargetsRole(repoId, namespace, signedPayload, checksum)) { newSignedRole =>
+              respondWithCheckSum(newSignedRole.checksum.hash) {
+                complete(StatusCodes.NoContent)
+              }
             }
           }
         }
@@ -321,5 +280,4 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       } ~
       modifyRepoRoutes(repoId)
     }
-
 }

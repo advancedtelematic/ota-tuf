@@ -17,7 +17,6 @@ object DataType {
   case class AuthConfig(server: URI, client_id: String, client_secret: String)
 
   sealed trait TufServerType
-
   case object RepoServer extends TufServerType
   case object Director extends TufServerType
 

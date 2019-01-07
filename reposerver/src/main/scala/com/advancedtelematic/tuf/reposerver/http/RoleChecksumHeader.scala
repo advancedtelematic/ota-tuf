@@ -15,15 +15,11 @@ object RoleChecksumHeader {
 
   def apply(checksum: RoleChecksum): RawHeader = RawHeader(HEADER_NAME, checksum.value)
 
-  def extractRoleChecksumHeader: Directive1[Option[RoleChecksum]] = {
-    val d = optionalHeaderValueByName(HEADER_NAME).map { value =>
+  def extractRoleChecksumHeader: Directive1[Option[RoleChecksum]] =
+    optionalHeaderValueByName(HEADER_NAME).map { value =>
       value.flatMap(v => refineV[ValidChecksum](v).toOption)
     }
 
-    d
-  }
-
-  def respondWithCheckSum(checksum: RoleChecksum): Directive0 = {
+  def respondWithCheckSum(checksum: RoleChecksum): Directive0 =
     mapResponse { _.addHeader(apply(checksum)) }
-  }
 }
