@@ -2,23 +2,24 @@ package com.advancedtelematic.tuf.keyserver.client
 
 import java.security.interfaces.RSAPublicKey
 
-import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, Ed25519TufKey, JsonSignedPayload, KeyId, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
-import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.Errors.RemoteServiceError
+import com.advancedtelematic.libats.http.tracing.NullRequestTracing
+import com.advancedtelematic.libats.http.tracing.Tracing.RequestTracing
+import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519TufKey, JsonSignedPayload, KeyId, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
 import com.advancedtelematic.libtuf_server.keyserver.{KeyserverClient, KeyserverHttpClient}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 import com.advancedtelematic.tuf.util._
 import eu.timepit.refined.refineV
 import io.circe.Json
+import io.circe.syntax._
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Millis, Seconds, Span}
 
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
-import io.circe.syntax._
-import com.advancedtelematic.libtuf.data.ClientCodecs._
 
 class KeyserverHttpClientSpec extends TufKeyserverSpec
   with ResourceSpec
@@ -31,6 +32,8 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
   implicit val ec = ExecutionContext.global
 
   override implicit def patienceConfig = PatienceConfig(timeout = Span(20, Seconds), interval = Span(500, Millis))
+
+  implicit lazy val requestTracing: RequestTracing = new NullRequestTracing
 
   val client = new KeyserverHttpClient("http://test-keyserver", testHttpClient)
 
