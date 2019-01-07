@@ -4,15 +4,14 @@ import java.security.{PrivateKey, PublicKey}
 import java.util.UUID
 
 import cats.Show
+import com.advancedtelematic.libats.data.DataType.HashMethod.HashMethod
+import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libats.data.UUIDKey.{UUIDKey, UUIDKeyObj}
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import eu.timepit.refined.api.{Refined, Validate}
-import io.circe.{Decoder, Encoder, Json}
-import TufCrypto.PublicKeyOps
-import com.advancedtelematic.libats.data.DataType.HashMethod.HashMethod
-import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import io.circe.syntax._
+import io.circe.{Encoder, Json}
 
 
 object TufDataType {
@@ -155,7 +154,7 @@ object TufDataType {
 
   sealed trait TufKey {
     val keyval: PublicKey
-    lazy val id = keyval.id
+    lazy val id = keytype.crypto.keyId(this)
     def keytype: KeyType
   }
   case class RSATufKey(override val keyval: PublicKey) extends TufKey {

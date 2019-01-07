@@ -9,7 +9,7 @@ object SignedPayloadSignatureOps  {
   implicit class SignedPayloadSignatureOps[T : Encoder](value: SignedPayload[T]) {
     def isValidFor(tufKey: TufKey): Boolean =
       value.signatures.exists { sig =>
-        TufCrypto.isValid(sig, tufKey.keyval, value.json)
+        TufCrypto.isValid(sig, tufKey, value.json)
       }
   }
 }

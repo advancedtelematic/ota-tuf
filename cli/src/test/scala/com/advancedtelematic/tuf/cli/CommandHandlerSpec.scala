@@ -4,18 +4,18 @@ import java.io.FileOutputStream
 import java.nio.file.Files
 import java.time.Instant
 
-import com.advancedtelematic.libtuf.data.ValidatedString._
-import com.advancedtelematic.libtuf.data.ClientDataType.DelegatedRoleName._
-import com.advancedtelematic.libtuf.data.ClientDataType.DelegatedPathPattern._
 import cats.data.Validated.Valid
 import cats.syntax.either._
 import cats.syntax.option._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType
+import com.advancedtelematic.libtuf.data.ClientDataType.DelegatedPathPattern._
+import com.advancedtelematic.libtuf.data.ClientDataType.DelegatedRoleName._
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedPathPattern, DelegatedRoleName, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, SignedPayload}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, SignedPayload}
+import com.advancedtelematic.libtuf.data.ValidatedString._
 import com.advancedtelematic.tuf.cli.Commands._
 import com.advancedtelematic.tuf.cli.DataType.KeyName
 import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, RepoServerRepo}
@@ -136,5 +136,21 @@ class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors
     handler(config).futureValue
 
     jawn.parseFile(out.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).valueOr(throw _).asJsonSignedPayload shouldBe signedDelegation.asJsonSignedPayload
+  }
+
+  test("IdUserKey outputs a key id") {
+    val out = Files.createTempFile("out", ".json")
+    val keyFile = Files.createTempFile("key", ".pub")
+
+    val keypair = Ed25519KeyType.crypto.generateKeyPair()
+    Files.write(keyFile, keypair.pubkey.asJson.spaces2.getBytes)
+
+    val config = Config(IdUserKey, inputPath = keyFile.some, outputPath = out.some)
+
+    handler(config).futureValue
+
+    val bytes = Files.readAllBytes(out)
+
+    new String(bytes) should be(keypair.pubkey.id.value)
   }
 }

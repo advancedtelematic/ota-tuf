@@ -120,6 +120,12 @@ object Cli extends App with VersionInfo {
         .toCommand(GenUserKey)
         .children(
           manyKeyNamesOpt(this).maxOccurs(1)
+        ),
+      cmd("id")
+        .text("Output calculated id for a public key")
+        .toCommand(IdUserKey)
+        .children(
+          opt[Path]("input").abbr("i").required().toConfigOptionParam('inputPath)
         )
     ).text("manage keys not associated with a specific repository")
 
