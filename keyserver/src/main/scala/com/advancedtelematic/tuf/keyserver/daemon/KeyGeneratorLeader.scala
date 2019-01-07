@@ -109,7 +109,7 @@ class DefaultKeyGenerationOp()(implicit val db: Database, val ec: ExecutionConte
 
     (0 until kgr.threshold).map { _ =>
       val pair = TufCrypto.generateKeyPair(kgr.keyType, kgr.keySize)
-      (Key(pair.pubkey.id, kgr.repoId, kgr.roleType, kgr.keyType, pair.pubkey.keyval, pair.privkey), pair)
+      (Key(pair.pubkey.id, kgr.repoId, kgr.roleType, kgr.keyType, pair.pubkey, pair.privkey), pair)
     }
   }
 

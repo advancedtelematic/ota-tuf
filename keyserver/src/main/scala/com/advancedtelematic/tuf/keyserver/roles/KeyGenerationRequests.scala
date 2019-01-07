@@ -112,9 +112,7 @@ extends KeyRepositorySupport with SignedRootRoleSupport {
 
     val repoKeys = await(keyRepo.repoKeys(repoId)).toSet
 
-    val clientKeys = repoKeys.map { key =>
-      key.id -> key.toTufKey
-    }.toMap
+    val clientKeys = repoKeys.map { key => key.id -> key.publicKey }.toMap
 
     val roleTypeToKeyIds = repoKeys.groupBy(_.roleType).mapValues(_.map(_.id).toSeq)
 

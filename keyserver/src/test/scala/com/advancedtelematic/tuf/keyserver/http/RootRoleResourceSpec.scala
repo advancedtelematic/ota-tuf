@@ -282,7 +282,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
       forAll(signedPayload.signatures) { sig =>
         sig.keyid shouldBe targetKey.pubkey.id
 
-        val isValidT = TufCrypto.isValid(sig, targetKey.pubkey.keyval, signedPayload.signed)
+        val isValidT = TufCrypto.isValid(sig, targetKey.pubkey, signedPayload.signed)
         isValidT shouldBe true
       }
     }
@@ -712,7 +712,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      responseAs[Seq[TufKeyPair]].map(_.pubkey).toSet shouldBe publicKeys.map(_.toTufKey).toSet
+      responseAs[Seq[TufKeyPair]].map(_.pubkey).toSet shouldBe publicKeys.map(_.publicKey).toSet
     }
   }
 

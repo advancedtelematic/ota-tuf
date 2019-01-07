@@ -1,22 +1,18 @@
 package com.advancedtelematic.tuf.keyserver.daemon
 
-import com.advancedtelematic.libtuf.data.TufDataType.KeyId
 import akka.actor.{ActorSystem, Props, Status}
 import akka.testkit.{ImplicitSender, TestKitBase, TestProbe}
-import com.advancedtelematic.libtuf.crypt.TufCrypto._
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, Ed25519TufKey, KeyType, RepoId, RoleType}
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
-import com.advancedtelematic.tuf.util.{KeyTypeSpecSupport, TufKeyserverSpec}
 import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.test.DatabaseSpec
-import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519TufKey, KeyId, KeyType, RSATufKey, RepoId, RoleType}
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenRequestStatus, _}
 import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport}
+import com.advancedtelematic.tuf.util.{KeyTypeSpecSupport, TufKeyserverSpec}
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Milliseconds, Seconds, Span}
-import org.bouncycastle.util.encoders.Hex
 
-import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
 
 
 class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with DatabaseSpec with ImplicitSender
@@ -60,11 +56,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
     val dbKey = keyRepo.findAll(Seq(key.id)).futureValue.head
 
     dbKey.keyType shouldBe keyType
-    dbKey.publicKey.toPem should include("BEGIN PUBLIC KEY")
-
-    if (keyType == Ed25519KeyType) {
-      keyType.crypto.parsePublic(Hex.toHexString(dbKey.publicKey.getEncoded)).get shouldBe a[Ed25519TufKey]
-    }
+    dbKey.publicKey should (be (a[Ed25519TufKey]) or be (a[RSATufKey]))
   }
 
   keyTypeTest("associates new key with role") { implicit keyType =>
