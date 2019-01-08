@@ -73,6 +73,7 @@ trait TufCrypto[T <: KeyType] {
 object TufCrypto {
   import SignedPayloadSignatureOps._
 
+  // TODO: Never used
   case class SignatureMethodMismatch(fromKey: SignatureMethod, fromSig: SignatureMethod)
       extends Exception(s"SignatureMethod mismatch, The key is for $fromKey but the signature is for $fromSig")
       with NoStackTrace
@@ -99,6 +100,8 @@ object TufCrypto {
     Signature(validSignature, keyType.crypto.signatureMethod)
   }
 
+  // TODO:SM Catch SignatureException, return false, log error
+  // Director is catching this exception, make this safe for director instead
   def isValid(signature: Signature, publicKey: TufKey, data: Array[Byte]): Boolean = {
     val signer = signature.method match {
       case SignatureMethod.RSASSA_PSS_SHA256 ⇒ rsaCrypto.signer
