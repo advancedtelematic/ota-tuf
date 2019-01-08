@@ -36,8 +36,12 @@ class KeysToJsonEncodedMigration(implicit
       pp.setString(tufKey.asJson.noSpaces)
     }
 
+    implicit val setKeyId: SetParameter[KeyId] = (keyId: KeyId, pp: PositionedParameters) => {
+      pp.setString(keyId.value)
+    }
+
     val rsaKey = RSATufKey(publicKey)
-    val sql = sqlu"""update `keys` set public_key = $rsaKey"""
+    val sql = sqlu"""update `keys` set public_key = $rsaKey where key_id = $keyId"""
 
     db.run(sql).map(_ => rsaKey)
   }
