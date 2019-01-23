@@ -90,7 +90,8 @@ class RepoResourceCommentSpec extends TufReposerverSpec with ResourceSpec with P
     val repoId = addTargetToRepo()
 
     Get(apiUri(s"repo/${repoId.show}/comments")) ~> routes ~> check {
-      status shouldBe StatusCodes.NotFound
+      status shouldBe StatusCodes.OK
+      responseAs[Seq[FilenameComment]] shouldBe Nil
     }
   }
 
@@ -98,7 +99,8 @@ class RepoResourceCommentSpec extends TufReposerverSpec with ResourceSpec with P
     val repoId = RepoId.generate()
 
     Get(apiUri(s"repo/${repoId.show}/comments")) ~> routes ~> check {
-      status shouldBe StatusCodes.NotFound
+      status shouldBe StatusCodes.OK
+      responseAs[Seq[FilenameComment]] shouldBe Nil
     }
   }
 

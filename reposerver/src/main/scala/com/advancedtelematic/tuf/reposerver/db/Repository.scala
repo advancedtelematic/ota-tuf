@@ -276,7 +276,6 @@ protected [db] class FilenameCommentRepository()(implicit db: Database, ec: Exec
       .filter(_.repoId === repoId)
       .map(filenameComment => (filenameComment.filename, filenameComment.comment))
       .result
-      .failIfEmpty(CommentNotFound)
   }
 
   def deleteAction(repoId: RepoId, filename: TargetFilename) =
