@@ -30,11 +30,12 @@ class DelegationsSpec extends CliSpec {
     val in = Files.createTempFile("payload", ".json")
     Files.write(in, "{}".getBytes)
 
-    val out = new ByteArrayOutputStream()
+    val outBaos = new ByteArrayOutputStream()
+    val out = WriteOutput.fromOutputStream(outBaos)
 
     subject.signPayload(List(pair.pubkey -> pair.privkey), in, out).get
 
-    val signedPayload = jawn.parse(out.toString).flatMap(_.as[SignedPayload[Json]]).valueOr(throw _)
+    val signedPayload = jawn.parse(outBaos.toString).flatMap(_.as[SignedPayload[Json]]).valueOr(throw _)
 
     signedPayload.signatures shouldNot be(empty)
 

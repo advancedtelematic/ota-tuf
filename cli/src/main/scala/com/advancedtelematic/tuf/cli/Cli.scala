@@ -65,7 +65,8 @@ case class Config(command: Command,
                   keyPaths: List[Path] = List.empty,
                   force: Boolean = false,
                   reposerverUrl: Option[URI] = None,
-                  verbose: Boolean = false)
+                  verbose: Boolean = false,
+                  inplace: Boolean = false)
 
 object Cli extends App with VersionInfo {
 
@@ -146,6 +147,7 @@ object Cli extends App with VersionInfo {
       cmd("gen")
         .toCommand(GenUserKey)
         .children(
+          opt[KeyType]("type").abbr("t").toConfigParam('keyType),
           manyKeyNamesOpt(this).maxOccurs(1)
         ),
       cmd("id")
@@ -164,7 +166,8 @@ object Cli extends App with VersionInfo {
         .toCommand(SignDelegation)
         .children(
           manyKeyNamesOpt(this),
-          opt[Path]("input").abbr("i").required().toConfigOptionParam('inputPath)
+          opt[Path]("input").abbr("i").required().toConfigOptionParam('inputPath),
+          opt[Unit]("inplace").abbr("e").optional().action { case (_, c) => c.copy(inplace = true) }
         ),
       cmd("push")
         .toCommand(PushDelegation)
@@ -184,7 +187,8 @@ object Cli extends App with VersionInfo {
         .toCommand(AddTargetToDelegation)
         .children(addTargetOptions(this):_*)
         .children(
-          opt[Path]("input").abbr("i").required().toConfigOptionParam('inputPath)
+          opt[Path]("input").abbr("i").required().toConfigOptionParam('inputPath),
+          opt[Unit]("inplace").abbr("e").optional().action { case (_, c) => c.copy(inplace = true) }
         )
     )
 

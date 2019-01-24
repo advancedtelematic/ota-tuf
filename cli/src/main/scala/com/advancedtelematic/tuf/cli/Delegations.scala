@@ -1,7 +1,7 @@
 package com.advancedtelematic.tuf.cli
 
 import java.io.OutputStream
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 import java.time.{Instant, Period}
 
 import com.advancedtelematic.libtuf.crypt.TufCrypto
@@ -27,18 +27,16 @@ object Delegations {
     output.write(empty.asJson.spaces2.getBytes)
   }
 
-  private def read(input: Path): Try[Json] = {
+  private def read(input: Path): Try[Json] =
     io.circe.jawn.parseFile(input.toFile).toTry
-  }
 
-  def signPayload(keys: List[(TufKey, TufPrivateKey)], input : Path, output: OutputStream): Try[Unit] = {
+  def signPayload(keys: List[(TufKey, TufPrivateKey)], input : Path, output: WriteOutput): Try[Unit] = {
     read(input).map { inJson =>
       val sigs = keys.map { case (pub, priv) =>
         TufCrypto.signPayload(priv, inJson).toClient(pub.id)
       }
 
       val signedPayload = SignedPayload(sigs, inJson, inJson)
-
       output.write(signedPayload.asJson.spaces2.getBytes)
     }.map(_ => ())
   }
@@ -51,15 +49,15 @@ object Delegations {
     }
   }
 
-  def pull(reposerverClient: ReposerverClient, delegationName: DelegatedRoleName, outputStream: OutputStream)
+  def pull(reposerverClient: ReposerverClient, delegationName: DelegatedRoleName, output: WriteOutput)
           (implicit ec: ExecutionContext): Future[SignedPayload[TargetsRole]] = {
     reposerverClient.pullDelegation(delegationName).map { delegation =>
-      outputStream.write(delegation.asJson.spaces2.getBytes)
+      output.write(delegation.asJson.spaces2.getBytes)
       delegation
     }
   }
 
-  def addTarget(input: Path, output: OutputStream, targetFilename: TargetFilename, targetItem: ClientTargetItem): Try[Unit] = {
+  def addTarget(input: Path, output: WriteOutput, targetFilename: TargetFilename, targetItem: ClientTargetItem): Try[Unit] = {
     read(input).flatMap { json =>
       json.as[TargetsRole].toTry.map(json -> _)
     }.map { case (rawJson, targets) =>

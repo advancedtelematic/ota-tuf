@@ -39,7 +39,6 @@ object CommandHandler {
       }
     } yield targetFilename -> newTarget
 
-
   def handle[S <: TufServerClient](tufRepo: => TufRepo[S],
                                    repoServer: => Future[S],
                                    delegationsServer: => Future[ReposerverClient],
@@ -163,7 +162,7 @@ object CommandHandler {
       config.keyNames
         .map(userKeyStorage.readKeyPair).sequence
         .flatMap { keyPairs =>
-          Delegations.signPayload(keyPairs, config.inputPath.valueOrConfigError, config.outputPath.streamOrStdout)
+          Delegations.signPayload(keyPairs, config.inputPath.valueOrConfigError, WriteOutput.fromConfig(config))
         }
 
     case PushDelegation =>
@@ -188,12 +187,12 @@ object CommandHandler {
       )
 
       itemT.flatMap { case(targetFilename, targetItem) =>
-        Delegations.addTarget(config.inputPath.valueOrConfigError, config.outputPath.streamOrStdout, targetFilename, targetItem)
+        Delegations.addTarget(config.inputPath.valueOrConfigError, WriteOutput.fromConfig(config), targetFilename, targetItem)
       }
 
     case PullDelegation =>
       delegationsServer.flatMap { server =>
-        Delegations.pull(server, config.delegationName, config.outputPath.streamOrStdout).map(_ => ())
+        Delegations.pull(server, config.delegationName, WriteOutput.fromConfig(config)).map(_ => ())
       }
   }
 }
