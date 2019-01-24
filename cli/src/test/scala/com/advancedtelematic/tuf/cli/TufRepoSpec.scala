@@ -6,12 +6,14 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 import cats.syntax.either._
+import cats.syntax.option._
+import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
-import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetCustom, TargetsRole, TufRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType, SignedPayload, TargetFormat, TargetName, TargetVersion, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType, SignedPayload, TargetFilename, TargetFormat, TargetName, TargetVersion, ValidTargetFilename}
 import com.advancedtelematic.tuf.cli.DataType.KeyName
 import com.advancedtelematic.tuf.cli.repo.RepoServerRepo
 import com.advancedtelematic.tuf.cli.repo.TufRepo.{RoleMissing, RootPullError}
@@ -30,6 +32,18 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
 
   def reposerverTest(name: String)(fn: (RepoServerRepo, FakeReposerverTufServerClient) => Any)(implicit pos: Position): Unit = {
     keyTypeTest(name) { keyType => fn(initRepo[RepoServerRepo](keyType), new FakeReposerverTufServerClient(keyType)) }
+  }
+
+  val fakeTargetFilename = refineV[ValidTargetFilename]("fake-one-1.2.3").right.get
+
+  val fakeTargetItem: ClientTargetItem = {
+    val name = TargetName("fake-one")
+    val version = TargetVersion("1.2.3")
+
+    val custom = TargetCustom(name, version, Seq.empty, Option(TargetFormat.BINARY), Option(URI.create("https://ats.com")))
+    val clientHashes = Map(HashMethod.SHA256 -> refineV[ValidChecksum]("03aa3f5e2779b625a455651b54866447f995a2970d164581b4073044435359ed").right.get)
+
+    ClientTargetItem(clientHashes, length = 100, custom = Option(custom.asJson))
   }
 
   reposerverTest("adds a key to a repo ") { (repo, _) =>
@@ -63,21 +77,19 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
   test("deletes an existing target targets") {
     val repo = initRepo[RepoServerRepo]
 
-    val targetFilename = refineV[ValidTargetFilename]("fake-one-1.2.3").right.get
+    repo.addTarget(fakeTargetFilename, fakeTargetItem).get
 
-    repo.addTarget(TargetName("fake-one"), TargetVersion("1.2.3"), 100, Refined.unsafeApply("03aa3f5e2779b625a455651b54866447f995a2970d164581b4073044435359ed"), List.empty, Some(URI.create("https://ats.com")), TargetFormat.BINARY).get
-
-    val path = repo.deleteTarget(targetFilename).get
+    val path = repo.deleteTarget(fakeTargetFilename).get
 
     val role = parseFile(path.toFile).flatMap(_.as[TargetsRole]).valueOr(throw _)
 
-    role.targets.keys shouldNot contain(targetFilename)
+    role.targets.keys shouldNot contain(fakeTargetFilename)
   }
 
   keyTypeTest("adds a target to an existing targets") { keyType =>
     val repo = initRepo[RepoServerRepo](keyType)
 
-    val path = repo.addTarget(TargetName("fake-one"), TargetVersion("1.2.3"), 100, Refined.unsafeApply("03aa3f5e2779b625a455651b54866447f995a2970d164581b4073044435359ed"), List.empty, Some(URI.create("https://ats.com")), TargetFormat.BINARY).get
+    val path = repo.addTarget(fakeTargetFilename, fakeTargetItem).get
     val role = parseFile(path.toFile).flatMap(_.as[TargetsRole]).valueOr(throw _)
 
     role.targets.keys.map(_.value) should contain("fake-one-1.2.3")
@@ -87,10 +99,11 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
   test("adds a target to an existing targets with specified format") {
     val repo = initRepo[RepoServerRepo]()
 
-    val path = repo.addTarget(TargetName("fake-ostree"), TargetVersion("1.2.3"), 100, Refined.unsafeApply("03aa3f5e2779b625a455651b54866447f995a2970d164581b4073044435359ed"), List.empty, Some(URI.create("https://ats.com")), TargetFormat.OSTREE).get
+    val custom = fakeTargetItem.customParsed[TargetCustom].get.copy(targetFormat = TargetFormat.OSTREE.some).asJson
+    val path = repo.addTarget(fakeTargetFilename, fakeTargetItem.copy(custom = custom.some)).get
     val role = parseFile(path.toFile).flatMap(_.as[TargetsRole]).valueOr(throw _)
 
-    val format = role.targets.get(Refined.unsafeApply("fake-ostree-1.2.3")).flatMap(_.customParsed[TargetCustom]).flatMap(_.targetFormat)
+    val format = role.targets.get(fakeTargetFilename).flatMap(_.customParsed[TargetCustom]).flatMap(_.targetFormat)
     format should contain(TargetFormat.OSTREE)
   }
 

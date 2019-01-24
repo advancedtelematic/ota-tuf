@@ -7,6 +7,7 @@ import java.time.Instant
 import cats.data.Validated.Valid
 import cats.syntax.either._
 import cats.syntax.option._
+import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType
@@ -14,7 +15,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.DelegatedPathPattern._
 import com.advancedtelematic.libtuf.data.ClientDataType.DelegatedRoleName._
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedPathPattern, DelegatedRoleName, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, SignedPayload}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, SignedPayload, TargetName, TargetVersion, ValidTargetFilename}
 import com.advancedtelematic.libtuf.data.ValidatedString._
 import com.advancedtelematic.tuf.cli.Commands._
 import com.advancedtelematic.tuf.cli.DataType.KeyName
@@ -24,6 +25,7 @@ import com.advancedtelematic.tuf.cli.util.{CliSpec, FakeReposerverTufServerClien
 import io.circe.jawn
 import io.circe.syntax._
 import org.scalatest.Inspectors
+import eu.timepit.refined._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -107,7 +109,7 @@ class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors
 
     val name = "delegation02".unsafeApply[DelegatedRoleName]
     val delegatedPath = "path01/*".unsafeApply[DelegatedPathPattern]
-    val config = Config(AddTargetDelegation, delegationName = name, delegatedPaths = List(delegatedPath), keyPaths = List(keyFile))
+    val config = Config(AddDelegationToTarget, delegationName = name, delegatedPaths = List(delegatedPath), keyPaths = List(keyFile))
 
     handler(config).futureValue
 
@@ -150,7 +152,27 @@ class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors
     handler(config).futureValue
 
     val bytes = Files.readAllBytes(out)
-
     new String(bytes) should be(keypair.pubkey.id.value)
+  }
+
+  test("adds a target to a delegation") {
+    val in = Files.createTempFile("in", ".json")
+    val out = Files.createTempFile("out", ".json")
+
+    Delegations.writeNew(new FileOutputStream(in.toFile)).get
+
+    val config = Config(AddTargetToDelegation,
+      inputPath = in.some,
+      outputPath = out.some,
+      targetName = TargetName("mytarget").some,
+      targetVersion = TargetVersion("0.1.1").some,
+      checksum = refineV[ValidChecksum]("66bad8889a5193362cbe4c89d21688cf79310bfeb7eff67fe0f79c6c11c86d67").toOption
+    )
+
+    handler(config).futureValue
+
+    val output = io.circe.jawn.parseFile(out.toFile).flatMap(_.as[TargetsRole]).valueOr(throw _)
+
+    output.targets.keys.map(_.value) should contain("mytarget-0.1.1")
   }
 }

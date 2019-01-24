@@ -12,9 +12,7 @@ import com.advancedtelematic.tuf.cli.util.CliSpec
 import io.circe.{Json, jawn}
 
 class DelegationsSpec extends CliSpec {
-
   val subject = Delegations
-
 
   test("generates an empty delegations role to a given Path") {
     val p = new ByteArrayOutputStream()
