@@ -15,19 +15,6 @@ This project is split into multiple modules:
 [ota-community-edition][2]. See [cli/README](cli/README.adoc) for
 information on how to run the CLI tools.
 
-You'll need vault installed (v0.5.2):
-
-    vault server -dev -dev-root-token-id="f8c637c5-b762-e6a7-7974-bf45d3061106"
-    export VAULT_TOKEN="f8c637c5-b762-e6a7-7974-bf45d3061106"
-    vault policy-write ota-tuf src/main/resources/vault_policy.hcl
-    vault mount -path=ota-tuf/keys generic
-
-    vault token-create -format json -policy ota-tuf -id="74e0216d-cc15-5ab9-454d-908a04d14787"
-    
-There is a script to run these commands and start a vault instance in `deploy/dev-vault.sh` 
-
-You'll need to edit `application.conf` in `keyserver` and `reposerver`
-
 You can then use `sbt keyserver/run` and `sbt reposerver/run`.
 
 ## Running tests
