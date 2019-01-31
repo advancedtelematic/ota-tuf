@@ -1,9 +1,8 @@
 package com.advancedtelematic.tuf.cli
 
-import java.io.{FileOutputStream, OutputStream}
+import java.io.{File, FileOutputStream, OutputStream}
 
 import scala.util.Try
-
 import CliConfigOptionOps._
 
 trait WriteOutput {
@@ -11,13 +10,17 @@ trait WriteOutput {
 }
 
 object WriteOutput {
-  def fromConfig(config: Config): WriteOutput = (bytes: Array[Byte]) => Try {
-    val outputStream = if (config.inplace)
-      new FileOutputStream(config.inputPath.valueOrConfigError.toFile)
-    else
-      config.outputPath.streamOrStdout
+  def fromConfig(config: Config): WriteOutput =
+    if (config.inplace)
+      fromFile(config.inputPath.valueOrConfigError.toFile)
+    else (bytes: Array[Byte]) => Try {
+      val outputStream = config.outputPath.streamOrStdout
+      outputStream.write(bytes)
+    }
 
-    outputStream.write(bytes)
+  def fromFile(file: File): WriteOutput = (bytes: Array[Byte]) => Try {
+    val out = new FileOutputStream(file)
+    out.write(bytes)
   }
 
   def fromOutputStream(out: OutputStream): WriteOutput = (bytes: Array[Byte]) => Try {

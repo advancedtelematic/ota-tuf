@@ -61,7 +61,7 @@ object Delegations {
     read(input).flatMap { json =>
       json.as[TargetsRole].toTry.map(json -> _)
     }.map { case (rawJson, targets) =>
-      val newTargets = targets.copy(targets = targets.targets + (targetFilename -> targetItem))
+      val newTargets = targets.copy(targets = Map(targetFilename -> targetItem))
       val newJson = rawJson.deepMerge(newTargets.asJson)
       output.write(newJson.spaces2.getBytes)
     }
