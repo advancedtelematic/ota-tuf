@@ -10,6 +10,60 @@ Download the archive file, unpack and run:
     cd garage-sign/
     bin/garage-sign --help
 
+== Delegations
+
+There are two actors in a delegations use case. The OEM, which owns the remote repository managed by ota-tuf, and the Supplier, which will sign metadata about a component they build.
+
+The OEM runs garage-sign against a local repository initialized using `garage-sign init`. The changes can then be pushed as normal to a remote `ota-tuf` repository.
+
+The Supplier runs garage-sign but does not have a local repository, instead the supplier edits metadata files using garage-sign. The resulting files can then be sent to the OEM using a secure channel (e.g. encrypted email), which adds that data to their local and remote repositories.
+
+The basic use case for delegations works as follows.
+
+1. The OEM manages a local repository as normal:
+
+   garage-sign init --repo paris -c credentials-paris.zip
+   garage-sign targets pull --repo paris
+
+2. The supplier generates a key that they will use to sign their metadata:
+
+    garage-sign user-keys generate --key-name supplier01-key  --type ed25519
+
+3. The supplier sends the *Public* part of the key to the OEM using a secure channel.
+
+4. The OEM adds the delegation to their local targets.json, using the new key
+
+    garage-sign targets delegations add --name supplier01 --prefix 'supplier01*' --key tuf/user-keys/supplier01-key.pub --repo paris
+
+5. The OEM signs the new targets.json and pushes it to the remote repository:
+
+    garage-sign targets sign --repo paris --key-name targets
+    garage-sign targets push --repo paris
+
+6. The Supplier initializes a delegations file and adds metadata about their images to the file.
+
+    garage-sign delegations init > delegations01.json
+    garage-sign delegations add-target --input delegations01.json  --inplace \
+       --length 1024 \
+       --name suplier01-target01.tar.gz \
+       --version 0.0.1 \
+       --sha256 766644289a2036c54f3485f5eae5144a08d003fc2f897de5faf8dc45bb2b0ea1 \
+       --hardwareids laptop
+
+7. The supplier signs the delegations metadata and sends it to the OEM:
+
+    garage-sign delegations sign --inplace --input delegations01.json --key-name supplier01-key
+
+8. The OEM pushes the signed role to the remote repository:
+
+   garage-sign delegations push --repo paris --input delegations01.json --name supplier01
+
+9. The delegation and targets are ready for the client to validate:
+
+   garage-sign targets pull --repo paris
+   garage-sign delegations pull --repo paris --name supplier01 
+
+
 == Offline signing use case
 // (aka PRO-3669)
 

@@ -65,7 +65,8 @@ case class Config(command: Command,
                   keyPaths: List[Path] = List.empty,
                   force: Boolean = false,
                   reposerverUrl: Option[URI] = None,
-                  verbose: Boolean = false)
+                  verbose: Boolean = false,
+                  inplace: Boolean = false)
 
 object Cli extends App with VersionInfo {
 
@@ -99,6 +100,33 @@ object Cli extends App with VersionInfo {
       .text("Path where this executable will look for keys, by default it's the `user-keys` directory in `home-dir`")
   }
 
+  lazy val addTargetOptions: OptionParser[Config] => Seq[OptionDef[_, Config]] = { parser =>
+    Seq(
+      parser.opt[Int]("length")
+        .required()
+        .toConfigParam('length)
+        .text("length in bytes"),
+      parser.opt[TargetName]("name")
+        .required()
+        .toConfigOptionParam('targetName),
+      parser.opt[TargetVersion]("version")
+        .required()
+        .toConfigOptionParam('targetVersion),
+      parser.opt[TargetFormat]("format")
+        .optional()
+        .text("target format [ostree|binary]")
+        .toConfigParam('targetFormat),
+      parser.opt[Refined[String, ValidChecksum]]("sha256")
+        .required()
+        .toConfigOptionParam('checksum),
+      parser.opt[List[HardwareIdentifier]]("hardwareids")
+        .required()
+        .toConfigParam('hardwareIds),
+      parser.opt[URI]("url")
+        .toConfigOptionParam('targetUri)
+    )
+  }
+
   lazy val parser = new scopt.OptionParser[Config](PROGRAM_NAME) {
     head(projectName, projectVersion)
 
@@ -119,6 +147,7 @@ object Cli extends App with VersionInfo {
       cmd("gen")
         .toCommand(GenUserKey)
         .children(
+          opt[KeyType]("type").abbr("t").toConfigParam('keyType),
           manyKeyNamesOpt(this).maxOccurs(1)
         ),
       cmd("id")
@@ -137,9 +166,8 @@ object Cli extends App with VersionInfo {
         .toCommand(SignDelegation)
         .children(
           manyKeyNamesOpt(this),
-          opt[Path]("input")
-            .abbr("i").required()
-            .toConfigOptionParam('inputPath)
+          opt[Path]("input").abbr("i").required().toConfigOptionParam('inputPath),
+          opt[Unit]("inplace").abbr("e").optional().action { case (_, c) => c.copy(inplace = true) }
         ),
       cmd("push")
         .toCommand(PushDelegation)
@@ -154,7 +182,14 @@ object Cli extends App with VersionInfo {
           repoNameOpt(this),
           opt[DelegatedRoleName]("name").abbr("n").required().toConfigParam('delegationName),
           opt[Path]("output").abbr("o").toConfigOptionParam('outputPath)
-        ).text("pull a delegation from the server. Requires an initialized tuf repo")
+        ).text("pull a delegation from the server. Requires an initialized tuf repo"),
+      cmd("add-target")
+        .toCommand(AddTargetToDelegation)
+        .children(addTargetOptions(this):_*)
+        .children(
+          opt[Path]("input").abbr("i").required().toConfigOptionParam('inputPath),
+          opt[Unit]("inplace").abbr("e").optional().action { case (_, c) => c.copy(inplace = true) }
+        )
     )
 
     cmd("init")
@@ -278,30 +313,7 @@ object Cli extends App with VersionInfo {
           ),
         cmd("add")
           .toCommand(AddTarget)
-          .children(
-            opt[Int]("length")
-              .required()
-              .toConfigParam('length)
-              .text("length in bytes"),
-            opt[TargetName]("name")
-              .required()
-              .toConfigOptionParam('targetName),
-            opt[TargetVersion]("version")
-              .required()
-              .toConfigOptionParam('targetVersion),
-            opt[TargetFormat]("format")
-              .optional()
-              .text("target format [ostree|binary]")
-              .toConfigParam('targetFormat),
-            opt[Refined[String, ValidChecksum]]("sha256")
-              .required()
-              .toConfigOptionParam('checksum),
-            opt[List[HardwareIdentifier]]("hardwareids")
-              .required()
-              .toConfigParam('hardwareIds),
-            opt[URI]("url")
-              .toConfigOptionParam('targetUri)
-          ),
+          .children(addTargetOptions(this):_*),
         cmd("sign")
           .toCommand(SignTargets)
           .children(
@@ -322,7 +334,7 @@ object Cli extends App with VersionInfo {
           .text("Manage a repository targets.json delegated targets")
           .children(
             cmd("add")
-              .toCommand(AddTargetDelegation)
+              .toCommand(AddDelegationToTarget)
               .text("add a new delegation to existing targets.json")
               .children(
                 opt[DelegatedRoleName]("name").abbr("n").required()

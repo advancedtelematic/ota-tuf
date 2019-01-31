@@ -26,6 +26,7 @@ object Commands {
   case object IdUserKey extends Command
   case object PushDelegation extends Command
   case object PullDelegation extends Command
-  case object AddTargetDelegation extends Command
+  case object AddDelegationToTarget extends Command
+  case object AddTargetToDelegation extends Command
 }
 

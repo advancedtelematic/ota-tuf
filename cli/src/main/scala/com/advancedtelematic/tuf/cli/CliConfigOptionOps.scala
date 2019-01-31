@@ -16,7 +16,6 @@ object CliConfigOptionOps {
   }
 
   implicit class CliConfigOptionPathConversion(value: Option[Path]) {
-    def streamOrStdout: OutputStream =
-      value.map(p => new FileOutputStream(p.toFile)).getOrElse(System.out)
+    def streamOrStdout: OutputStream = value.map(p => new FileOutputStream(p.toFile)).getOrElse(System.out)
   }
 }

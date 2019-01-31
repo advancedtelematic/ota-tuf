@@ -297,8 +297,7 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
 
   def initTargets(version: Int, expires: Instant): Try[Path]
 
-  def addTarget(name: TargetName, version: TargetVersion, length: Int, checksum: Refined[String, ValidChecksum],
-                hardwareIds: List[HardwareIdentifier], url: Option[URI], format: TargetFormat): Try[Path]
+  def addTarget(targetFilename: TargetFilename, targetItem: ClientTargetItem): Try[Path]
 
   def addTargetDelegation(name: DelegatedRoleName, key: List[TufKey],
                           delegatedPaths: List[DelegatedPathPattern], threshold: Int): Try[Path]
@@ -363,18 +362,10 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
     path <- writeUnsignedRole(newTargets)
   } yield path
 
-  def addTarget(name: TargetName, version: TargetVersion, length: Int, checksum: Refined[String, ValidChecksum],
-                hardwareIds: List[HardwareIdentifier], url: Option[URI], format: TargetFormat): Try[Path] = {
+  def addTarget(targetFilename: TargetFilename, targetItem: ClientTargetItem): Try[Path] = {
     for {
       targetsRole <- readUnsignedRole[TargetsRole]
-      targetFilename <- refineV[ValidTargetFilename](s"${name.value}-${version.value}").leftMap(s => new IllegalArgumentException(s)).toTry
-      newTargetRole = {
-        val custom = TargetCustom(name, version, hardwareIds, format.some, url)
-        val clientHashes = Map(HashMethod.SHA256 -> checksum)
-        val newTarget = ClientTargetItem(clientHashes, length, custom.asJson.some)
-
-        targetsRole.copy(targets = targetsRole.targets + (targetFilename -> newTarget))
-      }
+      newTargetRole = targetsRole.copy(targets = targetsRole.targets + (targetFilename -> targetItem))
       path <- writeUnsignedRole(newTargetRole)
     } yield path
   }
@@ -478,7 +469,7 @@ class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRep
   override def initTargets(version: Int, expires: Instant): Try[Path] =
     Failure(CommandNotSupportedByRepositoryType(Director, "initTargets"))
 
-  override def addTarget(name: TargetName, version: TargetVersion, length: Int, checksum: Refined[String, ValidChecksum], hardwareIds: List[HardwareIdentifier], url: Option[URI], format: TargetFormat): Try[Path] =
+  override def addTarget(targetFilename: TargetFilename, targetItem: ClientTargetItem): Try[Path] =
     Failure(CommandNotSupportedByRepositoryType(Director, "addTarget"))
 
   override def signTargets(targetsKeys: Seq[KeyName], version: Option[Int]): Try[Path] =
