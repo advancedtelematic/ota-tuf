@@ -17,14 +17,18 @@ import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{RawError, RemoteServiceError}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufCodecs._
+
 import scala.concurrent.{ExecutionContext, Future}
 import io.circe.generic.semiauto._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.HttpCodecs._
+import com.advancedtelematic.libats.http.tracing.Tracing.RequestTracing
+import com.advancedtelematic.libats.http.tracing.TracingHttpClient
 import com.advancedtelematic.libats.http.{ServiceHttpClient, ServiceHttpClientSupport}
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest
 import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.{KeysNotReady, NotFound, RootNotInKeyserver}
+
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
 
@@ -78,14 +82,14 @@ trait ReposerverClient {
 
 object ReposerverHttpClient extends ServiceHttpClientSupport {
   def apply(reposerverUri: Uri, authHeaders: Option[HttpHeader] = None)
-           (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer): ReposerverHttpClient =
+           (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer, tracing: RequestTracing): ReposerverHttpClient =
     new ReposerverHttpClient(reposerverUri, defaultHttpClient, authHeaders)
 }
 
 
 class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future[HttpResponse], authHeaders: Option[HttpHeader] = None)
-                          (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer)
-  extends ServiceHttpClient(httpClient) with ReposerverClient {
+                          (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer, tracing: RequestTracing)
+  extends TracingHttpClient(httpClient) with ReposerverClient {
 
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
   import io.circe.syntax._
