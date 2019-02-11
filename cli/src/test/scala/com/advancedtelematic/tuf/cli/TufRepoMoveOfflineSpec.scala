@@ -65,7 +65,7 @@ class TufRepoMoveOfflineSpec extends CliSpec {
   moveOfflineTest("rotate key is signed by both root keys") { (repo, client, moveOffline) =>
     val keyStorage = CliKeyStorage.forRepo(repo.repoPath)
     val (newPubKey, _, signedPayload) = moveOffline.futureValue
-    val oldPubKey = keyStorage.readPublicKey(KeyName(s"oldroot${repo.name.value}")).get
+    val oldPubKey = keyStorage.readPublicKey(KeyName(s"oldroot${repo.name}")).get
 
     signedPayload.isValidFor(newPubKey) shouldBe true
     signedPayload.isValidFor(oldPubKey) shouldBe true
@@ -74,7 +74,7 @@ class TufRepoMoveOfflineSpec extends CliSpec {
   moveOfflineTest("saves deleted root when rotating") { (repo, client, moveOffline) =>
     val keyStorage = CliKeyStorage.forRepo(repo.repoPath)
     moveOffline.futureValue
-    val oldPrivateKey = keyStorage.readPrivateKey(KeyName(s"oldroot${repo.name.value}")).get
+    val oldPrivateKey = keyStorage.readPrivateKey(KeyName(s"oldroot${repo.name}")).get
 
     oldPrivateKey shouldBe a[TufPrivateKey]
   }
@@ -104,7 +104,7 @@ class TufRepoMoveOfflineSpec extends CliSpec {
     val repo = initRepo[RepoServerRepo](KeyType.default)
     val client = FakeReposerverTufServerClient(KeyType.default)
     val (_, pubTargets, _) = ReposerverOfflineMover(repo, KeyType.default, client).futureValue
-    repo.signTargets(Seq(KeyName(s"targets${repo.name.value}"))).get
+    repo.signTargets(Seq(KeyName(s"targets${repo.name}"))).get
     Files.write(repo.repoPath.resolve("roles").resolve(TufRole.targetsTufRole.checksumPath), Seq("997890bc85c5796408ceb20b0ca75dabe6fe868136e926d24ad0f36aa424f99d").asJava)
 
     val payload = repo.pushTargets(client).futureValue
@@ -156,9 +156,9 @@ class TufRepoMoveOfflineSpec extends CliSpec {
 private object ReposerverOfflineMover {
   def apply(repo: TufRepo[ReposerverClient], keyType: KeyType, client: FakeReposerverTufServerClient)
            (implicit ec: ExecutionContext): Future[(TufKey, TufKey, SignedPayload[RootRole])] = {
-    val oldRootName = KeyName(s"oldroot${repo.name.value}")
-    val newRootName = KeyName(s"newroot${repo.name.value}")
-    val newTargetsName = KeyName(s"targets${repo.name.value}")
+    val oldRootName = KeyName(s"oldroot${repo.name}")
+    val newRootName = KeyName(s"newroot${repo.name}")
+    val newTargetsName = KeyName(s"targets${repo.name}")
 
     val pub = repo.genKeys(newRootName, keyType).get.pubkey
     val pubT = repo.genKeys(newTargetsName, keyType).get.pubkey
@@ -170,8 +170,8 @@ private object ReposerverOfflineMover {
 private object DirectorOfflineMover {
   def apply(repo: TufRepo[DirectorClient], keyType: KeyType, client: FakeReposerverTufServerClient)
            (implicit ec: ExecutionContext): Future[(TufKey, TufKey, SignedPayload[RootRole])] = {
-    val oldRootName = KeyName(s"oldroot${repo.name.value}")
-    val newRootName = KeyName(s"newroot${repo.name.value}")
+    val oldRootName = KeyName(s"oldroot${repo.name}")
+    val newRootName = KeyName(s"newroot${repo.name}")
 
     val pub = repo.genKeys(newRootName, keyType).get.pubkey
 
