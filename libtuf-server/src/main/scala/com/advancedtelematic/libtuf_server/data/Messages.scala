@@ -8,8 +8,10 @@ import io.circe.{Decoder, Encoder}
 import io.circe.generic.semiauto._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.codecs.CirceCodecs._
+import com.advancedtelematic.libats.data.EcuIdentifier
 import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
-import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, EcuSerial, UpdateId}
+import com.advancedtelematic.libats.messaging_datatype.DataType.{DeviceId, UpdateId}
+import com.advancedtelematic.libats.messaging_datatype.MessageCodecs._
 import com.advancedtelematic.libats.messaging_datatype.MessageLike
 
 object Messages {
@@ -35,7 +37,7 @@ object Messages {
   implicit val packageStorageUsageMessageLike = MessageLike[PackageStorageUsage](_.namespace)
 
   case class DeviceUpdateReport(namespace: Namespace, device: DeviceId, updateId: UpdateId, timestampVersion: Int,
-                                operationResult: Map[EcuSerial, OperationResult], resultCode: Int)
+                                operationResult: Map[EcuIdentifier, OperationResult], resultCode: Int)
 
   implicit val operationResultEncoder: Encoder[OperationResult] = deriveEncoder
   implicit val operationResultDecoder: Decoder[OperationResult] = deriveDecoder
