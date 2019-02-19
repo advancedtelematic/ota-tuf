@@ -27,7 +27,7 @@ The basic use case for delegations works as follows.
 
 2. The supplier generates a key that they will use to sign their metadata:
 
-    garage-sign user-keys generate --key-name supplier01-key  --type ed25519
+    garage-sign user-keys gen --key-name supplier01-key  --type ed25519
 
 3. The supplier sends the *Public* part of the key to the OEM using a secure channel.
 
