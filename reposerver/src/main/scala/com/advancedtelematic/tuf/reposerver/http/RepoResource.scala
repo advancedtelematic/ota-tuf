@@ -213,7 +213,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       } ~
       path("delegations" / DelegatedRoleUriPath) { delegatedRoleName =>
         (put & entity(as[SignedPayload[TargetsRole]])) { payload =>
-          complete(delegations.create(repoId, delegatedRoleName, payload).map(_ => StatusCodes.NoContent))
+          complete(signedRoleGeneration.createDelegatedRole(repoId, delegatedRoleName, payload).map(_ => StatusCodes.NoContent))
         } ~
         get {
           complete(delegations.find(repoId, delegatedRoleName))

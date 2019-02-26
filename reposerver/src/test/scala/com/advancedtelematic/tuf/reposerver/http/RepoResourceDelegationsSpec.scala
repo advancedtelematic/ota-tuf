@@ -10,7 +10,7 @@ import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.DelegatedPathPattern._
-import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedPathPattern, DelegatedRoleName, Delegation, Delegations, TargetsRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedPathPattern, DelegatedRoleName, Delegation, Delegations, RoleTypeOps, RootRole, SnapshotRole, TargetsRole, ValidMetaPath}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RepoId, RoleType, SignedPayload, TufKeyPair}
 import com.advancedtelematic.libtuf.data.ValidatedString._
@@ -18,6 +18,8 @@ import com.advancedtelematic.tuf.reposerver.util.{RepoResourceSpecUtil, Resource
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.syntax._
 import org.scalactic.source.Position
+import com.advancedtelematic.libtuf.crypt.CanonicalJson._
+import eu.timepit.refined.api.Refined
 
 class RepoResourceDelegationsSpec extends TufReposerverSpec
   with ResourceSpec
@@ -26,7 +28,6 @@ class RepoResourceDelegationsSpec extends TufReposerverSpec
   lazy val keyPair = Ed25519KeyType.crypto.generateKeyPair()
 
   val delegatedRoleName = "mydelegation".unsafeApply[DelegatedRoleName]
-
 
   val delegation = {
     val delegationPath = "mypath/*".unsafeApply[DelegatedPathPattern]
@@ -54,7 +55,7 @@ class RepoResourceDelegationsSpec extends TufReposerverSpec
   }
 
   private def pushSignedDelegatedMetadata(signedPayload: SignedPayload[TargetsRole])
-                                        (implicit repoId: RepoId): RouteTestResult =
+                                         (implicit repoId: RepoId): RouteTestResult =
     Put(apiUri(s"repo/${repoId.show}/delegations/${delegatedRoleName.value}.json"), signedPayload) ~> routes
 
   test("accepts delegated targets") {
@@ -67,7 +68,6 @@ class RepoResourceDelegationsSpec extends TufReposerverSpec
       responseAs[SignedPayload[TargetsRole]].signed.delegations should contain(delegations)
     }
   }
-
 
   test("accepts delegated role metadata when signed with known keys") {
     implicit val repoId = addTargetToRepo()
@@ -167,4 +167,72 @@ class RepoResourceDelegationsSpec extends TufReposerverSpec
       responseAs[ErrorRepresentation].code shouldBe ErrorCodes.PayloadSignatureInvalid
     }
   }
+
+  test("re-generates snapshot role after storing delegations") {
+    implicit val repoId = addTargetToRepo()
+
+    addDelegationToRepo()
+
+    Get(apiUri(s"repo/${repoId.show}/snapshot.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[SnapshotRole]].signed.version shouldBe 2
+    }
+  }
+
+  test("SnapshotRole includes signed delegation length") {
+    implicit val repoId = addTargetToRepo()
+
+    addDelegationToRepo()
+
+    val signedDelegationRole = buildSignedDelegatedTargets()
+
+    pushSignedDelegatedMetadata(signedDelegationRole) ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    val delegationRole =
+      Get(apiUri(s"repo/${repoId.show}/delegations/${delegatedRoleName.value}.json")) ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+        responseAs[SignedPayload[TargetsRole]]
+      }
+
+    val delegationLength = delegationRole.asJson.canonical.length
+
+    Get(apiUri(s"repo/${repoId.show}/snapshot.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val signed = responseAs[SignedPayload[SnapshotRole]].signed
+
+      signed.meta(Refined.unsafeApply(s"${delegatedRoleName.value}.json")).length shouldBe delegationLength
+    }
+  }
+
+  test("automatically renewed snapshot still contains delegation") {
+    val signedRoleGeneration = new SignedRoleGeneration(fakeKeyserverClient)
+
+    implicit val repoId = addTargetToRepo()
+
+    addDelegationToRepo()
+
+    val signedDelegationRole = buildSignedDelegatedTargets()
+
+    pushSignedDelegatedMetadata(signedDelegationRole) ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    val delegationRole =
+      Get(apiUri(s"repo/${repoId.show}/delegations/${delegatedRoleName.value}.json")) ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+        responseAs[SignedPayload[TargetsRole]]
+      }
+
+    val delegationLength = delegationRole.asJson.canonical.length
+
+    val oldSnapshots = signedRoleGeneration.findRole[SnapshotRole](repoId).futureValue
+
+    signedRoleRepository.persist[SnapshotRole](oldSnapshots.copy(expiresAt = Instant.now().minusSeconds(60)), forceVersion = true).futureValue
+
+    val renewedSnapshots = signedRoleRepository.find[SnapshotRole](repoId).futureValue
+    renewedSnapshots.role.meta(Refined.unsafeApply(s"${delegatedRoleName.value}.json")).length shouldBe delegationLength
+  }
+
 }

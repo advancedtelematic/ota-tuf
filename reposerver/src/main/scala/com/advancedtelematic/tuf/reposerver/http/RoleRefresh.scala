@@ -4,7 +4,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 import com.advancedtelematic.libtuf.data.ClientDataType.{MetaItem, MetaPath, SnapshotRole, TargetsRole, TimestampRole, TufRole, _}
-import com.advancedtelematic.libtuf.data.TufDataType.RepoId
+import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId}
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
@@ -12,6 +12,7 @@ import io.circe.syntax._
 import io.circe.{Decoder, Encoder}
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.tuf.reposerver.delegations.DelegationsManagement
 
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
@@ -27,6 +28,7 @@ class RoleSigner(repoId: RepoId, keyserverClient: KeyserverClient)(implicit ec: 
 
 class RepoRoleRefresh(signFn: RoleSigner)(implicit val db: Database, val ec: ExecutionContext) extends SignedRoleRepositorySupport {
   val roleRefresh = new RoleRefresh(signFn)
+  val delegationsManagement = new DelegationsManagement()
 
   private def findExisting[T](repoId: RepoId)(implicit tufRole: TufRole[T]): Future[SignedRole[T]] = {
     signedRoleRepository.find[T](repoId)
@@ -41,7 +43,8 @@ class RepoRoleRefresh(signFn: RoleSigner)(implicit val db: Database, val ec: Exe
     val existingTargets = await(findExisting[TargetsRole](repoId))
     val existingSnapshots = await(findExisting[SnapshotRole](repoId))
     val existingTimestamps = await(findExisting[TimestampRole](repoId))
-    val (newTargets, dependencies) = await(roleRefresh.refreshTargets(existingTargets, existingTimestamps, existingSnapshots))
+    val delegations = await(delegationsManagement.findDelegations(existingTargets))
+    val (newTargets, dependencies) = await(roleRefresh.refreshTargets(existingTargets, existingTimestamps, existingSnapshots, delegations))
     await(commitRefresh(newTargets, dependencies))
   }
 
@@ -49,7 +52,9 @@ class RepoRoleRefresh(signFn: RoleSigner)(implicit val db: Database, val ec: Exe
     val existingTargets = await(findExisting[TargetsRole](repoId))
     val existingSnapshots = await(findExisting[SnapshotRole](repoId))
     val existingTimestamps = await(findExisting[TimestampRole](repoId))
-    val (newSnapshots, dependencies) = await(roleRefresh.refreshSnapshots(existingSnapshots, existingTimestamps, existingTargets))
+    val delegations = await(delegationsManagement.findDelegations(existingTargets))
+
+    val (newSnapshots, dependencies) = await(roleRefresh.refreshSnapshots(existingSnapshots, existingTimestamps, existingTargets, delegations))
     await(commitRefresh(newSnapshots, dependencies))
   }
 
@@ -65,20 +70,22 @@ class RoleRefresh(signFn: RoleSigner)(implicit ec: ExecutionContext) {
 
   def refreshTargets(existingTargets: SignedRole[TargetsRole],
                      existingTimestamps: SignedRole[TimestampRole],
-                     existingSnapshots: SignedRole[SnapshotRole]): Future[(SignedRole[TargetsRole], List[SignedRole[_]])] = async {
+                     existingSnapshots: SignedRole[SnapshotRole],
+                     delegations: Map[MetaPath, MetaItem]): Future[(SignedRole[TargetsRole], List[SignedRole[_]])] = async {
     val newTargetsRole = refreshRole[TargetsRole](existingTargets)
     val signedTargets = await(signFn(newTargetsRole))
-    val (newSnapshots, dependencies) = await(refreshSnapshots(existingSnapshots, existingTimestamps, signedTargets))
+    val (newSnapshots, dependencies) = await(refreshSnapshots(existingSnapshots, existingTimestamps, signedTargets, delegations))
 
     (signedTargets, newSnapshots :: dependencies)
   }
 
   def refreshSnapshots(existingSnapshots: SignedRole[SnapshotRole],
                        existingTimestamps: SignedRole[TimestampRole],
-                       newTargets: SignedRole[TargetsRole]): Future[(SignedRole[SnapshotRole], List[SignedRole[_]])] = async {
+                       newTargets: SignedRole[TargetsRole],
+                       delegations: Map[MetaPath, MetaItem]): Future[(SignedRole[SnapshotRole], List[SignedRole[_]])] = async {
     val refreshed = refreshRole[SnapshotRole](existingSnapshots)
 
-    val newMeta: Map[MetaPath, MetaItem] = existingSnapshots.role.meta + newTargets.asMetaRole
+    val newMeta: Map[MetaPath, MetaItem] = existingSnapshots.role.meta + newTargets.asMetaRole ++ delegations
     val newSnapshot = SnapshotRole(newMeta, refreshed.expires, refreshed.version)
 
     val signedSnapshot = await(signFn(newSnapshot))
