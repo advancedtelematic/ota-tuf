@@ -171,7 +171,7 @@ protected object ZipRepoInitialization {
     def readRepoUri(src: ZipFile): Try[URI] = {
       val filename = repoServerType match {
         case RepoServer => "tufrepo.url"
-        case Director => "api-gateway.url"
+        case Director => "api_gateway.url"
       }
 
       for {
