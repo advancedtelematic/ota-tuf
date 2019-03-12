@@ -107,6 +107,9 @@ protected [db] class KeyRepository()(implicit db: Database, ec: ExecutionContext
   protected [db] def deleteRepoKeys(repoId: RepoId, keysToDelete: Set[KeyId]): DBIO[Unit] =
     keys.filter(_.repoId === repoId).filter(_.id.inSet(keysToDelete)).delete.map(_ => ())
 
+  protected [db] def keepOnlyKeys(repoId: RepoId, keysToKeep: Set[KeyId]): DBIO[Unit] =
+    keys.filter(_.repoId === repoId).filterNot(_.id.inSet(keysToKeep)).delete.map(_ => ())
+
   def find(keyId: KeyId): Future[Key] =
     findAll(Seq(keyId)).map(_.head)
 
@@ -147,8 +150,8 @@ protected[db] class SignedRootRoleRepository()(implicit db: Database, ec: Execut
     persistAction(signedRootRole)
   }
 
-  def persistAndDeleteRepoKeys(keyRepository: KeyRepository)(signedRootRole: SignedRootRole, keysToDelete: Set[KeyId]): Future[Unit] = db.run {
-    keyRepository.deleteRepoKeys(signedRootRole.repoId, keysToDelete).andThen(persistAction(signedRootRole).transactionally)
+  def persistAndKeepRepoKeys(keyRepository: KeyRepository)(signedRootRole: SignedRootRole, keysToKeep: Set[KeyId]): Future[Unit] = db.run {
+    keyRepository.keepOnlyKeys(signedRootRole.repoId, keysToKeep).andThen(persistAction(signedRootRole).transactionally)
   }
 
   protected [db] def persistAction(signedRootRole: SignedRootRole): DBIO[Unit] = {

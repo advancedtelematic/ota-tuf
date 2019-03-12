@@ -494,7 +494,9 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
-  keyTypeTest("POST offline signed deletes all keys for role") { keyType =>
+  keyTypeTest("POST offline signed role deletes old keys") { keyType =>
+    import RoleType._
+
     val repoId = RepoId.generate()
     generateRootRole(repoId, keyType).futureValue
 
@@ -506,27 +508,25 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     val keyPair = keyType.crypto.generateKeyPair()
     val (newPubKey, newPrivKey) = (keyPair.pubkey, keyPair.privkey)
 
-    val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
-    val rootRole = oldRootRole.withRoleKeys(RoleType.ROOT, newPubKey)
+    val additionalTargetkeyPair = keyType.crypto.generateKeyPair()
+    val dbKey = Key(additionalTargetkeyPair.pubkey.id, repoId, TARGETS, keyType, additionalTargetkeyPair.pubkey, additionalTargetkeyPair.privkey)
+    keyRepo.persist(dbKey).futureValue
+
+    keyRepo.repoKeys(repoId).futureValue.map(_.roleType).sorted shouldBe Vector(ROOT, SNAPSHOT, TARGETS, TARGETS, TIMESTAMP)
+
+    val rootKeyId = oldRootRole.roles(ROOT).keyids.head
+
+    val rootRole = oldRootRole.withRoleKeys(ROOT, newPubKey)
 
     val newSignature = signWithKeyPair(newPubKey.id, newPrivKey, rootRole)
     val oldSignedPayload = signPayloadWithKey(rootKeyId, rootRole)
     val signedPayload = oldSignedPayload.copy(signatures = newSignature +: oldSignedPayload.signatures)
 
-    Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
-      status shouldBe StatusCodes.OK
-      val keyPairs = responseAs[Seq[TufKeyPair]]
-      keyPairs shouldNot be(empty)
-    }
-
     Post(apiUri(s"root/${repoId.show}/unsigned"), signedPayload) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
-    Get(apiUri(s"root/${repoId.show}/keys/targets/pairs")) ~> routes ~> check {
-      status shouldBe StatusCodes.NotFound
-      responseAs[ErrorRepresentation].code.code shouldBe "missing_entity"
-    }
+    keyRepo.repoKeys(repoId).futureValue.map(_.roleType).sorted shouldBe Vector(SNAPSHOT, TARGETS, TIMESTAMP)
   }
 
   keyTypeTest("POST offline with same version returns bad request ") { keyType =>
@@ -796,10 +796,9 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     keyRepo.find(timestampKeyId).futureValue shouldBe a[Key]
 
     val targetsKeyId = newRoot.roleKeys(RoleType.TARGETS).head.id
-    keyRepo.find(targetsKeyId).failed.futureValue shouldBe KeyNotFound
+    keyRepo.find(targetsKeyId).futureValue shouldBe a[Key]
 
-    val newRootKeyId = newRoot.roleKeys(RoleType.ROOT).head.id
-    keyRepo.find(newRootKeyId).failed.futureValue shouldBe KeyNotFound
+    keyRepo.find(rootKeyId).futureValue shouldBe a[Key]
   }
 
   def signWithKeyPair(keyId: KeyId, priv: TufPrivateKey, role: RootRole): ClientSignature = {

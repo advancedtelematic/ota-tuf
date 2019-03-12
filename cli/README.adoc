@@ -173,14 +173,13 @@ or
 +
     garage-sign init --repo myrepo --servertype director --credentials credentials.zip
 
-2. Generate new root and target keys
+2. Generate new root key
 
     garage-sign key generate --repo myrepo --name myrepo-root --type ed25519
 
-3. Rotate Root Keys
+3. Rotate Root Key
 
-    garage-sign move-offline --repo myrepo --new-root myrepo-root \
-    --old-root-alias old-root
+    garage-sign move-offline --repo myrepo --new-root myrepo-root --old-root-alias old-root
 
 4. Check repository
 
