@@ -69,12 +69,9 @@ extends KeyRepositorySupport with SignedRootRoleSupport {
     offlineSignedParsedV = userSignedJsonIsValid(offlinePayload, oldSignedRoot)
     userSignedIsValid <- offlineSignedParsedV match {
       case Valid(offlineSignedParsed) =>
-        val oldKeyIds = oldSignedRoot.signed.keys.keys.toSet
-        val newOnlineKeys = offlineSignedParsed.signed.roleKeys(RoleType.SNAPSHOT, RoleType.TIMESTAMP).map(_.id).toSet
-        val keysToDelete = oldKeyIds -- newOnlineKeys
+        val newOnlineKeys = offlineSignedParsed.signed.keys.values.map(_.id).toSet
         val signedRootRole = SignedRootRole.fromSignedPayload(repoId, offlineSignedParsed)
-
-        signedRootRoleRepo.persistAndDeleteRepoKeys(keyRepo)(signedRootRole, keysToDelete).map(_ => Valid(signedRootRole))
+        signedRootRoleRepo.persistAndKeepRepoKeys(keyRepo)(signedRootRole, newOnlineKeys).map(_ => Valid(signedRootRole))
 
       case r@Invalid(_) =>
         FastFuture.successful(r)
