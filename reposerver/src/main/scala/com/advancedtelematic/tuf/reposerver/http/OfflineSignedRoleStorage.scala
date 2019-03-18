@@ -20,7 +20,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
-import com.advancedtelematic.tuf.reposerver.delegations.DelegationsManagement
+import com.advancedtelematic.tuf.reposerver.delegations.{SignedRoleDelegationsFind}
 import com.advancedtelematic.tuf.reposerver.http.RoleChecksumHeader.RoleChecksum
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import org.slf4j.LoggerFactory
@@ -33,8 +33,6 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
 
   private val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
 
-  private val delegationsManagement = new DelegationsManagement()
-
   def store(repoId: RepoId, signedPayload: SignedPayload[TargetsRole]): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole[TargetsRole])]] =
     for {
       validatedPayloadSig <- payloadSignatureIsValid(repoId, signedPayload)
@@ -44,8 +42,8 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
         case Valid(items) =>
           val signedTargetRole = SignedRole.withChecksum[TargetsRole](repoId, signedPayload.asJsonSignedPayload, signedPayload.signed.version, signedPayload.signed.expires)
           for {
-            (targets, timestamps) <- signedRoleGeneration.regenerateSignedDependent(repoId, signedTargetRole, signedPayload.signed.expires)
-              _ <- signedRoleRepository.storeAll(targetItemRepo)(repoId: RepoId, List(signedTargetRole, targets, timestamps), items)
+            (targets, timestamps) <- signedRoleGeneration.freshSignedDependent(repoId, signedTargetRole, signedPayload.signed.expires)
+            _ <- signedRoleRepository.storeAll(targetItemRepo)(repoId: RepoId, List(signedTargetRole, targets, timestamps), items)
           } yield (existingTargets, signedTargetRole).validNel
         case i @ Invalid(_) =>
           FastFuture.successful(i)

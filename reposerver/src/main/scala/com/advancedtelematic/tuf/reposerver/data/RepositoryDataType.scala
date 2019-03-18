@@ -5,13 +5,13 @@ import java.time.Instant
 
 import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libats.data.DataType.Checksum
-import com.advancedtelematic.libtuf.data.ClientDataType.{MetaItem, MetaPath, _}
-import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, TargetFilename}
-import io.circe.syntax._
-import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
+import com.advancedtelematic.libtuf.data.ClientDataType.{MetaItem, MetaPath, _}
+import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, TargetFilename}
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
-import io.circe.{Decoder, Json}
+import io.circe.Decoder
+import io.circe.syntax._
 
 object RepositoryDataType {
   object StorageMethod extends Enumeration {
@@ -25,7 +25,11 @@ object RepositoryDataType {
 
   case class SignedRole[T : TufRole](repoId: RepoId, content: JsonSignedPayload, checksum: Checksum, length: Long, version: Int, expiresAt: Instant) {
     def role(implicit dec: Decoder[T]): T =
-      RepositoryDataType.role[T](content.signed)
+      content.signed.as[T] match {
+        case Left(err) =>
+          throw new IllegalArgumentException(s"Could not decode a role saved in database as ${implicitly[TufRole[T]]} but not parseable as such a type: $err")
+        case Right(p) => p
+      }
 
     def asMetaRole: (MetaPath, MetaItem) = {
       val hashes = Map(checksum.method -> checksum.hash)
@@ -33,19 +37,6 @@ object RepositoryDataType {
     }
 
     def tufRole: TufRole[T] = implicitly[TufRole[T]]
-  }
-
-  private def role[T: TufRole](json: Json)(implicit dec: Decoder[T]): T = json.as[T] match {
-    case Left(err) =>
-      throw new IllegalArgumentException(s"Could not decode a role saved in database as ${implicitly[TufRole[T]]} but not parseable as such a type: $err")
-    case Right(p) => p
-  }
-
-  def asMetaItem(content: JsonSignedPayload)(implicit dec: Decoder[TargetsRole]): MetaItem = {
-    val canonicalJson = content.asJson.canonical
-    val checksum = Sha256Digest.digest(canonicalJson.getBytes)
-    val hashes = Map(checksum.method -> checksum.hash)
-    MetaItem(hashes, canonicalJson.length, role[TargetsRole](content.signed).version)
   }
 
   object SignedRole {
