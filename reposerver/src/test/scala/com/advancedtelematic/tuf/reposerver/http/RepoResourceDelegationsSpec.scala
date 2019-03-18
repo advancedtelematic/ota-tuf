@@ -201,7 +201,6 @@ class RepoResourceDelegationsSpec extends TufReposerverSpec
     Get(apiUri(s"repo/${repoId.show}/snapshot.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       val signed = responseAs[SignedPayload[SnapshotRole]].signed
-
       signed.meta(Refined.unsafeApply(s"${delegatedRoleName.value}.json")).length shouldBe delegationLength
     }
   }

@@ -16,7 +16,7 @@ import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
-import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, TufRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, SnapshotRole, TimestampRole, TufRole}
 import com.advancedtelematic.libtuf_server.data.Requests.TargetComment
 import com.advancedtelematic.libtuf_server.data.TufSlickMappings._
 import com.advancedtelematic.tuf.reposerver.db.DBDataType.{DbDelegation, DbSignedRole}
@@ -289,8 +289,8 @@ trait DelegationRepositorySupport extends DatabaseSupport {
 
 protected [db] class DelegationRepository()(implicit db: Database, ec: ExecutionContext) {
 
-  def find(repoId: RepoId, roleName: DelegatedRoleName): Future[DbDelegation] = db.run {
-    Schema.delegations.filter(_.repoId === repoId).filter(_.roleName === roleName).result.failIfNotSingle(Errors.DelegationNotFound)
+  def find(repoId: RepoId, roleNames: DelegatedRoleName*): Future[DbDelegation] = db.run {
+    Schema.delegations.filter(_.repoId === repoId).filter(_.roleName.inSet(roleNames)).result.failIfNotSingle(Errors.DelegationNotFound)
   }
 
   def persist(repoId: RepoId, roleName: DelegatedRoleName, content: JsonSignedPayload): Future[Unit] = db.run {

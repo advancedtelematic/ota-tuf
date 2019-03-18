@@ -48,7 +48,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   with SignedRoleRepositorySupport
   with Settings {
 
-  private val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
+  private implicit val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
   private val offlineSignedRoleStorage = new OfflineSignedRoleStorage(keyserverClient)
   private val delegations = new DelegationsManagement()
 
@@ -213,7 +213,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       } ~
       path("delegations" / DelegatedRoleUriPath) { delegatedRoleName =>
         (put & entity(as[SignedPayload[TargetsRole]])) { payload =>
-          complete(signedRoleGeneration.createDelegatedRole(repoId, delegatedRoleName, payload).map(_ => StatusCodes.NoContent))
+          complete(delegations.create(repoId, delegatedRoleName, payload).map(_ => StatusCodes.NoContent))
         } ~
         get {
           complete(delegations.find(repoId, delegatedRoleName))
