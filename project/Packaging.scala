@@ -19,8 +19,7 @@ object Packaging {
       defaultLinuxInstallLocation in Docker := s"/opt/${moduleName.value}",
 
       dockerCommands := Seq(
-        Cmd("FROM", "alpine:3.6"),
-        Cmd("RUN", "apk upgrade --update && apk add --update openjdk8-jre bash coreutils"),
+        Cmd("FROM", "advancedtelematic/alpine-jre:8"),
         ExecCmd("RUN", "mkdir", "-p", s"/var/log/${moduleName.value}"),
         Cmd("ADD", "opt /opt"),
         Cmd("WORKDIR", s"/opt/${moduleName.value}"),
