@@ -8,26 +8,30 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, RoleType, TargetFilename}
+import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
-import com.advancedtelematic.tuf.reposerver.db._
 import com.advancedtelematic.tuf.reposerver.db.DbSignedRoleRepository.SignedRoleNotFound
-import io.circe.syntax._
+import com.advancedtelematic.tuf.reposerver.db._
+import com.advancedtelematic.tuf.reposerver.delegations.SignedRoleDelegationsFind
 import io.circe.Encoder
+import io.circe.syntax._
+import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
-import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
-import org.slf4j.LoggerFactory
 
 class SignedRoleGeneration(keyserverClient: KeyserverClient)
-                          (implicit val db: Database, val ec: ExecutionContext) extends SignedRoleRepositorySupport {
+                          (implicit val db: Database, val ec: ExecutionContext)
+  extends SignedRoleRepositorySupport with DelegationRepositorySupport {
 
   private val log = LoggerFactory.getLogger(this.getClass)
 
   val targetRoleGeneration = new TargetRoleGeneration(keyserverClient)
+  val signedRoleDelegationsFind = new SignedRoleDelegationsFind()
 
   def regenerateAllSignedRoles(repoId: RepoId): Future[JsonSignedPayload] = async {
+
     await(fetchRootRole(repoId))
 
     val expireAt = defaultExpire
@@ -36,20 +40,28 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
     val targetRole = await(targetRoleGeneration.generate(repoId, expireAt, targetVersion))
     val signedTarget = await(signRole(repoId, targetRole))
 
-    val (newSnapshots, newTimestamps) = await(regenerateSignedDependent(repoId, signedTarget, expireAt))
+    val (newSnapshots, newTimestamps) = await(freshSignedDependent(repoId, signedTarget, expireAt))
 
     await(signedRoleRepository.persistAll(List(signedTarget, newSnapshots, newTimestamps)))
 
     signedTarget.content
   }
 
-  def regenerateSignedDependent(repoId: RepoId,
-                                targetRole: SignedRole[TargetsRole],
-                                expireAt: Instant): Future[(SignedRole[SnapshotRole], SignedRole[TimestampRole])] = async {
+  def regenerateSnapshots(repoId: RepoId): Future[(SignedRole[SnapshotRole], SignedRole[TimestampRole])] = async {
+    val existingTargets = await(signedRoleRepository.find[TargetsRole](repoId))
+    val (snapshots, timestamps) = await(freshSignedDependent(repoId, existingTargets, defaultExpire))
+    await(signedRoleRepository.persistAll(List(snapshots, timestamps)))
+    (snapshots, timestamps)
+  }
+
+  def freshSignedDependent(repoId: RepoId,
+                           targetRole: SignedRole[TargetsRole],
+                           expireAt: Instant): Future[(SignedRole[SnapshotRole], SignedRole[TimestampRole])] = async {
     val signedRoot = await(fetchRootRole(repoId))
 
     val snapshotVersion = await(nextVersion[SnapshotRole](repoId))
-    val snapshotRole = genSnapshotRole(signedRoot, targetRole, expireAt, snapshotVersion)
+    val delegations = await(signedRoleDelegationsFind.findSignedTargetRoleDelegations(targetRole))
+    val snapshotRole = genSnapshotRole(signedRoot, targetRole, delegations, expireAt, snapshotVersion)
     val signedSnapshot = await(signRole(repoId, snapshotRole))
 
     val timestampVersion = await(nextVersion[TimestampRole](repoId))
@@ -68,10 +80,8 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
     _ <- regenerateAllSignedRoles(repoId)
   } yield ()
 
-
-  private def signRole[T : Encoder : TufRole](repoId: RepoId, role: T): Future[SignedRole[T]] = {
-    new RoleSigner(repoId, keyserverClient).apply(role)
-  }
+  private def signRole[T : Encoder : TufRole](repoId: RepoId, role: T): Future[SignedRole[T]] =
+    new RepoRoleSigner(repoId, keyserverClient).apply(role)
 
   private def ensureTargetsCanBeSigned(repoId: RepoId): Future[SignedRole[TargetsRole]] = async {
     val targetsRole = await(signedRoleRepository.find[TargetsRole](repoId)).role
@@ -111,7 +121,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
   }
 
   def findRole(repoId: RepoId, roleType: RoleType): Future[SignedRole[_]] = {
-    lazy val refresher = new RepoRoleRefresh(new RoleSigner(repoId, keyserverClient))
+    lazy val refresher = new RepoRoleRefresh(keyserverClient)
 
     roleType match {
       case RoleType.ROOT =>
@@ -135,8 +145,9 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
         case SignedRoleNotFound => 1
       }
 
-  private def genSnapshotRole(root: SignedRole[RootRole], target: SignedRole[TargetsRole], expireAt: Instant, version: Int): SnapshotRole = {
-    val meta = List(root.asMetaRole, target.asMetaRole).toMap
+  private def genSnapshotRole(root: SignedRole[RootRole], target: SignedRole[TargetsRole],
+                              delegations: Map[MetaPath, MetaItem], expireAt: Instant, version: Int): SnapshotRole = {
+    val meta = List(root.asMetaRole, target.asMetaRole).toMap ++ delegations
     SnapshotRole(meta, expireAt, version)
   }
 
@@ -159,6 +170,8 @@ protected class TargetRoleGeneration(roleSigningClient: KeyserverClient)
   def deleteTargetItem(repoId: RepoId, filename: TargetFilename): Future[Unit] =
     targetItemRepo.deleteItemAndComments(filenameCommentRepo)(repoId, filename)
 
+  // TODO: Fix for https://saeljira.it.here.com/browse/OTA-2366 is related to this code
+  // We should rely on the existing TargetsRole and just add a target item, rather than regenerate a new TargetsRole
   def generate(repoId: RepoId, expireAt: Instant, version: Int): Future[TargetsRole] = {
     targetItemRepo.findFor(repoId).map { targetItems =>
       val targets = targetItems.map { item =>

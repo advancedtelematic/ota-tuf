@@ -11,7 +11,7 @@ import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepositorySupport, Tar
 import com.advancedtelematic.tuf.reposerver.db.DbSignedRoleRepository.SignedRoleNotFound
 import io.circe.Encoder
 import cats.implicits._
-import com.advancedtelematic.libats.data.DataType.{Checksum}
+import com.advancedtelematic.libats.data.DataType.Checksum
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
@@ -20,6 +20,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
+import com.advancedtelematic.tuf.reposerver.delegations.{SignedRoleDelegationsFind}
 import com.advancedtelematic.tuf.reposerver.http.RoleChecksumHeader.RoleChecksum
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import org.slf4j.LoggerFactory
@@ -40,10 +41,10 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
       signedRoleValidated <- targetItemsValidated match {
         case Valid(items) =>
           val signedTargetRole = SignedRole.withChecksum[TargetsRole](repoId, signedPayload.asJsonSignedPayload, signedPayload.signed.version, signedPayload.signed.expires)
-
-          signedRoleGeneration.regenerateSignedDependent(repoId, signedTargetRole, signedPayload.signed.expires)
-            .flatMap { case (targets, timestamps) => signedRoleRepository.storeAll(targetItemRepo)(repoId: RepoId, List(signedTargetRole, targets, timestamps), items) }
-            .map(_ => (existingTargets, signedTargetRole).validNel)
+          for {
+            (targets, timestamps) <- signedRoleGeneration.freshSignedDependent(repoId, signedTargetRole, signedPayload.signed.expires)
+            _ <- signedRoleRepository.storeAll(targetItemRepo)(repoId: RepoId, List(signedTargetRole, targets, timestamps), items)
+          } yield (existingTargets, signedTargetRole).validNel
         case i @ Invalid(_) =>
           FastFuture.successful(i)
       }

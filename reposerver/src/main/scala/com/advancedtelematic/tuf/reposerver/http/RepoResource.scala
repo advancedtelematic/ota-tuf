@@ -48,7 +48,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   with SignedRoleRepositorySupport
   with Settings {
 
-  private val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
+  private implicit val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
   private val offlineSignedRoleStorage = new OfflineSignedRoleStorage(keyserverClient)
   private val delegations = new DelegationsManagement()
 

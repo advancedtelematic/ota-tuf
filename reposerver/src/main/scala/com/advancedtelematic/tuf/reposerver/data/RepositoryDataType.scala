@@ -5,13 +5,13 @@ import java.time.Instant
 
 import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libats.data.DataType.Checksum
-import com.advancedtelematic.libtuf.data.ClientDataType.{MetaItem, MetaPath, _}
-import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, TargetFilename}
-import io.circe.syntax._
-import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
+import com.advancedtelematic.libtuf.data.ClientDataType.{MetaItem, MetaPath, _}
+import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, TargetFilename}
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
 import io.circe.Decoder
+import io.circe.syntax._
 
 object RepositoryDataType {
   object StorageMethod extends Enumeration {
@@ -24,11 +24,12 @@ object RepositoryDataType {
   case class TargetItem(repoId: RepoId, filename: TargetFilename, uri: Option[Uri], checksum: Checksum, length: Long, custom: Option[TargetCustom] = None, storageMethod: StorageMethod = Managed)
 
   case class SignedRole[T : TufRole](repoId: RepoId, content: JsonSignedPayload, checksum: Checksum, length: Long, version: Int, expiresAt: Instant) {
-    def role(implicit dec: Decoder[T]): T = content.signed.as[T] match {
-      case Left(err) =>
-        throw new IllegalArgumentException(s"Could not decode a role saved in database as ${tufRole.roleType} but not parseable as such a type: $err")
-      case Right(p) => p
-    }
+    def role(implicit dec: Decoder[T]): T =
+      content.signed.as[T] match {
+        case Left(err) =>
+          throw new IllegalArgumentException(s"Could not decode a role saved in database as ${implicitly[TufRole[T]]} but not parseable as such a type: $err")
+        case Right(p) => p
+      }
 
     def asMetaRole: (MetaPath, MetaItem) = {
       val hashes = Map(checksum.method -> checksum.hash)
