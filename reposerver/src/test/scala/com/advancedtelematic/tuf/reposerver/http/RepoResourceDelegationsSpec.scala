@@ -4,6 +4,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 import akka.http.scaladsl.model.StatusCodes
+import cats.syntax.either._
 import cats.syntax.option._
 import cats.syntax.show._
 import com.advancedtelematic.libats.data.ErrorRepresentation
@@ -11,8 +12,9 @@ import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.DelegatedPathPattern._
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedPathPattern, DelegatedRoleName, Delegation, Delegations, RoleTypeOps, RootRole, SnapshotRole, TargetsRole, ValidMetaPath}
+import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RepoId, RoleType, SignedPayload, TufKeyPair}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, JsonSignedPayload, RepoId, RoleType, SignedPayload, TufKeyPair, ValidTargetFilename}
 import com.advancedtelematic.libtuf.data.ValidatedString._
 import com.advancedtelematic.tuf.reposerver.util.{RepoResourceSpecUtil, ResourceSpec, TufReposerverSpec}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
@@ -232,6 +234,21 @@ class RepoResourceDelegationsSpec extends TufReposerverSpec
 
     val renewedSnapshots = signedRoleRepository.find[SnapshotRole](repoId).futureValue
     renewedSnapshots.role.meta(Refined.unsafeApply(s"${delegatedRoleName.value}.json")).length shouldBe delegationLength
+  }
+
+  test("Adding a single target keeps delegations") {
+    implicit val repoId = addTargetToRepo()
+
+    addDelegationToRepo()
+
+    Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[TargetsRole]].signed.delegations should contain(delegations)
+    }
   }
 
 }

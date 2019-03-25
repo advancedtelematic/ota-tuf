@@ -37,7 +37,8 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
     val expireAt = defaultExpire
 
     val targetVersion = await(nextVersion[TargetsRole](repoId))
-    val targetRole = await(targetRoleGeneration.generate(repoId, expireAt, targetVersion))
+    val targetDelegations = await(findTargetRoleDelegations(repoId))
+    val targetRole = await(targetRoleGeneration.generate(repoId, targetDelegations, expireAt, targetVersion))
     val signedTarget = await(signRole(repoId, targetRole))
 
     val (newSnapshots, newTimestamps) = await(freshSignedDependent(repoId, signedTarget, expireAt))
@@ -158,6 +159,13 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
 
   private def defaultExpire: Instant =
     Instant.now().plus(31, ChronoUnit.DAYS)
+
+  private def findTargetRoleDelegations(repoId: RepoId): Future[Option[Delegations]] =
+    signedRoleRepository.find[TargetsRole](repoId).map { signedTargetRole =>
+      signedTargetRole.role.delegations
+    }.recover {
+      case SignedRoleNotFound => None
+    }
 }
 
 protected class TargetRoleGeneration(roleSigningClient: KeyserverClient)
@@ -170,16 +178,14 @@ protected class TargetRoleGeneration(roleSigningClient: KeyserverClient)
   def deleteTargetItem(repoId: RepoId, filename: TargetFilename): Future[Unit] =
     targetItemRepo.deleteItemAndComments(filenameCommentRepo)(repoId, filename)
 
-  // TODO: Fix for https://saeljira.it.here.com/browse/OTA-2366 is related to this code
-  // We should rely on the existing TargetsRole and just add a target item, rather than regenerate a new TargetsRole
-  def generate(repoId: RepoId, expireAt: Instant, version: Int): Future[TargetsRole] = {
+  def generate(repoId: RepoId, delegations: Option[Delegations], expireAt: Instant, version: Int): Future[TargetsRole] = {
     targetItemRepo.findFor(repoId).map { targetItems =>
       val targets = targetItems.map { item =>
         val hashes = Map(item.checksum.method -> item.checksum.hash)
         item.filename -> ClientTargetItem(hashes, item.length, item.custom.map(_.asJson))
       }.toMap
 
-      TargetsRole(expireAt, targets, version)
+      TargetsRole(expireAt, targets, version, delegations)
     }
   }
 }
