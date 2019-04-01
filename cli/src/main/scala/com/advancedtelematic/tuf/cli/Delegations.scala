@@ -11,12 +11,13 @@ import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, Deleg
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{SignedPayload, TargetFilename, TufKey, TufPrivateKey}
 import com.advancedtelematic.libtuf.http.ReposerverClient
+import com.advancedtelematic.tuf.cli.Errors.DelegationsAlreadySigned
 import com.advancedtelematic.tuf.cli.TryToFuture._
-import io.circe.{Json, jawn}
+import io.circe.{DecodingFailure, Json, jawn}
 import io.circe.syntax._
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 object Delegations {
   private val defaultExpirePeriod = Period.ofDays(365)
@@ -27,11 +28,19 @@ object Delegations {
     output.write(empty.asJson.spaces2.getBytes)
   }
 
-  private def read(input: Path): Try[Json] =
-    io.circe.jawn.parseFile(input.toFile).toTry
+  private def readUnsigned(input: Path): Try[Json] = {
+    io.circe.jawn.parseFile(input.toFile).toTry.flatMap { json =>
+      json.as[SignedPayload[Json]] match {
+        case Right(_) =>
+          Failure(DelegationsAlreadySigned(input))
+        case Left(_) =>
+          Success(json)
+      }
+    }
+  }
 
   def signPayload(keys: List[(TufKey, TufPrivateKey)], input : Path, output: WriteOutput): Try[Unit] = {
-    read(input).map { inJson =>
+    readUnsigned(input).map { inJson =>
       val sigs = keys.map { case (pub, priv) =>
         TufCrypto.signPayload(priv, inJson).toClient(pub.id)
       }
@@ -58,7 +67,7 @@ object Delegations {
   }
 
   def addTarget(input: Path, output: WriteOutput, targetFilename: TargetFilename, targetItem: ClientTargetItem): Try[Unit] = {
-    read(input).flatMap { json =>
+    readUnsigned(input).flatMap { json =>
       json.as[TargetsRole].toTry.map(json -> _)
     }.map { case (rawJson, targets) =>
       val newTargets = targets.copy(targets = Map(targetFilename -> targetItem))

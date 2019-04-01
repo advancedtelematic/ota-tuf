@@ -12,7 +12,10 @@ import com.advancedtelematic.tuf.cli.util.CliSpec
 import io.circe.{Json, jawn}
 import cats.syntax.either._
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
+import com.advancedtelematic.tuf.cli.Errors.DelegationsAlreadySigned
 import eu.timepit.refined._
+
+import scala.util.Failure
 
 class DelegationsSpec extends CliSpec {
   test("generates an empty delegations role to a given Path") {
@@ -41,6 +44,28 @@ class DelegationsSpec extends CliSpec {
     signedPayload.signatures shouldNot be(empty)
 
     signedPayload.signed shouldBe Json.obj()
+  }
+
+  test("returns descriptive error when adding a target to a signed delegations file") {
+    val in = Files.createTempFile("delegations", ".json")
+    Delegations.writeNew(new FileOutputStream(in.toFile)).get
+    val pair = KeyType.default.crypto.generateKeyPair()
+    val out = Files.createTempFile("delegations-signed", ".json")
+    val outOutput = WriteOutput.fromFile(out.toFile)
+
+    Delegations.signPayload(List(pair.pubkey -> pair.privkey), in, outOutput).get
+
+    val filename = refineV[ValidTargetFilename]("test-0.0.1").right.get
+
+    val item = ClientTargetItem(
+      Map(HashMethod.SHA256 -> refineV[ValidChecksum]("4c89194898360ebba34059bb8a5dd47a0650ca66b37c0143c32f7e70416e29e0").right.get),
+      1024,
+      custom = None
+    )
+
+    val result = Delegations.addTarget(out, WriteOutput.fromOutputStream(new ByteArrayOutputStream()), filename, item)
+
+    result.failed.get shouldBe DelegationsAlreadySigned(out)
   }
 
   test("overwrites existing target") {
