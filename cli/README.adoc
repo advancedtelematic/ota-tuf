@@ -52,7 +52,12 @@ The basic use case for delegations works as follows.
 
 7. The supplier signs the delegations metadata and sends it to the OEM:
 
-    garage-sign delegations sign --inplace --input delegations01.json --key-name supplier01-key
+     garage-sign delegations sign --inplace --input delegations01.json --key-name supplier01-key
+
++
+After signing the delegations the file will need to be converted back to an unsigned file to be modified, for example to add another target. This can be done with:
+
+     jq .signed delegations01.json  > delegations01-unsigned.json
 
 8. The OEM pushes the signed role to the remote repository:
 
