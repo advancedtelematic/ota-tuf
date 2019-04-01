@@ -49,6 +49,7 @@ The basic use case for delegations works as follows.
        --version 0.0.1 \
        --sha256 766644289a2036c54f3485f5eae5144a08d003fc2f897de5faf8dc45bb2b0ea1 \
        --hardwareids laptop
+       --url https://example.com
 
 7. The supplier signs the delegations metadata and sends it to the OEM:
 
