@@ -39,7 +39,8 @@ trait Settings {
     val secretKey = _config.getString("storage.s3.secretKey")
     val bucketId = _config.getString("storage.s3.bucketId")
     val region = Regions.fromName(_config.getString("storage.s3.region"))
-    new S3Credentials(accessKey, secretKey, bucketId, region)
+    val endpointUrl = _config.getString("storage.s3.endpointUrl")
+    new S3Credentials(accessKey, secretKey, bucketId, region, endpointUrl)
   }
 
   lazy val useS3 = _config.getString("storage.type").equals("s3")
