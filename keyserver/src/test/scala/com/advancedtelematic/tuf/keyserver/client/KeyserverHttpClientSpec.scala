@@ -7,7 +7,7 @@ import com.advancedtelematic.libats.http.tracing.NullRequestTracing
 import com.advancedtelematic.libats.http.tracing.Tracing.RequestTracing
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519TufKey, JsonSignedPayload, KeyId, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, Ed25519TufKey, JsonSignedPayload, KeyId, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
 import com.advancedtelematic.libtuf_server.keyserver.{KeyserverClient, KeyserverHttpClient}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
@@ -210,5 +210,16 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
       val pairs = await(client.fetchTargetKeyPairs(repoId))
       pairs.map(_.pubkey) shouldBe keys.filter(_.roleType == RoleType.TARGETS).map(_.publicKey)
     }.futureValue
+  }
+
+  test("keyserver generates key synchronously when using `forceSync` is set") {
+    val repoId = RepoId.generate()
+
+    val rootF = for {
+      _ <- client.createRoot(repoId, Ed25519KeyType, forceSync = true)
+      r <- client.fetchRootRole(repoId)
+    } yield r.signed
+
+    rootF.futureValue shouldBe a[RootRole]
   }
 }

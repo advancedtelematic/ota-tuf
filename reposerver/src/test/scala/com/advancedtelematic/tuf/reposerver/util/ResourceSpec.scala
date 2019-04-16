@@ -106,7 +106,7 @@ class FakeKeyserverClient extends KeyserverClient {
   def deleteRepo(repoId: RepoId): Option[RootRole] =
     keys.asScala.remove(repoId).flatMap(_ => rootRoles.asScala.remove(repoId).map(_.signed))
 
-  override def createRoot(repoId: RepoId, keyType: KeyType): Future[Json] = {
+  override def createRoot(repoId: RepoId, keyType: KeyType, forceSync: Boolean): Future[Json] = {
     if (keys.contains(repoId)) {
       FastFuture.failed(RootRoleConflict)
     } else {
