@@ -5,32 +5,56 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.stream.Materializer
 import cats.data.Validated.{Invalid, Valid}
 import com.advancedtelematic.libats.data.ErrorRepresentation
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType}
-import com.advancedtelematic.tuf.keyserver.roles._
-import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, SignedRootRoleRepository}
-import com.advancedtelematic.libtuf.data.TufDataType._
-import com.advancedtelematic.libtuf_server.data.Marshalling._
 import com.advancedtelematic.libats.http.UUIDKeyAkka._
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ErrorCodes
+import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, _}
+import com.advancedtelematic.libtuf_server.data.Marshalling._
+import com.advancedtelematic.tuf.keyserver.daemon.DefaultKeyGenerationOp
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus
+import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, SignedRootRoleRepository}
+import com.advancedtelematic.tuf.keyserver.roles._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe._
 import io.circe.syntax._
+import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
-import slick.jdbc.MySQLProfile.api._
 
 class RootRoleResource()
                       (implicit val db: Database, val ec: ExecutionContext, mat: Materializer)
   extends KeyGenRequestSupport {
-  import akka.http.scaladsl.server.Directives._
   import ClientRootGenRequest._
+  import akka.http.scaladsl.server.Directives._
 
   val keyGenerationRequests = new KeyGenerationRequests()
   val signedRootRoles = new SignedRootRoles()
   val rootRoleKeyEdit = new RootRoleKeyEdit()
   val roleSigning = new RoleSigning()
+
+  private def createRootNow(repoId: RepoId, genRequest: ClientRootGenRequest) = {
+    require(genRequest.threshold > 0, "threshold must be greater than 0")
+
+    val keyGenerationOp = DefaultKeyGenerationOp()
+
+    val f = for {
+      reqs <- keyGenerationRequests.createDefaultGenRequest(repoId, genRequest.threshold, genRequest.keyType, KeyGenRequestStatus.ERROR)
+      _ <- Future.traverse(reqs)(keyGenerationOp)
+    } yield StatusCodes.Created -> reqs.map(_.id)
+
+    complete(f)
+  }
+
+  private def createRootLater(repoId: RepoId, genRequest: ClientRootGenRequest) = {
+    require(genRequest.threshold > 0, "threshold must be greater than 0")
+
+    val f = keyGenerationRequests
+      .createDefaultGenRequest(repoId, genRequest.threshold, genRequest.keyType, KeyGenRequestStatus.REQUESTED)
+      .map(StatusCodes.Accepted -> _.map(_.id))
+
+    complete(f)
+  }
 
   val route =
     pathPrefix("root" / RepoId.Path) { repoId =>
@@ -39,14 +63,11 @@ class RootRoleResource()
           val f = keyGenerationRequests.forceRetry(repoId).map(_ => StatusCodes.OK)
           complete(f)
         } ~
-        (post & entity(as[ClientRootGenRequest])) { genRequest =>
-          require(genRequest.threshold > 0, "threshold must be greater than 0")
-
-          val f = keyGenerationRequests
-            .createDefaultGenRequest(repoId, genRequest.threshold, genRequest.keyType)
-            .map(StatusCodes.Accepted -> _)
-
-          complete(f)
+        (post & entity(as[ClientRootGenRequest]) & optionalHeaderValueByName("x-ats-tuf-force-sync")) {
+          case (genRequest, Some(_)) =>
+            createRootNow(repoId, genRequest)
+          case (genRequest, None) =>
+            createRootLater(repoId, genRequest)
         } ~
         get {
           val f = signedRootRoles.findFreshAndPersist(repoId)
