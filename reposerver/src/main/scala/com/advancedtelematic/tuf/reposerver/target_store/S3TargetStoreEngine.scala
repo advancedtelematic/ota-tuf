@@ -36,14 +36,12 @@ class S3TargetStoreEngine(credentials: S3Credentials)(implicit val system: Actor
       AmazonS3ClientBuilder.standard()
         .withCredentials(credentials)
         .withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(credentials.endpointUrl, credentials.region.getName()))
-        .build()
     } else {
       AmazonS3ClientBuilder.standard()
         .withCredentials(credentials)
         .withRegion(credentials.region)
-        .build()
     }
-  }
+  }.build()
 
   override def store(repoId: RepoId, filename: TargetFilename, fileData: Source[ByteString, Any]): Future[TargetStoreResult] = {
     val tempFile = File.createTempFile("s3file", ".tmp")
