@@ -305,18 +305,21 @@ object Cli extends App with VersionInfo {
               .required(),
             opt[Instant]("expires")
               .toConfigParam('expires)
+              .text("UTC instant such as 2018-01-01T00:01:00Z")
               .required()
-          ),
-        cmd("delete")
-          .toCommand(DeleteTarget)
-          .children(
-            opt[TargetFilename]("filename")
-              .required()
-              .toConfigOptionParam('targetFilename)
           ),
         cmd("add")
           .toCommand(AddTarget)
           .children(addTargetOptions(this):_*),
+        cmd("delete")
+          .toCommand(DeleteTarget)
+          .text("Delete a single target.")
+          .children(
+            opt[TargetFilename]("filename")
+              .required()
+              .toConfigOptionParam('targetFilename)
+              .text("Filename of the target to delete in the format <name>_<version>.")
+          ),
         cmd("sign")
           .toCommand(SignTargets)
           .children(
