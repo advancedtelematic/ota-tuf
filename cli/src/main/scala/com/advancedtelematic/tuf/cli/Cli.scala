@@ -147,7 +147,9 @@ object Cli extends App with VersionInfo {
       cmd("gen")
         .toCommand(GenUserKey)
         .children(
-          opt[KeyType]("type").abbr("t").toConfigParam('keyType),
+          opt[KeyType]("type").abbr("t").toConfigParam('keyType)
+            .text("key type, ed25519 or rsa"),
+          opt[Int]("keysize").toConfigOptionParam('keySize),
           manyKeyNamesOpt(this).maxOccurs(1)
         ),
       cmd("id")
@@ -166,6 +168,7 @@ object Cli extends App with VersionInfo {
         .toCommand(SignDelegation)
         .children(
           manyKeyNamesOpt(this),
+          keysPathOpt(this),
           opt[Path]("input").abbr("i").required().toConfigOptionParam('inputPath),
           opt[Unit]("inplace").abbr("e").optional().action { case (_, c) => c.copy(inplace = true) }
         ),
