@@ -5,11 +5,12 @@ import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, TargetCustom}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFilename
 import com.advancedtelematic.libtuf_server.data.Messages.TufTargetAdded
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import cats.implicits._
+
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libats.codecs.CirceCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 
 
 class TufTargetsPublisher(messageBus: MessageBusPublisher)(implicit ec: ExecutionContext) {

@@ -5,14 +5,13 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Sink, Source}
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{StorageMethod, TargetItem}
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf_server.data.TufSlickMappings._
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.StorageMethod._
 import SlickMappings._
 import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{StorageMethod, TargetItem}
 
 import scala.concurrent.{ExecutionContext, Future}
 

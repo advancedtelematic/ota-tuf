@@ -15,10 +15,11 @@ import com.advancedtelematic.tuf.reposerver.util._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.codecs.CirceCodecs._
 import com.advancedtelematic.libats.data.DataType.{Checksum, HashMethod, ValidChecksum}
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, StorageMethod, TargetItem}
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
+import com.advancedtelematic.libtuf_server.repo.server.DataType.SignedRole
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{StorageMethod, TargetItem}
 import io.circe.Json
 
 import scala.concurrent.Future
@@ -57,7 +58,7 @@ class OfflineSignedRoleStorageSpec extends TufReposerverSpec with DatabaseSpec w
 
   val subject = new OfflineSignedRoleStorage(keyserver)
 
-  val signedRoleGeneration = SignedRoleGeneration(keyserver)
+  val signedRoleGeneration = TufRepoSignedRoleGeneration(keyserver)
   val targetRoleGeneration = new TargetRoleEdit(keyserver, signedRoleGeneration)
 
   def storeOffline(repoId: RepoId, targets: Map[TargetFilename, ClientTargetItem], version: Int): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole[TargetsRole])]] = {

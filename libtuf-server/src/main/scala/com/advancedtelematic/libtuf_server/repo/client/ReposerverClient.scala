@@ -1,12 +1,10 @@
-package com.advancedtelematic.libtuf_server.reposerver
+package com.advancedtelematic.libtuf_server.repo.client
 
-import akka.http.scaladsl.model._
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyType, RepoId, SignedPayload, TargetName, TargetVersion}
-import io.circe.{Decoder, Encoder, Json}
 import akka.actor.ActorSystem
 import akka.http.scaladsl.marshalling.Marshal
-import akka.http.scaladsl.model.Uri.{Path, Query}
 import akka.http.scaladsl.model.Uri.Path.Slash
+import akka.http.scaladsl.model.Uri.{Path, Query}
+import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import akka.stream.Materializer
@@ -15,30 +13,41 @@ import akka.util.ByteString
 import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{RawError, RemoteServiceError}
-import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.data.TufCodecs._
-
-import scala.concurrent.{ExecutionContext, Future}
-import io.circe.generic.semiauto._
-import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libats.http.HttpCodecs._
+import com.advancedtelematic.libats.http.ServiceHttpClientSupport
 import com.advancedtelematic.libats.http.tracing.Tracing.RequestTracing
 import com.advancedtelematic.libats.http.tracing.TracingHttpClient
-import com.advancedtelematic.libats.http.{ServiceHttpClient, ServiceHttpClientSupport}
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
+import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyType, RepoId, SignedPayload, TargetName, TargetVersion}
 import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest
-import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.{KeysNotReady, NotFound, RootNotInKeyserver}
+import com.advancedtelematic.libtuf_server.repo.client.ReposerverClient.{KeysNotReady, NotFound, RootNotInKeyserver}
+import io.circe.generic.semiauto._
+import io.circe.{Decoder, Encoder, Json}
+import com.advancedtelematic.libats.codecs.CirceCodecs._
+import com.advancedtelematic.libtuf_server.repo.server.DataType._
+import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libats.http.HttpCodecs._
 
+import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
+import com.advancedtelematic.libtuf.data.TufCodecs._
 
 object ReposerverClient {
-  import com.advancedtelematic.libats.codecs.CirceCodecs._
 
   object RequestTargetItem {
     implicit val encoder: Encoder[RequestTargetItem] = deriveEncoder
     implicit val decoder: Decoder[RequestTargetItem] = deriveDecoder
   }
+
+  case class RequestTargetItem2(uri: Uri, checksum: Checksum,
+                                targetFormat: Option[TargetFormat],
+                                name: Option[TargetName],
+                                version: Option[TargetVersion],
+                                hardwareIds: Seq[HardwareIdentifier],
+                                length: Long)
 
   case class RequestTargetItem(uri: Uri, checksum: Checksum,
                                targetFormat: Option[TargetFormat],
@@ -91,9 +100,9 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
                           (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer, tracing: RequestTracing)
   extends TracingHttpClient(httpClient) with ReposerverClient {
 
+  import ReposerverClient._
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
   import io.circe.syntax._
-  import ReposerverClient._
 
   private def apiUri(path: Path) =
     reposerverUri.withPath(Path("/api") / "v1" ++ Slash(path))
@@ -147,8 +156,8 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
     execHttpWithNamespace[Unit](namespace, req)(addTargetErrorHandler)
   }
 
-  def execHttpWithNamespace[T : ClassTag : FromEntityUnmarshaller](namespace: Namespace, request: HttpRequest)
-                                                                  (errorHandler: PartialFunction[RemoteServiceError, Future[T]] = PartialFunction.empty): Future[T] = {
+  def execHttpWithNamespace[T: ClassTag : FromEntityUnmarshaller](namespace: Namespace, request: HttpRequest)
+                                                                 (errorHandler: PartialFunction[RemoteServiceError, Future[T]] = PartialFunction.empty): Future[T] = {
     val req = request.addHeader(RawHeader("x-ats-namespace", namespace.get))
 
     val authReq = authHeaders match {
@@ -173,7 +182,7 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
         "targetFormat" -> targetFormat.toString)
 
     val hwparams =
-      if(hardwareIds.isEmpty)
+      if (hardwareIds.isEmpty)
         Map.empty
       else
         Map("hardwareIds" -> hardwareIds.map(_.value).mkString(","))

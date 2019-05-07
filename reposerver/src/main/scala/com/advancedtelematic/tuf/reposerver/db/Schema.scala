@@ -7,13 +7,13 @@ import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, TargetCustom}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, TargetFilename}
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import slick.jdbc.MySQLProfile.api._
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.StorageMethod._
 import SlickMappings._
 import com.advancedtelematic.libtuf_server.data.Requests.TargetComment
 import com.advancedtelematic.tuf.reposerver.db.DBDataType.{DbDelegation, DbSignedRole}
 import SlickValidatedString._
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.StorageMethod.StorageMethod
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 
 object Schema {
   import com.advancedtelematic.libats.slick.codecs.SlickRefined._

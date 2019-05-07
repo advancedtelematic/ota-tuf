@@ -11,7 +11,8 @@ import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity, MissingEntityId, RawError}
 import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, RoleType, TargetFilename}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
+import com.advancedtelematic.libtuf_server.repo.server.DataType._
 import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
@@ -21,18 +22,19 @@ import com.advancedtelematic.libtuf_server.data.Requests.TargetComment
 import com.advancedtelematic.libtuf_server.data.TufSlickMappings._
 import com.advancedtelematic.tuf.reposerver.db.DBDataType.{DbDelegation, DbSignedRole}
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport.MissingNamespaceException
-import com.advancedtelematic.tuf.reposerver.http.{Errors, SignedRoleProvider, TargetsItemsProvider}
+import com.advancedtelematic.tuf.reposerver.http.Errors._
+import com.advancedtelematic.libtuf_server.repo.server.Errors.SignedRoleNotFound
+
 import shapeless.ops.function.FnToProduct
 import shapeless.{Generic, HList}
 import SlickValidatedString._
+import com.advancedtelematic.libtuf_server.repo.server.SignedRoleProvider
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
 import slick.jdbc.MySQLProfile.api._
 import slick.lifted.AbstractTable
-
-import scala.concurrent.java8.FuturesConvertersImpl.P
-
 
 trait DatabaseSupport {
   implicit val ec: ExecutionContext
@@ -92,7 +94,7 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
       .filter(_.repoId === repoId)
       .filter(_.filename === filename)
       .result
-      .failIfNotSingle(Errors.TargetNotFoundError)
+      .failIfNotSingle(TargetNotFoundError)
   }
 
   def usage(repoId: RepoId): Future[(Namespace, Long)] =
@@ -119,27 +121,26 @@ trait SignedRoleRepositorySupport extends DatabaseSupport {
   lazy val signedRoleRepository = new SignedRoleRepository()
 }
 
-protected [db] class SignedRoleRepository()(implicit val db: Database, val ec: ExecutionContext) extends SignedRoleProvider {
+protected [db] class SignedRoleRepository()(implicit val db: Database, val ec: ExecutionContext) {
   import DBDataType._
 
   private val signedRoleRepository = new DbSignedRoleRepository()
 
-  override def persistAll(signedRoles: List[SignedRole[_]]): Future[List[SignedRole[_]]] =
-    signedRoleRepository.persistAll(signedRoles.map(_.asDbSignedRole)).map(_ => signedRoles)
+  def persistAll(repoId: RepoId, signedRoles: List[SignedRole[_]]): Future[Seq[DbSignedRole]] =
+    signedRoleRepository.persistAll(signedRoles.map(_.asDbSignedRole(repoId)))
 
-  def persist[T : TufRole](signedRole: SignedRole[T], forceVersion: Boolean = false): Future[DbSignedRole] =
-    signedRoleRepository.persist(signedRole.asDbSignedRole, forceVersion)
+  def persist[T : TufRole](repoId: RepoId, signedRole: SignedRole[T], forceVersion: Boolean = false): Future[DbSignedRole] =
+    signedRoleRepository.persist(signedRole.asDbSignedRole(repoId), forceVersion)
 
   def find[T](repoId: RepoId)(implicit tufRole: TufRole[T]): Future[SignedRole[T]] =
     signedRoleRepository.find(repoId, tufRole.roleType).map(_.asSignedRole)
 
   def storeAll(targetItemRepo: TargetItemRepository)(repoId: RepoId, signedRoles: List[SignedRole[_]], items: Seq[TargetItem]): Future[Unit] =
-    signedRoleRepository.storeAll(targetItemRepo)(repoId, signedRoles.map(_.asDbSignedRole), items)
+    signedRoleRepository.storeAll(targetItemRepo)(repoId, signedRoles.map(_.asDbSignedRole(repoId)), items)
 }
 
 
 object DbSignedRoleRepository {
-  val SignedRoleNotFound = MissingEntity[DbSignedRole]()
   def InvalidVersionBumpError(oldVersion: Int, newVersion: Int) =
     RawError(ErrorCode("invalid_version_bump"), StatusCodes.Conflict, s"Cannot bump version from $oldVersion to $newVersion")
 }
@@ -147,7 +148,6 @@ object DbSignedRoleRepository {
 protected[db] class DbSignedRoleRepository()(implicit val db: Database, val ec: ExecutionContext) {
   import DbSignedRoleRepository.InvalidVersionBumpError
   import Schema.signedRoles
-  import DbSignedRoleRepository.SignedRoleNotFound
 
   import shapeless._
 
@@ -183,7 +183,7 @@ protected[db] class DbSignedRoleRepository()(implicit val db: Database, val ec: 
         .filter(_.roleType === roleType)
         .result
         .headOption
-        .failIfNone(SignedRoleNotFound)
+        .failIfNone(SignedRoleNotFound(repoId, roleType))
     }
 
   def storeAll(targetItemRepo: TargetItemRepository)(repoId: RepoId, signedRoles: List[DbSignedRole], items: Seq[TargetItem]): Future[Unit] = db.run {
@@ -290,7 +290,7 @@ trait DelegationRepositorySupport extends DatabaseSupport {
 protected [db] class DelegationRepository()(implicit db: Database, ec: ExecutionContext) {
 
   def find(repoId: RepoId, roleNames: DelegatedRoleName*): Future[DbDelegation] = db.run {
-    Schema.delegations.filter(_.repoId === repoId).filter(_.roleName.inSet(roleNames)).result.failIfNotSingle(Errors.DelegationNotFound)
+    Schema.delegations.filter(_.repoId === repoId).filter(_.roleName.inSet(roleNames)).result.failIfNotSingle(DelegationNotFound)
   }
 
   def persist(repoId: RepoId, roleName: DelegatedRoleName, content: JsonSignedPayload): Future[Unit] = db.run {
