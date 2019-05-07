@@ -48,8 +48,9 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   with SignedRoleRepositorySupport
   with Settings {
 
-  private implicit val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
+  private implicit val signedRoleGeneration = SignedRoleGeneration(keyserverClient)
   private val offlineSignedRoleStorage = new OfflineSignedRoleStorage(keyserverClient)
+  private val targetRoleGeneration = new TargetRoleEdit(keyserverClient, signedRoleGeneration)
   private val delegations = new DelegationsManagement()
 
   val log = LoggerFactory.getLogger(this.getClass)
@@ -98,7 +99,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
 
   private def addTargetItem(namespace: Namespace, item: TargetItem): Future[JsonSignedPayload] =
     for {
-      result <- signedRoleGeneration.addTargetItem(item)
+      result <- targetRoleGeneration.addTargetItem(item)
       _ <- tufTargetsPublisher.targetAdded(namespace, item)
     } yield result
 
@@ -174,7 +175,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   def deleteTargetItem(repoId: RepoId, filename: TargetFilename): Route = complete {
     for {
       _ <- targetStore.delete(repoId, filename)
-      _ <- signedRoleGeneration.deleteTargetItem(repoId, filename)
+      _ <- targetRoleGeneration.deleteTargetItem(repoId, filename)
     } yield StatusCodes.NoContent
   }
 

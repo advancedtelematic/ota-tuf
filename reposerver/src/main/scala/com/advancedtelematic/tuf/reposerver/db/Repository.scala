@@ -8,7 +8,7 @@ import akka.http.scaladsl.util.FastFuture
 import akka.stream.scaladsl.Source
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.ErrorCode
-import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity, RawError}
+import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity, MissingEntityId, RawError}
 import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, RoleType, TargetFilename}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, TargetItem}
@@ -16,12 +16,12 @@ import com.advancedtelematic.libats.slick.db.SlickExtensions._
 import com.advancedtelematic.libats.slick.codecs.SlickRefined._
 import com.advancedtelematic.libats.slick.db.SlickUUIDKey._
 import com.advancedtelematic.libats.slick.db.SlickAnyVal._
-import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, SnapshotRole, TimestampRole, TufRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, DelegatedRoleName, SnapshotRole, TimestampRole, TufRole}
 import com.advancedtelematic.libtuf_server.data.Requests.TargetComment
 import com.advancedtelematic.libtuf_server.data.TufSlickMappings._
 import com.advancedtelematic.tuf.reposerver.db.DBDataType.{DbDelegation, DbSignedRole}
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport.MissingNamespaceException
-import com.advancedtelematic.tuf.reposerver.http.Errors
+import com.advancedtelematic.tuf.reposerver.http.{Errors, SignedRoleProvider, TargetsItemsProvider}
 import shapeless.ops.function.FnToProduct
 import shapeless.{Generic, HList}
 import SlickValidatedString._
@@ -119,13 +119,13 @@ trait SignedRoleRepositorySupport extends DatabaseSupport {
   lazy val signedRoleRepository = new SignedRoleRepository()
 }
 
-protected [db] class SignedRoleRepository()(implicit val db: Database, val ec: ExecutionContext) {
+protected [db] class SignedRoleRepository()(implicit val db: Database, val ec: ExecutionContext) extends SignedRoleProvider {
   import DBDataType._
 
   private val signedRoleRepository = new DbSignedRoleRepository()
 
-  def persistAll(signedRoles: List[SignedRole[_]]): Future[Seq[DbSignedRole]] =
-    signedRoleRepository.persistAll(signedRoles.map(_.asDbSignedRole))
+  override def persistAll(signedRoles: List[SignedRole[_]]): Future[List[SignedRole[_]]] =
+    signedRoleRepository.persistAll(signedRoles.map(_.asDbSignedRole)).map(_ => signedRoles)
 
   def persist[T : TufRole](signedRole: SignedRole[T], forceVersion: Boolean = false): Future[DbSignedRole] =
     signedRoleRepository.persist(signedRole.asDbSignedRole, forceVersion)
@@ -154,7 +154,7 @@ protected[db] class DbSignedRoleRepository()(implicit val db: Database, val ec: 
   import DBDataType._
 
   def persist(signedRole: DbSignedRole, forceVersion: Boolean = false): Future[DbSignedRole] =
-    db.run(persistAction(signedRole, forceVersion))
+    db.run(persistAction(signedRole, forceVersion)) // TODO:SM Missing .transactionally,but only used in tests
 
   protected [db] def persistAction(signedRole: DbSignedRole, forceVersion: Boolean): DBIO[DbSignedRole] = {
     signedRoles

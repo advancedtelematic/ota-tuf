@@ -208,7 +208,7 @@ class RepoResourceDelegationsSpec extends TufReposerverSpec
   }
 
   test("automatically renewed snapshot still contains delegation") {
-    val signedRoleGeneration = new SignedRoleGeneration(fakeKeyserverClient)
+    val signedRoleGeneration = SignedRoleGeneration(fakeKeyserverClient)
 
     implicit val repoId = addTargetToRepo()
 

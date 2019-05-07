@@ -23,7 +23,7 @@ class SignedRoleGenerationSpec extends TufReposerverSpec with DatabaseSpec with 
 
   val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient
 
-  val signedRoleGeneration = new SignedRoleGeneration(fakeKeyserverClient)
+  val signedRoleGeneration = SignedRoleGeneration(fakeKeyserverClient)
 
   def setupRepo(): Future[RepoId] = for {
     repoId <- FastFuture.successful(RepoId.generate())

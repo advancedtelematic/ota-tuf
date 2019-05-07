@@ -16,42 +16,81 @@ import com.advancedtelematic.tuf.reposerver.delegations.SignedRoleDelegationsFin
 import io.circe.Encoder
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
+import slick.jdbc.MySQLProfile
 import slick.jdbc.MySQLProfile.api._
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 
-class SignedRoleGeneration(keyserverClient: KeyserverClient)
-                          (implicit val db: Database, val ec: ExecutionContext)
-  extends SignedRoleRepositorySupport with DelegationRepositorySupport {
+trait TargetsItemsProvider {
+  def findSignedTargetRoleDelegations(signedRole: SignedRole[TargetsRole]): Future[Map[MetaPath, MetaItem]]
+
+  def findTargets(repoId: RepoId): Future[Map[TargetFilename, ClientTargetItem]]
+}
+
+class TufRepoTargetItemsProvider()(implicit val db: Database, val ec: ExecutionContext) extends TargetsItemsProvider
+  with TargetItemRepositorySupport {
+
+  val delegationsFind = new SignedRoleDelegationsFind()
+
+  override def findSignedTargetRoleDelegations(signedRole: SignedRole[TargetsRole]): Future[Map[MetaPath, MetaItem]] =
+    delegationsFind.findSignedTargetRoleDelegations(signedRole)
+
+  override def findTargets(repoId: RepoId): Future[Map[TargetFilename, ClientTargetItem]] = {
+    targetItemRepo.findFor(repoId).map { items =>
+      items.map { item =>
+        val hashes = Map(item.checksum.method -> item.checksum.hash)
+        item.filename -> ClientTargetItem(hashes, item.length, item.custom.map(_.asJson))
+      }.toMap
+    }
+  }
+}
+
+trait SignedRoleProvider {
+  def find[T : TufRole](repoId: RepoId): Future[SignedRole[T]]
+
+  def persistAll(roles: List[SignedRole[_]]): Future[List[SignedRole[_]]]
+}
+
+object SignedRoleGeneration {
+  def apply(keyserverClient: KeyserverClient)(implicit _db: Database, _ec: ExecutionContext) = {
+    val signedRoleProvider = new SignedRoleRepositorySupport {
+      override implicit val ec: ExecutionContext = _ec
+      override implicit val db: MySQLProfile.api.Database = _db
+    }
+    val refresher = new RepoRoleRefresh(keyserverClient)
+    new SignedRoleGeneration(keyserverClient, new TufRepoTargetItemsProvider(), signedRoleProvider.signedRoleRepository, refresher)
+  }
+}
+
+class SignedRoleGeneration(keyserverClient: KeyserverClient,
+                           targetsProvider: TargetsItemsProvider,
+                           signedRoleProvider: SignedRoleProvider,
+                           refresher: RepoRoleRefresh)(implicit ec: ExecutionContext) {
 
   private val log = LoggerFactory.getLogger(this.getClass)
 
-  val targetRoleGeneration = new TargetRoleGeneration(keyserverClient)
-  val signedRoleDelegationsFind = new SignedRoleDelegationsFind()
-
   def regenerateAllSignedRoles(repoId: RepoId): Future[JsonSignedPayload] = async {
-
     await(fetchRootRole(repoId))
 
     val expireAt = defaultExpire
 
     val targetVersion = await(nextVersion[TargetsRole](repoId))
-    val targetDelegations = await(findTargetRoleDelegations(repoId))
-    val targetRole = await(targetRoleGeneration.generate(repoId, targetDelegations, expireAt, targetVersion))
+    val targetDelegations = await(extractDelegationsFromTargetsRole(repoId))
+    val targetRole = await(genTargetsFromExistingItems(repoId, targetDelegations, expireAt, targetVersion))
     val signedTarget = await(signRole(repoId, targetRole))
 
     val (newSnapshots, newTimestamps) = await(freshSignedDependent(repoId, signedTarget, expireAt))
 
-    await(signedRoleRepository.persistAll(List(signedTarget, newSnapshots, newTimestamps)))
+    await(signedRoleProvider.persistAll(List(signedTarget, newSnapshots, newTimestamps)))
 
     signedTarget.content
   }
 
   def regenerateSnapshots(repoId: RepoId): Future[(SignedRole[SnapshotRole], SignedRole[TimestampRole])] = async {
-    val existingTargets = await(signedRoleRepository.find[TargetsRole](repoId))
+    val existingTargets = await(signedRoleProvider.find[TargetsRole](repoId))
     val (snapshots, timestamps) = await(freshSignedDependent(repoId, existingTargets, defaultExpire))
-    await(signedRoleRepository.persistAll(List(snapshots, timestamps)))
+    await(signedRoleProvider.persistAll(List(snapshots, timestamps)))
     (snapshots, timestamps)
   }
 
@@ -61,7 +100,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
     val signedRoot = await(fetchRootRole(repoId))
 
     val snapshotVersion = await(nextVersion[SnapshotRole](repoId))
-    val delegations = await(signedRoleDelegationsFind.findSignedTargetRoleDelegations(targetRole))
+    val delegations = await(targetsProvider.findSignedTargetRoleDelegations(targetRole))
     val snapshotRole = genSnapshotRole(signedRoot, targetRole, delegations, expireAt, snapshotVersion)
     val signedSnapshot = await(signRole(repoId, snapshotRole))
 
@@ -72,22 +111,8 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
     (signedSnapshot, signedTimestamp)
   }
 
-  def addTargetItem(targetItem: TargetItem): Future[JsonSignedPayload] =
-    targetRoleGeneration.addTargetItem(targetItem).flatMap(_ ⇒ regenerateAllSignedRoles(targetItem.repoId))
-
-  def deleteTargetItem(repoId: RepoId, filename: TargetFilename): Future[Unit] = for {
-    _ <- ensureTargetsCanBeSigned(repoId)
-    _ <- targetRoleGeneration.deleteTargetItem(repoId, filename)
-    _ <- regenerateAllSignedRoles(repoId)
-  } yield ()
-
   private def signRole[T : Encoder : TufRole](repoId: RepoId, role: T): Future[SignedRole[T]] =
     new RepoRoleSigner(repoId, keyserverClient).apply(role)
-
-  private def ensureTargetsCanBeSigned(repoId: RepoId): Future[SignedRole[TargetsRole]] = async {
-    val targetsRole = await(signedRoleRepository.find[TargetsRole](repoId)).role
-    await(signRole(repoId, targetsRole))
-  }
 
   private def fetchRootRole(repoId: RepoId): Future[SignedRole[RootRole]] =
     keyserverClient.fetchRootRole(repoId).map { rootRole =>
@@ -95,7 +120,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
     }
 
   private def findFreshRole[T](repoId: RepoId)(refreshFn: => Future[SignedRole[T]])(implicit tufRole: TufRole[T]): Future[SignedRole[T]] = {
-    signedRoleRepository.find[T](repoId).flatMap { role =>
+    signedRoleProvider.find[T](repoId).flatMap { role =>
       if (role.expiresAt.isBefore(Instant.now.plus(1, ChronoUnit.HOURS))) {
         refreshFn.recoverWith {
           case KeyserverClient.RoleKeyNotFound =>
@@ -114,7 +139,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
   private def generateAndCacheRole[T : TufRole](repoId: RepoId): Future[SignedRole[T]] = {
     regenerateAllSignedRoles(repoId)
       .recoverWith { case err => log.warn("Could not generate signed roles", err) ; FastFuture.failed(SignedRoleNotFound) }
-      .flatMap(_ => signedRoleRepository.find[T](repoId))
+      .flatMap(_ => signedRoleProvider.find[T](repoId))
   }
 
   protected [http] def findRole[T](repoId: RepoId)(implicit tufRole: TufRole[T]): Future[SignedRole[T]] = {
@@ -122,8 +147,6 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
   }
 
   def findRole(repoId: RepoId, roleType: RoleType): Future[SignedRole[_]] = {
-    lazy val refresher = new RepoRoleRefresh(keyserverClient)
-
     roleType match {
       case RoleType.ROOT =>
         fetchRootRole(repoId)
@@ -139,7 +162,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
   }
 
   private def nextVersion[T : TufRole](repoId: RepoId): Future[Int] =
-    signedRoleRepository
+    signedRoleProvider
       .find[T](repoId)
       .map(_.version + 1)
       .recover {
@@ -160,33 +183,20 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient)
   private def defaultExpire: Instant =
     Instant.now().plus(31, ChronoUnit.DAYS)
 
-  private def findTargetRoleDelegations(repoId: RepoId): Future[Option[Delegations]] =
-    signedRoleRepository.find[TargetsRole](repoId).map { signedTargetRole =>
+  private def extractDelegationsFromTargetsRole(repoId: RepoId): Future[Option[Delegations]] =
+    signedRoleProvider.find[TargetsRole](repoId).map { signedTargetRole =>
       signedTargetRole.role.delegations
     }.recover {
       case SignedRoleNotFound => None
     }
-}
 
-protected class TargetRoleGeneration(roleSigningClient: KeyserverClient)
-                          (implicit val db: Database, val ec: ExecutionContext)
-  extends TargetItemRepositorySupport with FilenameCommentRepository.Support {
+  private def genTargetsFromExistingItems(repoId: RepoId, delegations: Option[Delegations], expireAt: Instant, version: Int): Future[TargetsRole] =
+    for {
+      items <- targetsProvider.findTargets(repoId)
+    } yield TargetsRole(expireAt, items, version, delegations)
 
-  def addTargetItem(targetItem: TargetItem): Future[TargetItem] =
-    targetItemRepo.persist(targetItem)
-
-  def deleteTargetItem(repoId: RepoId, filename: TargetFilename): Future[Unit] =
-    targetItemRepo.deleteItemAndComments(filenameCommentRepo)(repoId, filename)
-
-  def generate(repoId: RepoId, delegations: Option[Delegations], expireAt: Instant, version: Int): Future[TargetsRole] = {
-    targetItemRepo.findFor(repoId).map { targetItems =>
-      val targets = targetItems.map { item =>
-        val hashes = Map(item.checksum.method -> item.checksum.hash)
-        item.filename -> ClientTargetItem(hashes, item.length, item.custom.map(_.asJson))
-      }.toMap
-
-      TargetsRole(expireAt, targets, version, delegations)
-    }
+  protected [http] def ensureTargetsCanBeSigned(repoId: RepoId): Future[SignedRole[TargetsRole]] = async {
+    val targetsRole = await(signedRoleProvider.find[TargetsRole](repoId)).role
+    await(signRole(repoId, targetsRole))
   }
 }
-

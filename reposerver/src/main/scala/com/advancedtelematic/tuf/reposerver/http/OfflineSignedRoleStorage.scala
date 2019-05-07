@@ -20,7 +20,6 @@ import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
-import com.advancedtelematic.tuf.reposerver.delegations.{SignedRoleDelegationsFind}
 import com.advancedtelematic.tuf.reposerver.http.RoleChecksumHeader.RoleChecksum
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import org.slf4j.LoggerFactory
@@ -31,7 +30,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
 
   private val _log = LoggerFactory.getLogger(this.getClass)
 
-  private val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
+  private val signedRoleGeneration = SignedRoleGeneration(keyserverClient)
 
   def store(repoId: RepoId, signedPayload: SignedPayload[TargetsRole]): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole[TargetsRole])]] =
     for {

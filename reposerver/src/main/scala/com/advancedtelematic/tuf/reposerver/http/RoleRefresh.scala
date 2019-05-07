@@ -27,7 +27,7 @@ protected class RepoRoleSigner(repoId: RepoId, keyserverClient: KeyserverClient)
 
 class RepoRoleRefresh(keyserverClient: KeyserverClient)(implicit val db: Database, val ec: ExecutionContext) extends SignedRoleRepositorySupport {
   val roleRefresh: RepoId => RoleRefresh = repoId => new RoleRefresh(new RepoRoleSigner(repoId, keyserverClient))
-  val delegationsManagement = new DelegationsManagement()
+
   val targetRoleDelegationFind = new SignedRoleDelegationsFind()
 
   private def findExisting[T](repoId: RepoId)(implicit tufRole: TufRole[T]): Future[SignedRole[T]] = {
@@ -62,6 +62,7 @@ class RepoRoleRefresh(keyserverClient: KeyserverClient)(implicit val db: Databas
     val existingTimestamp = await(findExisting[TimestampRole](repoId))
     val existingSnapshots = await(findExisting[SnapshotRole](repoId))
     val newTimestamp = await(roleRefresh(repoId).refreshTimestamps(existingTimestamp, existingSnapshots))
+
     await(commitRefresh(newTimestamp, List.empty))
   }
 }
