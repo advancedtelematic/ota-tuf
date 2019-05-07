@@ -1,4 +1,4 @@
-package com.advancedtelematic.libtuf_server.reposerver
+package com.advancedtelematic.libtuf_server.repo.client
 
 import java.util.UUID
 
@@ -20,21 +20,26 @@ import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libats.http.tracing.TracingHttpClient
 import com.advancedtelematic.libats.http.{ServiceHttpClientSupport, UnmarshalledHttpResponse}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyType, RepoId, SignedPayload, TargetName, TargetVersion}
-import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest
-import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.{KeysNotReady, NotFound, RootNotInKeyserver}
+import io.circe.generic.semiauto._
+import com.advancedtelematic.libtuf_server.repo.client.ReposerverClient.{KeysNotReady, NotFound, RootNotInKeyserver}
 import io.circe.generic.semiauto._
 import io.circe.{Decoder, Encoder, Json}
+import com.advancedtelematic.libats.codecs.CirceCodecs._
+import com.advancedtelematic.libtuf_server.repo.server.DataType._
+import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libats.http.HttpCodecs._
+import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
+import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest
 
 object ReposerverClient {
-  import com.advancedtelematic.libats.codecs.CirceCodecs._
 
   object RequestTargetItem {
     implicit val encoder: Encoder[RequestTargetItem] = deriveEncoder
@@ -188,7 +193,7 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
         "targetFormat" -> targetFormat.toString)
 
     val hwparams =
-      if(hardwareIds.isEmpty)
+      if (hardwareIds.isEmpty)
         Map.empty
       else
         Map("hardwareIds" -> hardwareIds.map(_.value).mkString(","))

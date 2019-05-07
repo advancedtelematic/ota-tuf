@@ -11,7 +11,8 @@ import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.BINARY
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetName, TargetVersion, ValidTargetFilename}
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
-import com.advancedtelematic.libtuf_server.reposerver.{ReposerverClient, ReposerverHttpClient}
+
+import com.advancedtelematic.libtuf_server.repo.client.{ReposerverClient, ReposerverHttpClient}
 import com.advancedtelematic.tuf.reposerver.util.NamespaceSpecOps.genNs
 import com.advancedtelematic.tuf.reposerver.util._
 import org.scalatest.concurrent.{Eventually, PatienceConfiguration}

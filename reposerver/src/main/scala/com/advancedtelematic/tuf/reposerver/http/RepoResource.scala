@@ -23,8 +23,11 @@ import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId
 import com.advancedtelematic.libtuf_server.data.Marshalling._
 import com.advancedtelematic.libtuf_server.data.Requests.{CommentRequest, CreateRepositoryRequest, _}
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
-import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
+import com.advancedtelematic.libtuf_server.repo.client.ReposerverClient.RequestTargetItem
+import com.advancedtelematic.libtuf_server.repo.server.DataType.SignedRole
 import com.advancedtelematic.tuf.reposerver.Settings
+import com.advancedtelematic.libtuf_server.repo.server.DataType._
+import com.advancedtelematic.libtuf_server.repo.server.RepoRoleRefresh
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
 import com.advancedtelematic.tuf.reposerver.db._
 import com.advancedtelematic.tuf.reposerver.delegations.DelegationsManagement
@@ -48,8 +51,10 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   with SignedRoleRepositorySupport
   with Settings {
 
-  private implicit val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
+  private implicit val signedRoleGeneration = TufRepoSignedRoleGeneration(keyserverClient)
   private val offlineSignedRoleStorage = new OfflineSignedRoleStorage(keyserverClient)
+  private val roleRefresher = new RepoRoleRefresh(keyserverClient, new TufRepoSignedRoleProvider(), new TufRepoTargetItemsProvider())
+  private val targetRoleGeneration = new TargetRoleEdit(keyserverClient, signedRoleGeneration)
   private val delegations = new DelegationsManagement()
 
   val log = LoggerFactory.getLogger(this.getClass)
@@ -98,7 +103,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
 
   private def addTargetItem(namespace: Namespace, item: TargetItem): Future[JsonSignedPayload] =
     for {
-      result <- signedRoleGeneration.addTargetItem(item)
+      result <- targetRoleGeneration.addTargetItem(item)
       _ <- tufTargetsPublisher.targetAdded(namespace, item)
     } yield result
 
@@ -143,7 +148,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   }
 
   private def findRole(repoId: RepoId, roleType: RoleType): Route = {
-    onSuccess(signedRoleGeneration.findRole(repoId, roleType)) { signedRole =>
+    onSuccess(signedRoleGeneration.findRole(repoId, roleType, roleRefresher)) { signedRole =>
       respondWithCheckSum(signedRole.checksum.hash) {
         complete(signedRole.content)
       }
@@ -174,7 +179,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   def deleteTargetItem(repoId: RepoId, filename: TargetFilename): Route = complete {
     for {
       _ <- targetStore.delete(repoId, filename)
-      _ <- signedRoleGeneration.deleteTargetItem(repoId, filename)
+      _ <- targetRoleGeneration.deleteTargetItem(repoId, filename)
     } yield StatusCodes.NoContent
   }
 

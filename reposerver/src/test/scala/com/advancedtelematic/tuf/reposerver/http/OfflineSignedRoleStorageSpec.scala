@@ -15,10 +15,11 @@ import com.advancedtelematic.tuf.reposerver.util._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.codecs.CirceCodecs._
 import com.advancedtelematic.libats.data.DataType.{Checksum, HashMethod, ValidChecksum}
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{SignedRole, StorageMethod, TargetItem}
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
+import com.advancedtelematic.libtuf_server.repo.server.DataType.SignedRole
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{StorageMethod, TargetItem}
 import io.circe.Json
 
 import scala.concurrent.Future
@@ -57,7 +58,8 @@ class OfflineSignedRoleStorageSpec extends TufReposerverSpec with DatabaseSpec w
 
   val subject = new OfflineSignedRoleStorage(keyserver)
 
-  val signedRoleGeneration = new SignedRoleGeneration(keyserver)
+  val signedRoleGeneration = TufRepoSignedRoleGeneration(keyserver)
+  val targetRoleGeneration = new TargetRoleEdit(keyserver, signedRoleGeneration)
 
   def storeOffline(repoId: RepoId, targets: Map[TargetFilename, ClientTargetItem], version: Int): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole[TargetsRole])]] = {
     val targetsRole = TargetsRole(Instant.now.plusSeconds(3600), targets, version)
@@ -69,7 +71,7 @@ class OfflineSignedRoleStorageSpec extends TufReposerverSpec with DatabaseSpec w
     val repoId = RepoId.generate()
     keyserver.createRoot(repoId).futureValue
 
-    signedRoleGeneration.addTargetItem(TargetItem(repoId, mockFilename, mockUri.some, mockChecksum, 22, None, StorageMethod.Managed)).futureValue
+    targetRoleGeneration.addTargetItem(TargetItem(repoId, mockFilename, mockUri.some, mockChecksum, 22, None, StorageMethod.Managed)).futureValue
     val existingItem = targetItemRepo.findByFilename(repoId, mockFilename).futureValue
 
     val newTargetItems = Map(mockFilename -> ClientTargetItem(mockHashes, existingItem.length, existingItem.custom.map(_.asJson)))
@@ -85,7 +87,7 @@ class OfflineSignedRoleStorageSpec extends TufReposerverSpec with DatabaseSpec w
     val newCustom = defaultCustom.as[TargetCustom].valueOr(throw _).copy(targetFormat = TargetFormat.BINARY.some)
 
     val oldTargetItem = TargetItem(repoId, mockFilename, mockUri.some, mockChecksum, 22, newCustom.some, StorageMethod.Managed)
-    signedRoleGeneration.addTargetItem(oldTargetItem).futureValue
+    targetRoleGeneration.addTargetItem(oldTargetItem).futureValue
 
     val newTargetItems = Map(mockFilename -> ClientTargetItem(mockHashes, oldTargetItem.length, newCustom.asJson.some))
 
@@ -102,7 +104,7 @@ class OfflineSignedRoleStorageSpec extends TufReposerverSpec with DatabaseSpec w
     val oldFilename = "my/oldfilename".refineTry[ValidTargetFilename].get
 
     val oldTargetItem = TargetItem(repoId, oldFilename, mockUri.some, mockChecksum, 22, defaultCustom.as[TargetCustom].toOption, StorageMethod.Managed)
-    signedRoleGeneration.addTargetItem(oldTargetItem).futureValue
+    targetRoleGeneration.addTargetItem(oldTargetItem).futureValue
 
     val newChecksum = "33a1e103ecb162181620d521915879e68736ea20e4eabe22cc243115d4d43563".refineTry[ValidChecksum].get
     val newHashes = Map(HashMethod.SHA256 -> newChecksum)
@@ -118,7 +120,7 @@ class OfflineSignedRoleStorageSpec extends TufReposerverSpec with DatabaseSpec w
     newTargetItem.storageMethod shouldBe StorageMethod.Managed
   }
 
-  keyTypeTest("deletes old target items when storing offline targets ") { keyType =>
+  test("deletes old target items when storing offline targets ") {
     val repoId = RepoId.generate()
 
     keyserver.createRoot(repoId).futureValue

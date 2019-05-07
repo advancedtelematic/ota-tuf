@@ -11,7 +11,7 @@ import cats.syntax.show._
 import com.advancedtelematic.libats.auth.NamespaceDirectives
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
 import com.advancedtelematic.libtuf_server.data.Requests.{CommentRequest, TargetComment}
-import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
+import com.advancedtelematic.libtuf_server.repo.client.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 

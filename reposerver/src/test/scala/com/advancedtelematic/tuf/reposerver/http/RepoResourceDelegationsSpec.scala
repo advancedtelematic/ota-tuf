@@ -4,24 +4,23 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 import akka.http.scaladsl.model.StatusCodes
-import cats.syntax.either._
 import cats.syntax.option._
 import cats.syntax.show._
 import com.advancedtelematic.libats.data.ErrorRepresentation
+import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.DelegatedPathPattern._
-import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedPathPattern, DelegatedRoleName, Delegation, Delegations, RoleTypeOps, RootRole, SnapshotRole, TargetsRole, ValidMetaPath}
-import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
+import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedPathPattern, DelegatedRoleName, Delegation, Delegations, SnapshotRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, JsonSignedPayload, RepoId, RoleType, SignedPayload, TufKeyPair, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RepoId, RoleType, SignedPayload, TufKeyPair}
 import com.advancedtelematic.libtuf.data.ValidatedString._
+import com.advancedtelematic.libtuf_server.repo.server.RepoRoleRefresh
 import com.advancedtelematic.tuf.reposerver.util.{RepoResourceSpecUtil, ResourceSpec, TufReposerverSpec}
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import eu.timepit.refined.api.Refined
 import io.circe.syntax._
 import org.scalactic.source.Position
-import com.advancedtelematic.libtuf.crypt.CanonicalJson._
-import eu.timepit.refined.api.Refined
 
 class RepoResourceDelegationsSpec extends TufReposerverSpec
   with ResourceSpec
@@ -35,6 +34,8 @@ class RepoResourceDelegationsSpec extends TufReposerverSpec
     val delegationPath = "mypath/*".unsafeApply[DelegatedPathPattern]
     Delegation(delegatedRoleName, List(keyPair.pubkey.id), List(delegationPath))
   }
+
+  implicit val roleRefresh = new RepoRoleRefresh(fakeKeyserverClient, new TufRepoSignedRoleProvider(), new TufRepoTargetItemsProvider())
 
   val delegations = Delegations(Map(keyPair.pubkey.id -> keyPair.pubkey), List(delegation))
 
@@ -208,7 +209,7 @@ class RepoResourceDelegationsSpec extends TufReposerverSpec
   }
 
   test("automatically renewed snapshot still contains delegation") {
-    val signedRoleGeneration = new SignedRoleGeneration(fakeKeyserverClient)
+    val signedRoleGeneration = TufRepoSignedRoleGeneration(fakeKeyserverClient)
 
     implicit val repoId = addTargetToRepo()
 
@@ -230,7 +231,7 @@ class RepoResourceDelegationsSpec extends TufReposerverSpec
 
     val oldSnapshots = signedRoleGeneration.findRole[SnapshotRole](repoId).futureValue
 
-    signedRoleRepository.persist[SnapshotRole](oldSnapshots.copy(expiresAt = Instant.now().minusSeconds(60)), forceVersion = true).futureValue
+    signedRoleRepository.persist[SnapshotRole](repoId, oldSnapshots.copy(expiresAt = Instant.now().minusSeconds(60)), forceVersion = true).futureValue
 
     val renewedSnapshots = signedRoleRepository.find[SnapshotRole](repoId).futureValue
     renewedSnapshots.role.meta(Refined.unsafeApply(s"${delegatedRoleName.value}.json")).length shouldBe delegationLength

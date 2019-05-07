@@ -4,7 +4,7 @@ import akka.http.scaladsl.model.{StatusCodes, Uri}
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RsaKeyType, ValidTargetFilename}
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
 import com.advancedtelematic.libtuf_server.data.Requests.{CommentRequest, FilenameComment, TargetComment}
-import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
+import com.advancedtelematic.libtuf_server.repo.client.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.tuf.reposerver.util.{RepoResourceSpecUtil, ResourceSpec, TufReposerverSpec}
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.time.{Seconds, Span}

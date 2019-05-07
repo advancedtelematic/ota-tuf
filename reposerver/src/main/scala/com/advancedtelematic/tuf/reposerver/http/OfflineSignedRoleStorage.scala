@@ -1,26 +1,28 @@
 package com.advancedtelematic.tuf.reposerver.http
 
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
 import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNel
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, TargetCustom, TargetsRole, TufRole}
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, SignedPayload, TargetFilename}
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{StorageMethod, TargetItem}
+import com.advancedtelematic.libtuf_server.repo.server.DataType._
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
 import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
-import com.advancedtelematic.tuf.reposerver.db.DbSignedRoleRepository.SignedRoleNotFound
 import io.circe.Encoder
 import cats.implicits._
 import com.advancedtelematic.libats.data.DataType.Checksum
+import com.advancedtelematic.libats.http.Errors.MissingEntityId
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
+import com.advancedtelematic.libtuf_server.repo.server.Errors.SignedRoleNotFound
 
 import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
-import com.advancedtelematic.tuf.reposerver.delegations.{SignedRoleDelegationsFind}
+import com.advancedtelematic.libtuf_server.repo.server.DataType.SignedRole
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import com.advancedtelematic.tuf.reposerver.http.RoleChecksumHeader.RoleChecksum
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import org.slf4j.LoggerFactory
@@ -31,7 +33,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
 
   private val _log = LoggerFactory.getLogger(this.getClass)
 
-  private val signedRoleGeneration = new SignedRoleGeneration(keyserverClient)
+  private val signedRoleGeneration = TufRepoSignedRoleGeneration(keyserverClient)
 
   def store(repoId: RepoId, signedPayload: SignedPayload[TargetsRole]): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole[TargetsRole])]] =
     for {
@@ -129,7 +131,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
   private def ensureChecksumIsValidForSave(repoId: RepoId, checksumOpt: Option[RoleChecksum]): Future[Unit] = {
     val existingRoleF = signedRoleRepository.find[TargetsRole](repoId)
       .map(_.some)
-      .recover {  case SignedRoleNotFound => None }
+      .recover {  case _: MissingEntityId[_] => None }
 
     existingRoleF.zip(FastFuture.successful(checksumOpt)).flatMap {
       case (None, _) =>

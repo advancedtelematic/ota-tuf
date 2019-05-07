@@ -9,7 +9,7 @@ import com.advancedtelematic.libats.data.DataType.HashMethod
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientHashes, ClientTargetItem, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, TargetFilename, TargetFormat, TargetName, TargetVersion}
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
-import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.RequestTargetItem
+import com.advancedtelematic.libtuf_server.repo.client.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
 import com.advancedtelematic.tuf.reposerver.http.RoleChecksumHeader
 import eu.timepit.refined.api.Refined
