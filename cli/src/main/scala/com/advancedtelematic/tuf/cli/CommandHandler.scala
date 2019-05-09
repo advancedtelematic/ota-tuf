@@ -93,7 +93,7 @@ object CommandHandler {
 
     case DeleteTarget =>
       tufRepo
-        .initTargets(config.version.valueOrConfigError, config.expires)
+        .deleteTarget(config.targetFilename.valueOrConfigError)
         .map(p => log.info(s"Wrote empty targets to $p"))
 
 

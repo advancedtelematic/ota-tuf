@@ -299,6 +299,8 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
 
   def addTarget(targetFilename: TargetFilename, targetItem: ClientTargetItem): Try[Path]
 
+  def deleteTarget(targetFilename: TargetFilename): Try[Path]
+
   def addTargetDelegation(name: DelegatedRoleName, key: List[TufKey],
                           delegatedPaths: List[DelegatedPathPattern], threshold: Int): Try[Path]
 
@@ -471,6 +473,9 @@ class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRep
 
   override def addTarget(targetFilename: TargetFilename, targetItem: ClientTargetItem): Try[Path] =
     Failure(CommandNotSupportedByRepositoryType(Director, "addTarget"))
+
+  override def deleteTarget(filename: TargetFilename): Try[Path] =
+    Failure(CommandNotSupportedByRepositoryType(Director, "deleteTarget"))
 
   override def signTargets(targetsKeys: Seq[KeyName], version: Option[Int]): Try[Path] =
     Failure(CommandNotSupportedByRepositoryType(Director, "signTargets"))
