@@ -14,14 +14,13 @@ import com.advancedtelematic.libtuf_server.repo.server.DataType.SignedRole
 import io.circe.Encoder
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
-import slick.jdbc.MySQLProfile.api._
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 
 
 class SignedRoleGeneration(keyserverClient: KeyserverClient,
-                           targetsProvider: TargetsItemsProvider,
+                           targetsProvider: TargetsItemsProvider[_],
                            signedRoleProvider: SignedRoleProvider)(implicit ec: ExecutionContext) {
 
   private val log = LoggerFactory.getLogger(this.getClass)
@@ -152,7 +151,7 @@ class SignedRoleGeneration(keyserverClient: KeyserverClient,
   private def genTargetsFromExistingItems(repoId: RepoId, delegations: Option[Delegations], expireAt: Instant, version: Int): Future[TargetsRole] =
     for {
       items <- targetsProvider.findTargets(repoId)
-    } yield TargetsRole(expireAt, items, version, delegations)
+    } yield TargetsRole(expireAt, items.items, version, delegations, items.customJson)
 
   def ensureTargetsCanBeSigned(repoId: RepoId): Future[SignedRole[TargetsRole]] = async {
     val targetsRole = await(signedRoleProvider.find[TargetsRole](repoId)).role

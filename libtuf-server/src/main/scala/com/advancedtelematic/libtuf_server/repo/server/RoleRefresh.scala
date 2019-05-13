@@ -18,7 +18,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 class RepoRoleRefresh(keyserverClient: KeyserverClient,
                       signedRoleProvider: SignedRoleProvider,
-                      targetItemProvider: TargetsItemsProvider)(implicit val db: Database, val ec: ExecutionContext) {
+                      targetItemProvider: TargetsItemsProvider[_])(implicit val db: Database, val ec: ExecutionContext) {
   val roleRefresh: RepoId => RoleRefresh = repoId => new RoleRefresh(new RepoRoleSigner(repoId, keyserverClient))
 
   private def findExisting[T](repoId: RepoId)(implicit tufRole: TufRole[T]): Future[SignedRole[T]] = {
