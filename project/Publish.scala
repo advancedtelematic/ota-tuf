@@ -23,13 +23,13 @@ object Publish {
 
   lazy val settings = Seq(
     credentials += Credentials(repoRealm, repoHost, repoUser, repoPassword),
-    publishTo <<= version { v: String =>
+    publishTo := version { v: String =>
       val server = repoUrl
       if (v.trim.endsWith("SNAPSHOT"))
         Some("snapshots" at server + "snapshots")
       else
         Some("releases"  at server + "releases")
-    }
+    }.value
   )
 
   lazy val disable = Seq(
