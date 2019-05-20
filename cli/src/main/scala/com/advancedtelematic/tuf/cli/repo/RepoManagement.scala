@@ -48,7 +48,8 @@ object RepoManagement {
         _ <- Try(dest.putNextEntry(new ZipEntry("treehub.json")))
         authConfig <- repo.authConfig
         treehubConfig <- repo.treehubConfig
-        newTreehubJson = treehubConfig.copy(oauth2 = authConfig).asJson
+        treehubAuth = authConfig.collect { case oauth: OAuthConfig => oauth }
+        newTreehubJson = treehubConfig.copy(oauth2 = treehubAuth).asJson
         _ <- Try(dest.write(newTreehubJson.spaces2.getBytes))
         _ <- Try(dest.closeEntry())
       } yield ()
@@ -164,9 +165,10 @@ protected object ZipRepoInitialization {
       treehubConfig <- CliUtil.readJsonFrom[TreehubConfig](is)
     } yield treehubConfig
 
-    def parseAuth(treehubConfig: TreehubConfig): Try[Option[AuthConfig]] =
+    def buildOauth(treehubConfig: TreehubConfig): Try[Option[OAuthConfig]] =
       if(treehubConfig.no_auth) Success(None)
-      else Either.fromOption(treehubConfig.oauth2, TreehubConfigError("auth required with no_auth: false")).toTry.map(_.some)
+      else
+        Either.fromOption(treehubConfig.oauth2, TreehubConfigError("auth required with no_auth: false")).toTry.map(_.some)
 
     def readRepoUri(src: ZipFile): Try[URI] = {
       val filename = repoServerType match {
@@ -197,12 +199,34 @@ protected object ZipRepoInitialization {
       _ <- tufRepo.writeSignedRole(rootRole)
     } yield ()
 
+    def writeTlsCerts(src: ZipFile): Try[Option[MutualTlsConfig]] = Try {
+      val clientCertO = Option(src.getEntry("client_auth.p12"))
+      val serverCert = Option(src.getEntry("server.p12"))
+
+      clientCertO.map { clientCert =>
+        val cert = src.getInputStream(clientCert)
+        val path = repoPath.resolve("client_auth.p12")
+
+        val serverCertPath = serverCert.map { serverCertEntry =>
+          val serverPath = repoPath.resolve("server.p12")
+          Files.copy(src.getInputStream(serverCertEntry), serverPath)
+          serverPath.getFileName
+        }
+
+        Files.copy(cert, path)
+
+        MutualTlsConfig(path.getFileName, serverCertPath)
+      }
+    }
+
     for {
       src ← Try(new ZipFile(initFilePath.toFile))
       treehubConfig <- readTreehubConfig(src)
-      auth <- parseAuth(treehubConfig)
+      clientCertPath <- writeTlsCerts(src)
+      auth <- if(clientCertPath.isDefined) Success(clientCertPath) else buildOauth(treehubConfig)
       serverUri <- if(repoUri.isDefined) Success(repoUri.get) else readRepoUri(src)
-      _ <- TufRepo.writeConfigFiles(repoPath, serverUri, treehubConfig, auth, repoServerType)
+      repoConfig =  RepoConfig(serverUri, auth, treehubConfig, repoServerType)
+      _ <- TufRepo.writeConfig(repoPath, repoConfig)
       _ <- writeRoot(src).recover { case ex =>
         _log.warn(s"Could not read/write root.json from credentials zip file: ${ex.getMessage}. Continuing.")
       }

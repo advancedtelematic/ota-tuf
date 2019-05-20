@@ -24,7 +24,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, HardwareI
 import com.advancedtelematic.libtuf.data.{ClientDataType, RootRoleValidation}
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleNotFound, TargetsResponse}
 import com.advancedtelematic.libtuf.http._
-import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoConfig, _}
+import com.advancedtelematic.tuf.cli.DataType.{OAuthConfig, KeyName, RepoConfig, _}
 import com.advancedtelematic.tuf.cli.Errors.CommandNotSupportedByRepositoryType
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
@@ -68,15 +68,31 @@ object TufRepo {
 
   case class RootPullError(errors: NonEmptyList[String]) extends Exception("Could not validate a valid root.json chain:\n" + errors.toList.mkString("\n")) with NoStackTrace
 
-  protected [cli] def readConfigFile(repoPath: => Path): Try[RepoConfig] =
+  protected [cli] def readConfig(repoPath: => Path): Try[RepoConfig] =
     Try { new FileInputStream(repoPath.resolve("config.json").toFile) }
       .flatMap { is => CliUtil.readJsonFrom[RepoConfig](is) }
 
-  protected [repo] def writeConfigFiles(repoPath: Path, repoUri: URI, treehubConfig: TreehubConfig,
-                                        authConfig: Option[AuthConfig], repoServerType: TufServerType): Try[RepoConfig] = Try {
-    val repoConfig = RepoConfig(repoUri, authConfig, treehubConfig, repoServerType)
-    Files.write(repoPath.resolve("config.json"), repoConfig.asJson.spaces2.getBytes)
-    repoConfig
+  def importTlsCerts(repoPath: Path, clientCert: Path, serverCert: Option[Path]): Try[RepoConfig] = {
+    for {
+      oldConfig <- readConfig(repoPath)
+      newConfig <- Try {
+        val clientCertPath = repoPath.resolve("client_auth.p12")
+        Files.copy(clientCert, clientCertPath)
+
+        val serverCertPath = serverCert.map { serverCertPath =>
+          val p = repoPath.resolve("server.p12")
+          Files.copy(serverCertPath, p)
+          p
+        }
+
+        oldConfig.copy(auth = Some(MutualTlsConfig(clientCertPath.getFileName, serverCertPath.map(_.getFileName))))
+      }
+      _ <- writeConfig(repoPath, newConfig)
+    } yield newConfig
+  }
+
+  protected [cli] def writeConfig(repoPath: Path, config: RepoConfig): Try[Unit] = Try {
+    Files.write(repoPath.resolve("config.json"), config.asJson.spaces2.getBytes)
   }
 }
 
@@ -268,11 +284,11 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
   def genKeys(name: KeyName, keyType: KeyType, keySize: Option[Int] = None): Try[TufKeyPair] =
     keyStorage.genKeys(name, keyType, keySize)
 
-  def treehubConfig: Try[TreehubConfig] = TufRepo.readConfigFile(repoPath).map(_.treehub)
+  def treehubConfig: Try[TreehubConfig] = TufRepo.readConfig(repoPath).map(_.treehub)
 
-  def authConfig: Try[Option[AuthConfig]] = TufRepo.readConfigFile(repoPath).map(_.auth)
+  def authConfig: Try[Option[CliAuth]] = TufRepo.readConfig(repoPath).map(_.auth)
 
-  def repoServerUri: Try[URI] = TufRepo.readConfigFile(repoPath).map(_.reposerver)
+  def repoServerUri: Try[URI] = TufRepo.readConfig(repoPath).map(_.reposerver)
 
   private def fetchRootChain(reposerverClient: S, from: Int, to: Int): Future[Vector[SignedPayload[RootRole]]] = {
     val versionsToFetch = from until to

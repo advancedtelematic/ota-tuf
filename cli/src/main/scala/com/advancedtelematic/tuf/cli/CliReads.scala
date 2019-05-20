@@ -1,6 +1,6 @@
 package com.advancedtelematic.tuf.cli
 
-import java.nio.file.Path
+import java.nio.file.{Path, Paths}
 import java.time.Instant
 
 import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RsaKeyType, TargetFormat}
@@ -12,7 +12,11 @@ import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.ValidatedString.{ValidatedString, ValidatedStringValidation}
 import com.advancedtelematic.tuf.cli.DataType._
-import io.circe.{Decoder, Json}
+import io.circe.{Decoder, Encoder, Json}
+import io.circe.syntax._
+
+import scala.util.Try
+import cats.syntax.functor._
 
 object CliCodecs {
   import io.circe.generic.extras.semiauto._
@@ -21,13 +25,25 @@ object CliCodecs {
 
   implicit val config: Configuration = Configuration.default.withDefaults
 
-  implicit val authConfigDecoder = deriveDecoder[AuthConfig]
-  implicit val authConfigEncoder = deriveEncoder[AuthConfig]
+  implicit val authConfigDecoder: Decoder[OAuthConfig] = deriveDecoder
+  implicit val authConfigEncoder: Encoder[OAuthConfig] = deriveEncoder
+
+  implicit val mutualTlsConfigEncoder: Encoder[MutualTlsConfig] = deriveEncoder
+  implicit val mutualTlsConfigDecoder: Decoder[MutualTlsConfig] = deriveDecoder
+
+  implicit val cliAuthEncoder: Encoder[CliAuth] = Encoder.instance {
+    case oauth: OAuthConfig => oauth.asJson
+    case tls: MutualTlsConfig => tls.asJson
+  }
+  implicit val cliAuthDecoder: Decoder[CliAuth] = authConfigDecoder.widen or mutualTlsConfigDecoder.widen
+
+  implicit val pathEncoder: Encoder[Path] = Encoder.encodeString.contramap(_.toString)
+  implicit val pathDecoder: Decoder[Path] = Decoder.decodeString.emapTry(s => Try(Paths.get(s)))
 
   implicit val treehubConfigDecoder = Decoder.instance { d =>
     for {
       noAuth <- d.downField("no_auth").as[Option[Boolean]]
-      oauth <- d.downField("oauth2").as[Option[AuthConfig]]
+      oauth <- d.downField("oauth2").as[Option[OAuthConfig]]
       ostree <- d.downField("ostree").as[Option[Json]]
     } yield TreehubConfig(oauth, noAuth.getOrElse(false), ostree.getOrElse(Json.obj()))
   }

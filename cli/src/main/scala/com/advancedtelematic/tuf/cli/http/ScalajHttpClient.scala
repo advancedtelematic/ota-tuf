@@ -9,6 +9,5 @@ class ScalajHttpClient(implicit ec: ExecutionContext)
   import scala.concurrent.blocking
 
   override def apply(request: HttpRequest) = Future {
-    blocking { request.asBytes }
-  }
+    blocking { request.asBytes } }
 }

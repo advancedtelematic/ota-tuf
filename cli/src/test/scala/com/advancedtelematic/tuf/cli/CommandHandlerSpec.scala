@@ -1,6 +1,7 @@
 package com.advancedtelematic.tuf.cli
 
 import java.io.FileOutputStream
+import java.net.URI
 import java.nio.file.Files
 import java.time.Instant
 
@@ -18,17 +19,19 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, SignedPayload, TargetName, TargetVersion}
 import com.advancedtelematic.libtuf.data.ValidatedString._
 import com.advancedtelematic.tuf.cli.Commands._
-import com.advancedtelematic.tuf.cli.DataType.KeyName
-import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, RepoServerRepo}
+import com.advancedtelematic.tuf.cli.DataType.{KeyName, MutualTlsConfig, RepoConfig, TreehubConfig}
+import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, RepoServerRepo, TufRepo}
 import com.advancedtelematic.tuf.cli.util.TufRepoInitializerUtil._
 import com.advancedtelematic.tuf.cli.util.{CliSpec, FakeReposerverTufServerClient, KeyTypeSpecSupport}
-import eu.timepit.refined._
-import io.circe.jawn
+import eu.timepit.refined.{string, _}
+import eu.timepit.refined.string.Uri
+import io.circe.{Json, jawn}
 import io.circe.syntax._
 import org.scalatest.Inspectors
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import scala.util.Random
 
 class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors {
 
@@ -40,10 +43,10 @@ class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors
 
   lazy val userKeyStorage = CliKeyStorage.forUser(userKeyDir)
 
-  lazy val client = FakeReposerverTufServerClient(KeyType.default)
+  lazy val reposerverClient = FakeReposerverTufServerClient(KeyType.default)
 
   lazy val handler: Config => Future[Unit] = config =>
-    CommandHandler.handle(tufRepo, Future.successful(client), Future.successful(client), userKeyStorage, config)
+    CommandHandler.handle(tufRepo, Future.successful(reposerverClient), Future.successful(reposerverClient), userKeyStorage, config)
 
   keyTypeTest("generates a key using the provided user key storage") { keyType =>
     val keyName01 = KeyName("mykey01")
@@ -96,7 +99,7 @@ class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors
 
     handler(config).futureValue
 
-    client.delegations().toMap.apply(name).asJsonSignedPayload shouldBe delegation.asJsonSignedPayload
+    reposerverClient.delegations().toMap.apply(name).asJsonSignedPayload shouldBe delegation.asJsonSignedPayload
   }
 
   test("adds a delegation to an existing targets role") {
@@ -129,7 +132,7 @@ class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors
     val delegation = TargetsRole(Instant.now, Map.empty, version = 1)
     val signedDelegation = SignedPayload(Seq.empty, delegation, delegation.asJson)
 
-    client.pushDelegation(name, signedDelegation).futureValue
+    reposerverClient.pushDelegation(name, signedDelegation).futureValue
 
     val config = Config(PullDelegation, delegationName = name, outputPath = out.some)
 
@@ -171,5 +174,34 @@ class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors
     val output = io.circe.jawn.parse(new String(Files.readAllBytes(in))).flatMap(_.as[TargetsRole]).valueOr(throw _)
 
     output.targets.keys.map(_.value) should contain("mytarget-0.1.1")
+  }
+
+  test("ImportClientTls adds certificates to a repository") {
+    val client = Files.createTempFile("client", ".p12")
+    Files.write(client, "myclientcert".getBytes())
+    val server = Files.createTempFile("server", ".p12")
+    Files.write(server, "myservercert".getBytes())
+
+    val repo = initRepo[RepoServerRepo]()
+
+    TufRepo.writeConfig(repo.repoPath, RepoConfig(new URI("http://test"), auth = None, TreehubConfig(None, no_auth = false, Json.Null)))
+
+    val config = Config(ImportClientTls,
+      inputPath = client.some,
+      serverCertPath = server.some
+    )
+
+    CommandHandler.handle(repo,
+      Future.successful(reposerverClient),
+      Future.successful(reposerverClient),
+      userKeyStorage, config).futureValue
+
+    val newConfig = TufRepo.readConfig(repo.repoPath)
+
+    val clientCertPath = repo.repoPath.resolve(newConfig.get.auth.get.asInstanceOf[MutualTlsConfig].certPath)
+    val serverCertPath = repo.repoPath.resolve(newConfig.get.auth.get.asInstanceOf[MutualTlsConfig].serverCertPath.get)
+
+    new String(Files.readAllBytes(clientCertPath)) shouldBe "myclientcert"
+    new String(Files.readAllBytes(serverCertPath)) shouldBe "myservercert"
   }
 }

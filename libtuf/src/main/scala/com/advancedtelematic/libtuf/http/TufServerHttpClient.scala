@@ -79,17 +79,8 @@ abstract class TufServerHttpClient(uri: URI, httpClient: HttpRequest => Future[s
 }
 
 class ReposerverHttpClient(uri: URI,
-                           httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]],
-                           token: Option[String])(implicit ec: ExecutionContext)
+                           httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]])(implicit ec: ExecutionContext)
   extends TufServerHttpClient(uri, httpClient) with ReposerverClient {
-
-  override protected def execHttp[T : ClassTag : Decoder](request: HttpRequest)(errorHandler: PartialFunction[(Int, ErrorRepresentation), Future[T]]) =
-    token match {
-      case Some(t) =>
-        super.execHttp(request.header("Authorization", s"Bearer $t"))(errorHandler)
-      case None =>
-        super.execHttp(request)(errorHandler)
-    }
 
   protected def uriPath: String = "/api/v1/user_repo/"
 
@@ -135,21 +126,12 @@ class ReposerverHttpClient(uri: URI,
   }
 }
 
-class DirectorHttpClient(uri: URI, httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]],
-                         token: Option[String])(implicit ec: ExecutionContext)
+class DirectorHttpClient(uri: URI, httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]])
+                        (implicit ec: ExecutionContext)
   extends TufServerHttpClient(uri, httpClient) with DirectorClient {
 
   // assumes talking to the Director through the API gateway
   protected def uriPath: String = "/api/v1/director/admin/repo/"
-
-  override protected def execHttp[T : ClassTag : Decoder](request: HttpRequest)(errorHandler: PartialFunction[(Int, ErrorRepresentation), Future[T]]) = {
-    token match {
-      case Some(t) =>
-        super.execHttp(request.header("Authorization", s"Bearer $t"))(errorHandler)
-      case None =>
-        super.execHttp(request)(errorHandler)
-    }
-  }
 
   def fetchKeyPair(keyId: KeyId): Future[TufKeyPair] = {
     val req = Http(apiUri("private_keys/" + keyId.value))

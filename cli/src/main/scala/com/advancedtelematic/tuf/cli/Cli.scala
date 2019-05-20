@@ -61,6 +61,7 @@ case class Config(command: Command,
                   userKeysPath: Option[Path] = None,
                   inputPath: Option[Path] = None,
                   outputPath: Option[Path] = None,
+                  serverCertPath: Option[Path] = None,
                   delegatedPaths: List[DelegatedPathPattern] = List.empty,
                   keyPaths: List[Path] = List.empty,
                   force: Boolean = false,
@@ -380,6 +381,20 @@ object Cli extends App with VersionInfo {
         opt[Path]('i', "input").toConfigOptionParam('inputPath)
       )
 
+    cmd("import-client-cert")
+      .toCommand(ImportClientTls)
+      .text("import a client certificate into an existing repository")
+      .children(
+        repoNameOpt(this),
+        opt[Path]('c', "client-cert")
+          .text("Path to a valid PKCS #12 file that can be used to authenticate to a remote tuf repository")
+          .required()
+          .toConfigOptionParam('inputPath),
+        opt[Path]('s', "server-cert")
+          .text("Path to a valid PKCS #12 file that can be used as trust store to validate a remote tuf repository certificate")
+          .toConfigOptionParam('serverCertPath),
+      )
+
     checkConfig { c =>
       c.command match {
         case RemoveRootKey if c.keyIds.isEmpty && c.keyNames.isEmpty =>
@@ -395,7 +410,7 @@ object Cli extends App with VersionInfo {
       if (config.command == InitRepo)
         config.repoType.valueOrConfigError
       else
-        TufRepo.readConfigFile(repoPath.value).map(_.repoServerType).getOrElse(RepoServer)
+        TufRepo.readConfig(repoPath.value).map(_.repoServerType).getOrElse(RepoServer)
 
     repoType match {
       case RepoServer if (config.command == MoveOffline) && config.keyNames.isEmpty =>

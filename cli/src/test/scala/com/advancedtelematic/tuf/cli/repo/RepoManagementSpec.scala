@@ -6,7 +6,7 @@ import java.time.Instant
 
 import io.circe.jawn._
 import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, JsonSignedPayload, KeyType, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
-import com.advancedtelematic.tuf.cli.DataType.{AuthConfig, KeyName, RepoName, RepoServer}
+import com.advancedtelematic.tuf.cli.DataType._
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufCodecs._
@@ -18,10 +18,11 @@ import io.circe.syntax._
 import scala.util.{Failure, Success, Try}
 
 class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
-  lazy val credentialsZipNoTargets: Path = Paths.get(this.getClass.getResource("/credentials_no_targets.zip").toURI)
-  lazy val credentialsZipEd25519: Path = Paths.get(this.getClass.getResource("/credentials_ed25519.zip").toURI)
-  lazy val credentialsZipNoTufRepoEd25519: Path = Paths.get(this.getClass.getResource("/credentials_no_tufrepo_ed25519.zip").toURI)
-  lazy val credentialsZipNoAuthEd25519: Path = Paths.get(this.getClass.getResource("/credentials_no_auth_ed25519.zip").toURI)
+  lazy val credentialsZipNoTargets = Paths.get(this.getClass.getResource("/credentials_no_targets.zip").toURI)
+  lazy val credentialsZipEd25519 = Paths.get(this.getClass.getResource("/credentials_ed25519.zip").toURI)
+  lazy val credentialsZipNoTufRepoEd25519 = Paths.get(this.getClass.getResource("/credentials_no_tufrepo_ed25519.zip").toURI)
+  lazy val credentialsZipNoAuthEd25519 = Paths.get(this.getClass.getResource("/credentials_no_auth_ed25519.zip").toURI)
+  lazy val credentialsZipTlsAuthEd25519 = Paths.get(this.getClass.getResource("/credentials_tls-auth_ed25519.zip").toURI)
 
   import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -66,7 +67,7 @@ class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
 
     repoT shouldBe a[Success[_]]
 
-    repoT.get.authConfig.get.get shouldBe a[AuthConfig]
+    repoT.get.authConfig.get.get shouldBe a[OAuthConfig]
   }
 
   test("skips auth when no_auth: true") {
@@ -106,7 +107,7 @@ class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
 
     val repo = repoT.get
 
-    repo.authConfig.get.get shouldBe a[AuthConfig]
+    repo.authConfig.get.get shouldBe a[OAuthConfig]
     parseFile(repo.repoPath.resolve("keys/targets.pub").toFile).flatMap(_.as[TufKey]).valueOr(throw _).keytype shouldBe keyType
     parseFile(repo.repoPath.resolve("keys/targets.sec").toFile).flatMap(_.as[TufPrivateKey]).valueOr(throw _).keytype shouldBe keyType
   }
@@ -138,7 +139,7 @@ class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
 
     // test the exported zip file by creating another repo from it:
     val repoFromExported = RepoManagement.initialize(RepoServer, randomRepoPath, tempPath).get
-    repoFromExported.authConfig.get.map(_.client_id).get shouldBe "8f505046-bf38-4e17-a0bc-8a289bbd1403"
+    repoFromExported.authConfig.get.map(_.asInstanceOf[OAuthConfig].client_id).get shouldBe "8f505046-bf38-4e17-a0bc-8a289bbd1403"
     val server = repoFromExported.treehubConfig.get.ostree.hcursor.downField("server").as[String].valueOr(throw _)
     server shouldBe "https://treehub-pub.gw.staging.atsgarage.com/api/v3"
   }
@@ -168,5 +169,27 @@ class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
     val repoFromExported = RepoManagement.initialize(RepoServer, randomRepoPath, tempPath).get
 
     repoFromExported.repoPath.toFile.exists() shouldBe true
+  }
+
+  test("initializes a repository with oauth if p12 file is not present in zip") {
+    val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipEd25519)
+
+    repoT shouldBe a[Success[_]]
+    val repo = repoT.get
+
+    val oauthConfig = repo.authConfig.get.get.asInstanceOf[OAuthConfig]
+
+    oauthConfig.client_id shouldBe "8f505046-bf38-4e17-a0bc-8a289bbd1403"
+  }
+
+  test("initializes a repository with mutual tls if p12 file present in zip") {
+    val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipTlsAuthEd25519)
+
+    repoT shouldBe a[Success[_]]
+    val repo = repoT.get
+
+    val tlsConfig = repo.authConfig.get.get.asInstanceOf[MutualTlsConfig]
+    Files.exists(repo.repoPath.resolve(tlsConfig.certPath)) shouldBe true
+    Files.exists(repo.repoPath.resolve(tlsConfig.serverCertPath.get)) shouldBe true
   }
 }
