@@ -194,5 +194,10 @@ object CommandHandler {
       delegationsServer.flatMap { server =>
         Delegations.pull(server, config.delegationName, WriteOutput.fromConfig(config)).map(_ => ())
       }
+
+    case ImportClientTls =>
+      TufRepo.importTlsCerts(tufRepo.repoPath, config.inputPath.valueOrConfigError, config.serverCertPath)
+        .map(_ => log.info("Certificate(s) imported"))
+        .toFuture
   }
 }

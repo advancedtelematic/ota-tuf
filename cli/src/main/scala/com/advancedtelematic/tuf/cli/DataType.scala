@@ -1,6 +1,7 @@
 package com.advancedtelematic.tuf.cli
 
 import java.net.URI
+import java.nio.file.Path
 
 import io.circe.Json
 
@@ -12,15 +13,18 @@ object DataType {
 
   case class RepoName(value: String) extends AnyVal
 
-  case class TreehubConfig(oauth2: Option[AuthConfig], no_auth: Boolean, ostree: Json)
+  case class TreehubConfig(oauth2: Option[OAuthConfig], no_auth: Boolean, ostree: Json)
 
-  case class AuthConfig(server: URI, client_id: String, client_secret: String)
+  sealed trait CliAuth
+  case class OAuthConfig(server: URI, client_id: String, client_secret: String) extends CliAuth
+  case class MutualTlsConfig(certPath: Path, serverCertPath: Option[Path]) extends CliAuth
 
   sealed trait TufServerType
   case object RepoServer extends TufServerType
   case object Director extends TufServerType
 
-  case class RepoConfig(reposerver: URI, auth: Option[AuthConfig], treehub: TreehubConfig,
+  case class RepoConfig(reposerver: URI, auth: Option[CliAuth],
+                        treehub: TreehubConfig,
                         repoServerType: TufServerType = RepoServer)
 
   case class AuthPlusToken(value: String) extends AnyVal

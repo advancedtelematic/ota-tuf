@@ -7,7 +7,7 @@ import java.time.temporal.ChronoUnit
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType}
-import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoName}
+import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoConfig, RepoName}
 import com.advancedtelematic.tuf.cli.repo.{DirectorRepo, RepoServerRepo, TufRepo}
 
 import scala.concurrent.ExecutionContext.Implicits.global

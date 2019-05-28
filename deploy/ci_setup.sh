@@ -69,6 +69,26 @@ function wait_for_mysql {
     done
 }
 
-start_mariadb
+function start_nginx {
+    local nginx=$(realpath cli/src/test/resources/nginx)
+    local repodata=$(realpath cli/src/test/resources/fake-repo)
 
-wait_for_mysql
+    docker rm --force tuf-cli-nginx || true
+
+    docker run -d --name tuf-cli-nginx \
+           --publish 8181:8181 \
+           --volume $nginx/nginx.conf:/etc/nginx/nginx.conf \
+           --volume $nginx:/cli-nginx \
+           --volume $repodata:/data/html \
+           nginx:stable
+}
+
+if [ $# -gt 0 ] && [ "$1" == "nginx-only" ]; then
+    start_nginx
+else
+    start_nginx
+
+    start_mariadb
+
+    wait_for_mysql
+fi

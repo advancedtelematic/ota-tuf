@@ -1,3 +1,4 @@
+
 package com.advancedtelematic.libtuf.crypt
 
 import java.io.{StringReader, StringWriter}
@@ -100,7 +101,7 @@ object TufCrypto {
     Signature(validSignature, keyType.crypto.signatureMethod)
   }
 
-  // TODO:SM Catch SignatureException, return false, log error
+  // TODO Catch SignatureException, return false, log error
   // Director is catching this exception, make this safe for director instead
   def isValid(signature: Signature, publicKey: TufKey, data: Array[Byte]): Boolean = {
     val signer = signature.method match {

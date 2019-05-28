@@ -211,3 +211,15 @@ This can be done by pulling a root with `root pull`, editing the root
 using the `root key` commands, or directly editing the unsigned root
 file, and signing the new root with `root sign`. The resulting root
 can then be pushed to the server with `root push`.
+
+== Client TLS Authentication support
+
+`cli` has experimental support for authentication to a tuf repository using TLS credentials.  If the `credentials.zip` file used to initialize a repository contains a valid PKCS #12 file for client authentication, `cli` will use that certificate for authentication and ignore the `oauth` credentials.
+
+If you already have an initialized repository, you can use the `import-client-cert` command to add a client certificate to your repository.
+
+If you have a valid `credentials.zip` containing a client certificate, you can add this certificate to an already initialized repository using the following command
+
+   unzip -p -l <path to credentials.zip> client_cert.p12 | garage-sign --tuf-repo ... import-client-cert --client-cert /dev/stdin
+
+All subsequent `garage-sign` operations will use this certificate for authentication to a tuf repository.
