@@ -48,7 +48,7 @@ object Boot extends BootApp
   val tracing = Tracing.fromConfig(config, projectName)
 
   val routes: Route =
-    (versionHeaders(version) & requestMetrics(metricRegistry) & logResponseMetrics(projectName) & logRequestResult(("tuf-keyserver", Logging.InfoLevel))) {
+    (versionHeaders(version) & requestMetrics(metricRegistry) & logResponseMetrics(projectName) & logRequestResult(("tuf-keyserver", Logging.DebugLevel))) {
       tracing.traceRequests { _ =>
         new TufKeyserverRoutes(metricsRoutes = prometheusMetricsRoutes).routes
       }
