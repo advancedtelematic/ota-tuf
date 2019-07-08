@@ -3,8 +3,8 @@ package com.advancedtelematic.tuf.keyserver.client
 import java.security.interfaces.RSAPublicKey
 
 import com.advancedtelematic.libats.http.Errors.RemoteServiceError
-import com.advancedtelematic.libats.http.tracing.NullRequestTracing
-import com.advancedtelematic.libats.http.tracing.Tracing.RequestTracing
+import com.advancedtelematic.libats.http.tracing.NullServerRequestTracing
+import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519TufKey, JsonSignedPayload, KeyId, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
@@ -33,7 +33,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
 
   override implicit def patienceConfig = PatienceConfig(timeout = Span(20, Seconds), interval = Span(500, Millis))
 
-  implicit lazy val requestTracing: RequestTracing = new NullRequestTracing
+  implicit lazy val requestTracing: ServerRequestTracing = new NullServerRequestTracing
 
   val client = new KeyserverHttpClient("http://test-keyserver", testHttpClient)
 

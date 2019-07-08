@@ -9,13 +9,13 @@ import cats.syntax.show._
 import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{RawError, RemoteServiceError}
 import com.advancedtelematic.libats.http.ServiceHttpClientSupport
-import com.advancedtelematic.libats.http.tracing.Tracing.RequestTracing
+import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libats.http.tracing.TracingHttpClient
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.{RoleType, _}
-import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, KeyId, KeyType, RepoId, RsaKeyType, SignedPayload, TufKeyPair}
+import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, KeyId, KeyType, RepoId, SignedPayload, TufKeyPair}
 import io.circe.Json
 
 import scala.concurrent.Future
@@ -50,13 +50,13 @@ trait KeyserverClient {
 }
 
 object KeyserverHttpClient extends ServiceHttpClientSupport {
-  def apply(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer, tracing: RequestTracing): KeyserverHttpClient =
+  def apply(uri: Uri)(implicit system: ActorSystem, mat: ActorMaterializer, tracing: ServerRequestTracing): KeyserverHttpClient =
     new KeyserverHttpClient(uri, defaultHttpClient)
 }
 
 class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpResponse])
-                         (implicit system: ActorSystem, mat: ActorMaterializer, tracing: RequestTracing)
-  extends TracingHttpClient(httpClient) with KeyserverClient {
+                         (implicit system: ActorSystem, mat: ActorMaterializer, tracing: ServerRequestTracing)
+  extends TracingHttpClient(httpClient, "keyserver") with KeyserverClient {
 
   import KeyserverClient._
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._

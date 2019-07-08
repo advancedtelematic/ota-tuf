@@ -11,11 +11,10 @@ import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.monitoring.{MetricsSupport, ServiceHealthCheck}
 import com.advancedtelematic.libats.http.tracing.Tracing
-import com.advancedtelematic.libats.http.tracing.Tracing.RequestTracing
+import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libats.messaging.MessageBus
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
-import com.advancedtelematic.libtuf.data.TufDataType.RsaKeyType
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverHttpClient
 import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
@@ -63,20 +62,20 @@ object Boot extends BootApp
 
   log.info(s"Starting $version on http://$host:$port")
 
-  def keyStoreClient(implicit requestTracing: RequestTracing) = KeyserverHttpClient(keyServerUri)
+  def keyStoreClient(implicit requestTracing: ServerRequestTracing) = KeyserverHttpClient(keyServerUri)
 
   val messageBusPublisher = MessageBus.publisher(system, config)
 
   val targetStoreEngine = if(useS3) new S3TargetStoreEngine(s3Credentials) else LocalTargetStoreEngine(targetStoreRoot)
 
-  def targetStore(implicit requestTracing: RequestTracing) = TargetStore(keyStoreClient,  targetStoreEngine, messageBusPublisher)
+  def targetStore(implicit requestTracing: ServerRequestTracing) = TargetStore(keyStoreClient,  targetStoreEngine, messageBusPublisher)
 
   val keyserverHealthCheck = new ServiceHealthCheck(keyServerUri)
 
   implicit val tracing = Tracing.fromConfig(config, "reposerver")
 
   val routes: Route =
-    (versionHeaders(version) & logResponseMetrics(projectName) & logRequestResult(("reposerver", Logging.DebugLevel))) {
+    (versionHeaders(version) & logResponseMetrics(projectName) & logRequestResult(("reposerver", Logging.InfoLevel))) {
       tracing.traceRequests { implicit requestTracing =>
         new TufReposerverRoutes(keyStoreClient, NamespaceValidation.withDatabase, targetStore,
           messageBusPublisher,
