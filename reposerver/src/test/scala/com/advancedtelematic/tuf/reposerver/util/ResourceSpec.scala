@@ -38,7 +38,7 @@ import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStoreEngine
 
 import scala.concurrent.Promise
 import cats.syntax.either._
-import com.advancedtelematic.libats.http.tracing.NullRequestTracing
+import com.advancedtelematic.libats.http.tracing.NullServerRequestTracing
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -230,5 +230,5 @@ trait ResourceSpec extends TufReposerverSpec
 
   lazy val routes = new TufReposerverRoutes(fakeKeyserverClient, namespaceValidation, targetStore, messageBusPublisher).routes
 
-  implicit lazy val tracing = new NullRequestTracing
+  implicit lazy val tracing = new NullServerRequestTracing
 }
