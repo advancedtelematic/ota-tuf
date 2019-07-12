@@ -16,8 +16,8 @@ import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole}
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMethod
 import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, EcPrime256KeyType, EcPrime256TufKey, EcPrime256TufKeyPair, EcPrime256TufPrivateKey, Ed25519KeyType, Ed25519TufKey, Ed25519TufKeyPair, Ed25519TufPrivateKey, KeyId, KeyType, RSATufKey, RSATufKeyPair, RSATufPrivateKey, RsaKeyType, Signature, SignatureMethod, SignedPayload, TufKey, TufKeyPair, TufPrivateKey, ValidKeyId, ValidSignature}
 import io.circe.{Encoder, Json}
-import net.i2p.crypto.eddsa.spec.EdDSANamedCurveTable
-import net.i2p.crypto.eddsa.{EdDSAEngine, EdDSAPrivateKey, EdDSAPublicKey}
+import net.i2p.crypto.eddsa.spec.{EdDSANamedCurveTable, EdDSAPrivateKeySpec, EdDSAPublicKeySpec}
+import net.i2p.crypto.eddsa.{EdDSAEngine, EdDSAPrivateKey, EdDSAPublicKey, Utils}
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.jce.ECNamedCurveTable
@@ -230,18 +230,36 @@ protected [crypt] class ED25519Crypto extends TufCrypto[Ed25519KeyType.type] {
     Ed25519TufKeyPair(publicKey, privateKey)
 
   override def parsePublic(publicKeyHex: String): Try[Ed25519TufKey] = Try {
-    val spec = new X509EncodedKeySpec(Base64.decode(publicKeyHex))
-    Ed25519TufKey(new EdDSAPublicKey(spec))
+    val spec = EdDSANamedCurveTable.getByName("ed25519")
+    val pubKeySpec = new EdDSAPublicKeySpec(Utils.hexToBytes(publicKeyHex), spec)
+    Ed25519TufKey(new EdDSAPublicKey(pubKeySpec))
   }
 
   override def parsePrivate(privateKeyHex: String): Try[Ed25519TufPrivateKey] = Try {
-    val spec = new PKCS8EncodedKeySpec(Base64.decode(privateKeyHex))
-    Ed25519TufPrivateKey(new EdDSAPrivateKey(spec))
+    val seed = new Array[Byte](32)
+    System.arraycopy(Utils.hexToBytes(privateKeyHex), 0, seed, 0, 32)
+    val spec = EdDSANamedCurveTable.getByName("ed25519")
+    val privateKeySpec = new EdDSAPrivateKeySpec(seed, spec)
+    Ed25519TufPrivateKey(new EdDSAPrivateKey(privateKeySpec))
   }
 
-  override def encode(keyVal: Ed25519TufKey): String = Base64.toBase64String(keyVal.keyval.getEncoded)
+  override def encode(keyVal: Ed25519TufKey): String = {
+    if (keyVal.keyval.isInstanceOf[EdDSAPublicKey]) {
+      return Utils.bytesToHex(keyVal.keyval.asInstanceOf[EdDSAPublicKey].getAbyte)
+    } else {
+      return Utils.bytesToHex(keyVal.keyval.getEncoded)
+    }
+  }
 
-  override def encode(keyVal: Ed25519TufPrivateKey): String = Base64.toBase64String(keyVal.keyval.getEncoded)
+  override def encode(keyVal: Ed25519TufPrivateKey): String = {
+    if (keyVal.keyval.isInstanceOf[EdDSAPrivateKey]) {
+      val seed = Utils.bytesToHex(keyVal.keyval.asInstanceOf[EdDSAPrivateKey].getSeed)
+      val pub_key = Utils.bytesToHex(keyVal.keyval.asInstanceOf[EdDSAPrivateKey].getAbyte)
+      return seed + pub_key
+    } else {
+      return Utils.bytesToHex(keyVal.keyval.getEncoded)
+    }
+  }
 
   override def signer: security.Signature = {
     val spec = EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519)
