@@ -36,9 +36,10 @@ class ReposerverHttpClientSpec extends TufReposerverSpec
   keyTypeTest("fetches a root") { keyType =>
     val ns = genNs
     client.createRoot(ns, keyType).futureValue
-    val signed = client.fetchRoot(ns).futureValue.signed
-    signed shouldBe a[RootRole]
-    signed.keys.head._2.keytype shouldBe keyType
+    val (repoId, signedRoot)  = client.fetchRoot(ns).futureValue
+    repoId shouldBe a[RepoId]
+    signedRoot.signed shouldBe a[RootRole]
+    signedRoot.signed.keys.head._2.keytype shouldBe keyType
   }
 
   keyTypeTest("fails if role not on keyserver") { keyType =>

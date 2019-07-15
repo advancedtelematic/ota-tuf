@@ -1,12 +1,12 @@
 package com.advancedtelematic.libtuf_server.reposerver
 
-import akka.http.scaladsl.model._
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyType, RepoId, SignedPayload, TargetName, TargetVersion}
-import io.circe.{Decoder, Encoder, Json}
+import java.util.UUID
+
 import akka.actor.ActorSystem
 import akka.http.scaladsl.marshalling.Marshal
-import akka.http.scaladsl.model.Uri.{Path, Query}
 import akka.http.scaladsl.model.Uri.Path.Slash
+import akka.http.scaladsl.model.Uri.{Path, Query}
+import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
 import akka.stream.Materializer
@@ -14,21 +14,22 @@ import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libats.data.ErrorCode
-import com.advancedtelematic.libats.http.Errors.{RawError, RemoteServiceError}
-import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.data.TufCodecs._
-
-import scala.concurrent.{ExecutionContext, Future}
-import io.circe.generic.semiauto._
-import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libats.http.Errors.{MissingEntity, RawError, RemoteServiceError}
 import com.advancedtelematic.libats.http.HttpCodecs._
 import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libats.http.tracing.TracingHttpClient
-import com.advancedtelematic.libats.http.ServiceHttpClientSupport
+import com.advancedtelematic.libats.http.{ServiceHttpClientSupport, UnmarshalledHttpResponse}
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
+import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyType, RepoId, SignedPayload, TargetName, TargetVersion}
 import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest
-import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.{KeysNotReady, NotFound, RootNotInKeyserver}
+import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.{KeysNotReady, MissingRepoIdHeader, NotFound, RootNotInKeyserver}
+import io.circe.generic.semiauto._
+import io.circe.{Decoder, Encoder, Json}
 
+import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
 
@@ -52,6 +53,7 @@ object ReposerverClient {
   val NotFound = RawError(ErrorCode("repo_resource_not_found"), StatusCodes.NotFound, "the requested repo resource was not found")
   val RepoConflict = RawError(ErrorCode("repo_conflict"), StatusCodes.Conflict, "repo already exists")
   val PrivateKeysNotInKeyserver = RawError(ErrorCode("private_keys_not_found"), StatusCodes.PreconditionFailed, "could not find required private keys. The repository might be using offline signing")
+  val MissingRepoIdHeader = MissingEntity[RepoId]
 }
 
 
@@ -60,11 +62,11 @@ trait ReposerverClient {
 
   def createRoot(namespace: Namespace, keyType: KeyType): Future[RepoId]
 
-  def fetchRoot(namespace: Namespace): Future[SignedPayload[RootRole]]
+  def fetchRoot(namespace: Namespace): Future[(RepoId, SignedPayload[RootRole])]
 
   def repoExists(namespace: Namespace)(implicit ec: ExecutionContext): Future[Boolean] =
     fetchRoot(namespace).transform {
-      case Success(_) | Failure(KeysNotReady) => Success(true)
+      case Success(_) | Failure(KeysNotReady) | Failure(MissingRepoIdHeader) => Success(true)
       case Failure(NotFound) | Failure(RootNotInKeyserver) => Success(false)
       case Failure(t) => Failure(t)
     }
@@ -91,9 +93,9 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
                           (implicit ec: ExecutionContext, system: ActorSystem, mat: Materializer, tracing: ServerRequestTracing)
   extends TracingHttpClient(httpClient, "reposerver") with ReposerverClient {
 
+  import ReposerverClient._
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
   import io.circe.syntax._
-  import ReposerverClient._
 
   private def apiUri(path: Path) =
     reposerverUri.withPath(Path("/api") / "v1" ++ Slash(path))
@@ -109,15 +111,21 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
       }
     }
 
-  override def fetchRoot(namespace: Namespace): Future[SignedPayload[RootRole]] = {
+  override def fetchRoot(namespace: Namespace): Future[(RepoId, SignedPayload[RootRole])] = {
     val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("user_repo/root.json")))
-    execHttpWithNamespace[SignedPayload[RootRole]](namespace, req) {
+
+    val response = execHttpWithNamespace2[SignedPayload[RootRole]](namespace, req) {
       case error if error.status == StatusCodes.NotFound =>
         Future.failed(NotFound)
       case error if error.status == StatusCodes.Locked =>
         Future.failed(KeysNotReady)
       case error if error.status == StatusCodes.FailedDependency =>
         Future.failed(RootNotInKeyserver)
+    }
+
+    response.map { r =>
+      val repoIdHeader = r.httpResponse.headers.find(_.is("x-ats-tuf-repo-id")).getOrElse(throw MissingRepoIdHeader)
+      RepoId(UUID.fromString(repoIdHeader.value)) -> r.unmarshalledResponse
     }
   }
 
@@ -148,7 +156,11 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
   }
 
   def execHttpWithNamespace[T : ClassTag : FromEntityUnmarshaller](namespace: Namespace, request: HttpRequest)
-                                                                  (errorHandler: PartialFunction[RemoteServiceError, Future[T]] = PartialFunction.empty): Future[T] = {
+                                                                  (errorHandler: PartialFunction[RemoteServiceError, Future[T]] = PartialFunction.empty): Future[T] =
+    execHttpWithNamespace2[T](namespace, request)(errorHandler).map(_.unmarshalledResponse)
+
+  def execHttpWithNamespace2[T : ClassTag : FromEntityUnmarshaller](namespace: Namespace, request: HttpRequest)
+                                                                  (errorHandler: PartialFunction[RemoteServiceError, Future[T]] = PartialFunction.empty): Future[UnmarshalledHttpResponse[T]] = {
     val req = request.addHeader(RawHeader("x-ats-namespace", namespace.get))
 
     val authReq = authHeaders match {
@@ -156,7 +168,7 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
       case None => req
     }
 
-    execHttp[T](authReq)(errorHandler)
+    execHttp2[T](authReq)(errorHandler)
   }
 
   private def payloadFrom(uri: Uri, checksum: Checksum, length: Int, name: Option[TargetName],
