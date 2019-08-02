@@ -14,7 +14,7 @@ import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libats.data.ErrorCode
-import com.advancedtelematic.libats.http.Errors.{MissingEntity, RawError, RemoteServiceError}
+import com.advancedtelematic.libats.http.Errors.{RawError, RemoteServiceError}
 import com.advancedtelematic.libats.http.HttpCodecs._
 import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libats.http.tracing.TracingHttpClient
@@ -25,7 +25,7 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyType, RepoId, SignedPayload, TargetName, TargetVersion}
 import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest
-import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.{KeysNotReady, MissingRepoIdHeader, NotFound, RootNotInKeyserver}
+import com.advancedtelematic.libtuf_server.reposerver.ReposerverClient.{KeysNotReady, NotFound, RootNotInKeyserver}
 import io.circe.generic.semiauto._
 import io.circe.{Decoder, Encoder, Json}
 
@@ -53,7 +53,6 @@ object ReposerverClient {
   val NotFound = RawError(ErrorCode("repo_resource_not_found"), StatusCodes.NotFound, "the requested repo resource was not found")
   val RepoConflict = RawError(ErrorCode("repo_conflict"), StatusCodes.Conflict, "repo already exists")
   val PrivateKeysNotInKeyserver = RawError(ErrorCode("private_keys_not_found"), StatusCodes.PreconditionFailed, "could not find required private keys. The repository might be using offline signing")
-  val MissingRepoIdHeader = MissingEntity[RepoId]
 }
 
 
@@ -66,7 +65,7 @@ trait ReposerverClient {
 
   def repoExists(namespace: Namespace)(implicit ec: ExecutionContext): Future[Boolean] =
     fetchRoot(namespace).transform {
-      case Success(_) | Failure(KeysNotReady) | Failure(MissingRepoIdHeader) => Success(true)
+      case Success(_) | Failure(KeysNotReady) => Success(true)
       case Failure(NotFound) | Failure(RootNotInKeyserver) => Success(false)
       case Failure(t) => Failure(t)
     }
@@ -123,9 +122,13 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
         Future.failed(RootNotInKeyserver)
     }
 
-    response.map { r =>
-      val repoIdHeader = r.httpResponse.headers.find(_.is("x-ats-tuf-repo-id")).getOrElse(throw MissingRepoIdHeader)
-      RepoId(UUID.fromString(repoIdHeader.value)) -> r.unmarshalledResponse
+    response.flatMap { r =>
+      r.httpResponse.headers.find(_.is("x-ats-tuf-repo-id")) match {
+        case Some(repoIdHeader) =>
+          Future.successful(RepoId(UUID.fromString(repoIdHeader.value)) -> r.unmarshalledResponse)
+        case None =>
+          Future.failed(NotFound)
+      }
     }
   }
 
