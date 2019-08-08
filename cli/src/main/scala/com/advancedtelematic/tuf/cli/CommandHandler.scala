@@ -1,6 +1,7 @@
 package com.advancedtelematic.tuf.cli
 
 import java.net.URI
+import java.time.{Instant, Period}
 
 import cats.implicits._
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
@@ -12,6 +13,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, Target
 import com.advancedtelematic.libtuf.http.{ReposerverClient, TufServerClient}
 import com.advancedtelematic.tuf.cli.CliConfigOptionOps._
 import com.advancedtelematic.tuf.cli.Commands._
+import com.advancedtelematic.tuf.cli.Errors.PastDate
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.tuf.cli.repo._
 import eu.timepit.refined._
@@ -24,6 +26,10 @@ import scala.language.implicitConversions
 import scala.util.Try
 
 object CommandHandler {
+
+  val DEFAULT_ROOT_LIFETIME: Period = Period.ofDays(365)
+  val DEFAULT_TARGET_LIFETIME: Period = Period.ofDays(31)
+
   private lazy val log = LoggerFactory.getLogger(this.getClass)
 
   private implicit def tryToFutureConversion[T](value: Try[T]): Future[T] = value.toFuture
@@ -38,6 +44,22 @@ object CommandHandler {
         ClientTargetItem(clientHashes, length, custom.asJson.some)
       }
     } yield targetFilename -> newTarget
+
+  def expirationDate(config: Config, now: Instant = Instant.now())(previous: Instant): Instant = {
+
+    // Instant.plus can only deal with days
+    def toDays(p: Period): Period =
+      Period.ofDays(365 * p.getYears + 30 * p.getMonths + p.getDays)
+
+    val d = config.expireAfter
+      .map(toDays)
+      .map(now.plus(_))
+      .orElse(config.expireOn)
+      .getOrElse(previous)
+
+    if (d.isBefore(now) && !config.force) throw PastDate()
+    else d
+  }
 
   def handle[S <: TufServerClient](tufRepo: => TufRepo[S],
                                    repoServer: => Future[S],
@@ -60,7 +82,8 @@ object CommandHandler {
           config.rootKey,
           config.oldRootKey,
           config.oldKeyId,
-          config.keyNames.headOption)
+          config.keyNames.headOption,
+          Instant.now().plus(DEFAULT_ROOT_LIFETIME))
           .map(_ => log.info(s"root keys moved offline, root.json saved to ${tufRepo.repoPath}"))
       }
 
@@ -71,7 +94,7 @@ object CommandHandler {
 
     case InitTargets =>
       tufRepo
-        .initTargets(config.version.valueOrConfigError, config.expires)
+        .initTargets(config.version.valueOrConfigError, config.expireOn.getOrElse(Instant.now().plus(DEFAULT_TARGET_LIFETIME)))
         .map(p => log.info(s"Wrote empty targets to $p"))
 
 
@@ -99,7 +122,7 @@ object CommandHandler {
 
     case SignTargets =>
       tufRepo
-        .signTargets(config.keyNames, config.version)
+        .signTargets(config.keyNames, expirationDate(config), config.version)
         .map(p => log.info(s"signed targets.json to $p"))
 
 
@@ -130,7 +153,7 @@ object CommandHandler {
         .map(_ => log.info("Pushed root.json"))
 
     case SignRoot =>
-      tufRepo.signRoot(config.keyNames)
+      tufRepo.signRoot(config.keyNames, expirationDate(config))
         .map(p => log.info(s"signed root.json saved to $p"))
 
     case AddRootKey =>

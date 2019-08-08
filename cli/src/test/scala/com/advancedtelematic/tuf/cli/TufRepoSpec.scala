@@ -107,6 +107,8 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
     format should contain(TargetFormat.OSTREE)
   }
 
+  private def defaultExpiration(i: Instant) = Instant.now().plusSeconds(60)
+
   test("bumps version when signing targets role") {
     val repo = initRepo[RepoServerRepo]()
     val previousExpires = repo.readUnsignedRole[TargetsRole].get.expires
@@ -114,7 +116,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
     val targetsKeyName = KeyName("somekey")
     repo.genKeys(targetsKeyName, KeyType.default).get
 
-    repo.signTargets(Seq(targetsKeyName)).get
+    repo.signTargets(Seq(targetsKeyName), defaultExpiration).get
 
     val payload = repo.readSignedRole[TargetsRole].get
     payload.signed.version shouldBe 12
@@ -127,7 +129,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
     val targetsKeyName = KeyName("somekey")
     repo.genKeys(targetsKeyName, KeyType.default).get
 
-    repo.signTargets(Seq(targetsKeyName), Option(21)).get
+    repo.signTargets(Seq(targetsKeyName), defaultExpiration, Option(21)).get
 
     val payload = repo.readSignedRole[TargetsRole].get
     payload.signed.version shouldBe 21
@@ -138,7 +140,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
     val targetsKeyName = KeyName("somekey")
     val pub = repo.genKeys(targetsKeyName, keyType).get.pubkey
 
-    val path = repo.signTargets(Seq(targetsKeyName)).get
+    val path = repo.signTargets(Seq(targetsKeyName), defaultExpiration).get
     val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).valueOr(throw _)
 
     payload.signatures.map(_.keyid) should contain(pub.id)
@@ -304,7 +306,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
     val keyname02 = KeyName("somekey02")
     val pub02 = repo.genKeys(keyname02, keyType).get.pubkey
 
-    val path = repo.signRoot(Seq(keyname, keyname02)).get
+    val path = repo.signRoot(Seq(keyname, keyname02), defaultExpiration).get
     val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[RootRole]]).valueOr(throw _)
 
     payload.isValidFor(pub) shouldBe true
@@ -315,7 +317,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
     val keyname = KeyName("somekey")
     val pub = repo.genKeys(keyname, KeyType.default).get.pubkey
 
-    val path = repo.signRoot(Seq(keyname)).get
+    val path = repo.signRoot(Seq(keyname), defaultExpiration).get
     val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[RootRole]]).valueOr(throw _)
 
     payload.signed.version shouldBe 2

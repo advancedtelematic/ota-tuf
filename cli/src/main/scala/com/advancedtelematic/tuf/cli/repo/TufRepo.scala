@@ -24,8 +24,8 @@ import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, HardwareI
 import com.advancedtelematic.libtuf.data.{ClientDataType, RootRoleValidation}
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleNotFound, TargetsResponse}
 import com.advancedtelematic.libtuf.http._
-import com.advancedtelematic.tuf.cli.DataType.{OAuthConfig, KeyName, RepoConfig, _}
-import com.advancedtelematic.tuf.cli.Errors.CommandNotSupportedByRepositoryType
+import com.advancedtelematic.tuf.cli.DataType.{KeyName, OAuthConfig, RepoConfig, _}
+import com.advancedtelematic.tuf.cli.Errors.{CommandNotSupportedByRepositoryType, PastDate}
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
 import com.advancedtelematic.tuf.cli.{CliCodecs, CliUtil}
@@ -104,9 +104,6 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
   protected lazy val log = LoggerFactory.getLogger(this.getClass)
 
   private lazy val rolesPath = repoPath.resolve("roles")
-
-  protected val DEFAULT_ROOT_EXPIRE_TIME = Period.ofDays(365)
-  private val DEFAULT_TARGET_EXPIRE_TIME = Period.ofDays(31)
 
   def initRepoDirs(): Try[Unit] = Try {
     val perms = PosixFilePermissions.asFileAttribute(java.util.EnumSet.of(OWNER_READ, OWNER_WRITE, OWNER_EXECUTE))
@@ -202,13 +199,13 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
     _ <- client.pushSignedRoot(signedRoot)
   } yield ()
 
-  def signRoot(keys: Seq[KeyName], version: Option[Int] = None): Try[Path] =
-    signRole[RootRole](version, keys)
+  def signRoot(keys: Seq[KeyName], validExpiration: Instant => Instant, version: Option[Int] = None): Try[Path] =
+    signRole[RootRole](version, keys, validExpiration)
 
   import cats.implicits._
 
-  protected def signRole[T : Decoder : Encoder](version: Option[Int], keys: Seq[KeyName])
-                                             (implicit tufRole: TufRole[T]): Try[Path] = {
+  protected def signRole[T : Decoder : Encoder](version: Option[Int], keys: Seq[KeyName], validExpiration: Instant => Instant)
+                                               (implicit tufRole: TufRole[T]): Try[Path] = {
     def signatures(payload: T): Try[List[ClientSignature]] =
       keys.toList.traverse { key =>
         keyStorage.readKeyPair(key).map { case (pub, priv) =>
@@ -218,7 +215,8 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
 
     for {
       unsigned <- readUnsignedRole[T]
-      newUnsigned = tufRole.refreshRole(unsigned, oldV => version.getOrElse(oldV + 1), Instant.now().plus(DEFAULT_TARGET_EXPIRE_TIME))
+      expiration <- Try(validExpiration(unsigned.expires))
+      newUnsigned = tufRole.refreshRole(unsigned, oldV => version.getOrElse(oldV + 1), expiration)
       sigs <- signatures(newUnsigned)
       signedRole = SignedPayload(sigs, newUnsigned, newUnsigned.asJson)
       path <- writeSignedRole(signedRole)
@@ -309,7 +307,8 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
                       newRootName: KeyName,
                       oldRootName: KeyName,
                       oldKeyId: Option[KeyId],
-                      newTargetsName: Option[KeyName]): Future[SignedPayload[RootRole]]
+                      newTargetsName: Option[KeyName],
+                      rootExpireTime: Instant): Future[SignedPayload[RootRole]]
 
   def initTargets(version: Int, expires: Instant): Try[Path]
 
@@ -320,7 +319,7 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
   def addTargetDelegation(name: DelegatedRoleName, key: List[TufKey],
                           delegatedPaths: List[DelegatedPathPattern], threshold: Int): Try[Path]
 
-  def signTargets(targetsKeys: Seq[KeyName], version: Option[Int] = None): Try[Path]
+  def signTargets(targetsKeys: Seq[KeyName], expiration: Instant => Instant, version: Option[Int] = None): Try[Path]
 
   def pullVerifyTargets(reposerverClient: S, rootRole: RootRole): Future[SignedPayload[TargetsRole]]
 
@@ -388,14 +387,15 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
     } yield path
   }
 
-  override def signTargets(targetsKeys: Seq[KeyName], version: Option[Int] = None): Try[Path] =
-    signRole[TargetsRole](version, targetsKeys)
+  override def signTargets(targetsKeys: Seq[KeyName], expiration: Instant => Instant, version: Option[Int] = None): Try[Path] =
+    signRole[TargetsRole](version, targetsKeys, expiration)
 
   override def moveRootOffline(repoClient: ReposerverClient,
                                newRootName: KeyName,
                                oldRootName: KeyName,
                                oldKeyId: Option[KeyId],
-                               newTargetsName: Option[KeyName]): Future[SignedPayload[RootRole]] = {
+                               newTargetsName: Option[KeyName],
+                               rootExpireTime: Instant): Future[SignedPayload[RootRole]] = {
     assert(newTargetsName.isDefined, "new targets key name must be defined when moving root off line in tuf-reposerver")
 
     for {
@@ -411,7 +411,7 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
         .withRoleKeys(RoleType.ROOT, threshold = 1, newRootPubKey)
         .withRoleKeys(RoleType.TARGETS, threshold = 1, newTargetsPubKey)
         .withVersion(oldRootRole.version + 1)
-        .addExpires(DEFAULT_ROOT_EXPIRE_TIME)
+        .copy(expires = rootExpireTime)
       newRootSignature = TufCrypto.signPayload(newRootPrivKey, newRootRole.asJson).toClient(newRootPubKey.id)
       newRootOldSignature = TufCrypto.signPayload(oldRootPrivKey, newRootRole.asJson).toClient(oldRootPubKeyId)
       newSignedRoot = SignedPayload(Seq(newRootSignature, newRootOldSignature), newRootRole, newRootRole.asJson)
@@ -460,7 +460,8 @@ class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRep
                                newRootName: KeyName,
                                oldRootName: KeyName,
                                oldKeyId: Option[KeyId],
-                               newTargetsName: Option[KeyName]): Future[SignedPayload[RootRole]] = {
+                               newTargetsName: Option[KeyName],
+                               rootExpireTime: Instant): Future[SignedPayload[RootRole]] = {
     assert(newTargetsName.isEmpty, "new targets key name must be empty for director")
 
     for {
@@ -474,7 +475,7 @@ class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRep
       newRootRole = oldRootRole
         .withRoleKeys(RoleType.ROOT, threshold = 1, newRootPubKey)
         .withVersion(oldRootRole.version + 1)
-        .addExpires(DEFAULT_ROOT_EXPIRE_TIME)
+        .copy(expires = rootExpireTime)
       newRootSignature = TufCrypto.signPayload(newRootPrivKey, newRootRole.asJson).toClient(newRootPubKey.id)
       newRootOldSignature = TufCrypto.signPayload(oldRootPrivKey, newRootRole.asJson).toClient(oldRootPubKeyId)
       newSignedRoot = SignedPayload(Seq(newRootSignature, newRootOldSignature), newRootRole, newRootRole.asJson)
@@ -493,7 +494,7 @@ class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRep
   override def deleteTarget(filename: TargetFilename): Try[Path] =
     Failure(CommandNotSupportedByRepositoryType(Director, "deleteTarget"))
 
-  override def signTargets(targetsKeys: Seq[KeyName], version: Option[Int]): Try[Path] =
+  override def signTargets(targetsKeys: Seq[KeyName], expiration: Instant => Instant, version: Option[Int]): Try[Path] =
     Failure(CommandNotSupportedByRepositoryType(Director, "signTargets"))
 
   override def pullVerifyTargets(client: DirectorClient, rootRole: RootRole): Future[SignedPayload[TargetsRole]] =

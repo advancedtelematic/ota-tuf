@@ -1,7 +1,7 @@
 package com.advancedtelematic.tuf.cli
 
 import java.nio.file.{Path, Paths}
-import java.time.Instant
+import java.time.{Instant, Period}
 
 import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RsaKeyType, TargetFormat}
 import eu.timepit.refined
@@ -79,6 +79,8 @@ object CliReads {
   implicit val pathRead: Read[Path] = Read.fileRead.map(_.toPath)
 
   implicit val instantRead: Read[Instant] = Read.stringRead.map(Instant.parse)
+
+  implicit val periodRead: Read[Period] = Read.stringRead.map(s => Period.parse('P' +: s))
 
   implicit val targetFormatRead: Read[TargetFormat] = Read.stringRead.map(_.toUpperCase).map(TargetFormat.withName)
 

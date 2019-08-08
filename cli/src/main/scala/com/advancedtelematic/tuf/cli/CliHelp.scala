@@ -3,7 +3,7 @@ package com.advancedtelematic.tuf.cli
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libtuf.data.ErrorCodes
 import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
-import com.advancedtelematic.tuf.cli.Errors.CommandNotSupportedByRepositoryType
+import com.advancedtelematic.tuf.cli.Errors.{CommandNotSupportedByRepositoryType, PastDate}
 import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
@@ -49,5 +49,8 @@ object CliHelp {
 
     case CommandNotSupportedByRepositoryType(repoType, msg) =>
       _log.error(s"The local repository is of type $repoType which does not support this command: $msg")
+
+    case PastDate() =>
+      _log.error("The metadata expiration date lies in the past, use --force if you really want to use it")
   }
 }
