@@ -4,6 +4,7 @@ import java.io.FileOutputStream
 import java.net.URI
 import java.nio.file.Files
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 import cats.data.Validated.Valid
 import cats.syntax.either._
@@ -62,7 +63,7 @@ class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors
     }
   }
 
-  test("signs a payload with the provided keys") {
+  test("signs a delegation with the provided keys") {
     val keyName01 = KeyName("mykey01")
     val keyName02 = KeyName("mykey02")
 
@@ -103,7 +104,6 @@ class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors
   }
 
   test("adds a delegation to an existing targets role") {
-    val key = userKeyStorage.genKeys(KeyName("mykey02"), KeyType.default).get
     val pubkey = KeyType.default.crypto.generateKeyPair().pubkey
     val keyFile = Files.createTempFile("key01.pub", ".json")
     Files.write(keyFile, pubkey.asJson.spaces2.getBytes)
@@ -203,5 +203,19 @@ class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors
 
     new String(Files.readAllBytes(clientCertPath)) shouldBe "myclientcert"
     new String(Files.readAllBytes(serverCertPath)) shouldBe "myservercert"
+  }
+
+  test("signs targets with a given expiration date") {
+    val pubkey = KeyType.default.crypto.generateKeyPair().pubkey
+    val keyFile = Files.createTempFile("key01.pub", ".json")
+    Files.write(keyFile, pubkey.asJson.spaces2.getBytes)
+    val expiration = Instant.now().plusSeconds(10000).truncatedTo(ChronoUnit.SECONDS)
+
+    val config = Config(SignTargets, keyPaths = List(keyFile), expireOn = Some(expiration))
+
+    handler(config).futureValue
+
+    val role = tufRepo.readSignedRole[TargetsRole].get
+    role.signed.expires shouldBe expiration
   }
 }

@@ -3,7 +3,7 @@ package com.advancedtelematic.tuf.cli
 import java.net.URI
 import java.nio.file.{Files, Path, Paths}
 import java.security.Security
-import java.time.Instant
+import java.time.{Instant, Period}
 import java.time.temporal.ChronoUnit
 
 import cats.Eval
@@ -48,7 +48,8 @@ case class Config(command: Command,
                   keyIds: List[KeyId]= List.empty,
                   oldKeyId: Option[KeyId] = None,
                   version: Option[Int] = None,
-                  expires: Instant = Instant.now().plus(1, ChronoUnit.DAYS),
+                  expireOn: Option[Instant] = None,
+                  expireAfter: Option[Period] = None,
                   length: Int = -1,
                   targetFilename: Option[TargetFilename] = None,
                   targetName: Option[TargetName] = None,
@@ -99,6 +100,16 @@ object Cli extends App with VersionInfo {
       .opt[Path]("keys-path").abbr("p")
       .toConfigOptionParam('userKeysPath)
       .text("Path where this executable will look for keys, by default it's the `user-keys` directory in `home-dir`")
+  }
+
+  lazy val expirationOpts: OptionParser[Config] => Seq[OptionDef[_, Config]] = { parser =>
+    Seq(
+      parser.opt[Instant]("expires")
+        .text("UTC instant such as '2018-01-01T00:01:00Z'")
+        .toConfigOptionParam('expireOn),
+      parser.opt[Period]("expire-after")
+        .text("Expiration delay in years, months and days (each optional, but in that order), such as '1Y3M5D'")
+        .toConfigOptionParam('expireAfter))
   }
 
   lazy val addTargetOptions: OptionParser[Config] => Seq[OptionDef[_, Config]] = { parser =>
@@ -288,9 +299,8 @@ object Cli extends App with VersionInfo {
           ),
         cmd("sign")
           .toCommand(SignRoot)
-          .children(
-            manyKeyNamesOpt(this)
-          )
+          .children(manyKeyNamesOpt(this))
+          .children(expirationOpts(this):_*)
       )
 
     cmd("targets")
@@ -305,8 +315,8 @@ object Cli extends App with VersionInfo {
               .toConfigOptionParam('version)
               .required(),
             opt[Instant]("expires")
-              .toConfigParam('expires)
-              .text("UTC instant such as 2018-01-01T00:01:00Z")
+              .toConfigOptionParam('expireOn)
+              .text("UTC instant such as '2018-01-01T00:01:00Z'")
               .required()
           ),
         cmd("add")
@@ -330,7 +340,8 @@ object Cli extends App with VersionInfo {
             opt[Int]("version")
               .text("Ignore unsigned role version and use <version> instead")
               .toConfigOptionParam('version)
-          ),
+          )
+          .children(expirationOpts(this):_*),
         cmd("pull")
           .toCommand(PullTargets),
         cmd("push")
@@ -399,6 +410,8 @@ object Cli extends App with VersionInfo {
       c.command match {
         case RemoveRootKey if c.keyIds.isEmpty && c.keyNames.isEmpty =>
           "To remove a root key you need to specify at least one key id or key name".asLeft
+        case SignTargets | SignRoot if c.expireOn.isDefined && c.expireAfter.isDefined =>
+          "The expiration date should be given with either '--expires' or '--expire-after', not both".asLeft
         case _ =>
           Right(())
       }

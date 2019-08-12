@@ -1,6 +1,7 @@
 package com.advancedtelematic.tuf.cli
 
 import java.nio.file.{Files, Paths}
+import java.time.Instant
 
 import scala.collection.JavaConverters._
 import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole, TufRole}
@@ -104,7 +105,7 @@ class TufRepoMoveOfflineSpec extends CliSpec {
     val repo = initRepo[RepoServerRepo](KeyType.default)
     val client = FakeReposerverTufServerClient(KeyType.default)
     val (_, pubTargets, _) = ReposerverOfflineMover(repo, KeyType.default, client).futureValue
-    repo.signTargets(Seq(KeyName(s"targets${repo.name}"))).get
+    repo.signTargets(Seq(KeyName(s"targets${repo.name}")), _ => Instant.now().plusSeconds(60)).get
     Files.write(repo.repoPath.resolve("roles").resolve(TufRole.targetsTufRole.checksumPath), Seq("997890bc85c5796408ceb20b0ca75dabe6fe868136e926d24ad0f36aa424f99d").asJava)
 
     val payload = repo.pushTargets(client).futureValue
@@ -163,7 +164,7 @@ private object ReposerverOfflineMover {
     val pub = repo.genKeys(newRootName, keyType).get.pubkey
     val pubT = repo.genKeys(newTargetsName, keyType).get.pubkey
 
-    repo.moveRootOffline(client, newRootName, oldRootName, None, Option(newTargetsName)).map { s => (pub, pubT, s) }
+    repo.moveRootOffline(client, newRootName, oldRootName, None, Option(newTargetsName), Instant.now().plusSeconds(60)).map { s => (pub, pubT, s) }
   }
 }
 
@@ -175,7 +176,7 @@ private object DirectorOfflineMover {
 
     val pub = repo.genKeys(newRootName, keyType).get.pubkey
 
-    repo.moveRootOffline(client, newRootName, oldRootName, None, None).flatMap { s =>
+    repo.moveRootOffline(client, newRootName, oldRootName, None, None, Instant.now().plusSeconds(60)).flatMap { s =>
       client.fetchKeyPair(s.signed.roles(RoleType.TARGETS).keyids.head).map(_.pubkey).map { pubT =>
         (pub, pubT, s)
       }
