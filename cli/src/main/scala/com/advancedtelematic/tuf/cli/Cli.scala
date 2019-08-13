@@ -109,7 +109,10 @@ object Cli extends App with VersionInfo {
         .toConfigOptionParam('expireOn),
       parser.opt[Period]("expire-after")
         .text("Expiration delay in years, months and days (each optional, but in that order), such as '1Y3M5D'")
-        .toConfigOptionParam('expireAfter))
+        .toConfigOptionParam('expireAfter),
+      parser.opt[Unit]("force")
+        .action { (_, c) => c.copy(force = true) }
+        .text("Allow setting a date in the past"))
   }
 
   lazy val addTargetOptions: OptionParser[Config] => Seq[OptionDef[_, Config]] = { parser =>
