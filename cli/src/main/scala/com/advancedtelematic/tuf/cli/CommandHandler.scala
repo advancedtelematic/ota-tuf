@@ -1,7 +1,7 @@
 package com.advancedtelematic.tuf.cli
 
 import java.net.URI
-import java.time.{Instant, Period}
+import java.time.{Instant, Period, ZoneOffset}
 
 import cats.implicits._
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
@@ -46,14 +46,8 @@ object CommandHandler {
     } yield targetFilename -> newTarget
 
   def expirationDate(config: Config, now: Instant = Instant.now())(previous: Instant): Instant = {
-
-    // Instant.plus can only deal with days
-    def toDays(p: Period): Period =
-      Period.ofDays(365 * p.getYears + 30 * p.getMonths + p.getDays)
-
     val d = config.expireAfter
-      .map(toDays)
-      .map(now.plus(_))
+      .map(now.atOffset(ZoneOffset.UTC).plus(_).toInstant)
       .orElse(config.expireOn)
       .getOrElse(previous)
 

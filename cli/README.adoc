@@ -223,3 +223,18 @@ If you have a valid `credentials.zip` containing a client certificate, you can a
    unzip -p -l <path to credentials.zip> client_cert.p12 | garage-sign --tuf-repo ... import-client-cert --client-cert /dev/stdin
 
 All subsequent `garage-sign` operations will use this certificate for authentication to a tuf repository.
+
+== Appendix: Giving expiration dates on the command line
+
+The commands `garage-sign sign root` and `garage-sign sign targets`
+take the date from the unsigned metadata by default. If the date lies
+in the past, they refuse to sign. The expired date can still be used in that case by
+giving the option `--force`. If you want to change the date of the
+signed metadata you need to give a new date with `--expires` or
+`--expire-after` which also checks if it is in the past, which can
+again be overwritten with `--force`.
+
+`--expires` takes an absolute UTC instant such as _2018-01-01T00:01:00Z_.
+`--expire-after` takes a relative expiration delay in years, months and days
+(each optional, but in that order), such as _1Y3M5D_.
+
