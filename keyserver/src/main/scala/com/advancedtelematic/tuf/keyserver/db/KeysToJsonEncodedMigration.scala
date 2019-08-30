@@ -1,6 +1,7 @@
 package com.advancedtelematic.tuf.keyserver.db
 
 import java.security.PublicKey
+import java.security.interfaces.RSAPublicKey
 
 import akka.actor.ActorSystem
 import akka.stream.Materializer
@@ -31,7 +32,7 @@ class KeysToJsonEncodedMigration(implicit
     db.run(sql).map(_ => Done)
   }
 
-  def writeKey(keyId: KeyId, publicKey: PublicKey)(implicit db: Database): Future[TufKey] = {
+  def writeKey(keyId: KeyId, publicKey: RSAPublicKey)(implicit db: Database): Future[TufKey] = {
     implicit val setRsaKey: SetParameter[TufKey] = (tufKey: TufKey, pp: PositionedParameters) => {
       pp.setString(tufKey.asJson.noSpaces)
     }
@@ -46,14 +47,14 @@ class KeysToJsonEncodedMigration(implicit
     db.run(sql).map(_ => rsaKey)
   }
 
-  def existingKeys(implicit db: Database):  Source[(KeyId, PublicKey), NotUsed] = {
-    implicit val getResult: GetResult[(KeyId, PublicKey)] = pr => {
+  def existingKeys(implicit db: Database):  Source[(KeyId, RSAPublicKey), NotUsed] = {
+    implicit val getResult: GetResult[(KeyId, RSAPublicKey)] = pr => {
       val keyId = implicitly[ColumnType[KeyId]].getValue(pr.rs, 1)
       val publicKeyStr = pr.rs.getString("public_key")
-      keyId -> TufCrypto.parsePublicPem(publicKeyStr).get
+      keyId -> TufCrypto.parsePublicPem(publicKeyStr).get.asInstanceOf[RSAPublicKey]
     }
 
-    val findQ = sql""" select key_id, public_key from `keys` where key_type = 'RSA'""".as[(KeyId, PublicKey)]
+    val findQ = sql""" select key_id, public_key from `keys` where key_type = 'RSA'""".as[(KeyId, RSAPublicKey)]
 
     Source.fromPublisher(db.stream(findQ))
   }

@@ -3,7 +3,7 @@ package com.advancedtelematic.libtuf.crypt
 
 import java.io.{StringReader, StringWriter}
 import java.security
-import java.security.interfaces.RSAPublicKey
+import java.security.interfaces.{RSAPrivateKey, RSAPublicKey}
 import java.security.spec.{PKCS8EncodedKeySpec, X509EncodedKeySpec}
 import java.security.{KeyFactory, MessageDigest, Signature => _, _}
 
@@ -272,7 +272,7 @@ protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
       val pemKeyPair = parser.readObject().asInstanceOf[SubjectPublicKeyInfo]
       val pubKey = converter.getPublicKey(pemKeyPair)
       pubKey match {
-        case rsaPubKey: RSAPublicKey if rsaPubKey.getModulus.bitLength() >= 2048 => RSATufKey(pubKey)
+        case rsaPubKey: RSAPublicKey if rsaPubKey.getModulus.bitLength() >= 2048 => RSATufKey(rsaPubKey)
         case _: RSAPublicKey => throw new IllegalArgumentException("Key size too small, must be >= 2048")
         case _ => throw new IllegalArgumentException("Key is not an RSAPublicKey")
       }
@@ -285,7 +285,7 @@ protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
 
     Try {
       val pemKeyPair = parser.readObject().asInstanceOf[PEMKeyPair]
-      RSATufPrivateKey(converter.getKeyPair(pemKeyPair).getPrivate)
+      RSATufPrivateKey(converter.getKeyPair(pemKeyPair).getPrivate.asInstanceOf[RSAPrivateKey])
     }
   }
 
@@ -320,6 +320,6 @@ protected [crypt] class RsaCrypto extends TufCrypto[RsaKeyType.type] {
   override def generateKeyPair(keySize: Int): TufKeyPair = {
     require(validKeySize(keySize), "Key size too small")
     val keyPair = keyPairGenerator(keySize).generateKeyPair()
-    RSATufKeyPair(RSATufKey(keyPair.getPublic), RSATufPrivateKey(keyPair.getPrivate))
+    RSATufKeyPair(RSATufKey(keyPair.getPublic.asInstanceOf[RSAPublicKey]), RSATufPrivateKey(keyPair.getPrivate.asInstanceOf[RSAPrivateKey]))
   }
 }
