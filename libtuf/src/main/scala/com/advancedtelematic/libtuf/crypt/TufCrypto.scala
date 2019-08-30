@@ -3,7 +3,7 @@ package com.advancedtelematic.libtuf.crypt
 
 import java.io.{StringReader, StringWriter}
 import java.security
-import java.security.interfaces.{RSAPrivateKey, RSAPublicKey}
+import java.security.interfaces.{ECPrivateKey, ECPublicKey,RSAPrivateKey, RSAPublicKey}
 import java.security.spec.{PKCS8EncodedKeySpec, X509EncodedKeySpec}
 import java.security.{KeyFactory, MessageDigest, Signature => _, _}
 
@@ -191,12 +191,12 @@ protected [crypt] class ECPrime256Crypto extends TufCrypto[EcPrime256KeyType.typ
 
   override def parsePublic(publicKeyHex: String): Try[EcPrime256TufKey] = Try {
     val spec = new X509EncodedKeySpec(Hex.decode(publicKeyHex))
-    EcPrime256TufKey(fac.generatePublic(spec))
+    EcPrime256TufKey(fac.generatePublic(spec).asInstanceOf[ECPublicKey])
   }
 
   override def parsePrivate(privateKeyHex: String): Try[EcPrime256TufPrivateKey] = Try {
     val spec = new PKCS8EncodedKeySpec(Hex.decode(privateKeyHex))
-    EcPrime256TufPrivateKey(fac.generatePrivate(spec))
+    EcPrime256TufPrivateKey(fac.generatePrivate(spec).asInstanceOf[ECPrivateKey])
   }
 
   def keyPairGenerator(keySize: Int): KeyPairGenerator = generator
@@ -219,7 +219,9 @@ protected [crypt] class ECPrime256Crypto extends TufCrypto[EcPrime256KeyType.typ
   override def generateKeyPair(keySize: Int): TufKeyPair = {
     require(validKeySize(keySize), "Key size too small")
     val keyPair = keyPairGenerator(keySize).generateKeyPair()
-    EcPrime256TufKeyPair(EcPrime256TufKey(keyPair.getPublic), EcPrime256TufPrivateKey(keyPair.getPrivate))
+    val pub = keyPair.getPublic.asInstanceOf[ECPublicKey]
+    val priv = keyPair.getPrivate.asInstanceOf[ECPrivateKey]
+    EcPrime256TufKeyPair(EcPrime256TufKey(pub), EcPrime256TufPrivateKey(priv))
   }
 }
 

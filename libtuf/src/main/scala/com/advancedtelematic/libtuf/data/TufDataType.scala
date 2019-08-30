@@ -1,6 +1,6 @@
 package com.advancedtelematic.libtuf.data
 
-import java.security.interfaces.{RSAPrivateKey, RSAPublicKey}
+import java.security.interfaces.{ECPrivateKey, ECPublicKey, RSAPrivateKey, RSAPublicKey}
 import java.security.{PrivateKey, PublicKey}
 import java.util.UUID
 
@@ -164,7 +164,7 @@ object TufDataType {
   case class Ed25519TufKey(override val keyval: PublicKey) extends TufKey {
     override def keytype: KeyType = Ed25519KeyType
   }
-  case class EcPrime256TufKey(override val keyval: PublicKey) extends TufKey {
+  case class EcPrime256TufKey(override val keyval: ECPublicKey) extends TufKey {
     override def keytype: KeyType = EcPrime256KeyType
   }
 
@@ -178,7 +178,7 @@ object TufDataType {
   case class Ed25519TufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey {
     override def keytype: KeyType = Ed25519KeyType
   }
-  case class EcPrime256TufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey {
+  case class EcPrime256TufPrivateKey(override val keyval: ECPrivateKey) extends TufPrivateKey {
     override def keytype: KeyType = EcPrime256KeyType
   }
 
