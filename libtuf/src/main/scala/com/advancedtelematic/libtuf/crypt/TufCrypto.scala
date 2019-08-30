@@ -224,7 +224,7 @@ protected [crypt] class ECPrime256Crypto extends TufCrypto[EcPrime256KeyType.typ
 }
 
 protected [crypt] class ED25519Crypto extends TufCrypto[Ed25519KeyType.type] {
-  private lazy val keyPairGenerator = new net.i2p.crypto.eddsa.KeyPairGenerator()
+  private lazy val edDSAKeyPairGenerator = new net.i2p.crypto.eddsa.KeyPairGenerator()
 
   override def toKeyPair(publicKey: Ed25519TufKey, privateKey: Ed25519TufPrivateKey): TufKeyPair =
     Ed25519TufKeyPair(publicKey, privateKey)
@@ -244,21 +244,13 @@ protected [crypt] class ED25519Crypto extends TufCrypto[Ed25519KeyType.type] {
   }
 
   override def encode(keyVal: Ed25519TufKey): String = {
-    if (keyVal.keyval.isInstanceOf[EdDSAPublicKey]) {
-      return Utils.bytesToHex(keyVal.keyval.asInstanceOf[EdDSAPublicKey].getAbyte)
-    } else {
-      return Utils.bytesToHex(keyVal.keyval.getEncoded)
-    }
+    Utils.bytesToHex(keyVal.keyval.getAbyte)
   }
 
   override def encode(keyVal: Ed25519TufPrivateKey): String = {
-    if (keyVal.keyval.isInstanceOf[EdDSAPrivateKey]) {
-      val seed = Utils.bytesToHex(keyVal.keyval.asInstanceOf[EdDSAPrivateKey].getSeed)
-      val pub_key = Utils.bytesToHex(keyVal.keyval.asInstanceOf[EdDSAPrivateKey].getAbyte)
-      return seed + pub_key
-    } else {
-      return Utils.bytesToHex(keyVal.keyval.getEncoded)
-    }
+    val seed = Utils.bytesToHex(keyVal.keyval.getSeed)
+    val pub_key = Utils.bytesToHex(keyVal.keyval.getAbyte)
+    seed + pub_key
   }
 
   override def signer: security.Signature = {
@@ -274,8 +266,11 @@ protected [crypt] class ED25519Crypto extends TufCrypto[Ed25519KeyType.type] {
 
   override def generateKeyPair(keySize: Int): TufKeyPair = {
     require(validKeySize(keySize), "Key size too small")
-    val keyPair = keyPairGenerator.generateKeyPair()
-    Ed25519TufKeyPair(Ed25519TufKey(keyPair.getPublic), Ed25519TufPrivateKey(keyPair.getPrivate))
+
+    val keyPair = edDSAKeyPairGenerator.generateKeyPair()
+    val pub = keyPair.getPublic.asInstanceOf[EdDSAPublicKey]
+    val priv = keyPair.getPrivate.asInstanceOf[EdDSAPrivateKey]
+    Ed25519TufKeyPair(Ed25519TufKey(pub), Ed25519TufPrivateKey(priv))
   }
 }
 
