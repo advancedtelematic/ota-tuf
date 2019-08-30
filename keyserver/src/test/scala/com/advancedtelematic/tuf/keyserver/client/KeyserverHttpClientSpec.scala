@@ -7,12 +7,12 @@ import com.advancedtelematic.libats.http.tracing.NullServerRequestTracing
 import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519TufKey, JsonSignedPayload, KeyId, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
+import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload}
+
 import com.advancedtelematic.libtuf_server.keyserver.{KeyserverClient, KeyserverHttpClient}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
 import com.advancedtelematic.tuf.util._
-import eu.timepit.refined.refineV
 import io.circe.Json
 import io.circe.syntax._
 import org.scalatest.concurrent.PatienceConfiguration
@@ -66,18 +66,13 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
   }
 
   def manipulateSignedRsaKey(payload: SignedPayload[RootRole]): SignedPayload[RootRole] = {
-    val kid: KeyId = refineV[ValidKeyId]("0" * 64).right.get
-    // change type of one of the RSA keys to Ed25519:
-    val key = Ed25519TufKey(payload.signed.keys.values.head.keyval)
-    val signedCopy = payload.signed.copy(keys = payload.signed.keys.updated(kid, key))
-    payload.updated(signed = signedCopy)
-  }
+    val keyObject = payload.json.hcursor.downField("keys")
+    val json = keyObject.downField(keyObject.keys.get.head).downField("keytype").withFocus(_.mapString {
+      case "RSA" => "ED25519"
+      case _ => "RSA"
+    }).top.get
 
-  def manipulateSignedKey(payload: SignedPayload[RootRole], keyType: KeyType): SignedPayload[RootRole] = {
-    val kid: KeyId = refineV[ValidKeyId]("0" * 64).right.get
-    val key = Ed25519TufKey(payload.signed.keys.values.head.keyval)
-    val signedCopy = payload.signed.copy(keys = payload.signed.keys.updated(kid, key))
-    payload.updated(signed = signedCopy)
+    new SignedPayload[RootRole](payload.signatures, payload.signed, json)
   }
 
   keyTypeTest("creates a root") { keyType =>
