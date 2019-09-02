@@ -2,7 +2,7 @@ package com.advancedtelematic.libtuf.data
 
 import cats.data.Validated.Valid
 import com.advancedtelematic.libtuf.crypt.TufCrypto
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, SignedPayload}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519TufKey, Ed25519TufKeyPair, Ed25519TufPrivateKey, KeyType, SignedPayload}
 import io.circe.Json
 
 class TufCryptoSpec extends LibtufSpec {
@@ -28,5 +28,16 @@ class TufCryptoSpec extends LibtufSpec {
     val keyMap = List(key01.pubkey, key02.pubkey).map(k => k.id -> k).toMap
 
     TufCrypto.payloadSignatureIsValid(keyMap, threshold = 2, signedPayload) shouldBe a[Valid[_]]
+  }
+
+  test("Ed25519 encoding/decoding") {
+    import TufCrypto.ed25519Crypto._
+
+    val keyPair = generateKeyPair().asInstanceOf[Ed25519TufKeyPair]
+    val priv = keyPair.privkey
+    val pub = keyPair.pubkey
+
+    parsePublic(encode(pub)).get shouldBe pub
+    parsePrivate(encode(priv)).get shouldBe priv
   }
 }

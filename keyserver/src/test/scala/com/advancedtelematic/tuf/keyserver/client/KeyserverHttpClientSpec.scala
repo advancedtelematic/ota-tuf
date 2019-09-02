@@ -7,7 +7,7 @@ import com.advancedtelematic.libats.http.tracing.NullServerRequestTracing
 import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519TufKey, JsonSignedPayload, KeyId, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
+import com.advancedtelematic.libtuf.data.TufDataType.{EcPrime256TufKey, Ed25519TufKey, JsonSignedPayload, KeyId, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
 import com.advancedtelematic.libtuf_server.keyserver.{KeyserverClient, KeyserverHttpClient}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
 import com.advancedtelematic.tuf.keyserver.db.KeyGenRequestSupport
@@ -68,14 +68,7 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
   def manipulateSignedRsaKey(payload: SignedPayload[RootRole]): SignedPayload[RootRole] = {
     val kid: KeyId = refineV[ValidKeyId]("0" * 64).right.get
     // change type of one of the RSA keys to Ed25519:
-    val key = Ed25519TufKey(payload.signed.keys.values.head.keyval)
-    val signedCopy = payload.signed.copy(keys = payload.signed.keys.updated(kid, key))
-    payload.updated(signed = signedCopy)
-  }
-
-  def manipulateSignedKey(payload: SignedPayload[RootRole], keyType: KeyType): SignedPayload[RootRole] = {
-    val kid: KeyId = refineV[ValidKeyId]("0" * 64).right.get
-    val key = Ed25519TufKey(payload.signed.keys.values.head.keyval)
+    val key = EcPrime256TufKey(payload.signed.keys.values.head.keyval)
     val signedCopy = payload.signed.copy(keys = payload.signed.keys.updated(kid, key))
     payload.updated(signed = signedCopy)
   }

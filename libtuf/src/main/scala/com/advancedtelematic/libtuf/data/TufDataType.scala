@@ -12,6 +12,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.SignatureMe
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.syntax._
 import io.circe.{Encoder, Json}
+import net.i2p.crypto.eddsa.{EdDSAPrivateKey, EdDSAPublicKey}
 
 
 object TufDataType {
@@ -160,7 +161,7 @@ object TufDataType {
   case class RSATufKey(override val keyval: PublicKey) extends TufKey {
     override def keytype: KeyType = RsaKeyType
   }
-  case class Ed25519TufKey(override val keyval: PublicKey) extends TufKey {
+  case class Ed25519TufKey(override val keyval: EdDSAPublicKey) extends TufKey {
     override def keytype: KeyType = Ed25519KeyType
   }
   case class EcPrime256TufKey(override val keyval: PublicKey) extends TufKey {
@@ -174,7 +175,7 @@ object TufDataType {
   case class RSATufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey {
     override def keytype: KeyType = RsaKeyType
   }
-  case class Ed25519TufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey {
+  case class Ed25519TufPrivateKey(override val keyval: EdDSAPrivateKey) extends TufPrivateKey {
     override def keytype: KeyType = Ed25519KeyType
   }
   case class EcPrime256TufPrivateKey(override val keyval: PrivateKey) extends TufPrivateKey {
