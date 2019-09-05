@@ -61,7 +61,7 @@ lazy val commonSettings = Seq(
   resolvers += "ATS Releases" at "http://nexus.advancedtelematic.com:8081/content/repositories/releases",
   resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content/repositories/snapshots",
   resolvers += "version99 Empty loggers" at "http://version99.qos.ch",
-  libatsVersion := "0.3.0-26-g5ce86ad",
+  libatsVersion := "0.3.0-38-g6acedb6",
   licenses += ("MPL-2.0", url("http://mozilla.org/MPL/2.0/")),
   buildInfoOptions += BuildInfoOption.ToMap,
   buildInfoOptions += BuildInfoOption.BuildTime,
@@ -117,7 +117,8 @@ lazy val cli = (project in file("cli"))
     topLevelDirectory := Some("garage-sign"),
     executableScriptName := "garage-sign",
     mappings in Universal += (file("cli/LICENSE") -> "docs/LICENSE"),
-    s3Bucket := "ats-tuf-cli-releases"
+    s3Bucket := "ats-tuf-cli-releases",
+    libraryDependencies += "com.typesafe" % "config" % "1.3.4" % Test
   )
   .dependsOn(libtuf)
 

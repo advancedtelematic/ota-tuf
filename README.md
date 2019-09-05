@@ -31,6 +31,16 @@ vault, see above.
 
     sbt it:test
 
+The `cli` module includes a test that requires an nginx to run with the proper TLS certificates, which match the certificates inside a zip file used for the test.
+
+The nginx certificates can be renewed and copied to the correct places with the following command:
+
+    cd cli/src/test/resources/mtls-openssl && make clean all
+    
+This will require the certificates in the test zip file to be updated, which can be done with:
+
+    cd cli/src/test/resources/mtls-openssl && make update-credentials.zip
+
 ## Continuous Integration
 
 The `deploy` directory includes scripts required for CI jobs.

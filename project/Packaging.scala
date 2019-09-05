@@ -4,6 +4,7 @@ import sbt.Keys._
 import sbt._
 import com.typesafe.sbt.SbtNativePackager.Docker
 import DockerPlugin.autoImport._
+import com.typesafe.sbt.SbtGit.git
 import com.typesafe.sbt.SbtNativePackager.autoImport._
 import com.typesafe.sbt.packager.linux.LinuxPlugin.autoImport._
 
@@ -14,7 +15,9 @@ object Packaging {
 
       packageName in Docker := distPackageName,
 
-      dockerUpdateLatest := true,
+      dockerUpdateLatest := false,
+
+      dockerAliases ++= Seq(dockerAlias.value.withTag(git.gitHeadCommit.value)),
 
       defaultLinuxInstallLocation in Docker := s"/opt/${moduleName.value}",
 
@@ -31,5 +34,3 @@ object Packaging {
     )
   }
 }
-
-

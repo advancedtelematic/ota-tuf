@@ -75,7 +75,7 @@ object Boot extends BootApp
   implicit val tracing = Tracing.fromConfig(config, "reposerver")
 
   val routes: Route =
-    (versionHeaders(version) & logResponseMetrics(projectName) & logRequestResult(("reposerver", Logging.InfoLevel))) {
+    (versionHeaders(version) & logResponseMetrics(projectName) & logRequestResult(("reposerver", Logging.DebugLevel))) {
       tracing.traceRequests { implicit requestTracing =>
         new TufReposerverRoutes(keyStoreClient, NamespaceValidation.withDatabase, targetStore,
           messageBusPublisher,
