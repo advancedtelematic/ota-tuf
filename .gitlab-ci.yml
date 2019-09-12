@@ -3,40 +3,26 @@ stages:
   - pages
   - veracode scan
 
-
 veracode scan:
   # prepare and submit for static code analysis
   stage: veracode scan
   only:
     variables:
       - $VERACODE_API_ID
-  image: advancedtelematic/gitlab-jobs:0.1.0
-  before_script:
-    # The latest wrapper version can be found in https://repo1.maven.org/maven2/com/veracode/vosp/api/wrappers/vosp-api-wrappers-java/
-    - wget -q -O veracode-wrapper.jar https://repo1.maven.org/maven2/com/veracode/vosp/api/wrappers/vosp-api-wrappers-java/${VERACODE_WRAPPER_VERSION}/vosp-api-wrappers-java-${VERACODE_WRAPPER_VERSION}.jar
-    - ./sbt package
-    - mkdir -p package
-    - mv ota-tuf/target/scala-*/ota_tuf_*.jar ./package/ota_tuf.jar
-    - mv libtuf/target/scala-*/libtuf_*.jar ./package/libtuf.jar
-    - mv libtuf-server/target/scala-*/libtuf-server_*.jar ./package/libtuf-server.jar
-    - mv cli/target/scala-*/cli_*.jar ./package/cli.jar
-    - mv keyserver/target/scala-*/keyserver_*.jar ./package/keyserver.jar
-    - mv reposerver/target/scala-*/reposerver_*.jar ./package/reposerver.jar
-    - zip -r package package
+  image: advancedtelematic/veracode:0.1.0
   script:
-    - java -jar veracode-wrapper.jar -vid ${VERACODE_API_ID} -vkey ${VERACODE_API_KEY}
-      -action UploadAndScan -appname "OTA Backend - ota-tuf" -createprofile true -autoscan true
-      -filepath package.zip -version "job ${CI_JOB_ID} in pipeline ${CI_PIPELINE_ID} for ${CI_PROJECT_NAME} repo"
+    - ./sbt package
+    - run-veracode.sh
   artifacts:
     paths:
-      - package.zip
+      - /tmp/package.zip
 
 deps scan:
   # perform dependencies CVE analysis
   stage: deps scan
   only:
     - schedules
-  image: advancedtelematic/gitlab-jobs:0.1.0
+  image: advancedtelematic/gitlab-jobs:0.2.0
   script:
     - ./sbt dependencyCheckAggregate
     - mv target/scala-*/dependency-check-report.html ./depchk.html
