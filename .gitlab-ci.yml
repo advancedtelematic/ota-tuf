@@ -100,3 +100,31 @@ trigger dev keyserver deploy:
   trigger:
     project: OLP/EDGE/OTA/infra/deployment-descriptors
     branch: master
+
+
+trigger sit keyserver deploy:
+  stage: trigger deploy
+  only:
+    - deploy/sit
+  variables:
+    ENV: "sit"
+    NEW_TAG: $CI_COMMIT_SHA
+    SERVICE: tuf-keyserver
+    CREATE_COMMIT: "true"
+  trigger:
+    project: OLP/EDGE/OTA/infra/deployment-descriptors
+    branch: master
+
+
+trigger sit reposerver deploy:
+  stage: trigger deploy
+  only:
+    - deploy/sit
+  variables:
+    ENV: "sit"
+    NEW_TAG: $CI_COMMIT_SHA
+    SERVICE: tuf-reposerver
+    CREATE_COMMIT: "true"
+  trigger:
+    project: OLP/EDGE/OTA/infra/deployment-descriptors
+    branch: master
