@@ -10,10 +10,10 @@ import com.advancedtelematic.libats.http.LogDirectives._
 import com.advancedtelematic.libats.http.VersionDirectives._
 import com.advancedtelematic.libats.http.monitoring.{BootMetrics, MetricsSupport}
 import com.advancedtelematic.libats.http.tracing.Tracing
-import com.advancedtelematic.libats.slick.db.{DatabaseConfig, SlickEncryptionConfig}
+import com.advancedtelematic.libats.slick.db.{CheckMigrations, DatabaseConfig, SlickEncryptionConfig}
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
-import com.advancedtelematic.metrics.{AkkaHttpRequestMetrics, InfluxdbMetricsReporterSupport}
+import com.advancedtelematic.metrics.AkkaHttpRequestMetrics
 import com.advancedtelematic.tuf.keyserver.http.TufKeyserverRoutes
 import com.typesafe.config.ConfigFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider
@@ -34,8 +34,8 @@ object Boot extends BootApp
   with MetricsSupport
   with BootMetrics
   with DatabaseMetrics
+  with CheckMigrations
   with SlickEncryptionConfig
-  with InfluxdbMetricsReporterSupport
   with AkkaHttpRequestMetrics
   with PrometheusMetricsSupport {
 
@@ -48,7 +48,7 @@ object Boot extends BootApp
   val tracing = Tracing.fromConfig(config, projectName)
 
   val routes: Route =
-    (versionHeaders(version) & requestMetrics(metricRegistry) & logResponseMetrics(projectName) & logRequestResult(("tuf-keyserver", Logging.InfoLevel))) {
+    (versionHeaders(version) & requestMetrics(metricRegistry) & logResponseMetrics(projectName) & logRequestResult(("tuf-keyserver", Logging.DebugLevel))) {
       tracing.traceRequests { _ =>
         new TufKeyserverRoutes(metricsRoutes = prometheusMetricsRoutes).routes
       }

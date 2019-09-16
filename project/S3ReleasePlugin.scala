@@ -12,10 +12,12 @@ import org.apache.commons.compress.archivers.tar.{TarArchiveEntry, TarArchiveOut
 import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream
 import org.apache.commons.compress.utils.IOUtils
 import sbt.Keys._
-import sbt.{AutoPlugin, InputKey, Logger, SettingKey, TaskKey}
+import sbt.{AutoPlugin, Def, InputKey, Logger, SettingKey, TaskKey}
+import sbt._
 
 import scala.collection.JavaConversions._
 import scala.collection.immutable.HashSet
+import scala.util.Try
 
 object S3ReleasePlugin extends AutoPlugin {
   override lazy val projectSettings = s3ReleaseSettings
@@ -37,13 +39,21 @@ object S3ReleasePlugin extends AutoPlugin {
 
   import sbt.complete.DefaultParsers._
 
+  private def logTaskExceptions[T](log: Logger)(task: => T): T = try {
+    task
+  } catch  {
+    case ex: Throwable =>
+      log.error(s"Could not run task: ${ex.getLocalizedMessage}")
+      throw ex
+  }
+
   val s3ReleaseSettings = Seq (
     s3AccessKey := readEnv("AWS_ACCESS_KEY_ID"),
     s3SecretKey := readEnv("AWS_SECRET_ACCESS_KEY"),
     s3Bucket := readEnv("AWS_BUCKET_ID"),
     s3Region := readEnv("AWS_REGION", Option(Regions.EU_CENTRAL_1.getName)),
     s3Credentials := S3Credentials(s3AccessKey.value, s3SecretKey.value, s3Bucket.value, Regions.fromName(s3Region.value)),
-    s3DepsRelease := {
+    s3DepsRelease := logTaskExceptions(streams.value.log) {
       import sbt._
       val log = streams.value.log
       val graph = (moduleGraph in Compile in thisProject).value
@@ -53,12 +63,11 @@ object S3ReleasePlugin extends AutoPlugin {
       val versionName = s"${moduleName.value}-${version.value}"
       depsUpload.uploadAll(graph, versionName)
     },
-    s3UploadTask := {
+    s3UploadTask := logTaskExceptions(streams.value.log) {
       val force = (token(Space) ~> token("force", "force release overwriting")).?.parsed.isDefined
       val log = streams.value.log
       val upload = new S3Upload(log, s3Credentials.value)
       val releaseUpload = new S3ReleaseUpload(log, upload)
-
       releaseUpload.uploadLatest(force)
     }
   )
@@ -140,7 +149,8 @@ class S3Upload(log: Logger, credentials: S3Credentials) {
 
     if(exists && !force) {
       val url = s3Client.getUrl(credentials.bucketId, fileName)
-      throw new Exception(s"release already exists in s3: $url")
+      log.err(s"release already exists in s3: $url")
+      throw new RuntimeException(s"release already exists in s3: $url")
     } else {
       if(force && exists)
         log.warn(s"Overwriting release $fileName")
@@ -152,7 +162,6 @@ class S3Upload(log: Logger, credentials: S3Credentials) {
     val url = s3Client.getUrl(credentials.bucketId, fileName)
     log.info(s"Url for $fileName release is $url")
   }
-
 }
 
 class S3ReleaseUpload(log: Logger, s3upload: S3Upload) {
