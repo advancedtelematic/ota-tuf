@@ -18,6 +18,7 @@ class TufReposerverRoutes(keyserverClient: KeyserverClient,
                           namespaceValidation: NamespaceValidation,
                           targetStore: TargetStore,
                           messageBusPublisher: MessageBusPublisher,
+                          metricsRoutes: Route = Directives.reject,
                           dependencyChecks: Seq[HealthCheck] = Seq.empty)
                          (implicit val db: Database, val ec: ExecutionContext, mat: Materializer) extends VersionInfo {
 
@@ -28,7 +29,7 @@ class TufReposerverRoutes(keyserverClient: KeyserverClient,
       ErrorHandler.handleErrors {
         pathPrefix("api" / "v1") {
           new RepoResource(keyserverClient, namespaceValidation, targetStore, new TufTargetsPublisher(messageBusPublisher)).route
-        } ~ DbHealthResource(versionMap, dependencies = dependencyChecks).route
+        } ~ DbHealthResource(versionMap, dependencies = dependencyChecks).route ~ metricsRoutes
       }
     }
 }
