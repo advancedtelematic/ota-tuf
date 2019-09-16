@@ -79,8 +79,9 @@ object Boot extends BootApp
       tracing.traceRequests { implicit requestTracing =>
         new TufReposerverRoutes(keyStoreClient, NamespaceValidation.withDatabase, targetStore,
           messageBusPublisher,
+          prometheusMetricsRoutes,
           Seq(keyserverHealthCheck)).routes
-      } ~ prometheusMetricsRoutes
+      }
     }
 
   Http().bindAndHandle(routes, host, port)
