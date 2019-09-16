@@ -16,7 +16,7 @@ import com.advancedtelematic.libats.messaging.MessageBus
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverHttpClient
-import com.advancedtelematic.metrics.InfluxdbMetricsReporterSupport
+import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
 import com.advancedtelematic.tuf.reposerver.target_store._
 import com.amazonaws.regions.Regions
@@ -54,7 +54,7 @@ object Boot extends BootApp
   with BootMigrations
   with MetricsSupport
   with DatabaseMetrics
-  with InfluxdbMetricsReporterSupport {
+  with PrometheusMetricsSupport {
 
   implicit val _db = db
 
@@ -80,7 +80,7 @@ object Boot extends BootApp
         new TufReposerverRoutes(keyStoreClient, NamespaceValidation.withDatabase, targetStore,
           messageBusPublisher,
           Seq(keyserverHealthCheck)).routes
-      }
+      } ~ prometheusMetricsRoutes
     }
 
   Http().bindAndHandle(routes, host, port)
