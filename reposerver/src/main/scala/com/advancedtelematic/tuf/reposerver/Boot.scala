@@ -16,6 +16,7 @@ import com.advancedtelematic.libats.messaging.MessageBus
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverHttpClient
+import com.advancedtelematic.metrics.AkkaHttpRequestMetrics
 import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
 import com.advancedtelematic.tuf.reposerver.target_store._
@@ -54,6 +55,7 @@ object Boot extends BootApp
   with BootMigrations
   with MetricsSupport
   with DatabaseMetrics
+  with AkkaHttpRequestMetrics
   with PrometheusMetricsSupport {
 
   implicit val _db = db
@@ -75,7 +77,7 @@ object Boot extends BootApp
   implicit val tracing = Tracing.fromConfig(config, "reposerver")
 
   val routes: Route =
-    (versionHeaders(version) & logResponseMetrics(projectName) & logRequestResult(("reposerver", Logging.DebugLevel))) {
+    (versionHeaders(version) & requestMetrics(metricRegistry) & logResponseMetrics(projectName) & logRequestResult(("reposerver", Logging.DebugLevel))) {
       tracing.traceRequests { implicit requestTracing =>
         new TufReposerverRoutes(keyStoreClient, NamespaceValidation.withDatabase, targetStore,
           messageBusPublisher,

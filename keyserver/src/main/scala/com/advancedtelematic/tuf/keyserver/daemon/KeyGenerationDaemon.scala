@@ -10,6 +10,7 @@ import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig, Sl
 import com.advancedtelematic.libats.http.BootApp
 import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.slick.monitoring.{DatabaseMetrics, DbHealthResource}
+import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
 
 object KeyGenerationDaemon extends BootApp
   with Settings
@@ -18,10 +19,12 @@ object KeyGenerationDaemon extends BootApp
   with DatabaseConfig
   with MetricsSupport
   with DatabaseMetrics
+  with PrometheusMetricsSupport
   with SlickEncryptionConfig {
 
   import com.advancedtelematic.libats.http.LogDirectives._
   import com.advancedtelematic.libats.http.VersionDirectives._
+  import akka.http.scaladsl.server.Directives._
 
   implicit val _db = db
 
@@ -32,7 +35,7 @@ object KeyGenerationDaemon extends BootApp
   system.actorOf(KeyGeneratorLeader.props(), "keygen-leader")
 
   val routes: Route = (versionHeaders(version) & logResponseMetrics(projectName)) {
-    DbHealthResource(versionMap).route
+    DbHealthResource(versionMap).route ~ prometheusMetricsRoutes
   }
 
   Http().bindAndHandle(routes, host, port)
