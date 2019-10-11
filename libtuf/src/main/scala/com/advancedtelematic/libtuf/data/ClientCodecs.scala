@@ -13,8 +13,8 @@ object ClientCodecs {
   import io.circe.generic.semiauto._
   import com.advancedtelematic.libats.codecs.CirceCodecs._
 
-  implicit val targetFormatEncoder: Encoder[TargetFormat] = Encoder.enumEncoder(TargetFormat)
-  implicit val targetFormatDecoder: Decoder[TargetFormat] = Decoder.enumDecoder(TargetFormat)
+  implicit val targetFormatEncoder: Encoder[TargetFormat] = Encoder.encodeEnumeration(TargetFormat)
+  implicit val targetFormatDecoder: Decoder[TargetFormat] = Decoder.decodeEnumeration(TargetFormat)
 
   implicit val roleTypeKeyEncoder: KeyEncoder[RoleType] = KeyEncoder.encodeKeyString.contramap[RoleType](_.toString.toLowerCase)
   implicit val roleTypeKeyDecoder: KeyDecoder[RoleType] = KeyDecoder.decodeKeyString.map[RoleType](s => RoleType.withName(s.toUpperCase))

@@ -11,7 +11,7 @@ lazy val UnitTest = config("ut").extend(Test)
 lazy val commonConfigs = Seq(ItTest, UnitTest)
 
 lazy val commonDeps = libraryDependencies ++= {
-  val scalaTestV = "3.0.0"
+  val scalaTestV = "3.0.8"
   lazy val libatsV = libatsVersion.value
 
   Seq(
@@ -22,11 +22,11 @@ lazy val commonDeps = libraryDependencies ++= {
 }
 
 lazy val serverDependencies = libraryDependencies ++= {
-  lazy val akkaV = "2.5.20"
-  lazy val akkaHttpV = "10.1.7"
+  lazy val akkaV = "2.5.25"
+  lazy val akkaHttpV = "10.1.10"
   lazy val libatsV = libatsVersion.value
   lazy val slickV = "3.2.0"
-  lazy val catsV = "1.5.0"
+  lazy val catsV = "2.0.0"
 
   Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaV,
@@ -45,7 +45,7 @@ lazy val serverDependencies = libraryDependencies ++= {
     "com.advancedtelematic" %% "libats-logging" % libatsV,
     "com.typesafe.slick" %% "slick" % slickV,
     "com.typesafe.slick" %% "slick-hikaricp" % slickV,
-    "org.mariadb.jdbc" % "mariadb-java-client" % "2.2.5",
+    "org.mariadb.jdbc" % "mariadb-java-client" % "2.4.4",
 
     "org.typelevel" %% "cats-core" % catsV withSources(),
     "org.typelevel" %% "cats-kernel" % catsV,
@@ -55,13 +55,13 @@ lazy val serverDependencies = libraryDependencies ++= {
 
 lazy val commonSettings = Seq(
   organization := "com.advancedtelematic",
-  scalaVersion := "2.12.4",
+  scalaVersion := "2.12.10",
   scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8", "-Xexperimental", "-Ypartial-unification"),
   scalacOptions in (Compile, console) ~= (_.filterNot(_ == "-Ywarn-unused-import")),
   resolvers += "ATS Releases" at "http://nexus.advancedtelematic.com:8081/content/repositories/releases",
   resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content/repositories/snapshots",
   resolvers += "version99 Empty loggers" at "http://version99.qos.ch",
-  libatsVersion := "0.3.0-38-g6acedb6",
+  libatsVersion := "0.3.0-42-g1ccbae7",
   licenses += ("MPL-2.0", url("http://mozilla.org/MPL/2.0/")),
   buildInfoOptions += BuildInfoOption.ToMap,
   buildInfoOptions += BuildInfoOption.BuildTime,
@@ -123,7 +123,7 @@ lazy val cli = (project in file("cli"))
   .dependsOn(libtuf)
 
 lazy val ota_tuf = (project in file("."))
-  .settings(scalaVersion := "2.12.4")
+  .settings(scalaVersion := "2.12.10")
   .settings(Publish.disable)
   .settings(Release.settings(libtuf, libtuf_server, keyserver, reposerver))
   .aggregate(libtuf_server, libtuf, keyserver, reposerver, cli)
