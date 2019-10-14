@@ -7,17 +7,16 @@ import com.amazonaws.auth.{AWSCredentials, AWSCredentialsProvider}
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.s3.AmazonS3ClientBuilder
 import net.virtualvoid.sbt.graph.DependencyGraphPlugin.autoImport._
-import net.virtualvoid.sbt.graph.{Module, ModuleGraph, ModuleId}
+import net.virtualvoid.sbt.graph.{ModuleGraph, ModuleId}
 import org.apache.commons.compress.archivers.tar.{TarArchiveEntry, TarArchiveOutputStream}
 import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream
 import org.apache.commons.compress.utils.IOUtils
 import sbt.Keys._
-import sbt.{AutoPlugin, Def, InputKey, Logger, SettingKey, TaskKey}
+import sbt.{AutoPlugin, InputKey, Logger, SettingKey, TaskKey}
 import sbt._
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.immutable.HashSet
-import scala.util.Try
 
 object S3ReleasePlugin extends AutoPlugin {
   override lazy val projectSettings = s3ReleaseSettings
@@ -179,6 +178,7 @@ class S3ReleaseUpload(log: Logger, s3upload: S3Upload) {
     val allReleases =
       Files.list(Paths.get("cli/target/universal/"))
         .iterator()
+        .asScala
         .filter(matcher.matches)
         .toVector
         .sortBy(_.getFileName.toString)(Ordering[String].reverse)
