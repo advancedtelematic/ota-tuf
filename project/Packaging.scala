@@ -15,7 +15,7 @@ object Packaging {
 
       packageName in Docker := distPackageName,
 
-      dockerUpdateLatest := false,
+      dockerUpdateLatest := true,
 
       dockerAliases ++= Seq(dockerAlias.value.withTag(git.gitHeadCommit.value)),
 
