@@ -1,10 +1,13 @@
 package com.advancedtelematic.libtuf.crypt
 
-import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, SignedPayload, TufKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{SignedPayload, TufKey}
 import io.circe.Encoder
+import org.slf4j.LoggerFactory
 
 
 object SignedPayloadSignatureOps  {
+
+  private val _log = LoggerFactory.getLogger(this.getClass)
 
   implicit class SignedPayloadSignatureOps[T : Encoder](value: SignedPayload[T]) {
     def isValidFor(tufKey: TufKey): Boolean =

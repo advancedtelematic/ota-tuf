@@ -3,6 +3,7 @@ package com.advancedtelematic.libtuf_server.keyserver
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.model.Uri.Path.{Empty, Slash}
+import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{StatusCodes, _}
 import akka.stream.ActorMaterializer
 import cats.syntax.show._
@@ -30,7 +31,7 @@ object KeyserverClient {
 }
 
 trait KeyserverClient {
-  def createRoot(repoId: RepoId, keyType: KeyType = KeyType.default): Future[Json]
+  def createRoot(repoId: RepoId, keyType: KeyType = KeyType.default, forceSync: Boolean = false): Future[Json]
 
   def sign(repoId: RepoId, roleType: RoleType, payload: Json): Future[JsonSignedPayload]
 
@@ -65,11 +66,18 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
   private def apiUri(path: Path) =
     uri.withPath(Empty / "api" / "v1" ++ Slash(path))
 
-  override def createRoot(repoId: RepoId, keyType: KeyType): Future[Json] = {
+  override def createRoot(repoId: RepoId, keyType: KeyType, forceSync: Boolean): Future[Json] = {
     val entity = Json.obj("threshold" -> 1.asJson, "keyType" -> keyType.asJson)
+
     val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show))
 
-    execJsonHttp[Json, Json](req, entity) {
+    val finalReq =
+      if(forceSync)
+        req.addHeader(RawHeader("x-ats-tuf-force-sync", "keys"))
+      else
+        req
+
+    execJsonHttp[Json, Json](finalReq, entity) {
       case RemoteServiceError(_, StatusCodes.Conflict, _, _, _, _)  =>
         Future.failed(RootRoleConflict)
       case RemoteServiceError(_, StatusCodes.Locked, _, _, _, _) =>

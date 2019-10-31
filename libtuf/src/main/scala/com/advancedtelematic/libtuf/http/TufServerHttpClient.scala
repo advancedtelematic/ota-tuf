@@ -3,7 +3,6 @@ package com.advancedtelematic.libtuf.http
 import java.net.URI
 
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
-import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
@@ -12,11 +11,9 @@ import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpResponse
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleChecksumNotValid, RoleNotFound, TargetsResponse}
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
-import io.circe.Decoder
 import scalaj.http.{Http, HttpRequest}
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.reflect.ClassTag
 import scala.util.control.NoStackTrace
 
 object TufServerHttpClient {

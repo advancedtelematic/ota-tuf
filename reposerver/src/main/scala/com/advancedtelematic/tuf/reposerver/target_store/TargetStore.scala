@@ -16,12 +16,13 @@ import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetFilename}
 import com.advancedtelematic.libtuf_server.data.Messages.PackageStorageUsage
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{TargetBytes, TargetRedirect}
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api.Database
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.StorageMethod._
+import com.advancedtelematic.libtuf_server.repo.server.DataType._
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import com.advancedtelematic.tuf.reposerver.http.Errors
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -78,11 +79,11 @@ class TargetStore(roleKeyStore: KeyserverClient,
   def retrieve(repoId: RepoId, targetFilename: TargetFilename): Future[HttpResponse] = {
     targetItemRepo.findByFilename(repoId, targetFilename).flatMap { item =>
       item.storageMethod match {
-        case Managed =>
+        case StorageMethod.Managed =>
           retrieveFromManaged(repoId, targetFilename)
-        case Unmanaged if item.uri.isDefined =>
+        case StorageMethod.Unmanaged if item.uri.isDefined =>
           redirectToUnmanaged(item.uri.get)
-        case Unmanaged =>
+        case StorageMethod.Unmanaged =>
           FastFuture.failed(Errors.NoUriForUnamanagedTarget)
       }
     }
@@ -93,9 +94,9 @@ class TargetStore(roleKeyStore: KeyserverClient,
 
   def delete(item: TargetItem): Future[Unit] = {
     item.storageMethod match {
-      case Managed =>
+      case StorageMethod.Managed =>
         engine.delete(item.repoId, item.filename)
-      case Unmanaged =>
+      case StorageMethod.Unmanaged =>
         FastFuture.successful(())
     }
   }

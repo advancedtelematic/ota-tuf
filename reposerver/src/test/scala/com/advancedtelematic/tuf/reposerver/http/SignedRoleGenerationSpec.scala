@@ -7,6 +7,7 @@ import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{TimestampRole, _}
 import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, RepoId, RoleType}
+import com.advancedtelematic.libtuf_server.repo.server.RepoRoleRefresh
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util.{FakeKeyserverClient, TufReposerverSpec}
 import org.scalatest.concurrent.ScalaFutures
@@ -16,6 +17,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.ExecutionContext.Implicits
 
 
+// TODO: Should be moved to libtuf_server and tested without TufRepoProviders
 class SignedRoleGenerationSpec extends TufReposerverSpec with DatabaseSpec with SignedRoleRepositorySupport with ScalaFutures {
   override implicit val ec: ExecutionContext = Implicits.global
 
@@ -23,7 +25,8 @@ class SignedRoleGenerationSpec extends TufReposerverSpec with DatabaseSpec with 
 
   val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient
 
-  val signedRoleGeneration = new SignedRoleGeneration(fakeKeyserverClient)
+  val signedRoleGeneration = TufRepoSignedRoleGeneration(fakeKeyserverClient)
+  implicit val roleRefresh = new RepoRoleRefresh(fakeKeyserverClient, new TufRepoSignedRoleProvider(), new TufRepoTargetItemsProvider())
 
   def setupRepo(): Future[RepoId] = for {
     repoId <- FastFuture.successful(RepoId.generate())
@@ -37,9 +40,9 @@ class SignedRoleGenerationSpec extends TufReposerverSpec with DatabaseSpec with 
     val oldTimestamps = signedRoleGeneration.findRole[TimestampRole](repoId).futureValue
     val oldSnapshots = signedRoleGeneration.findRole[SnapshotRole](repoId).futureValue
 
-    signedRoleRepository.persist[SnapshotRole](oldSnapshots.copy(expiresAt = Instant.now().minusSeconds(60)), forceVersion = true).futureValue
+    signedRoleRepository.persist[SnapshotRole](repoId, oldSnapshots.copy(expiresAt = Instant.now().minusSeconds(60)), forceVersion = true).futureValue
 
-    val renewedSnapshots = signedRoleGeneration.findRole(repoId, RoleType.SNAPSHOT).futureValue
+    val renewedSnapshots = signedRoleGeneration.findRole[SnapshotRole](repoId).futureValue
     val renewedTimestampsDb = signedRoleRepository.find[TimestampRole](repoId).futureValue
     val (_, renewedSnapshotsHash) = renewedTimestampsDb.role.meta(RoleType.SNAPSHOT.metaPath).hashes.head
 
@@ -53,13 +56,13 @@ class SignedRoleGenerationSpec extends TufReposerverSpec with DatabaseSpec with 
   test("renewal of targets renews also snapshots and timestamps") {
     val repoId = setupRepo().futureValue
 
-    val oldTargets = signedRoleGeneration.findRole(repoId, RoleType.TARGETS).futureValue
-    val oldSnapshots = signedRoleGeneration.findRole(repoId, RoleType.SNAPSHOT).futureValue
-    val oldTimestamps = signedRoleGeneration.findRole(repoId, RoleType.TIMESTAMP).futureValue
+    val oldTargets = signedRoleGeneration.findRole[TargetsRole](repoId).futureValue
+    val oldSnapshots = signedRoleGeneration.findRole[SnapshotRole](repoId).futureValue
+    val oldTimestamps = signedRoleGeneration.findRole[TimestampRole](repoId).futureValue
 
-    signedRoleRepository.persist[TargetsRole](oldTargets.copy(expiresAt = Instant.now().minusSeconds(60)), forceVersion = true).futureValue
+    signedRoleRepository.persist[TargetsRole](repoId, oldTargets.copy(expiresAt = Instant.now().minusSeconds(60)), forceVersion = true).futureValue
 
-    val renewedTargets = signedRoleGeneration.findRole(repoId, RoleType.TARGETS).futureValue
+    val renewedTargets = signedRoleGeneration.findRole[TargetsRole](repoId).futureValue
     val renewedSnapshots = signedRoleRepository.find[SnapshotRole](repoId).futureValue
     val renewedTimestamps = signedRoleGeneration.findRole[TimestampRole](repoId).futureValue
     val (_, renewedSnapshotsHash) = renewedTimestamps.role.meta(RoleType.SNAPSHOT.metaPath).hashes.head

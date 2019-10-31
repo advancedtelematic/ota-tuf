@@ -24,6 +24,7 @@ import org.bouncycastle.jce.ECNamedCurveTable
 import org.bouncycastle.openssl.jcajce.{JcaPEMKeyConverter, JcaPEMWriter}
 import org.bouncycastle.openssl.{PEMKeyPair, PEMParser}
 import org.bouncycastle.util.encoders.{Base64, Hex}
+import org.slf4j.LoggerFactory
 
 import scala.util.Try
 import scala.util.control.NoStackTrace
@@ -74,6 +75,8 @@ trait TufCrypto[T <: KeyType] {
 object TufCrypto {
   import SignedPayloadSignatureOps._
 
+  private val _log = LoggerFactory.getLogger(this.getClass)
+
   // TODO: Never used
   case class SignatureMethodMismatch(fromKey: SignatureMethod, fromSig: SignatureMethod)
       extends Exception(s"SignatureMethod mismatch, The key is for $fromKey but the signature is for $fromSig")
@@ -109,10 +112,16 @@ object TufCrypto {
       case SignatureMethod.ED25519 ⇒ ed25519Crypto.signer
       case other ⇒ throw new IllegalArgumentException(s"Unsupported signature method: $other")
     }
-    val decodedSig = Base64.decode(signature.sig.value)
-    signer.initVerify(publicKey.keyval)
-    signer.update(data)
-    signer.verify(decodedSig)
+    try {
+      val decodedSig = Base64.decode(signature.sig.value)
+      signer.initVerify(publicKey.keyval)
+      signer.update(data)
+      signer.verify(decodedSig)
+    } catch {
+      case ex: InvalidKeyException =>
+        _log.debug(s"invalid signature for key ${publicKey.id}", ex)
+        false
+    }
   }
 
   def isValid(signature: ClientSignature, publicKey: TufKey, value: Json): Boolean = {

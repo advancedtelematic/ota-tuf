@@ -8,7 +8,8 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, Delegation, MetaItem, MetaPath, TargetsRole, ValidMetaPath}
 import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, SignedPayload}
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.SignedRole
+import com.advancedtelematic.libtuf_server.repo.server.DataType.SignedRole
+import com.advancedtelematic.libtuf_server.repo.server.SignedRoleGeneration
 import com.advancedtelematic.tuf.reposerver.db.{DelegationRepositorySupport, SignedRoleRepositorySupport}
 import com.advancedtelematic.tuf.reposerver.http._
 import slick.jdbc.MySQLProfile.api._
@@ -23,11 +24,11 @@ class SignedRoleDelegationsFind()(implicit val db: Database, val ec: ExecutionCo
   import com.advancedtelematic.libtuf.data.TufCodecs._
   import io.circe.syntax._
 
-  def findSignedTargetRoleDelegations(targetRole: SignedRole[TargetsRole]): Future[Map[MetaPath, MetaItem]] = {
+  def findSignedTargetRoleDelegations(repoId: RepoId, targetRole: SignedRole[TargetsRole]): Future[Map[MetaPath, MetaItem]] = {
     val delegatedRoleNames = targetRole.role.delegations.map(_.roles.map(_.name)).getOrElse(List.empty)
     val delegationsF =
       delegatedRoleNames
-        .map { name => delegationsRepo.find(targetRole.repoId, name).map((name, _)) }
+        .map { name => delegationsRepo.find(repoId, name).map((name, _)) }
         .sequence
         .recover { case Errors.DelegationNotFound => List.empty }
 

@@ -11,6 +11,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import com.advancedtelematic.libtuf.data.RootRoleValidation
 import com.advancedtelematic.libtuf.data.TufDataType._
+import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.KeyGenRequestStatus.KeyGenRequestStatus
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.tuf.keyserver.db._
 import com.advancedtelematic.tuf.keyserver.http._
@@ -130,13 +131,12 @@ class KeyGenerationRequests()
 
   private val DEFAULT_ROLES = RoleType.ALL
 
-  def createDefaultGenRequest(repoId: RepoId, threshold: Int, keyType: KeyType): Future[Seq[KeyGenId]] = {
+  def createDefaultGenRequest(repoId: RepoId, threshold: Int, keyType: KeyType, initStatus: KeyGenRequestStatus): Future[Seq[KeyGenRequest]] = {
     val reqs = DEFAULT_ROLES.map { roleType =>
-      KeyGenRequest(KeyGenId.generate(), repoId, KeyGenRequestStatus.REQUESTED, roleType, keyType.crypto.defaultKeySize, keyType,
-        threshold)
+      KeyGenRequest(KeyGenId.generate(), repoId, initStatus, roleType, keyType.crypto.defaultKeySize, keyType, threshold)
     }
 
-    keyGenRepo.persistAll(reqs).map(_.map(_.id))
+    keyGenRepo.persistAll(reqs)
   }
 
   def forceRetry(repoId: RepoId): Future[Seq[KeyGenId]] = {
