@@ -3,9 +3,10 @@ package com.advancedtelematic.libtuf.data
 import cats.syntax.either._
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.{Delegation, TargetsRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{Delegation, TargetCustom, TargetsRole}
+import com.advancedtelematic.libtuf.data.TufDataType.TargetName
 import io.circe.syntax._
-import io.circe.{DecodingFailure, parser => circeParser}
+import io.circe.{DecodingFailure, Json, ParsingFailure, parser => circeParser}
 import org.scalatest.concurrent.ScalaFutures
 
 class TufClientCodecsSpec extends LibtufSpec with ScalaFutures  {
@@ -151,5 +152,28 @@ class TufClientCodecsSpec extends LibtufSpec with ScalaFutures  {
     val targets = result.flatMap(_.as[TargetsRole]).valueOr(throw _)
 
     targets.asJson.canonical shouldBe result.valueOr(throw _).canonical
+  }
+
+  test("lossless TargetCustom codec") {
+    val str = """{
+                  "name" : "bananas",
+                  "version" : "0.0.1",
+                  "hardwareIds" : [
+                    "archlinux"
+                  ],
+                  "targetFormat" : "BINARY",
+                  "createdAt" : "2019-03-19T14:54:48Z",
+                  "updatedAt" : "2019-03-19T14:54:48Z",
+                  "additionalField": true
+                 }"""
+
+    val json = circeParser.parse(str).right.get
+    val targetCustom = json.as[TargetCustom].right.get
+
+    targetCustom.name shouldBe TargetName("bananas")
+    targetCustom.uri shouldBe None
+    targetCustom.proprietary shouldBe Json.obj("additionalField" -> Json.True)
+
+    targetCustom.asJson.dropNullValues shouldBe json
   }
 }

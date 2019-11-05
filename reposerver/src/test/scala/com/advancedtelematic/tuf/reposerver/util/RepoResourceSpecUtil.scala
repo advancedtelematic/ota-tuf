@@ -55,7 +55,7 @@ trait RepoResourceSpecUtil extends ResourceSpec with SignedRoleRepositorySupport
     SignedPayload(signedPayload.signatures, targetsRole, targetsRole.asJson)
   }
 
-  def createOfflineTargets(filename: TargetFilename = offlineTargetFilename, proprietary: Json = Json.Null) = {
+  def createOfflineTargets(filename: TargetFilename = offlineTargetFilename, proprietary: Json = Json.obj()) = {
     val targetCustomJson =
       TargetCustom(TargetName("name"), TargetVersion("version"), Seq.empty, TargetFormat.BINARY.some)
         .asJson
