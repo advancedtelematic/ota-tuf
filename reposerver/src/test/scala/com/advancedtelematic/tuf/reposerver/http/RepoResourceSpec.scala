@@ -980,6 +980,29 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
     }
   }
 
+  test("Uploading a TargetItem doesn't overwrite custom metadata added offline") {
+    implicit val repoId = addTargetToRepo()
+
+    val targets = createOfflineTargets(proprietary = Json.obj("proprietary" -> Json.True))
+    val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), targets, 2)
+    val jsonSignedPayload = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targetsRole.asJson).futureValue
+    val signedPayload = SignedPayload(jsonSignedPayload.signatures, targetsRole, targetsRole.asJson)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      val newJson = responseAs[JsonSignedPayload].signed
+      newJson.hcursor.downField("targets").downField("some/file/name").downField("custom").downField("proprietary")  shouldBe 'succeeded
+    }
+  }
+
   implicit class ErrorRepresentationOps(value: ErrorRepresentation) {
     def firstErrorCause: Option[String] =
       value.cause.flatMap(_.as[NonEmptyList[String]].toOption).map(_.head)
