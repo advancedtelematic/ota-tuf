@@ -1,12 +1,20 @@
 package com.advancedtelematic.libtuf.data
 
+import java.net.URI
+import java.time.Instant
+
 import com.advancedtelematic.libtuf.data.ClientDataType._
-import com.advancedtelematic.libtuf.data.TufDataType.{RoleType, TargetFormat, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RoleType, TargetFormat, TargetName, TargetVersion}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import io.circe._
 import ClientDataType.TufRole._
+import cats.data.StateT
+import io.circe.syntax._
 import cats.syntax.either._
+import cats.data.StateT
+import cats.instances.either._
+import io.circe._
+import io.circe.{ ACursor, Decoder, Json }
 
 object ClientCodecs {
   import TufCodecs._
@@ -22,14 +30,40 @@ object ClientCodecs {
   implicit val roleKeyEncoder: Encoder[RoleKeys] = deriveEncoder
   implicit val roleKeyDecoder: Decoder[RoleKeys] = deriveDecoder
 
-  implicit val targetCustomDecoder: Decoder[TargetCustom] = deriveDecoder
-  implicit val targetCustomEncoder: Encoder[TargetCustom] = deriveEncoder
 
   implicit val targetNameEncoder: Encoder[TargetName] = anyValStringEncoder
   implicit val targetNameDecoder: Decoder[TargetName] = anyValStringDecoder
 
   implicit val targetVersionEncoder: Encoder[TargetVersion] = anyValStringEncoder
   implicit val targetVersionDecoder: Decoder[TargetVersion] = anyValStringDecoder
+
+  implicit val targetCustomDecoder: Decoder[TargetCustom] = Decoder.fromState {
+    import Decoder.state.decodeField
+
+    for {
+      name <- decodeField[TargetName]("name")
+      version <- decodeField[TargetVersion]("version")
+      hardwareIds <- decodeField[Seq[HardwareIdentifier]]("hardwareIds")
+      targetFormat <- decodeField[Option[TargetFormat]]("targetFormat")
+      uri <- decodeField[Option[URI]]("uri")
+      createdAt <- decodeField[Instant]("createdAt")
+      updatedAt <- decodeField[Instant]("updatedAt")
+      proprietary <- StateT.inspectF((_: ACursor).as[Json])
+    } yield TargetCustom(name, version, hardwareIds, targetFormat, uri, createdAt, updatedAt, proprietary)
+  }
+
+  implicit val targetCustomEncoder: Encoder[TargetCustom] = (targetCustom: TargetCustom) => {
+    val main = Json.obj(
+      ("name", Json.fromString(targetCustom.name.value)),
+      ("version", Json.fromString(targetCustom.version.value)),
+      ("hardwareIds", targetCustom.hardwareIds.asJson),
+      ("targetFormat", targetCustom.targetFormat.asJson),
+      ("uri", targetCustom.uri.asJson),
+      ("createdAt", targetCustom.createdAt.asJson),
+      ("updatedAt", targetCustom.updatedAt.asJson))
+
+    targetCustom.proprietary.deepMerge(main)
+  }
 
   implicit val clientTargetItemEncoder: Encoder[ClientTargetItem] = deriveEncoder
   implicit val clientTargetItemDecoder: Decoder[ClientTargetItem] = deriveDecoder

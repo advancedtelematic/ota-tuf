@@ -14,6 +14,7 @@ import com.advancedtelematic.libtuf.data.ValidatedString.{ValidatedString, Valid
 import eu.timepit.refined.api.{Refined, Validate}
 import io.circe.{Decoder, Json}
 
+
 object ClientDataType {
   type ClientHashes = Map[HashMethod, Refined[String, ValidChecksum]]
 
@@ -21,8 +22,8 @@ object ClientDataType {
                           targetFormat: Option[TargetFormat],
                           uri: Option[URI] = None,
                           createdAt: Instant = Instant.now,
-                          updatedAt: Instant = Instant.now
-                         )
+                          updatedAt: Instant = Instant.now,
+                          proprietary: Json = Json.obj())
 
   case class ClientTargetItem(hashes: ClientHashes,
                               length: Long, custom: Option[Json]) {

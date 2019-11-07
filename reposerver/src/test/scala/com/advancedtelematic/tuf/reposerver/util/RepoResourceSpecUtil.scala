@@ -55,11 +55,12 @@ trait RepoResourceSpecUtil extends ResourceSpec with SignedRoleRepositorySupport
     SignedPayload(signedPayload.signatures, targetsRole, targetsRole.asJson)
   }
 
-  def createOfflineTargets(filename: TargetFilename = offlineTargetFilename) = {
+  def createOfflineTargets(filename: TargetFilename = offlineTargetFilename, proprietary: Json = Json.obj()) = {
     val targetCustomJson =
       TargetCustom(TargetName("name"), TargetVersion("version"), Seq.empty, TargetFormat.BINARY.some)
         .asJson
         .deepMerge(Json.obj("uri" -> Uri("https://ats.com").asJson))
+        .deepMerge(proprietary)
 
     val hashes: ClientHashes = Map(HashMethod.SHA256 -> Refined.unsafeApply("8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"))
 
