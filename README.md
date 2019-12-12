@@ -26,8 +26,7 @@ a database with the proper permissions.
 
 To run tests simply run `sbt test`.
 
-To run integration tests you will also need a running instance of
-vault, see above.
+To run integration tests:
 
     sbt it:test
 
