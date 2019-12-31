@@ -12,6 +12,7 @@ import akka.util.ByteString
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetFilename}
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{TargetRedirect, TargetRetrieveResult, TargetStoreResult}
 import com.amazonaws.auth.{AWSCredentials, AWSCredentialsProvider}
+import com.amazonaws.client.builder.AwsClientBuilder
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.s3.AmazonS3ClientBuilder
 import com.amazonaws.services.s3.model.{CannedAccessControlList, PutObjectRequest}
@@ -29,10 +30,18 @@ class S3TargetStoreEngine(credentials: S3Credentials)(implicit val system: Actor
 
   private val log = LoggerFactory.getLogger(this.getClass)
 
-  private lazy val s3client = AmazonS3ClientBuilder.standard()
-    .withCredentials(credentials)
-    .withRegion(credentials.region)
-    .build()
+  protected lazy val s3client = {
+    if(credentials.endpointUrl.length() > 0) {
+      log.info(s"Using custom S3 url: ${credentials.endpointUrl}")
+      AmazonS3ClientBuilder.standard()
+        .withCredentials(credentials)
+        .withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(credentials.endpointUrl, credentials.region.getName()))
+    } else {
+      AmazonS3ClientBuilder.standard()
+        .withCredentials(credentials)
+        .withRegion(credentials.region)
+    }
+  }.build()
 
   override def store(repoId: RepoId, filename: TargetFilename, fileData: Source[ByteString, Any]): Future[TargetStoreResult] = {
     val tempFile = File.createTempFile("s3file", ".tmp")
@@ -91,7 +100,7 @@ class S3TargetStoreEngine(credentials: S3Credentials)(implicit val system: Actor
   }
 }
 
-class S3Credentials(accessKey: String, secretKey: String, val bucketId: String, val region: Regions)
+class S3Credentials(accessKey: String, secretKey: String, val bucketId: String, val region: Regions, val endpointUrl: String)
   extends AWSCredentials with AWSCredentialsProvider {
   override def getAWSAccessKeyId: String = accessKey
 
