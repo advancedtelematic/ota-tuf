@@ -98,7 +98,6 @@ class SignedRootRolesSpec extends TufKeyserverSpec with DatabaseSpec
   }
 
   keyTypeTest("persists renewed root.json when old one expired") { keyType =>
-
     val expiredSignedRootRoles = new SignedRootRoles(Duration.ofMillis(1))
     val repoId = RepoId.generate()
     val rootKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
@@ -117,22 +116,25 @@ class SignedRootRolesSpec extends TufKeyserverSpec with DatabaseSpec
     }.futureValue
   }
 
-  keyTypeTest("fails renewing root.json when keys not online") { keyType =>
+  keyTypeTest("returns old role when when keys are not online") { keyType =>
     val expiredSignedRootRoles = new SignedRootRoles(Duration.ofMillis(1))
     val repoId = RepoId.generate()
     val rootKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
       repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType.crypto.defaultKeySize, keyType)
 
-    async {
-      await(keyGenRepo.persist(rootKeyGenRequest))
-      await(keyGenerationOp(rootKeyGenRequest))
-      val role = await(expiredSignedRootRoles.findFreshAndPersist(repoId))
+    val rootRole = for {
+      _ <- keyGenRepo.persist(rootKeyGenRequest)
+      _ <- keyGenerationOp(rootKeyGenRequest)
+      role <- expiredSignedRootRoles.findFreshAndPersist(repoId)
+    } yield role
 
-      val keyIds = role.signed.roleKeys(RoleType.ROOT).map(_.id)
-      await(Future.sequence(keyIds.map(keyRepo.delete)))
+    val keyIds = rootRole.futureValue.signed.roleKeys(RoleType.ROOT).map(_.id)
 
-      await(signedRootRoles.findFreshAndPersist(repoId))
-    }.failed.futureValue shouldBe Errors.PrivateKeysNotFound
+    val fetchedRole = for {
+      _ <- Future.sequence(keyIds.map(keyRepo.delete))
+      role <- signedRootRoles.findFreshAndPersist(repoId)
+    } yield role
+
+    fetchedRole.futureValue.signed.asJson shouldBe rootRole.futureValue.signed.asJson
   }
-
 }

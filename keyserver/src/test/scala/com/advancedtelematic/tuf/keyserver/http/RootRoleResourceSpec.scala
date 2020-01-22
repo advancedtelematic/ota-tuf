@@ -27,6 +27,7 @@ import org.scalatest.time.{Millis, Seconds, Span}
 import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import KeyRepository.KeyNotFound
 import cats.syntax.either._
+import com.advancedtelematic.libtuf_server.repo.server.DataType.SignedRole
 import com.advancedtelematic.tuf.keyserver.roles.SignedRootRoles
 
 import scala.async.Async.await
@@ -748,7 +749,7 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
-  keyTypeTest("GET returns 412 if root is expired and keys are offline") { keyType =>
+  keyTypeTest("GET returns OK with expired root if root is expired and keys are offline") { keyType =>
     val repoId = RepoId.generate()
 
     Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(1, keyType)) ~> routes ~> check {
@@ -764,8 +765,8 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     Future.sequence(keyIds.map(keyRepo.delete)).futureValue
 
     Get(apiUri(s"root/${repoId.show}")) ~> routes ~> check {
-      status shouldBe StatusCodes.PreconditionFailed
-      responseAs[ErrorRepresentation].code shouldBe Errors.PrivateKeysNotFound.code
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed.expires.isBefore(Instant.now) shouldBe true
     }
   }
 

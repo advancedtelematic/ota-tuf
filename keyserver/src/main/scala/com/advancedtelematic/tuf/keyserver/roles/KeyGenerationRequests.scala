@@ -16,10 +16,12 @@ import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
 import com.advancedtelematic.tuf.keyserver.db._
 import com.advancedtelematic.tuf.keyserver.http._
 import io.circe.syntax._
+import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success, Try}
 
 class SignedRootRoles(defaultRoleExpire: Duration = Duration.ofDays(365))
                      (implicit val db: Database, val ec: ExecutionContext)
@@ -27,6 +29,8 @@ extends KeyRepositorySupport with SignedRootRoleSupport {
 
   private val rootRoleGeneration = new KeyGenerationRequests()
   private val roleSigning = new RoleSigning()
+
+  private val _log = LoggerFactory.getLogger(this.getClass)
 
   def findByVersion(repoId: RepoId, version: Int): Future[SignedPayload[RootRole]] =
     signedRootRoleRepo.findByVersion(repoId, version).map(_.content)
@@ -37,17 +41,26 @@ extends KeyRepositorySupport with SignedRootRoleSupport {
   def findLatest(repoId: RepoId): Future[SignedPayload[RootRole]] =
     find(repoId).map(_.content)
 
-  def findFreshAndPersist(repoId: RepoId): Future[SignedPayload[RootRole]] = {
-    findAndPersist(repoId).flatMap { signedRole =>
-      if (signedRole.expiresAt.isBefore(Instant.now.plus(1, ChronoUnit.HOURS))) {
-        val versionedRole = signedRole.content.signed
-        val nextVersion = versionedRole.version + 1
-        val nextExpires = Instant.now.plus(defaultRoleExpire)
-        val newRole = versionedRole.copy(expires = nextExpires, version = nextVersion)
-        signRootRole(newRole).flatMap(persistSignedPayload(repoId)).map(_.content)
-      } else {
-        FastFuture.successful(signedRole.content)
+  def findFreshAndPersist(repoId: RepoId): Future[SignedPayload[RootRole]] = async {
+    val signedRole = await(findAndPersist(repoId))
+
+    if (signedRole.expiresAt.isBefore(Instant.now.plus(1, ChronoUnit.HOURS))) {
+      val versionedRole = signedRole.content.signed
+      val nextVersion = versionedRole.version + 1
+      val nextExpires = Instant.now.plus(defaultRoleExpire)
+      val newRole = versionedRole.copy(expires = nextExpires, version = nextVersion)
+
+      val f = signRootRole(newRole)
+        .flatMap(persistSignedPayload(repoId))
+        .map(_.content).recover {
+          case Errors.PrivateKeysNotFound =>
+            _log.info("Could not find private keys to refresh a role, keys are offline, returning an expired role")
+            signedRole.content
       }
+
+      await(f)
+    } else {
+      signedRole.content
     }
   }
 
