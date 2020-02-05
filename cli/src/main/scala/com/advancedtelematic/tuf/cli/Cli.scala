@@ -223,7 +223,7 @@ object Cli extends App with VersionInfo {
           .required(),
         opt[TufServerType]("servertype")
           .abbr("t")
-          .text("repo server type, 'reposerver' or 'director'")
+          .text("repo server type, 'reposerver' (default) or 'director'")
           .toConfigOptionParam('repoType)
           .optional()
       )

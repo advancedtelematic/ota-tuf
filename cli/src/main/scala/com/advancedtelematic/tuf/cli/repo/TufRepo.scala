@@ -166,9 +166,13 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
     }
   }
 
-  def pullRoot(client: S, skipLocalValidation: Boolean): Future[SignedPayload[RootRole]] = {
+  val importedRootFile = false
+
+  def pullRoot(client: S, userSkipsLocalValidation: Boolean): Future[SignedPayload[RootRole]] = {
+
     def newRootIsvalid(newRoot: SignedPayload[RootRole]): Future[SignedPayload[RootRole]] = {
-      if(skipLocalValidation)
+
+      if (userSkipsLocalValidation || !importedRootFile)
         RootRoleValidation.rootIsValid(newRoot) match {
           case Invalid(errors) => Future.failed(RootPullError(errors))
           case Valid(signedPayload) => Future.successful(signedPayload)
@@ -329,6 +333,8 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
 }
 
 class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRepo[ReposerverClient](repoPath) {
+
+  override val importedRootFile: Boolean = true
 
   def initTargets(version: Int, expires: Instant): Try[Path] = {
     val emptyTargets = TargetsRole(expires, Map.empty, version)
