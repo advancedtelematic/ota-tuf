@@ -8,8 +8,8 @@ import com.advancedtelematic.tuf.keyserver.{Settings, VersionInfo}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig, SlickEncryptionConfig}
 import com.advancedtelematic.libats.http.BootApp
-import com.advancedtelematic.libats.http.monitoring.MetricsSupport
 import com.advancedtelematic.libats.slick.monitoring.{DatabaseMetrics, DbHealthResource}
+import com.advancedtelematic.metrics.MetricsSupport
 import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
 
 object KeyGenerationDaemon extends BootApp
