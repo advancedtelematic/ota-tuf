@@ -159,7 +159,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
   }
 
   reposerverTest("can pull a root.json when no local root is available, when forcing") { (repo, client) =>
-    val newRoot = repo.pullRoot(client, skipLocalValidation = true).futureValue
+    val newRoot = repo.pullRoot(client, userSkipsLocalValidation = true).futureValue
 
     val signed = repo.readSignedRole[RootRole]
     signed shouldBe a[Success[_]]
@@ -211,42 +211,42 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
   }
 
   reposerverTest("pull succeeds when new root.json is valid against local root.json") { (repo, server) =>
-    val oldRoot = repo.pullRoot(server, skipLocalValidation = true).futureValue
+    val oldRoot = repo.pullRoot(server, userSkipsLocalValidation = true).futureValue
 
     val newUnsignedRoot = oldRoot.signed.copy(version = oldRoot.signed.version + 1)
     val newRoot = server.sign(newUnsignedRoot)
 
     server.pushSignedRoot(newRoot).futureValue
 
-    repo.pullRoot(server, skipLocalValidation = false).futureValue
+    repo.pullRoot(server, userSkipsLocalValidation = false).futureValue
   }
 
   reposerverTest("pull fails when new root.json is not the same as old root but has same version numbers") { (repo, client) =>
-    val oldSignedRoot = repo.pullRoot(client, skipLocalValidation = true).futureValue
+    val oldSignedRoot = repo.pullRoot(client, userSkipsLocalValidation = true).futureValue
 
     val newRoot = oldSignedRoot.signed.copy(expires = Instant.now().plus(100, ChronoUnit.DAYS))
     client.setRoot(client.sign(newRoot))
 
-    val error = repo.pullRoot(client, skipLocalValidation = false).failed.futureValue
+    val error = repo.pullRoot(client, userSkipsLocalValidation = false).failed.futureValue
 
     error shouldBe a[RootPullError]
     error.asInstanceOf[RootPullError].errors.head shouldBe "New root has same version as old root but is not the same root.json"
   }
 
   reposerverTest("pull succeeds when new root.json is the same as old json") { (repo, client) =>
-    repo.pullRoot(client, skipLocalValidation = true).futureValue
+    repo.pullRoot(client, userSkipsLocalValidation = true).futureValue
 
-    repo.pullRoot(client, skipLocalValidation = false).futureValue shouldBe a[SignedPayload[_]]
+    repo.pullRoot(client, userSkipsLocalValidation = false).futureValue shouldBe a[SignedPayload[_]]
   }
 
 
   reposerverTest("pull fails when new root.json is not valid against local root.json") { (repo, client) =>
-    val oldRoot = repo.pullRoot(client, skipLocalValidation = true).futureValue
+    val oldRoot = repo.pullRoot(client, userSkipsLocalValidation = true).futureValue
 
     val newUnsignedRoot = oldRoot.signed.copy(version = oldRoot.signed.version + 1)
     client.setRoot(SignedPayload(Seq.empty, newUnsignedRoot, newUnsignedRoot.asJson))
 
-    val error = repo.pullRoot(client, skipLocalValidation = false).failed.futureValue
+    val error = repo.pullRoot(client, userSkipsLocalValidation = false).failed.futureValue
 
     val oldKeyId = oldRoot.signed.roles(RoleType.ROOT).keyids.head
 
@@ -256,19 +256,19 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
   }
 
   reposerverTest("fails with proper error when cannot find root at specified version") { (repo, client) =>
-    val oldRoot = repo.pullRoot(client, skipLocalValidation = true).futureValue
+    val oldRoot = repo.pullRoot(client, userSkipsLocalValidation = true).futureValue
 
     val newUnsignedRoot = oldRoot.signed.copy(version = oldRoot.signed.version + 10)
     client.setRoot(SignedPayload(Seq.empty, newUnsignedRoot, newUnsignedRoot.asJson))
 
-    val error = repo.pullRoot(client, skipLocalValidation = false).failed.futureValue
+    val error = repo.pullRoot(client, userSkipsLocalValidation = false).failed.futureValue
 
     error shouldBe a[RootPullError]
     error.getMessage should include(s"role with version 2 not found")
   }
 
   reposerverTest("validates a root chain") { (repo, client) =>
-    val oldRoot = repo.pullRoot(client, skipLocalValidation = true).futureValue
+    val oldRoot = repo.pullRoot(client, userSkipsLocalValidation = true).futureValue
 
     for(i <- 1 until 10) {
       val newUnsignedRoot = oldRoot.signed.copy(version = oldRoot.signed.version + i)
@@ -276,20 +276,20 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
       client.pushSignedRoot(newRoot).futureValue
     }
 
-    val newRoot = repo.pullRoot(client, skipLocalValidation = false).futureValue
+    val newRoot = repo.pullRoot(client, userSkipsLocalValidation = false).futureValue
 
     newRoot shouldBe a[SignedPayload[_]]
     newRoot.signed shouldBe a[RootRole]
   }
 
   reposerverTest("pull fails when local root does not exist") { (repo, client) =>
-    val error = repo.pullRoot(client, skipLocalValidation = false).failed.futureValue
+    val error = repo.pullRoot(client, userSkipsLocalValidation = false).failed.futureValue
 
     error shouldBe a[RoleMissing[_]]
   }
 
   reposerverTest("can push root.json") { (repo, client) =>
-    repo.pullRoot(client, skipLocalValidation = true).futureValue
+    repo.pullRoot(client, userSkipsLocalValidation = true).futureValue
 
     repo.pushRoot(client).futureValue
 

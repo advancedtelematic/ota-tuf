@@ -12,8 +12,8 @@ import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TufRole, TufR
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.CliCodecs._
-import com.advancedtelematic.tuf.cli.CliUtil
-import com.advancedtelematic.tuf.cli.DataType._
+import com.advancedtelematic.tuf.cli.{CliUtil, DataType}
+import com.advancedtelematic.tuf.cli.DataType.{TufServerType, _}
 import com.advancedtelematic.tuf.cli.repo.TufRepo.{MissingCredentialsZipFile, RepoAlreadyInitialized, TreehubConfigError}
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder}
@@ -193,11 +193,17 @@ protected object ZipRepoInitialization {
       _ <- tufRepo.keyStorage.writeKeys(zipTargetKeyName, pubKey, privKey)
     } yield ()
 
-    def writeRoot(src: ZipFile): Try[Unit] = for {
-      rootIs <- Try(src.getInputStream(src.getEntry(TufRole.rootTufRole.metaPath.value)))
-      rootRole <- CliUtil.readJsonFrom[SignedPayload[RootRole]](rootIs)
-      _ <- tufRepo.writeSignedRole(rootRole)
-    } yield ()
+    def writeRoot(src: ZipFile): Try[Unit] =  {
+      if (repoServerType == DataType.RepoServer) {
+        for {
+          rootIs <- Try(src.getInputStream(src.getEntry(TufRole.rootTufRole.metaPath.value)))
+          rootRole <- CliUtil.readJsonFrom[SignedPayload[RootRole]](rootIs)
+          _ <- tufRepo.writeSignedRole(rootRole)
+        } yield ()
+      } else {
+        Try(())
+      }
+    }
 
     def writeTlsCerts(src: ZipFile): Try[Option[MutualTlsConfig]] = Try {
       val clientCertO = Option(src.getEntry("client_auth.p12"))
