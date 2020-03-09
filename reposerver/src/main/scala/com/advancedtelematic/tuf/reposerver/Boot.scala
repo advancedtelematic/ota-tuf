@@ -44,7 +44,7 @@ trait Settings {
 
   lazy val useS3 = _config.getString("storage.type").equals("s3")
 
-  lazy val userRepoSizeLimit = _config.getInt("reposerver.sizeLimit")
+  lazy val userRepoSizeLimit = _config.getLong("reposerver.sizeLimit")
 }
 
 object Boot extends BootApp
