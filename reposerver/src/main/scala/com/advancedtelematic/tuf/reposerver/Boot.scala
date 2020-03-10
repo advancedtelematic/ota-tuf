@@ -16,13 +16,16 @@ import com.advancedtelematic.libats.messaging.MessageBus
 import com.advancedtelematic.libats.slick.db.{BootMigrations, DatabaseConfig}
 import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverHttpClient
-import com.advancedtelematic.metrics.{AkkaHttpRequestMetrics, MetricsSupport}
 import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
+import com.advancedtelematic.metrics.{AkkaHttpRequestMetrics, MetricsSupport}
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
 import com.advancedtelematic.tuf.reposerver.target_store._
 import com.amazonaws.regions.Regions
 import com.typesafe.config.ConfigFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider
+
+import scala.concurrent.duration.Duration
+
 
 trait Settings {
   private lazy val _config = ConfigFactory.load()
@@ -44,7 +47,10 @@ trait Settings {
 
   lazy val useS3 = _config.getString("storage.type").equals("s3")
 
-  lazy val userRepoSizeLimit = _config.getInt("reposerver.sizeLimit")
+  lazy val userRepoSizeLimit = _config.getLong("reposerver.sizeLimit")
+
+  // not using Config.getDuration() here because that parses different formats than what Akka uses
+  lazy val userRepoUploadRequestTimeout = Duration(_config.getString("reposerver.uploadRequestTimeout"))
 }
 
 object Boot extends BootApp

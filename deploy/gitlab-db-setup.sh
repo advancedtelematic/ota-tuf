@@ -8,7 +8,7 @@ HOST=$2
 if [ "$MYSQL_COMMAND" = "mysql" ]; then
     MYSQL=mysql
 else
-    MYSQL="docker run -i --rm --link $HOST mariadb:10.1 mysql"
+    MYSQL="docker run -i --rm --link $HOST mariadb:10.2 mysql"
 fi
 
 $MYSQL -v -h $HOST -u root -proot <<EOF

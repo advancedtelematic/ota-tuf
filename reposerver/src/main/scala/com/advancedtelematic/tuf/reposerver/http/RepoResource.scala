@@ -121,12 +121,14 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   private def addTargetFromContent(namespace: Namespace, filename: TargetFilename, repoId: RepoId): Route = {
     targetCustomParameters { custom =>
       withSizeLimit(userRepoSizeLimit) {
-        fileUpload("file") { case (_, file) =>
-          complete {
-            for {
-              item <- targetStore.store(repoId, filename, file, custom)
-              result <- addTargetItem(namespace, item)
-            } yield result
+        withRequestTimeout(userRepoUploadRequestTimeout) {
+          fileUpload("file") { case (_, file) =>
+            complete {
+              for {
+                item <- targetStore.store(repoId, filename, file, custom)
+                result <- addTargetItem(namespace, item)
+              } yield result
+            }
           }
         }
       } ~
