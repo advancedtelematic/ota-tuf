@@ -5,6 +5,8 @@ import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.unmarshalling.PredefinedFromStringUnmarshallers.CsvSeq
 import akka.http.scaladsl.unmarshalling._
+import akka.stream.scaladsl.Source
+import akka.util.ByteString
 import com.advancedtelematic.libats.data.RefinedUtils._
 import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
@@ -118,28 +120,38 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       addTargetItem(namespace, TargetItem(repoId, filename, Option(clientItem.uri), clientItem.checksum, clientItem.length, custom, StorageMethod.Unmanaged))
     }
 
+  private def storeTarget(ns: Namespace, repoId: RepoId, filename: TargetFilename, custom: TargetCustom,
+                          file: Source[ByteString, Any], size: Option[Long]): Future[Unit] = {
+    for {
+      item <- targetStore.store(repoId, filename, file, custom, size)
+      _ <- addTargetItem(ns, item)
+    } yield ()
+  }
+
   private def addTargetFromContent(namespace: Namespace, filename: TargetFilename, repoId: RepoId): Route = {
     targetCustomParameters { custom =>
-      withSizeLimit(userRepoSizeLimit) {
-        withRequestTimeout(userRepoUploadRequestTimeout) {
-          fileUpload("file") { case (_, file) =>
-            complete {
-              for {
-                item <- targetStore.store(repoId, filename, file, custom)
-                result <- addTargetItem(namespace, item)
-              } yield result
+      concat(
+        withSizeLimit(userRepoSizeLimit) {
+          withRequestTimeout(userRepoUploadRequestTimeout) {
+            fileUpload("file") { case (_, file) =>
+              complete(storeTarget(namespace, repoId, filename, custom, file, size = None))
             }
           }
-        }
-      } ~
-      parameter('fileUri) { fileUri =>
-        complete {
-          for {
-            item <- targetStore.storeFromUri(repoId, filename, Uri(fileUri), custom)
-            result <- addTargetItem(namespace, item)
-          } yield result
-        }
-      }
+        },
+        extractRequestEntity { entity =>
+          entity.contentLengthOption match {
+            case Some(size) if size > 0 => complete(storeTarget(namespace, repoId, filename, custom, entity.dataBytes, Option(size)).map(_ => StatusCodes.NoContent))
+            case _ => reject(MalformedHeaderRejection("Content-Length", "a finite length request is required to upload a file", cause = None))
+          }
+        },
+        parameter('fileUri) { fileUri =>
+          complete {
+            for {
+              item <- targetStore.storeFromUri(repoId, filename, Uri(fileUri), custom)
+              result <- addTargetItem(namespace, item)
+            } yield result
+          }
+        })
     }
   }
 
