@@ -7,14 +7,14 @@ import scala.async.Async._
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{FileIO, Source}
+import akka.stream.scaladsl.{FileIO, Source, StreamConverters}
 import akka.util.ByteString
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetFilename}
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{TargetRedirect, TargetRetrieveResult, TargetStoreResult}
 import com.amazonaws.auth.{AWSCredentials, AWSCredentialsProvider}
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.s3.AmazonS3ClientBuilder
-import com.amazonaws.services.s3.model.{CannedAccessControlList, PutObjectRequest}
+import com.amazonaws.services.s3.model.{CannedAccessControlList, ObjectMetadata, PutObjectRequest}
 import org.slf4j.LoggerFactory
 
 import scala.concurrent._
@@ -48,6 +48,27 @@ class S3TargetStoreEngine(credentials: S3Credentials)(implicit val system: Actor
           Future.failed(result.getError)
         }
       }
+    }
+
+    write(fileData, sink)
+  }
+
+  override def storeStream(repoId: RepoId, filename: TargetFilename, fileData: Source[ByteString, Any], size: Long): Future[TargetStoreResult] = {
+    val storagePath = storageFilename(repoId, filename)
+    val sink =  StreamConverters.asInputStream().mapMaterializedValue { is =>
+      val meta = new ObjectMetadata()
+      meta.setContentLength(size)
+      val request = new PutObjectRequest(bucketId, storagePath.toString, is, meta).withCannedAcl(CannedAccessControlList.AuthenticatedRead)
+
+      log.info(s"Uploading $filename to amazon s3 using streaming upload")
+
+      val uploadF = async {
+        await(Future { blocking { s3client.putObject(request) } })
+        log.info(s"$filename with size $size uploaded to s3")
+        await(Future { blocking { s3client.getUrl(bucketId, storagePath.toString) } })
+      }
+
+      uploadF.map(uri => Uri(uri.toString) -> size)
     }
 
     write(fileData, sink)

@@ -597,6 +597,19 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
     }
   }
 
+  test("uploading a target using raw body changes targets json") {
+    val repoId = addTargetToRepo()
+
+    Put(apiUri(s"repo/${repoId.show}/targets/some/target/raw/thing?name=name&version=version"), testEntity) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/targets/some/target/raw/thing")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseEntity.dataBytes.runReduce(_ ++ _).futureValue shouldBe testEntity.getData()
+    }
+  }
+
   keyTypeTest("uploading a target from a uri changes targets json") { keyType =>
     val repoId = addTargetToRepo(keyType = keyType)
 

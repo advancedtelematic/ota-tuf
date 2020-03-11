@@ -45,6 +45,10 @@ class LocalTargetStoreEngine(root: File)(implicit val system: ActorSystem, val m
     write(fileData, sink)
   }
 
+  override def storeStream(repoId: RepoId, filename: TargetFilename, fileData: Source[ByteString, Any], size: Long): Future[TargetStoreResult] = {
+    store(repoId, filename, fileData)
+  }
+
   override def retrieve(repoId: RepoId, filename: TargetFilename): Future[TargetRetrieveResult] = {
     val storePath = root.toPath.resolve(storageFilename(repoId, filename))
 

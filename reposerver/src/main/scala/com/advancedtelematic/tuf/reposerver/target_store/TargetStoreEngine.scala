@@ -30,6 +30,8 @@ object TargetStoreEngine {
 trait TargetStoreEngine {
   private val _log = LoggerFactory.getLogger(this.getClass)
 
+  def storeStream(repoId: RepoId, filename: TargetFilename, fileData: Source[ByteString, Any], size: Long): Future[TargetStoreResult]
+
   def store(repoId: RepoId, filename: TargetFilename, fileData: Source[ByteString, Any]): Future[TargetStoreResult]
 
   def retrieve(repoId: RepoId, filename: TargetFilename): Future[TargetRetrieveResult]
