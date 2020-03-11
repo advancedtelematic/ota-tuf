@@ -24,6 +24,7 @@ import com.advancedtelematic.libtuf_server.repo.server.DataType._
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import com.advancedtelematic.tuf.reposerver.http.Errors
+import com.sun.corba.se.spi.ior.ObjectId
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
@@ -63,6 +64,13 @@ class TargetStore(roleKeyStore: KeyserverClient,
   def store(repoId: RepoId, targetFile: TargetFilename, fileData: Source[ByteString, Any], custom: TargetCustom): Future[TargetItem] = {
     for {
       storeResult <- engine.store(repoId, targetFile, fileData)
+      _ <- publishUploadMessages(repoId)
+    } yield TargetItem(repoId, targetFile, storeResult.uri.some, storeResult.checksum, storeResult.size, Some(custom))
+  }
+
+  def storeStream(repoId: RepoId, targetFile: TargetFilename, fileData: Source[ByteString, Any], custom: TargetCustom, size: Long): Future[TargetItem] = {
+    for {
+      storeResult <- engine.storeStream(repoId, targetFile, fileData, size)
       _ <- publishUploadMessages(repoId)
     } yield TargetItem(repoId, targetFile, storeResult.uri.some, storeResult.checksum, storeResult.size, Some(custom))
   }

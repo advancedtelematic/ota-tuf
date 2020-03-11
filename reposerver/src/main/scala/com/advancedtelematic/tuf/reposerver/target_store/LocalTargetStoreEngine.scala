@@ -94,4 +94,8 @@ class LocalTargetStoreEngine(root: File)(implicit val system: ActorSystem, val m
       }
     }
   }
+
+  override def storeStream(repoId: RepoId, filename: TargetFilename, fileData: Source[ByteString, Any], size: Long): Future[TargetStoreResult] = {
+    store(repoId, filename, fileData)
+  }
 }

@@ -120,24 +120,31 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
 
   private def addTargetFromContent(namespace: Namespace, filename: TargetFilename, repoId: RepoId): Route = {
     targetCustomParameters { custom =>
-      withSizeLimit(userRepoSizeLimit) {
-        fileUpload("file") { case (_, file) =>
+      concat(
+        withSizeLimit(userRepoSizeLimit) {
+          fileUpload("file") { case (_, file) =>
+            complete {
+              for {
+                item <- targetStore.store(repoId, filename, file, custom)
+                result <- addTargetItem(namespace, item)
+              } yield result
+            }
+          }
+        },
+        extractRequestEntity { entity =>
+          entity.contentLengthOption match {
+            case Some(size) if size > 0 => complete(targetStore.storeStream(repoId, filename, entity.dataBytes, custom, size).map(_ => StatusCodes.NoContent))
+            case _ => reject(MalformedHeaderRejection("Content-Length", "a finite length request is required to upload a file", cause = None))
+          }
+        },
+        parameter('fileUri) { fileUri =>
           complete {
             for {
-              item <- targetStore.store(repoId, filename, file, custom)
+              item <- targetStore.storeFromUri(repoId, filename, Uri(fileUri), custom)
               result <- addTargetItem(namespace, item)
             } yield result
           }
-        }
-      } ~
-      parameter('fileUri) { fileUri =>
-        complete {
-          for {
-            item <- targetStore.storeFromUri(repoId, filename, Uri(fileUri), custom)
-            result <- addTargetItem(namespace, item)
-          } yield result
-        }
-      }
+        })
     }
   }
 
