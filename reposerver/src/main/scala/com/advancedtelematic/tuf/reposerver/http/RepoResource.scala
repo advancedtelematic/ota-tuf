@@ -121,11 +121,11 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
     }
 
   private def storeTarget(ns: Namespace, repoId: RepoId, filename: TargetFilename, custom: TargetCustom,
-                          file: Source[ByteString, Any], size: Option[Long]): Future[Unit] = {
+                          file: Source[ByteString, Any], size: Option[Long]): Future[JsonSignedPayload] = {
     for {
       item <- targetStore.store(repoId, filename, file, custom, size)
-      _ <- addTargetItem(ns, item)
-    } yield ()
+      result <- addTargetItem(ns, item)
+    } yield result
   }
 
   private def addTargetFromContent(namespace: Namespace, filename: TargetFilename, repoId: RepoId): Route = {
