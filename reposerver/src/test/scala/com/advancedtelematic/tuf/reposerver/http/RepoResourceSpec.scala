@@ -589,6 +589,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
 
     Put(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing?name=name&version=version"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[TargetsRole]]
     }
 
     Get(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing")) ~> routes ~> check {
