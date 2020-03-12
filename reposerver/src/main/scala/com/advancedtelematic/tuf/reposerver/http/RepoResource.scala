@@ -138,7 +138,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
             }
           }
         },
-        extractRequestEntity { entity =>
+        (withSizeLimit(userRepoSizeLimit) & withRequestTimeout(userRepoUploadRequestTimeout) & extractRequestEntity) { entity =>
           entity.contentLengthOption match {
             case Some(size) if size > 0 => complete(storeTarget(namespace, repoId, filename, custom, entity.dataBytes, Option(size)).map(_ => StatusCodes.NoContent))
             case _ => reject(MalformedHeaderRejection("Content-Length", "a finite length request is required to upload a file", cause = None))
