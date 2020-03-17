@@ -63,5 +63,5 @@ fi
 
 reposerver=$(unzip -qc "$credentials_path" tufrepo.url)
 
-curl -o /dev/null --max-time 3600 --request PUT --header "application/octet-stream" --header "Authorization: Bearer $token" \
+curl -o /dev/null -f --max-time 3600 --request PUT --header "application/octet-stream" --header "Authorization: Bearer $token" \
   "${reposerver}/api/v1/user_repo/targets/${target_name}_${version}?name=${target_name}&version=${version}&hardwareIds=${hardware_ids}" --data-binary @"$file"
