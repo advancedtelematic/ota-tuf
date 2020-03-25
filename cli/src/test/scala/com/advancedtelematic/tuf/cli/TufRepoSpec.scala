@@ -315,7 +315,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
 
   reposerverTest("signing root increases version") { (repo, _) =>
     val keyname = KeyName("somekey")
-    val pub = repo.genKeys(keyname, KeyType.default).get.pubkey
+    val _ = repo.genKeys(keyname, KeyType.default).get.pubkey
 
     val path = repo.signRoot(Seq(keyname), defaultExpiration).get
     val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[RootRole]]).valueOr(throw _)

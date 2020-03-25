@@ -238,3 +238,18 @@ again be overwritten with `--force`.
 `--expire-after` takes a relative expiration delay in years, months and days
 (each optional, but in that order), such as _1Y3M5D_.
 
+== Uploading a target binary to reposerver
+
+The `garage-sign` tool supports uploading binary files to
+reposerver. These binaries can then be easily added to the user's
+targets.json.
+
+    garage-sign targets pull --repo dev
+
+    garage-sign targets upload --repo dev --input bigfile.bin --name name-of-target --version 0.0.2
+
+    garage-sign targets add-uploaded --repo dev --input bigfile.bin- --name name-of-target --version 0.0.2 --hardwareids <hardware-id1>,<hardware-id2>
+
+    garage-sign targets sign --repo dev --key-name targets
+
+    garage-sign targets push --repo dev

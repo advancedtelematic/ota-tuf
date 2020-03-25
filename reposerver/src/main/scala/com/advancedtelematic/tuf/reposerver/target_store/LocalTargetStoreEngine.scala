@@ -98,4 +98,7 @@ class LocalTargetStoreEngine(root: File)(implicit val system: ActorSystem, val m
       }
     }
   }
+
+  override def buildStorageUri(repoId: RepoId, filename: TargetFilename, length: Long): Future[Uri] =
+    FastFuture.failed(new IllegalArgumentException("out of band storage of target is not supported for local storage"))
 }

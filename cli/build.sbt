@@ -4,6 +4,6 @@ libraryDependencies += "org.slf4j" % "slf4j-api" % "1.7.25"
 
 libraryDependencies += "io.circe" %% "circe-generic-extras" % "0.12.1"
 
-libraryDependencies += "io.circe" %% "circe-literal" % "0.12.1" % Test
+libraryDependencies += "io.circe" %% "circe-literal" % "0.12.1" % "test"
 
 fork := true

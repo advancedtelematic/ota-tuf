@@ -5,27 +5,26 @@ import java.net.URI
 import java.nio.file.attribute.PosixFilePermission._
 import java.nio.file.attribute.PosixFilePermissions
 import java.nio.file.{Files, Path}
-import java.time.{Instant, Period}
+import java.time.Instant
 
 import cats.data.NonEmptyList
 import cats.data.Validated.{Invalid, Valid}
 import cats.implicits._
-import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
+import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.KeyListToKeyMapOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, DelegatedPathPattern, DelegatedRoleName, Delegations, MetaPath, RootRole, TargetCustom, TargetsRole, TufRole, TufRoleOps}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, DelegatedPathPattern, DelegatedRoleName, Delegations, MetaPath, RootRole, TargetsRole, TufRole, TufRoleOps}
 import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, HardwareIdentifier, KeyId, KeyType, RoleType, SignedPayload, TargetFilename, TargetName, TargetVersion, TufKey, TufKeyPair, TufPrivateKey, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, KeyId, KeyType, RoleType, SignedPayload, TargetFilename, TufKey, TufKeyPair, TufPrivateKey}
 import com.advancedtelematic.libtuf.data.{ClientDataType, RootRoleValidation}
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleNotFound, TargetsResponse}
 import com.advancedtelematic.libtuf.http._
-import com.advancedtelematic.tuf.cli.DataType.{KeyName, OAuthConfig, RepoConfig, _}
-import com.advancedtelematic.tuf.cli.Errors.{CommandNotSupportedByRepositoryType, PastDate}
+import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoConfig, _}
+import com.advancedtelematic.tuf.cli.Errors.CommandNotSupportedByRepositoryType
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
 import com.advancedtelematic.tuf.cli.{CliCodecs, CliUtil}
@@ -39,6 +38,7 @@ import shapeless.{:: => _, Path => _}
 
 import scala.async.Async._
 import scala.collection.JavaConverters._
+import scala.concurrent.duration.Duration
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
 import scala.util.{Failure, Success, Try}
@@ -307,6 +307,8 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
     rootRolesF
   }
 
+  def uploadTarget(repoClient: S, targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit]
+
   def moveRootOffline(repoClient: S,
                       newRootName: KeyName,
                       oldRootName: KeyName,
@@ -449,6 +451,10 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
     }
 
   }
+
+  override def uploadTarget(repoClient: ReposerverClient, targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit] = {
+    repoClient.uploadTarget(targetFilename, inputPath, timeout)
+  }
 }
 
 class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRepo[DirectorClient](repoPath) {
@@ -514,4 +520,7 @@ class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRep
 
   override def addTargetDelegation(name: DelegatedRoleName, key: List[TufKey], delegatedPaths: List[DelegatedPathPattern], threshold: Int): Try[Path] =
     Failure(CommandNotSupportedByRepositoryType(Director, "addTargetDelegation"))
+
+  override def uploadTarget(repoClient: DirectorClient, targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit] =
+    Future.failed(CommandNotSupportedByRepositoryType(Director, "uploadTarget"))
 }

@@ -2,6 +2,7 @@ package com.advancedtelematic.tuf.cli
 
 import java.io.FileOutputStream
 import java.net.URI
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -9,8 +10,8 @@ import java.time.temporal.ChronoUnit
 import cats.data.Validated.Valid
 import cats.syntax.either._
 import cats.syntax.option._
-import com.advancedtelematic.libats.data.DataType.ValidChecksum
-import com.advancedtelematic.libtuf.crypt.TufCrypto
+import com.advancedtelematic.libats.data.DataType.{Checksum, HashMethod, ValidChecksum}
+import com.advancedtelematic.libtuf.crypt.{Sha256FileDigest, TufCrypto}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType
 import com.advancedtelematic.libtuf.data.ClientDataType.DelegatedPathPattern._
@@ -24,15 +25,15 @@ import com.advancedtelematic.tuf.cli.DataType.{KeyName, MutualTlsConfig, RepoCon
 import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, RepoServerRepo, TufRepo}
 import com.advancedtelematic.tuf.cli.util.TufRepoInitializerUtil._
 import com.advancedtelematic.tuf.cli.util.{CliSpec, FakeReposerverTufServerClient, KeyTypeSpecSupport}
-import eu.timepit.refined.{string, _}
-import eu.timepit.refined.string.Uri
-import io.circe.{Json, jawn}
+import eu.timepit.refined._
+import eu.timepit.refined.api.Refined
 import io.circe.syntax._
+import io.circe.{Json, jawn}
 import org.scalatest.Inspectors
+import org.scalatest.OptionValues._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
-import scala.util.Random
 
 class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors {
 
@@ -165,7 +166,7 @@ class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors
       inputPath = in.some,
       targetName = TargetName("mytarget").some,
       targetVersion = TargetVersion("0.1.1").some,
-      checksum = refineV[ValidChecksum]("66bad8889a5193362cbe4c89d21688cf79310bfeb7eff67fe0f79c6c11c86d67").toOption,
+      checksum = Checksum(HashMethod.SHA256, refineV[ValidChecksum]("66bad8889a5193362cbe4c89d21688cf79310bfeb7eff67fe0f79c6c11c86d67").right.get).some,
       inplace = true
     )
 
@@ -217,5 +218,33 @@ class CommandHandlerSpec extends CliSpec with KeyTypeSpecSupport with Inspectors
 
     val role = tufRepo.readSignedRole[TargetsRole].get
     role.signed.expires shouldBe expiration
+  }
+
+  test("uploads a target to server"){
+    val p = Files.createTempFile("s3upload-", ".txt")
+    Files.write(p, "“You who read me, are You sure of understanding my language“".getBytes(StandardCharsets.UTF_8))
+
+    val config = Config(UploadTarget, targetName = TargetName("uploaded-target").some, targetVersion = TargetVersion("0.0.1").some, inputPath = p.some)
+
+    handler(config).futureValue
+
+    reposerverClient.uploaded.get(Refined.unsafeApply("uploaded-target-0.0.1")) shouldBe p
+  }
+
+  test("adds an uploaded target to targets.json") {
+    val uploadFilePath = Files.createTempFile("s3upload-", ".txt")
+    Files.write(uploadFilePath, "“You who read me, are You sure of understanding my language“".getBytes(StandardCharsets.UTF_8))
+
+    val config = Config(AddUploadedTarget, targetName = TargetName("uploaded-target-before").some, targetVersion = TargetVersion("0.0.1").some, inputPath = uploadFilePath.some)
+
+    handler(config).futureValue
+
+    val role = tufRepo.readUnsignedRole[TargetsRole].get
+    val addedTarget = role.targets.get(Refined.unsafeApply("uploaded-target-before-0.0.1")).value
+
+    addedTarget.length shouldBe uploadFilePath.toFile.length()
+    val (method, checksum) = addedTarget.hashes.head
+    method shouldBe HashMethod.SHA256
+    checksum shouldBe Sha256FileDigest.from(uploadFilePath).hash
   }
 }

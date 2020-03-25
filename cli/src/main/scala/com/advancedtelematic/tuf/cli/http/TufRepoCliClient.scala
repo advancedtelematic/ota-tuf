@@ -2,12 +2,12 @@ package com.advancedtelematic.tuf.cli.http
 
 import java.net.URI
 
+import com.advancedtelematic.libtuf.http.CliHttpClient.CliHttpBackend
 import com.advancedtelematic.libtuf.http._
 import com.advancedtelematic.tuf.cli.DataType.{MutualTlsConfig, OAuthConfig}
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.tuf.cli.repo.TufRepo
 import org.slf4j
-import scalaj.http.HttpRequest
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
@@ -16,17 +16,18 @@ object TufRepoCliClient {
   private val log = slf4j.LoggerFactory.getLogger(this.getClass)
 
   trait HttpClientBuilder[S <: TufServerClient] {
-    def apply(reposerverUri: URI, auth: HttpRequest => HttpRequest)(implicit ec: ExecutionContext): S
+    def apply(reposerverUri: URI, auth: CliHttpBackend)(implicit ec: ExecutionContext): S
   }
 
   implicit val reposerverHttpClientBuilder = new HttpClientBuilder[ReposerverClient] {
-    override def apply(reposerverUri: URI, auth: HttpRequest => HttpRequest)(implicit ec: ExecutionContext): ReposerverClient =
-      new ReposerverHttpClient(reposerverUri, auth.andThen(new ScalajHttpClient))
+    override def apply(reposerverUri: URI, httpBackend: CliHttpBackend)(implicit ec: ExecutionContext): ReposerverClient = {
+      new ReposerverHttpClient(reposerverUri, httpBackend)
+    }
   }
 
   implicit val directorHttpClientBuilder = new HttpClientBuilder[DirectorClient] {
-    override def apply(reposerverUri: URI, auth: HttpRequest => HttpRequest)(implicit ec: ExecutionContext): DirectorClient =
-      new DirectorHttpClient(reposerverUri, auth.andThen(new ScalajHttpClient))
+    override def apply(reposerverUri: URI, httpBackend: CliHttpBackend)(implicit ec: ExecutionContext): DirectorClient =
+      new DirectorHttpClient(reposerverUri, httpBackend)
   }
 
   def forRepo[S <: TufServerClient](repo: TufRepo[S])
@@ -37,18 +38,18 @@ object TufRepoCliClient {
           token <- AuthPlusClient.tokenFor(ac)
           _ = log.debug(s"client token: ${token.value}")
           repoUri <- repo.repoServerUri.toFuture
-        } yield httpClientBuilder.apply(repoUri, Auth.oauth(token.value))
+        } yield httpClientBuilder.apply(repoUri, AuthenticatedHttpBackend.authPlusHttpBackend(token))
 
       case Success(Some(tls: MutualTlsConfig)) =>
         repo.repoServerUri.toFuture.map { uri =>
           val clientCertPath = repo.repoPath.resolve(tls.certPath)
           val serverCertPath = tls.serverCertPath.map(repo.repoPath.resolve)
 
-          httpClientBuilder.apply(uri, Auth.mutualTls(clientCertPath, serverCertPath))
+          httpClientBuilder.apply(uri, AuthenticatedHttpBackend.mutualTls(clientCertPath, serverCertPath))
         }
 
       case Success(None) =>
-        repo.repoServerUri.map { repoUri => httpClientBuilder.apply(repoUri, Auth.none) }.toFuture
+        repo.repoServerUri.map { repoUri => httpClientBuilder.apply(repoUri, AuthenticatedHttpBackend.none) }.toFuture
 
       case Failure(ex) => Future.failed(ex)
     }

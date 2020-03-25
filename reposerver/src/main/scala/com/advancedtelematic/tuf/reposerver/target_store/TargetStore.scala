@@ -24,7 +24,6 @@ import com.advancedtelematic.libtuf_server.repo.server.DataType._
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import com.advancedtelematic.tuf.reposerver.http.Errors
-import com.sun.corba.se.spi.ior.ObjectId
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
@@ -81,10 +80,13 @@ class TargetStore(roleKeyStore: KeyserverClient,
     }
   }
 
+  def buildStorageUrl(repoId: RepoId, targetFilename: TargetFilename, length: Long): Future[Uri] =
+    engine.buildStorageUri(repoId, targetFilename, length)
+
   def retrieve(repoId: RepoId, targetFilename: TargetFilename): Future[HttpResponse] = {
     targetItemRepo.findByFilename(repoId, targetFilename).flatMap { item =>
       item.storageMethod match {
-        case StorageMethod.Managed =>
+        case StorageMethod.Managed | StorageMethod.CliManaged =>
           retrieveFromManaged(repoId, targetFilename)
         case StorageMethod.Unmanaged if item.uri.isDefined =>
           redirectToUnmanaged(item.uri.get)
@@ -99,7 +101,7 @@ class TargetStore(roleKeyStore: KeyserverClient,
 
   def delete(item: TargetItem): Future[Unit] = {
     item.storageMethod match {
-      case StorageMethod.Managed =>
+      case StorageMethod.Managed | StorageMethod.CliManaged =>
         engine.delete(item.repoId, item.filename)
       case StorageMethod.Unmanaged =>
         FastFuture.successful(())

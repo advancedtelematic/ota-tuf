@@ -2,14 +2,16 @@ package com.advancedtelematic.tuf.cli
 
 import java.net.URI
 import java.time.{Instant, Period, ZoneOffset}
+import java.util.concurrent.TimeUnit
 
 import cats.implicits._
-import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
+import com.advancedtelematic.libats.data.DataType.Checksum
+import com.advancedtelematic.libtuf.crypt.Sha256FileDigest
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RootRole, TargetCustom}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, TargetFilename, TargetName, TargetVersion, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, TargetFilename, TargetFormat, TargetName, TargetVersion, ValidTargetFilename}
 import com.advancedtelematic.libtuf.http.{ReposerverClient, TufServerClient}
 import com.advancedtelematic.tuf.cli.CliConfigOptionOps._
 import com.advancedtelematic.tuf.cli.Commands._
@@ -17,10 +19,10 @@ import com.advancedtelematic.tuf.cli.Errors.PastDate
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.tuf.cli.repo._
 import eu.timepit.refined._
-import eu.timepit.refined.api.Refined
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
 
+import scala.concurrent.duration.Duration
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions
 import scala.util.Try
@@ -34,13 +36,17 @@ object CommandHandler {
 
   private implicit def tryToFutureConversion[T](value: Try[T]): Future[T] = value.toFuture
 
-  private def buildClientTarget(name: TargetName, version: TargetVersion, length: Int, checksum: Refined[String, ValidChecksum],
-                                hardwareIds: List[HardwareIdentifier], url: Option[URI], format: TargetFormat): Try[(TargetFilename, ClientTargetItem)] =
+  private def targetFilenameFrom(name: TargetName, version: TargetVersion): Try[TargetFilename] = {
+    refineV[ValidTargetFilename](s"${name.value}-${version.value}").leftMap(s => new IllegalArgumentException(s)).toTry
+  }
+
+  private def buildClientTarget(name: TargetName, version: TargetVersion, length: Long, checksum: Checksum,
+                                hardwareIds: List[HardwareIdentifier], uri: Option[URI], format: TargetFormat, cliUploaded: Boolean = false): Try[(TargetFilename, ClientTargetItem)] =
     for {
-      targetFilename <- refineV[ValidTargetFilename](s"${name.value}-${version.value}").leftMap(s => new IllegalArgumentException(s)).toTry
+      targetFilename <- targetFilenameFrom(name, version)
       newTarget = {
-        val custom = TargetCustom(name, version, hardwareIds, format.some, url)
-        val clientHashes = Map(HashMethod.SHA256 -> checksum)
+        val custom = TargetCustom(name, version, hardwareIds, format.some, uri, cliUploaded = cliUploaded.some)
+        val clientHashes = Map(checksum.method -> checksum.hash)
         ClientTargetItem(clientHashes, length, custom.asJson.some)
       }
     } yield targetFilename -> newTarget
@@ -107,6 +113,23 @@ object CommandHandler {
         .flatMap((tufRepo.addTarget _).tupled)
         .map(p => log.info(s"added target to $p"))
 
+    case AddUploadedTarget =>
+      val file = config.inputPath.valueOrConfigError
+
+      val itemT = buildClientTarget(
+        config.targetName.valueOrConfigError,
+        config.targetVersion.valueOrConfigError,
+        file.toFile.length(),
+        Sha256FileDigest.from(file),
+        config.hardwareIds,
+        uri = None,
+        format = TargetFormat.BINARY,
+        cliUploaded = true
+      )
+
+      itemT
+        .flatMap((tufRepo.addTarget _).tupled)
+        .map(p => log.info(s"added uploaded target to $p"))
 
     case DeleteTarget =>
       tufRepo
@@ -119,6 +142,13 @@ object CommandHandler {
         .signTargets(config.keyNames, expirationDate(config), config.version)
         .map(p => log.info(s"signed targets.json to $p"))
 
+
+    case UploadTarget =>
+      for {
+        filename <- Future.fromTry(targetFilenameFrom(config.targetName.valueOrConfigError, config.targetVersion.valueOrConfigError))
+        client <- repoServer
+        _ <- tufRepo.uploadTarget(client, filename, config.inputPath.valueOrConfigError, Duration(config.timeout, TimeUnit.SECONDS))
+      } yield log.info("Target uploaded. You can now add this target to your targets with `targets add`")
 
     case PullTargets =>
       for {

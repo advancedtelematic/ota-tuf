@@ -6,9 +6,11 @@ import com.advancedtelematic.libtuf.data.ClientDataType._
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetFilename}
 
 object RepositoryDataType {
-  object StorageMethod extends Enumeration {
-    type StorageMethod = Value
-    val Managed, Unmanaged = Value
+  object StorageMethod {
+    sealed trait StorageMethod
+    object Managed extends StorageMethod
+    object Unmanaged extends StorageMethod
+    object CliManaged extends StorageMethod
   }
 
   import StorageMethod._

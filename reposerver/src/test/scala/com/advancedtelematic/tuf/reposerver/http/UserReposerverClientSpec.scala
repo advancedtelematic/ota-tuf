@@ -13,7 +13,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, Delegation, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RepoId, RoleType, SignedPayload, TufKey, TufPrivateKey}
 import com.advancedtelematic.libtuf.http.ReposerverHttpClient
-import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
+import com.advancedtelematic.libtuf.http.CliHttpClient.CliHttpClientError
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.RoleChecksumNotValid
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util._
@@ -26,7 +26,7 @@ import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 
 class UserReposerverClientSpec extends TufReposerverSpec
   with ResourceSpec
-  with FakeScalajHttpClient
+  with FakeCliHttpClient
   with RepoNamespaceRepositorySupport
   with BeforeAndAfter {
 
@@ -38,7 +38,7 @@ class UserReposerverClientSpec extends TufReposerverSpec
 
   val repoId = RepoId.generate()
 
-  val client = new ReposerverHttpClient(URI.create("http://test-reposerver"), testClient)
+  val client = new ReposerverHttpClient(URI.create("http://test-reposerver"), testBackend)
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -84,7 +84,7 @@ class UserReposerverClientSpec extends TufReposerverSpec
     keyPair.privkey shouldBe a[TufPrivateKey]
     keyPair.pubkey shouldBe a[TufKey]
 
-    client.fetchKeyPair(keyPair.pubkey.id).failed.futureValue shouldBe a[HttpjClientError]
+    client.fetchKeyPair(keyPair.pubkey.id).failed.futureValue shouldBe a[CliHttpClientError]
   }
 
   test("returns specific exception when previous checksum is not valid") {
