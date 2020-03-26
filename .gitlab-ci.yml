@@ -69,7 +69,7 @@ release:
     - docker-sock
     - vault-token
   variables:
-    AWS_BUCKET_ID: "ats-tuf-cli-releases"
+    AWS_BUCKET_ID: "ota-tuf-cli-releases"
   image: advancedtelematic/gitlab-jobs:0.2.2
   script:
     - git fetch origin
