@@ -58,8 +58,8 @@ lazy val commonSettings = Seq(
   scalaVersion := "2.12.10",
   scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8", "-Xexperimental", "-Ypartial-unification"),
   scalacOptions in (Compile, console) ~= (_.filterNot(_ == "-Ywarn-unused-import")),
-  resolvers += "ATS Releases" at "http://nexus.advancedtelematic.com:8081/content/repositories/releases",
-  resolvers += "ATS Snapshots" at "http://nexus.advancedtelematic.com:8081/content/repositories/snapshots",
+  resolvers += "ATS Releases" at "https://nexus.ota.here.com/content/repositories/releases",
+  resolvers += "ATS Snapshots" at "https://nexus.ota.here.com/content/repositories/snapshots",
   resolvers += "version99 Empty loggers" at "http://version99.qos.ch",
   libatsVersion := "0.3.0-83-g43409bd",
   licenses += ("MPL-2.0", url("http://mozilla.org/MPL/2.0/")),
@@ -117,7 +117,7 @@ lazy val cli = (project in file("cli"))
     topLevelDirectory := Some("garage-sign"),
     executableScriptName := "garage-sign",
     mappings in Universal += (file("cli/LICENSE") -> "docs/LICENSE"),
-    s3Bucket := "ats-tuf-cli-releases",
+    s3Bucket := "ota-tuf-cli-releases",
     libraryDependencies += "com.typesafe" % "config" % "1.3.4" % Test
   )
   .dependsOn(libtuf)

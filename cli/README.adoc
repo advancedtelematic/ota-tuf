@@ -2,7 +2,7 @@
 
 == Obtaining the binary
 
-Binaries are compiled for each push to `master` and stored in https://ats-tuf-cli-releases.s3-eu-central-1.amazonaws.com/index.html[s3].
+Binaries are compiled for each push to `master` and stored in https://ota-tuf-cli-releases.s3-eu-west-1.amazonaws.com/index.html[s3].
 
 Download the archive file, unpack and run:
 
