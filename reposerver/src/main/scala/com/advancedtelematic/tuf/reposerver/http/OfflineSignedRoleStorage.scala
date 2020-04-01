@@ -76,7 +76,8 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
         json <- item.custom.toRight(errorMsg(filename, "new offline signed target items must contain custom metadata"))
         targetCustom <- json.as[TargetCustom].leftMap(errorMsg(filename, _))
         checksum <- validateNewChecksum(filename, item)
-      } yield TargetItem(repoId, filename, targetCustom.uri.map(_.toUri), checksum, item.length, Some(targetCustom), storageMethod = StorageMethod.Unmanaged)
+        storageMethod = if(targetCustom.cliUploaded.contains(true)) StorageMethod.CliManaged else StorageMethod.Unmanaged
+      } yield TargetItem(repoId, filename, targetCustom.uri.map(_.toUri), checksum, item.length, Some(targetCustom), storageMethod)
 
     val existingTargetsAsMap = existingTargets.map { ti => ti.filename -> ti }.toMap
 

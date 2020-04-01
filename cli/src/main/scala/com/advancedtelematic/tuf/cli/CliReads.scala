@@ -17,6 +17,7 @@ import io.circe.syntax._
 
 import scala.util.Try
 import cats.syntax.functor._
+import com.advancedtelematic.libats.data.DataType.{Checksum, HashMethod, ValidChecksum}
 
 object CliCodecs {
   import io.circe.generic.extras.semiauto._
@@ -25,11 +26,11 @@ object CliCodecs {
 
   implicit val config: Configuration = Configuration.default.withDefaults
 
-  implicit val authConfigDecoder: Decoder[OAuthConfig] = deriveDecoder
-  implicit val authConfigEncoder: Encoder[OAuthConfig] = deriveEncoder
+  implicit val authConfigDecoder: Decoder[OAuthConfig] = deriveConfiguredDecoder
+  implicit val authConfigEncoder: Encoder[OAuthConfig] = deriveConfiguredCodec
 
-  implicit val mutualTlsConfigEncoder: Encoder[MutualTlsConfig] = deriveEncoder
-  implicit val mutualTlsConfigDecoder: Decoder[MutualTlsConfig] = deriveDecoder
+  implicit val mutualTlsConfigEncoder: Encoder[MutualTlsConfig] = deriveConfiguredEncoder
+  implicit val mutualTlsConfigDecoder: Decoder[MutualTlsConfig] = deriveConfiguredDecoder
 
   implicit val cliAuthEncoder: Encoder[CliAuth] = Encoder.instance {
     case oauth: OAuthConfig => oauth.asJson
@@ -48,18 +49,21 @@ object CliCodecs {
     } yield TreehubConfig(oauth, noAuth.getOrElse(false), ostree.getOrElse(Json.obj()))
   }
 
-  implicit val treehubConfigEncoder = deriveEncoder[TreehubConfig]
+  implicit val treehubConfigEncoder = deriveConfiguredEncoder[TreehubConfig]
 
-  implicit val repoServerTypeEncoder = deriveEnumerationEncoder[TufServerType]
-  implicit val repoServerTypeDecoder = deriveEnumerationDecoder[TufServerType]
+  implicit val repoServerTypeCodec = deriveEnumerationCodec[TufServerType]
 
-  implicit val repoConfigEncoder = deriveEncoder[RepoConfig]
-  implicit val repoConfigDecoder = deriveDecoder[RepoConfig]
+  implicit val repoConfigCodec = deriveConfiguredCodec[RepoConfig]
 }
 
 object CliReads {
   implicit def refinedRead[P](implicit v: Validate.Plain[String, P]): Read[Refined[String, P]] = Read.stringRead.map { str =>
     refined.refineV[P](str).valueOr(p => throw new IllegalArgumentException(s"Invalid value: $p"))
+  }
+
+  // We only support SHA256
+  implicit def checksumRead(implicit refined: Read[Refined[String, ValidChecksum]]): Read[Checksum] = refined.map { hash =>
+    Checksum(HashMethod.SHA256, hash)
   }
 
   implicit val keyTypeRead: Read[KeyType] = Read.reads {

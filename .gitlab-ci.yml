@@ -52,7 +52,7 @@ test:
   before_script:
     - ./deploy/gitlab-db-setup.sh mysql db
   script:
-    - sbt -sbt-dir ./.sbt -ivy ./.ivy2 test
+    - sbt -sbt-dir ./.sbt -ivy ./.ivy2 ut:test
   cache:
     paths:
       - .ivy2/

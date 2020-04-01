@@ -4,13 +4,12 @@ import java.net.URI
 import java.nio.file.{Files, Path, Paths}
 import java.security.Security
 import java.time.{Instant, Period}
-import java.time.temporal.ChronoUnit
 
 import cats.Eval
 import cats.syntax.either._
 import cats.syntax.option._
 import ch.qos.logback.classic.{Level, Logger}
-import com.advancedtelematic.libats.data.DataType.ValidChecksum
+import com.advancedtelematic.libats.data.DataType.Checksum
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedPathPattern, DelegatedRoleName}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, TargetFilename, TargetFormat, TargetName, TargetVersion}
@@ -24,13 +23,12 @@ import com.advancedtelematic.tuf.cli.GenericOptionDefOps._
 import com.advancedtelematic.tuf.cli.http.TufRepoCliClient
 import com.advancedtelematic.tuf.cli.http.TufRepoCliClient._
 import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, DirectorRepo, RepoServerRepo, TufRepo}
-import eu.timepit.refined.api.Refined
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.slf4j.LoggerFactory
 import scopt.{OptionDef, OptionParser}
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import com.advancedtelematic.libtuf.data.ValidatedString._
 import DelegatedRoleName._
@@ -50,18 +48,19 @@ case class Config(command: Command,
                   version: Option[Int] = None,
                   expireOn: Option[Instant] = None,
                   expireAfter: Option[Period] = None,
-                  length: Int = -1,
+                  length: Long = -1L,
                   targetFilename: Option[TargetFilename] = None,
                   targetName: Option[TargetName] = None,
                   targetFormat: TargetFormat = TargetFormat.BINARY,
                   targetVersion: Option[TargetVersion] = None,
-                  checksum: Option[Refined[String, ValidChecksum]] = None,
+                  checksum: Option[Checksum] = None,
                   hardwareIds: List[HardwareIdentifier] = List.empty,
                   targetUri: Option[URI] = None,
                   keySize: Option[Int] = None,
                   userKeysPath: Option[Path] = None,
                   inputPath: Option[Path] = None,
                   outputPath: Option[Path] = None,
+                  timeout: Long = 3600,
                   serverCertPath: Option[Path] = None,
                   delegatedPaths: List[DelegatedPathPattern] = List.empty,
                   keyPaths: List[Path] = List.empty,
@@ -117,7 +116,7 @@ object Cli extends App with VersionInfo {
 
   lazy val addTargetOptions: OptionParser[Config] => Seq[OptionDef[_, Config]] = { parser =>
     Seq(
-      parser.opt[Int]("length")
+      parser.opt[Long]("length")
         .required()
         .toConfigParam('length)
         .text("length in bytes"),
@@ -131,7 +130,7 @@ object Cli extends App with VersionInfo {
         .optional()
         .text("target format [ostree|binary]")
         .toConfigParam('targetFormat),
-      parser.opt[Refined[String, ValidChecksum]]("sha256")
+      parser.opt[Checksum]("sha256")
         .required()
         .toConfigOptionParam('checksum),
       parser.opt[List[HardwareIdentifier]]("hardwareids")
@@ -325,6 +324,23 @@ object Cli extends App with VersionInfo {
         cmd("add")
           .toCommand(AddTarget)
           .children(addTargetOptions(this):_*),
+        cmd("add-uploaded")
+          .toCommand(AddUploadedTarget)
+          .children(
+            opt[Path]('i', "input")
+              .required()
+              .toConfigOptionParam('inputPath)
+              .text("Path to the file"),
+            opt[TargetName]("name")
+              .required()
+              .toConfigOptionParam('targetName),
+            opt[TargetVersion]("version")
+              .required()
+              .toConfigOptionParam('targetVersion),
+            opt[List[HardwareIdentifier]]("hardwareids")
+              .required()
+              .toConfigParam('hardwareIds)
+          ),
         cmd("delete")
           .toCommand(DeleteTarget)
           .text("Delete a single target.")
@@ -351,6 +367,29 @@ object Cli extends App with VersionInfo {
           .toCommand(PushTargets)
           .text("""push latest targets.json to server This will fail with exit code 2 if the latest `pull`
                   |was too long ago and did not pull the latest targets.json on the server.""".stripMargin),
+
+        cmd("upload")
+          .toCommand(UploadTarget)
+          .children(
+            opt[Path]('i', "input")
+              .required()
+              .toConfigOptionParam('inputPath)
+              .text("Path to the file to upload"),
+            opt[TargetName]("name")
+              .required()
+              .toConfigOptionParam('targetName),
+            opt[TargetVersion]("version")
+              .required()
+              .toConfigOptionParam('targetVersion),
+            opt[Long]("timeout")
+              .optional()
+              .text("timeout in seconds for the upload http request")
+              .toConfigParam('timeout),
+          )
+          .text("""Upload a binary to the repository. This will not add the binary to your available targets. After the upload
+                  |is successful, you need to add this target to your targets.json using `targets add` to make it available to clients
+                  |""".stripMargin),
+
         cmd("delegations")
           .text("Manage a repository targets.json delegated targets")
           .children(
@@ -478,9 +517,10 @@ object Cli extends App with VersionInfo {
   def execute(config: Config): Unit = {
     Files.createDirectories(config.home)
 
-    try
+    try {
       Await.result(buildCommandHandler(config).value, Duration.Inf)
-    catch {
+      System.exit(0) // Needed because AsyncHttpClient might still be using idle threads for it's connection pool
+    } catch {
       case ex if CliHelp.explainError.isDefinedAt(ex) =>
         CliHelp.explainError(ex)
         sys.exit(1)
@@ -498,5 +538,7 @@ object Cli extends App with VersionInfo {
   def setLoggingLevel(level: Level): Unit = {
     val logger: Logger = LoggerFactory.getLogger("com.advancedtelematic").asInstanceOf[Logger]
     logger.setLevel(level)
+    val sttpLogger: Logger = LoggerFactory.getLogger("sttp.client.logging.slf4j").asInstanceOf[Logger]
+    sttpLogger.setLevel(level)
   }
 }

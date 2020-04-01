@@ -1,20 +1,24 @@
 package com.advancedtelematic.tuf.reposerver.target_store
 
 import java.io.File
+import java.time.temporal.ChronoUnit
 import java.time.{Duration, Instant}
+import java.util.Date
 
 import scala.async.Async._
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri
+import akka.http.scaladsl.util.FastFuture
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{FileIO, Source, StreamConverters}
 import akka.util.ByteString
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetFilename}
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{TargetRedirect, TargetRetrieveResult, TargetStoreResult}
+import com.amazonaws.HttpMethod
 import com.amazonaws.auth.{AWSCredentials, AWSCredentialsProvider}
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.s3.AmazonS3ClientBuilder
-import com.amazonaws.services.s3.model.{CannedAccessControlList, ObjectMetadata, PutObjectRequest}
+import com.amazonaws.services.s3.model.{CannedAccessControlList, GeneratePresignedUrlRequest, ObjectMetadata, PutObjectRequest}
 import org.slf4j.LoggerFactory
 
 import scala.concurrent._
@@ -108,6 +112,22 @@ class S3TargetStoreEngine(credentials: S3Credentials)(implicit val system: Actor
     blocking {
       val storagePath = storageFilename(repoId, filename)
       s3client.deleteObject(bucketId, storagePath.toString)
+    }
+  }
+
+  override def buildStorageUri(repoId: RepoId, filename: TargetFilename, length: Long): Future[Uri] = {
+    val objectId = storageFilename(repoId, filename).toString
+    val expiresAt = Date.from(Instant.now().plus(3, ChronoUnit.HOURS))
+
+    log.info(s"Signing s3 url for $objectId")
+
+    FastFuture.successful {
+      val req = new GeneratePresignedUrlRequest(bucketId, objectId, HttpMethod.PUT)
+      req.putCustomRequestHeader("Content-Length", length.toString)
+      req.setExpiration(expiresAt)
+      val url = s3client.generatePresignedUrl(req)
+      log.debug(s"Signed s3 url for $objectId")
+      url.toString
     }
   }
 }

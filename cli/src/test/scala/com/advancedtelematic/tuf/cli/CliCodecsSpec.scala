@@ -1,7 +1,6 @@
 package com.advancedtelematic.tuf.cli
-
 import org.scalatest.FunSuite
-import CliCodecs.{repoConfigDecoder, repoServerTypeEncoder}
+import CliCodecs._
 import com.advancedtelematic.tuf.cli.DataType.RepoServer
 import io.circe.Json
 import io.circe.literal._
@@ -9,7 +8,7 @@ import io.circe.literal._
 class CliCodecsSpec extends FunSuite {
 
   test("repo server type encoder") {
-    assert(repoServerTypeEncoder(RepoServer) == Json.fromString("RepoServer"))
+    assert(repoServerTypeCodec(RepoServer) == Json.fromString("RepoServer"))
   }
 
   test("decode config without repo type") {
@@ -34,6 +33,6 @@ class CliCodecsSpec extends FunSuite {
                }
         }"""
 
-    assert(repoConfigDecoder.decodeJson(missingRepoServerType).right.get.repoServerType == RepoServer)
+    assert(repoConfigCodec.decodeJson(missingRepoServerType).right.get.repoServerType == RepoServer)
   }
 }

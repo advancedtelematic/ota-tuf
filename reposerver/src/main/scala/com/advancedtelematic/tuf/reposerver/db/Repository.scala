@@ -2,6 +2,8 @@ package com.advancedtelematic.tuf.reposerver.db
 
 import java.time.Instant
 
+import scala.util.Success
+import scala.util.Failure
 import akka.NotUsed
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.util.FastFuture
@@ -24,9 +26,8 @@ import com.advancedtelematic.tuf.reposerver.db.DBDataType.{DbDelegation, DbSigne
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport.MissingNamespaceException
 import com.advancedtelematic.tuf.reposerver.http.Errors._
 import com.advancedtelematic.libtuf_server.repo.server.Errors.SignedRoleNotFound
-
 import shapeless.ops.function.FnToProduct
-import shapeless.{Generic, HList}
+import shapeless.{Generic, HList, Succ}
 import SlickValidatedString._
 import com.advancedtelematic.libtuf_server.repo.server.SignedRoleProvider
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
@@ -87,6 +88,15 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
 
   def findFor(repoId: RepoId): Future[Seq[TargetItem]] = db.run {
     targetItems.filter(_.repoId === repoId).result
+  }
+
+  def exists(repoId: RepoId, filename: TargetFilename): Future[Boolean] = {
+    findByFilename(repoId, filename)
+      .transform {
+        case Success(_) => Success(true)
+        case Failure(TargetNotFoundError) => Success(false)
+        case Failure(err) => Failure(err)
+      }
   }
 
   def findByFilename(repoId: RepoId, filename: TargetFilename): Future[TargetItem] = db.run {

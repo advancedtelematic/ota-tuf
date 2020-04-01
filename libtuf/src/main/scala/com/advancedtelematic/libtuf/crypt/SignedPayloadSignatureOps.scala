@@ -7,8 +7,6 @@ import org.slf4j.LoggerFactory
 
 object SignedPayloadSignatureOps  {
 
-  private val _log = LoggerFactory.getLogger(this.getClass)
-
   implicit class SignedPayloadSignatureOps[T : Encoder](value: SignedPayload[T]) {
     def isValidFor(tufKey: TufKey): Boolean =
       value.signatures.exists { sig =>

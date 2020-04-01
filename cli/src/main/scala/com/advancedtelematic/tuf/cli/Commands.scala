@@ -9,10 +9,12 @@ object Commands {
   case object GetTargets extends Command
   case object InitTargets extends Command
   case object AddTarget extends Command
+  case object AddUploadedTarget extends Command
   case object DeleteTarget extends Command
   case object SignTargets extends Command
   case object SignRoot extends Command
   case object PullTargets extends Command
+  case object UploadTarget extends Command
   case object PushTargets extends Command
   case object PullRoot extends Command
   case object PushRoot extends Command

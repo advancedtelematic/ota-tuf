@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.cli.util
 
+import java.nio.file.Path
 import java.security.Security
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -10,7 +11,7 @@ import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, RoleKeys, RootRole, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyId, KeyType, RoleType, RsaKeyType, SignedPayload, TufKeyPair}
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyId, KeyType, RoleType, RsaKeyType, SignedPayload, TargetFilename, TargetVersion, TufKeyPair}
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleNotFound, TargetsResponse}
 import com.advancedtelematic.libtuf.http._
 import eu.timepit.refined.api.Refined
@@ -22,9 +23,11 @@ import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{FunSuite, Matchers}
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.tuf.cli.repo.TufRepo
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
+import scala.concurrent.duration.Duration
 import scala.util.{Failure, Success, Try}
 
 trait KeyTypeSpecSupport {
@@ -118,7 +121,11 @@ object FakeReposerverTufServerClient {
 
 class FakeReposerverTufServerClient(val keyType: KeyType) extends ReposerverClient with FakeTufServerClient with DirectorClient {
 
+  private val _log = LoggerFactory.getLogger(this.getClass)
+
   private var unsignedTargets = TargetsRole(Instant.now.plus(1, ChronoUnit.DAYS), Map.empty, 1)
+
+  val uploaded = new ConcurrentHashMap[TargetFilename, Path]()
 
   override def targets(): Future[TargetsResponse] = Future.successful {
     val sig = TufCrypto.signPayload(targetsPair.privkey, unsignedTargets.asJson).toClient(targetsPubKey.id)
@@ -144,5 +151,11 @@ class FakeReposerverTufServerClient(val keyType: KeyType) extends ReposerverClie
 
   override def pullDelegation(name: DelegatedRoleName): Future[SignedPayload[TargetsRole]] = Future.successful {
     Option(pushedDelegations.get(name)).getOrElse(throw new IllegalArgumentException("[test] delegation not found"))
+  }
+
+  override def uploadTarget(targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit] = {
+    _log.info(s"Received upload for $targetFilename, $inputPath")
+    uploaded.put(targetFilename, inputPath)
+    Future.successful(())
   }
 }

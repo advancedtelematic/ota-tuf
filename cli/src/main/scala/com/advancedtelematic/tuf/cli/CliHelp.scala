@@ -2,7 +2,7 @@ package com.advancedtelematic.tuf.cli
 
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libtuf.data.ErrorCodes
-import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpjClientError
+import com.advancedtelematic.libtuf.http.CliHttpClient.CliHttpClientError
 import com.advancedtelematic.tuf.cli.Errors.{CommandNotSupportedByRepositoryType, PastDate}
 import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
 import io.circe.syntax._
@@ -13,7 +13,7 @@ object CliHelp {
   private val _log = LoggerFactory.getLogger(this.getClass)
 
   val explainError: PartialFunction[Throwable, Unit] = {
-    case ex: HttpjClientError if ex.remoteError.code == ErrorCodes.KeyServer.InvalidRootRole =>
+    case ex: CliHttpClientError if ex.remoteError.code == ErrorCodes.KeyServer.InvalidRootRole =>
       val causes = for {
         errorRepr <- ex.remoteError.cause.flatMap(_.as[ErrorRepresentation].toOption)
         errorMsgs <- errorRepr.cause.flatMap(_.as[List[String]].toOption)

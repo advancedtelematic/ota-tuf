@@ -1,6 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.http
 
-import akka.http.scaladsl.model.headers.RawHeader
+import akka.http.scaladsl.model.headers.{RawHeader, `Content-Length`}
 import akka.http.scaladsl.model.{StatusCodes, Uri}
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.unmarshalling.PredefinedFromStringUnmarshallers.CsvSeq
@@ -8,7 +8,7 @@ import akka.http.scaladsl.unmarshalling._
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.advancedtelematic.libats.data.RefinedUtils._
-import com.advancedtelematic.libats.http.Errors.MissingEntity
+import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity}
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
 import com.advancedtelematic.libats.http.UUIDKeyAkka._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -39,6 +39,7 @@ import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
+import scala.async.Async._
 
 import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
@@ -58,6 +59,20 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   private val roleRefresher = new RepoRoleRefresh(keyserverClient, new TufRepoSignedRoleProvider(), new TufRepoTargetItemsProvider())
   private val targetRoleGeneration = new TargetRoleEdit(keyserverClient, signedRoleGeneration)
   private val delegations = new DelegationsManagement()
+
+  private val withContentLengthHeader: Directive1[Long] = optionalHeaderValueByType[`Content-Length`](()).flatMap {
+    case Some(header) => provide(header.length)
+    case None => extractRequestEntity.flatMap { e =>
+      /* This is needed for tests only. We should get this value from the `Content-Length` header.
+       Http clients send this as a header, but akka-http-testkit takes the header and makes it available only
+       through this method.
+       */
+      e.contentLengthOption match {
+        case Some(cl) => provide(cl)
+        case None => reject(MissingHeaderRejection("Content-Length"))
+      }
+    }
+  }
 
   val log = LoggerFactory.getLogger(this.getClass)
 
@@ -141,7 +156,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
         (withSizeLimit(userRepoSizeLimit) & withRequestTimeout(userRepoUploadRequestTimeout) & extractRequestEntity) { entity =>
           entity.contentLengthOption match {
             case Some(size) if size > 0 => complete(storeTarget(namespace, repoId, filename, custom, entity.dataBytes, Option(size)).map(_ => StatusCodes.NoContent))
-            case _ => reject(MalformedHeaderRejection("Content-Length", "a finite length request is required to upload a file", cause = None))
+            case _ => reject(MissingHeaderRejection("Content-Length"))
           }
         },
         parameter('fileUri) { fileUri =>
@@ -236,6 +251,18 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
         } ~
         get {
           complete(delegations.find(repoId, delegatedRoleName))
+        }
+      } ~
+      pathPrefix("uploads") {
+        (put & path(TargetFilenamePath) & withContentLengthHeader) { (filename, cl) =>
+          val f = async {
+            if(await(targetItemRepo.exists(repoId, filename)))
+              throw new EntityAlreadyExists[TargetItem]()
+            await(targetStore.buildStorageUrl(repoId, filename, cl))
+          }
+          onSuccess(f) { uri =>
+            redirect(uri, StatusCodes.Found)
+          }
         }
       } ~
       pathPrefix("targets") {

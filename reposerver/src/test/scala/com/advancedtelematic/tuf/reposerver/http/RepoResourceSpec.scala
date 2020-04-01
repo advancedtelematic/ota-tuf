@@ -1,11 +1,14 @@
 package com.advancedtelematic.tuf.reposerver.http
 
+import java.net.URI
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+import org.scalatest.OptionValues._
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
+import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import cats.data.NonEmptyList
 import cats.syntax.either._
@@ -862,6 +865,31 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
     }
   }
 
+  test("accepts offline target uploaded by cli") {
+    implicit val repoId = addTargetToRepo()
+
+    val targetCustomJson = TargetCustom(TargetName("cli-uploaded"), TargetVersion("0.0.1"), Seq.empty, TargetFormat.BINARY.some,
+      uri = None, cliUploaded = true.some).asJson
+
+    val hashes: ClientHashes = Map(HashMethod.SHA256 -> Refined.unsafeApply("8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"))
+    val targetFilename: TargetFilename = Refined.unsafeApply("cli-uploaded-0.0.1")
+
+    val targets = Map(targetFilename -> ClientTargetItem(hashes, 0, targetCustomJson.some))
+    val signedPayload = buildSignedTargetsRole(repoId, targets)
+
+    // Fake "upload" by cli tool
+    localStorage.store(repoId, targetFilename, Source.single(ByteString("cli file"))).futureValue
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+
+    Get(apiUri(s"repo/${repoId.show}/targets/cli-uploaded-0.0.1")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[ByteString].utf8String shouldBe "cli file"
+    }
+  }
+
   keyTypeTest("rejects offline targets.json with bad signatures") { keyType =>
     implicit val repoId = addTargetToRepo(keyType = keyType)
 
@@ -1014,6 +1042,29 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
       status shouldBe StatusCodes.OK
       val newJson = responseAs[JsonSignedPayload].signed
       newJson.hcursor.downField("targets").downField("some/file/name").downField("custom").downField("proprietary")  shouldBe 'succeeded
+    }
+  }
+
+  test("PUT to uploads errors when using local storage") {
+    val repoId = addTargetToRepo()
+
+    Put(apiUri(s"repo/${repoId.show}/uploads/mytarget")).withHeaders(`Content-Length`(1024)) ~> routes ~> check {
+      status shouldBe StatusCodes.InternalServerError
+      responseAs[ErrorRepresentation].description shouldBe "out of band storage of target is not supported for local storage"
+    }
+  }
+
+  test("cannot upload a target that still exists in targets.json") {
+    val repoId = addTargetToRepo()
+
+    Put(apiUri(s"repo/${repoId.show}/targets/some/target/thing?name=name&version=version"), form) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[TargetsRole]]
+    }
+
+    Put(apiUri(s"repo/${repoId.show}/uploads/some/target/thing")).withHeaders(`Content-Length`(1024)) ~> routes ~> check {
+      status shouldBe StatusCodes.Conflict
+      responseAs[ErrorRepresentation].description should include("Entity already exists")
     }
   }
 

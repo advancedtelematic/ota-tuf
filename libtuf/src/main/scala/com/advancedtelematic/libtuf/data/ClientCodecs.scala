@@ -8,7 +8,6 @@ import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RoleTy
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import ClientDataType.TufRole._
-import cats.data.StateT
 import io.circe.syntax._
 import cats.syntax.either._
 import cats.data.StateT
@@ -48,12 +47,13 @@ object ClientCodecs {
       uri <- decodeField[Option[URI]]("uri")
       createdAt <- decodeField[Instant]("createdAt")
       updatedAt <- decodeField[Instant]("updatedAt")
+      cliUploaded <- decodeField[Option[Boolean]]("cliUploaded")
       proprietary <- StateT.inspectF((_: ACursor).as[Json])
-    } yield TargetCustom(name, version, hardwareIds, targetFormat, uri, createdAt, updatedAt, proprietary)
+    } yield TargetCustom(name, version, hardwareIds, targetFormat, uri, cliUploaded, createdAt, updatedAt, proprietary)
   }
 
-  implicit val targetCustomEncoder: Encoder[TargetCustom] = (targetCustom: TargetCustom) => {
-    val main = Json.obj(
+  implicit val targetCustomEncoder: Encoder[TargetCustom] = Encoder.instance { targetCustom =>
+    val main = List(
       ("name", Json.fromString(targetCustom.name.value)),
       ("version", Json.fromString(targetCustom.version.value)),
       ("hardwareIds", targetCustom.hardwareIds.asJson),
@@ -62,7 +62,12 @@ object ClientCodecs {
       ("createdAt", targetCustom.createdAt.asJson),
       ("updatedAt", targetCustom.updatedAt.asJson))
 
-    targetCustom.proprietary.deepMerge(main)
+    val withCliUploaded = if(targetCustom.cliUploaded.isDefined)
+      ("cliUploaded", targetCustom.cliUploaded.asJson) :: main
+    else
+      main
+
+    targetCustom.proprietary.deepMerge(Json.fromFields(withCliUploaded))
   }
 
   implicit val clientTargetItemEncoder: Encoder[ClientTargetItem] = deriveEncoder
@@ -94,11 +99,6 @@ object ClientCodecs {
 
   implicit val timestampRoleEncoder: Encoder[TimestampRole] = deriveEncoder[TimestampRole].encodeRoleType
   implicit val timestampRoleDecoder: Decoder[TimestampRole] = deriveDecoder[TimestampRole].validateRoleType
-
-  // TODO: Remove after https://github.com/circe/circe/pull/983/files is merged
-  implicit private class JsonDropNullValues(value: Json) {
-    def dropNullValues: Json = value.mapObject(_.filter { case (_, v) => !v.isNull })
-  }
 
   implicit private class EncodeRoleTypeOp[T](encoder: Encoder[T])(implicit tr: TufRole[T]) {
     def encodeRoleType: Encoder[T] = encoder.mapJson(_.deepMerge(Json.obj("_type" -> Json.fromString(tr.typeStr))))

@@ -34,6 +34,8 @@ trait TargetStoreEngine {
 
   def store(repoId: RepoId, filename: TargetFilename, fileData: Source[ByteString, Any]): Future[TargetStoreResult]
 
+  def buildStorageUri(repoId: RepoId, filename: TargetFilename, length: Long): Future[Uri]
+
   def retrieve(repoId: RepoId, filename: TargetFilename): Future[TargetRetrieveResult]
 
   def delete(repoId: RepoId, filename: TargetFilename): Future[Unit]

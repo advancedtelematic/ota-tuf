@@ -22,8 +22,8 @@ lazy val commonDeps = libraryDependencies ++= {
 }
 
 lazy val serverDependencies = libraryDependencies ++= {
-  lazy val akkaV = "2.5.25"
-  lazy val akkaHttpV = "10.1.10"
+  lazy val akkaV = "2.5.26"
+  lazy val akkaHttpV = "10.1.11"
   lazy val libatsV = libatsVersion.value
   lazy val slickV = "3.2.0"
   lazy val catsV = "2.0.0"
@@ -35,6 +35,7 @@ lazy val serverDependencies = libraryDependencies ++= {
     "com.typesafe.akka" %% "akka-http" % akkaHttpV,
     "com.typesafe.akka" %% "akka-slf4j" % akkaV,
     "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpV % "test",
+    "com.softwaremill.sttp.client" %% "akka-http-backend" % "2.0.6" % "test",
 
     "com.advancedtelematic" %% "libats-http" % libatsV,
     "com.advancedtelematic" %% "libats-http-tracing" % libatsV,
@@ -61,7 +62,7 @@ lazy val commonSettings = Seq(
   resolvers += "ATS Releases" at "https://nexus.ota.here.com/content/repositories/releases",
   resolvers += "ATS Snapshots" at "https://nexus.ota.here.com/content/repositories/snapshots",
   resolvers += "version99 Empty loggers" at "http://version99.qos.ch",
-  libatsVersion := "0.3.0-83-g43409bd",
+  libatsVersion := "0.3.0-98-g11dd194",
   licenses += ("MPL-2.0", url("http://mozilla.org/MPL/2.0/")),
   buildInfoOptions += BuildInfoOption.ToMap,
   buildInfoOptions += BuildInfoOption.BuildTime,

@@ -21,6 +21,7 @@ object ClientDataType {
   case class TargetCustom(name: TargetName, version: TargetVersion, hardwareIds: Seq[HardwareIdentifier],
                           targetFormat: Option[TargetFormat],
                           uri: Option[URI] = None,
+                          cliUploaded: Option[Boolean] = None,
                           createdAt: Instant = Instant.now,
                           updatedAt: Instant = Instant.now,
                           proprietary: Json = Json.obj())

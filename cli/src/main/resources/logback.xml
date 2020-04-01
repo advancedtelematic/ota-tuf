@@ -5,6 +5,8 @@
         </encoder>
     </appender>
 
+    <logger name="sttp.client.logging.slf4j" level="${CLI_LOG_LEVEL:-error}" />
+
     <root level="${rootLevel:-info}">
         <appender-ref ref="STDOUT" />
     </root>

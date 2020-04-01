@@ -1,19 +1,25 @@
 package com.advancedtelematic.libtuf.http
 
+import java.io.{FileInputStream, InputStream}
 import java.net.URI
+import java.nio.file.Path
 
+import scala.concurrent.duration._
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TufKeyPair}
-import com.advancedtelematic.libtuf.http.SHttpjServiceClient.HttpResponse
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TargetFilename, TufKeyPair}
+import com.advancedtelematic.libtuf.http.CliHttpClient.CliHttpBackend
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleChecksumNotValid, RoleNotFound, TargetsResponse}
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
-import scalaj.http.{Http, HttpRequest}
+import org.slf4j.LoggerFactory
+import sttp.client
+import sttp.client._
+import sttp.model.Uri
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, Future, _}
 import scala.util.control.NoStackTrace
 
 object TufServerHttpClient {
@@ -42,31 +48,35 @@ trait ReposerverClient extends TufServerClient {
   def targets(): Future[TargetsResponse]
 
   def pushTargets(role: SignedPayload[TargetsRole], previousChecksum: Option[Refined[String, ValidChecksum]]): Future[Unit]
+
+  def uploadTarget(targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit]
 }
 
 trait DirectorClient extends TufServerClient
 
-abstract class TufServerHttpClient(uri: URI, httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]])
-                                  (implicit ec: ExecutionContext) extends SHttpjServiceClient(httpClient) {
+abstract class TufServerHttpClient(uri: URI, httpBackend: CliHttpBackend)
+                                  (implicit ec: ExecutionContext) extends CliHttpClient(httpBackend) {
 
   protected def uriPath: String
 
-  protected def apiUri(path: String): String =
-    URI.create(uri.toString + uriPath + path).toString
+  protected def apiUri(path: String): Uri =
+    Uri.apply(URI.create(uri.toString + uriPath + path))
 
   def root(version: Option[Int] = None): Future[SignedPayload[RootRole]] = {
     val filename = version match {
       case Some(v) => v + ".root.json"
       case None => "root.json"
     }
-    val req = Http(apiUri(filename)).method("GET")
+
+    val req = http.get(apiUri(filename))
+
     execHttp[SignedPayload[RootRole]](req) {
       case (404, error) => Future.failed(RoleNotFound(error.description))
     }.map(_.body)
   }
 
   def pushSignedRoot(signedRoot: SignedPayload[RootRole]): Future[Unit] = {
-    val req = Http(apiUri("root")).method("POST")
+    val req = http.post(apiUri("root"))
     execJsonHttp[Unit, SignedPayload[RootRole]](req, signedRoot)()
   }
 
@@ -75,33 +85,33 @@ abstract class TufServerHttpClient(uri: URI, httpClient: HttpRequest => Future[s
   def deleteKey(keyId: KeyId): Future[Unit]
 }
 
-class ReposerverHttpClient(uri: URI,
-                           httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]])(implicit ec: ExecutionContext)
-  extends TufServerHttpClient(uri, httpClient) with ReposerverClient {
+class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: ExecutionContext)
+  extends TufServerHttpClient(uri, httpBackend) with ReposerverClient {
+
+  private val _log = LoggerFactory.getLogger(this.getClass)
 
   protected def uriPath: String = "/api/v1/user_repo/"
 
   def fetchKeyPair(keyId: KeyId): Future[TufKeyPair] = {
-    val req = Http(apiUri("root/private_keys/" + keyId.value))
+    val req = http.get(apiUri("root/private_keys/" + keyId.value))
     execHttp[TufKeyPair](req)().map(_.body)
   }
 
   def deleteKey(keyId: KeyId): Future[Unit] = {
-    val req = Http(apiUri("root/private_keys/" + keyId.value)).method("DELETE")
+    val req = http.delete(apiUri("root/private_keys/" + keyId.value))
     execHttp[Unit](req)().map(_.body)
   }
 
   def targets(): Future[TargetsResponse] = {
-    val req = Http(apiUri("targets.json")).method("GET")
-    execHttp[SignedPayload[TargetsRole]](req)().map {
-      case HttpResponse(payload, response) =>
-        val checksumO = response.header("x-ats-role-checksum").flatMap { v => refineV[ValidChecksum](v).toOption }
-        TargetsResponse(payload, checksumO)
+    val req = http.get(apiUri("targets.json"))
+    execHttp[SignedPayload[TargetsRole]](req)().map { response =>
+      val checksumO = response.header("x-ats-role-checksum").flatMap { v => refineV[ValidChecksum](v).toOption }
+      TargetsResponse(response.body, checksumO)
     }
   }
 
   def pushTargets(role: SignedPayload[TargetsRole], previousChecksum: Option[Refined[String, ValidChecksum]]): Future[Unit] = {
-    val put = Http(apiUri("targets")).method("PUT")
+    val put = http.put(apiUri("targets"))
     val req = previousChecksum.map(e => put.header("x-ats-role-checksum", e.value)).getOrElse(put)
 
     execJsonHttp[Unit, SignedPayload[TargetsRole]](req, role) {
@@ -113,30 +123,57 @@ class ReposerverHttpClient(uri: URI,
   }
 
   override def pushDelegation(name: DelegatedRoleName, delegation: SignedPayload[TargetsRole]): Future[Unit] = {
-    val req = Http(apiUri(s"delegations/${name.value}.json")).method("PUT")
+    val req = http.put(apiUri(s"delegations/${name.value}.json"))
     execJsonHttp[Unit, SignedPayload[TargetsRole]](req, delegation)()
   }
 
   override def pullDelegation(name: DelegatedRoleName): Future[SignedPayload[TargetsRole]] = {
-    val req = Http(apiUri(s"delegations/${name.value}.json"))
+    val req = http.get(apiUri(s"delegations/${name.value}.json"))
     execHttp[SignedPayload[TargetsRole]](req)().map(_.body)
+  }
+
+  override def uploadTarget(targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit] = {
+    val req = basicRequest.put(apiUri(s"uploads/" + targetFilename.value))
+      .body(inputPath)
+      .readTimeout(timeout)
+      .followRedirects(true)
+      .response(asByteArrayAlways)
+
+    val httpF = execHttp[Unit](req)().map(_ => ())
+
+    _log.info("Uploading file, this may take a while")
+
+    def wait(): Future[Unit] = {
+      if(httpF.isCompleted) {
+        println("")
+        httpF
+      } else {
+        Future {
+          blocking {
+            print(".")
+            Thread.sleep(1000)
+          }
+        }.flatMap(_ => wait())
+      }
+    }
+
+    wait()
   }
 }
 
-class DirectorHttpClient(uri: URI, httpClient: HttpRequest => Future[scalaj.http.HttpResponse[Array[Byte]]])
-                        (implicit ec: ExecutionContext)
-  extends TufServerHttpClient(uri, httpClient) with DirectorClient {
+class DirectorHttpClient(uri: URI, httpBackend: CliHttpBackend)
+                        (implicit ec: ExecutionContext) extends TufServerHttpClient(uri, httpBackend) with DirectorClient {
 
   // assumes talking to the Director through the API gateway
   protected def uriPath: String = "/api/v1/director/admin/repo/"
 
   def fetchKeyPair(keyId: KeyId): Future[TufKeyPair] = {
-    val req = Http(apiUri("private_keys/" + keyId.value))
+    val req = http.get(apiUri("private_keys/" + keyId.value))
     execHttp[TufKeyPair](req)().map(_.body)
   }
 
   def deleteKey(keyId: KeyId): Future[Unit] = {
-    val req = Http(apiUri("private_keys/" + keyId.value)).method("DELETE")
+    val req = http.delete(apiUri("private_keys/" + keyId.value))
     execHttp[Unit](req)().map(_.body)
   }
 }
