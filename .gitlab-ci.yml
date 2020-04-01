@@ -70,6 +70,7 @@ release:
     - vault-token
   variables:
     AWS_BUCKET_ID: "ota-tuf-cli-releases"
+    AWS_REGION: "eu-west-1"
   image: advancedtelematic/gitlab-jobs:0.2.2
   script:
     - git fetch origin
