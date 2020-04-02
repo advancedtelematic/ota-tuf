@@ -1,10 +1,8 @@
 package com.advancedtelematic.tuf.reposerver.http
 
-import java.net.URI
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-import org.scalatest.OptionValues._
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
@@ -1051,6 +1049,15 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
     Put(apiUri(s"repo/${repoId.show}/uploads/mytarget")).withHeaders(`Content-Length`(1024)) ~> routes ~> check {
       status shouldBe StatusCodes.InternalServerError
       responseAs[ErrorRepresentation].description shouldBe "out of band storage of target is not supported for local storage"
+    }
+  }
+
+  test("PUT to uploads is rejected when file is too big") {
+    val repoId = addTargetToRepo()
+
+    Put(apiUri(s"repo/${repoId.show}/uploads/mytarget")).withHeaders(`Content-Length`(3 * Math.pow(10, 9).toLong + 1)) ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+      responseAs[ErrorRepresentation].description should include("entity being uploaded is too big")
     }
   }
 

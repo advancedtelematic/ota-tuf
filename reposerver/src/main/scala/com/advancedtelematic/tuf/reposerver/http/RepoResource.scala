@@ -60,19 +60,19 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   private val targetRoleGeneration = new TargetRoleEdit(keyserverClient, signedRoleGeneration)
   private val delegations = new DelegationsManagement()
 
-  private val withContentLengthHeader: Directive1[Long] = optionalHeaderValueByType[`Content-Length`](()).flatMap {
-    case Some(header) => provide(header.length)
-    case None => extractRequestEntity.flatMap { e =>
-      /* This is needed for tests only. We should get this value from the `Content-Length` header.
-       Http clients send this as a header, but akka-http-testkit takes the header and makes it available only
-       through this method.
-       */
-      e.contentLengthOption match {
-        case Some(cl) => provide(cl)
+  /*
+    extractRequestEntity is needed for tests only. We should get this value from the `Content-Length` header.
+    Http clients send this as a header, but akka-http-testkit takes the header and makes it available only
+    through this method.
+  */
+  private val withContentLengthCheck: Directive1[Long] =
+    (optionalHeaderValueByType[`Content-Length`](()) & extractRequestEntity)
+      .tmap { case (clHeader, entity) => clHeader.map(_.length).orElse(entity.contentLengthOption) }
+      .flatMap {
+        case Some(cl) if cl <= outOfBandUploadLimit => provide(cl)
+        case Some(cl) => reject(ValidationRejection(s"entity being uploaded is too big ($cl bytes) maximum size is $outOfBandUploadLimit bytes"))
         case None => reject(MissingHeaderRejection("Content-Length"))
       }
-    }
-  }
 
   val log = LoggerFactory.getLogger(this.getClass)
 
@@ -254,7 +254,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
         }
       } ~
       pathPrefix("uploads") {
-        (put & path(TargetFilenamePath) & withContentLengthHeader) { (filename, cl) =>
+        (put & path(TargetFilenamePath) & withContentLengthCheck) { (filename, cl) =>
           val f = async {
             if(await(targetItemRepo.exists(repoId, filename)))
               throw new EntityAlreadyExists[TargetItem]()
