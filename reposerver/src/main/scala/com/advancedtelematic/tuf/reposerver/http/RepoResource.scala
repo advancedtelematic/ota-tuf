@@ -1,7 +1,7 @@
 package com.advancedtelematic.tuf.reposerver.http
 
 import akka.http.scaladsl.model.headers.{RawHeader, `Content-Length`}
-import akka.http.scaladsl.model.{StatusCodes, Uri}
+import akka.http.scaladsl.model.{HttpEntity, StatusCodes, Uri}
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.unmarshalling.PredefinedFromStringUnmarshallers.CsvSeq
 import akka.http.scaladsl.unmarshalling._
@@ -39,8 +39,8 @@ import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import org.slf4j.LoggerFactory
 import slick.jdbc.MySQLProfile.api._
-import scala.async.Async._
 
+import scala.async.Async._
 import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
@@ -274,6 +274,10 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
           } ~
           put {
             addTargetFromContent(namespace, filename, repoId)
+          } ~
+          head {
+            complete(targetStore.find(repoId, filename)
+              .map(_ => (StatusCodes.OK, HttpEntity.Empty)))
           } ~
           get {
             complete(targetStore.retrieve(repoId, filename))

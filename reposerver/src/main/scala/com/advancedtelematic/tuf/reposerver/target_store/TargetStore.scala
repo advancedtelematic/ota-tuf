@@ -96,6 +96,10 @@ class TargetStore(roleKeyStore: KeyserverClient,
     }
   }
 
+  def find(repoId: RepoId, targetFilename: TargetFilename): Future[TargetItem] = {
+    targetItemRepo.findByFilename(repoId, targetFilename)
+  }
+
   def delete(repoId: RepoId, filename: TargetFilename): Future[Unit] =
     targetItemRepo.findByFilename(repoId, filename).flatMap(delete)
 
