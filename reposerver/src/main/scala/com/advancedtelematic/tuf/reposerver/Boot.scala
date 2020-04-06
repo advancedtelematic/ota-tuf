@@ -45,6 +45,8 @@ trait Settings {
     new S3Credentials(accessKey, secretKey, bucketId, region)
   }
 
+  lazy val outOfBandUploadLimit = _config.getBytes("storage.outOfBandUploadLimit")
+
   lazy val useS3 = _config.getString("storage.type").equals("s3")
 
   lazy val userRepoSizeLimit = _config.getLong("reposerver.sizeLimit")
