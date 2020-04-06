@@ -70,7 +70,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       .tmap { case (clHeader, entity) => clHeader.map(_.length).orElse(entity.contentLengthOption) }
       .flatMap {
         case Some(cl) if cl <= outOfBandUploadLimit => provide(cl)
-        case Some(cl) => reject(ValidationRejection(s"entity being uploaded is too big ($cl bytes) maximum size is $outOfBandUploadLimit bytes"))
+        case Some(cl) => failWith(Errors.PayloadTooLarge(cl, outOfBandUploadLimit))
         case None => reject(MissingHeaderRejection("Content-Length"))
       }
 

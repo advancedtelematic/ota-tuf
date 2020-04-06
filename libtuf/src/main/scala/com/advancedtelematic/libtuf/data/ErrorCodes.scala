@@ -12,4 +12,8 @@ object ErrorCodes {
     val InvalidRootRole = ErrorCode("invalid_root_role")
     val SignedRootRoleDecodingFailed = ErrorCode("signed_root_role_decoding_failed")
   }
+
+  object Reposerver {
+    val PayloadTooLarge = ErrorCode("payload_too_large")
+  }
 }

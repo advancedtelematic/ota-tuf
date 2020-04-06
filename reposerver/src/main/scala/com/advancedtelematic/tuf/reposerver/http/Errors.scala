@@ -23,7 +23,6 @@ object ErrorCodes {
 }
 
 object Errors {
-
   val DelegationNotDefined = RawError(ErrorCodes.DelegationNotDefined, StatusCodes.BadRequest, "Delegation is not defined in repository targets.json")
   val DelegationNotFound = RawError(ErrorCodes.DelegationNotFound, StatusCodes.NotFound, "Delegation was not found")
   val RoleKeysNotFound = RawError(ErrorCodes.RoleKeysNotFound, StatusCodes.NotFound, "There are no keys for this repoid/roletype")
@@ -32,6 +31,10 @@ object Errors {
   val RoleChecksumNotProvided = RawError(ErrorCodes.RoleChecksumNotProvided, StatusCodes.PreconditionRequired, "A targets role already exists, but no previous checksum was sent")
   val RoleChecksumMismatch = RawError(ErrorCodes.RoleChecksumMismatch, StatusCodes.PreconditionFailed, "Provided checksum of previous role does not match current checksum")
   val TooManyReposForNamespace = RawError(ErrorCodes.TooManyReposForNamespace, StatusCodes.BadRequest, "Too many repos found for this namespace. Use the /repo/:repo_id API instead")
+
+  def PayloadTooLarge(size: Long, max: Long) =
+    RawError(com.advancedtelematic.libtuf.data.ErrorCodes.Reposerver.PayloadTooLarge, StatusCodes.PayloadTooLarge,
+      s"File being uploaded is too large ($size), maximum size is $max")
 
   def PayloadSignatureInvalid(errors: NonEmptyList[String]) =
     JsonError(ErrorCodes.PayloadSignatureInvalid, StatusCodes.BadRequest, errors.asJson, "Invalid payload signature")

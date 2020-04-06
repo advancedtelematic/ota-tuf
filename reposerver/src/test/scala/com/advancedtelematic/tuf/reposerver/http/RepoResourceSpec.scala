@@ -1056,8 +1056,9 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
     val repoId = addTargetToRepo()
 
     Put(apiUri(s"repo/${repoId.show}/uploads/mytarget")).withHeaders(`Content-Length`(3 * Math.pow(10, 9).toLong + 1)) ~> routes ~> check {
-      status shouldBe StatusCodes.BadRequest
-      responseAs[ErrorRepresentation].description should include("entity being uploaded is too big")
+      status shouldBe StatusCodes.PayloadTooLarge
+      responseAs[ErrorRepresentation].code shouldBe com.advancedtelematic.libtuf.data.ErrorCodes.Reposerver.PayloadTooLarge
+      responseAs[ErrorRepresentation].description should include("File being uploaded is too large")
     }
   }
 
