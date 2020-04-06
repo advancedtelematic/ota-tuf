@@ -92,7 +92,7 @@ class ReposerverHttpClientSpec extends TufReposerverSpec
       Sha256Digest.digest("hi".getBytes), 42, BINARY).failed.futureValue shouldBe ReposerverClient.KeysNotReady
   }
 
-  keyTypeTest("can't add target to nonexistant repo") { keyType =>
+  test("can't add target to nonexistant repo") {
     client.addTarget(Namespace("non-existant-namespace"), "filename", Uri("http://example.com"),
                      Sha256Digest.digest("hi".getBytes), 42, BINARY).failed.futureValue shouldBe ReposerverClient.NotFound
   }

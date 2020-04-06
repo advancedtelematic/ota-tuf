@@ -1,6 +1,8 @@
 package com.advancedtelematic.tuf.reposerver.http
 
+import java.io.RandomAccessFile
 import java.net.URI
+import java.nio.file.Files
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
@@ -11,17 +13,18 @@ import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, Delegation, RootRole, TargetsRole}
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RepoId, RoleType, SignedPayload, TufKey, TufPrivateKey}
-import com.advancedtelematic.libtuf.http.ReposerverHttpClient
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RepoId, RoleType, SignedPayload, TufKey, TufPrivateKey, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.ValidatedString._
 import com.advancedtelematic.libtuf.http.CliHttpClient.CliHttpClientError
-import com.advancedtelematic.libtuf.http.TufServerHttpClient.RoleChecksumNotValid
+import com.advancedtelematic.libtuf.http.ReposerverHttpClient
+import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleChecksumNotValid, UploadTargetTooBig}
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util._
 import io.circe.syntax._
 import org.scalatest.BeforeAndAfter
 import org.scalatest.time.{Seconds, Span}
-import com.advancedtelematic.libtuf.data.ValidatedString._
 
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 
 class UserReposerverClientSpec extends TufReposerverSpec
@@ -134,5 +137,23 @@ class UserReposerverClientSpec extends TufReposerverSpec
     client.pushDelegation(name, signedDelegation).futureValue shouldBe (())
 
     client.pullDelegation(name).futureValue.asJsonSignedPayload shouldBe signedDelegation.asJsonSignedPayload
+  }
+
+  test("returns specific exception when uploaded file is too large") {
+    val uploadFilePath = Files.createTempFile("s3upload", "txt")
+    val f = new RandomAccessFile(uploadFilePath.toFile, "rw")
+    f.setLength(3 * Math.pow(10, 9).toLong + 1)
+
+    try {
+      val targetFilename = eu.timepit.refined.refineV[ValidTargetFilename]("filesizetest-0.0.1").right.get
+
+      val err = client.uploadTarget(targetFilename, uploadFilePath, 10.seconds).failed.futureValue
+
+      err shouldBe a[UploadTargetTooBig]
+      err.getMessage shouldBe "File being uploaded is too large (3000000001), maximum size is 3000000000"
+
+    } finally {
+      Files.delete(uploadFilePath)
+    }
   }
 }

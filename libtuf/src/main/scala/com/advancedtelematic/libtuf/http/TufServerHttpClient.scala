@@ -1,24 +1,23 @@
 package com.advancedtelematic.libtuf.http
 
-import java.io.{FileInputStream, InputStream}
 import java.net.URI
 import java.nio.file.Path
 
-import scala.concurrent.duration._
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, RootRole, TargetsRole}
+import com.advancedtelematic.libtuf.data.ErrorCodes
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TargetFilename, TufKeyPair}
 import com.advancedtelematic.libtuf.http.CliHttpClient.CliHttpBackend
-import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleChecksumNotValid, RoleNotFound, TargetsResponse}
+import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleChecksumNotValid, RoleNotFound, TargetsResponse, UploadTargetTooBig}
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import org.slf4j.LoggerFactory
-import sttp.client
 import sttp.client._
-import sttp.model.Uri
+import sttp.model.{StatusCode, Uri}
 
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, _}
 import scala.util.control.NoStackTrace
 
@@ -28,6 +27,8 @@ object TufServerHttpClient {
   case object RoleChecksumNotValid extends Exception("could not overwrite targets, trying to update an older version of role. Did you run `targets pull` ?") with NoStackTrace
 
   case class RoleNotFound(msg: String) extends Exception(s"role not found: $msg") with NoStackTrace
+
+  case class UploadTargetTooBig(msg: String) extends Exception(msg) with NoStackTrace
 }
 
 trait TufServerClient {
@@ -139,7 +140,11 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
       .followRedirects(true)
       .response(asByteArrayAlways)
 
-    val httpF = execHttp[Unit](req)().map(_ => ())
+    val httpF = execHttp[Unit](req) {
+      case (StatusCode.PayloadTooLarge.code, err) if err.code == ErrorCodes.Reposerver.PayloadTooLarge =>
+        _log.debug(s"Error from server: $err")
+        Future.failed(UploadTargetTooBig(err.description))
+    }.map(_ => ())
 
     _log.info("Uploading file, this may take a while")
 
