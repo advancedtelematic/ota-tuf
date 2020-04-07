@@ -22,7 +22,7 @@ import com.advancedtelematic.libats.http.{ServiceHttpClientSupport, Unmarshalled
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyType, RepoId, SignedPayload, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyType, RepoId, SignedPayload, TargetFilename, TargetName, TargetVersion}
 import io.circe.generic.semiauto._
 import com.advancedtelematic.libtuf_server.repo.client.ReposerverClient.{KeysNotReady, NotFound, RootNotInKeyserver}
 import io.circe.generic.semiauto._
@@ -84,6 +84,8 @@ trait ReposerverClient {
                            content: Source[ByteString, Any],
                            name: TargetName, version: TargetVersion,
                            hardwareIds: Seq[HardwareIdentifier] = Seq.empty): Future[Unit]
+
+  def targetExists(namespace: Namespace, targetFilename: TargetFilename): Future[Boolean]
 }
 
 object ReposerverHttpClient extends ServiceHttpClientSupport {
@@ -161,6 +163,12 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
       entity = entity)
 
     execHttpWithNamespace[Unit](namespace, req)(addTargetErrorHandler)
+  }
+
+  override def targetExists(namespace: Namespace, targetFilename: TargetFilename): Future[Boolean] = {
+    val req = HttpRequest(HttpMethods.HEAD, uri = apiUri(Path("user_repo") / "targets" / targetFilename.value))
+                    .addHeader(RawHeader("x-ats-namespace", namespace.get))
+    httpClient(req).map(_.status.isSuccess())
   }
 
   def execHttpWithNamespace[T : ClassTag : FromEntityUnmarshaller](namespace: Namespace, request: HttpRequest)

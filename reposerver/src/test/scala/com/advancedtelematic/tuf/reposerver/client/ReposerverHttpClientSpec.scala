@@ -61,8 +61,13 @@ class ReposerverHttpClientSpec extends TufReposerverSpec
   keyTypeTest("can add target") { keyType =>
     val ns = genNs
     client.createRoot(ns, keyType).futureValue shouldBe a[RepoId]
+
+    client.targetExists(ns, "filename".refineTry[ValidTargetFilename].get).futureValue shouldBe false
+
     client.addTarget(ns, "filename", Uri("http://example.com"),
                      Sha256Digest.digest("hi".getBytes), 42, BINARY).futureValue shouldBe(())
+
+    client.targetExists(ns, "filename".refineTry[ValidTargetFilename].get).futureValue shouldBe true
   }
 
   keyTypeTest("can add target with content") { keyType =>

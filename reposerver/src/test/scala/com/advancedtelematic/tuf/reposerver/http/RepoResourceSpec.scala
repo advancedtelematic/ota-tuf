@@ -593,6 +593,11 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
       responseAs[SignedPayload[TargetsRole]]
     }
 
+    Head(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseEntity shouldBe HttpEntity.Empty
+    }
+
     Get(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseEntity.dataBytes.runReduce(_ ++ _).futureValue shouldBe testEntity.getData()
@@ -625,10 +630,18 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
     }
   }
 
-  test("returns 404 if target does not exist") {
+  test("GET returns 404 if target does not exist") {
     val repoId = addTargetToRepo()
 
     Get(apiUri(s"repo/${repoId.show}/targets/some/thing")) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
+    }
+  }
+
+  test("HEAD returns 404 if target does not exist") {
+    val repoId = addTargetToRepo()
+
+    Head(apiUri(s"repo/${repoId.show}/targets/some/thing")) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
     }
   }
