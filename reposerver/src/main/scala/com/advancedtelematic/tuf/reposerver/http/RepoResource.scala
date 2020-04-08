@@ -276,8 +276,10 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
             addTargetFromContent(namespace, filename, repoId)
           } ~
           head {
-            complete(targetStore.find(repoId, filename)
-              .map(_ => (StatusCodes.OK, HttpEntity.Empty)))
+            onComplete(targetStore.find(repoId, filename)) {
+              case Success(_) => complete((StatusCodes.OK, HttpEntity.Empty))
+              case Failure(e@Errors.TargetNotFoundError) => complete((e.responseCode, HttpEntity.Empty))
+            }
           } ~
           get {
             complete(targetStore.retrieve(repoId, filename))
