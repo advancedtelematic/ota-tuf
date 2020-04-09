@@ -643,6 +643,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
 
     Head(apiUri(s"repo/${repoId.show}/targets/some/thing")) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
+      responseEntity shouldBe HttpEntity.Empty
     }
   }
 

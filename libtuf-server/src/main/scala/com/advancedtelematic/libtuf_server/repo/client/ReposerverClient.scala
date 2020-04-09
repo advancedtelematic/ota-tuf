@@ -9,6 +9,7 @@ import akka.http.scaladsl.model.Uri.{Path, Query}
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
+import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
@@ -167,8 +168,13 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
 
   override def targetExists(namespace: Namespace, targetFilename: TargetFilename): Future[Boolean] = {
     val req = HttpRequest(HttpMethods.HEAD, uri = apiUri(Path("user_repo") / "targets" / targetFilename.value))
-                    .addHeader(RawHeader("x-ats-namespace", namespace.get))
-    httpClient(req).map(_.status.isSuccess())
+
+    execHttpWithNamespace2[Unit](namespace, req) {
+      case err if err.status == StatusCodes.NotFound => FastFuture.successful(false)
+    }.map {
+      case resp if resp.httpResponse.status == StatusCodes.NotFound => false
+      case _ => true
+    }
   }
 
   def execHttpWithNamespace[T : ClassTag : FromEntityUnmarshaller](namespace: Namespace, request: HttpRequest)
