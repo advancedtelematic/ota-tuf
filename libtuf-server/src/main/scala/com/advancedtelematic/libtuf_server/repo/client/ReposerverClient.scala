@@ -7,8 +7,8 @@ import akka.http.scaladsl.marshalling.Marshal
 import akka.http.scaladsl.model.Uri.Path.Slash
 import akka.http.scaladsl.model.Uri.{Path, Query}
 import akka.http.scaladsl.model._
-import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
+
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
 import akka.stream.scaladsl.Source
@@ -19,7 +19,7 @@ import com.advancedtelematic.libats.http.Errors.{RawError, RemoteServiceError}
 import com.advancedtelematic.libats.http.HttpCodecs._
 import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libats.http.tracing.TracingHttpClient
-import com.advancedtelematic.libats.http.{ServiceHttpClientSupport, UnmarshalledHttpResponse}
+import com.advancedtelematic.libats.http.ServiceHttpClientSupport
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
@@ -101,8 +101,10 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
   extends TracingHttpClient(httpClient, "reposerver") with ReposerverClient {
 
   import ReposerverClient._
+  import com.advancedtelematic.libats.http.ServiceHttpClient
   import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
   import io.circe.syntax._
+  import ServiceHttpClient._
 
   private def apiUri(path: Path) =
     reposerverUri.withPath(Path("/api") / "v1" ++ Slash(path))
@@ -110,9 +112,11 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
   override def createRoot(namespace: Namespace, keyType: KeyType): Future[RepoId] =
     Marshal(CreateRepositoryRequest(keyType)).to[RequestEntity].flatMap { entity =>
       val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("user_repo")), entity = entity)
-      execHttpWithNamespace[RepoId](namespace, req) {
+
+      execHttpUnmarshalledWithNamespace[RepoId](namespace, req).handleErrors {
         case error if error.status == StatusCodes.Conflict =>
           Future.failed(RepoConflict)
+
         case error if error.status == StatusCodes.Locked =>
           Future.failed(KeysNotReady)
       }
@@ -121,22 +125,20 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
   override def fetchRoot(namespace: Namespace): Future[(RepoId, SignedPayload[RootRole])] = {
     val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("user_repo/root.json")))
 
-    val response = execHttpWithNamespace2[SignedPayload[RootRole]](namespace, req) {
-      case error if error.status == StatusCodes.NotFound =>
-        Future.failed(NotFound)
-      case error if error.status == StatusCodes.Locked =>
-        Future.failed(KeysNotReady)
-      case error if error.status == StatusCodes.FailedDependency =>
-        Future.failed(RootNotInKeyserver)
-    }
-
-    response.flatMap { r =>
-      r.httpResponse.headers.find(_.is("x-ats-tuf-repo-id")) match {
-        case Some(repoIdHeader) =>
-          Future.successful(RepoId(UUID.fromString(repoIdHeader.value)) -> r.unmarshalledResponse)
-        case None =>
-          Future.failed(NotFound)
-      }
+    execHttpFullWithNamespace[SignedPayload[RootRole]](namespace, req).flatMap {
+      case Left(error) if error.status == StatusCodes.NotFound =>
+        FastFuture.failed(NotFound)
+      case Left(error) if error.status == StatusCodes.Locked =>
+        FastFuture.failed(KeysNotReady)
+      case Left(error) if error.status == StatusCodes.FailedDependency =>
+        FastFuture.failed(RootNotInKeyserver)
+      case Right(r) =>
+        r.httpResponse.headers.find(_.is("x-ats-tuf-repo-id")) match {
+          case Some(repoIdHeader) =>
+            FastFuture.successful(RepoId(UUID.fromString(repoIdHeader.value)) -> r.unmarshalled)
+          case None =>
+            FastFuture.failed(NotFound)
+        }
     }
   }
 
@@ -163,35 +165,29 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
       uri = apiUri(Path("user_repo") / "targets" / fileName),
       entity = entity)
 
-    execHttpWithNamespace[Unit](namespace, req)(addTargetErrorHandler)
+    execHttpUnmarshalledWithNamespace[Unit](namespace, req).handleErrors(addTargetErrorHandler)
   }
 
   override def targetExists(namespace: Namespace, targetFilename: TargetFilename): Future[Boolean] = {
     val req = HttpRequest(HttpMethods.HEAD, uri = apiUri(Path("user_repo") / "targets" / targetFilename.value))
 
-    execHttpWithNamespace2[Unit](namespace, req) {
-      case err if err.status == StatusCodes.NotFound => FastFuture.successful(false)
-    }.map {
-      case resp if resp.httpResponse.status == StatusCodes.NotFound => false
-      case _ => true
+    execHttpUnmarshalledWithNamespace[Unit](namespace, req).flatMap {
+      case Left(err) if err.status == StatusCodes.NotFound => FastFuture.successful(false)
+      case Left(err) => FastFuture.failed(err)
+      case Right(_) => FastFuture.successful(true)
     }
   }
 
-  def execHttpWithNamespace[T : ClassTag : FromEntityUnmarshaller](namespace: Namespace, request: HttpRequest)
-                                                                  (errorHandler: PartialFunction[RemoteServiceError, Future[T]] = PartialFunction.empty): Future[T] =
-    execHttpWithNamespace2[T](namespace, request)(errorHandler).map(_.unmarshalledResponse)
-
-  def execHttpWithNamespace2[T : ClassTag : FromEntityUnmarshaller](namespace: Namespace, request: HttpRequest)
-                                                                  (errorHandler: PartialFunction[RemoteServiceError, Future[T]] = PartialFunction.empty): Future[UnmarshalledHttpResponse[T]] = {
-    val req = request.addHeader(RawHeader("x-ats-namespace", namespace.get))
-
+  override protected def execHttpFullWithNamespace[T](namespace: Namespace, request: HttpRequest)
+                                                  (implicit ct: ClassTag[T], ev: FromEntityUnmarshaller[T]): Future[ServiceHttpFullResponseEither[T]] = {
     val authReq = authHeaders match {
-      case Some(a) => req.addHeader(a)
-      case None => req
+      case Some(a) => request.addHeader(a)
+      case None => request
     }
 
-    execHttp2[T](authReq)(errorHandler)
+    super.execHttpFullWithNamespace(namespace, authReq)
   }
+
 
   private def payloadFrom(uri: Uri, checksum: Checksum, length: Int, name: Option[TargetName],
                           version: Option[TargetVersion], hardwareIds: Seq[HardwareIdentifier], targetFormat: TargetFormat): Json =
@@ -220,8 +216,7 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
 
     Marshal(multipartForm).to[RequestEntity].flatMap { form =>
       val req = HttpRequest(HttpMethods.PUT, uri, entity = form)
-      execHttpWithNamespace[Unit](namespace, req)(addTargetErrorHandler)
+      execHttpUnmarshalledWithNamespace[Unit](namespace, req).handleErrors(addTargetErrorHandler)
     }
   }
 }
-
