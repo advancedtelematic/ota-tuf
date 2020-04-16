@@ -2,7 +2,7 @@
 
 == Obtaining the binary
 
-Binaries are compiled for each push to `master` and stored in https://ota-tuf-cli-releases.s3-eu-west-1.amazonaws.com/index.html[s3].
+Binaries are compiled for each push to `master` and stored in https://tuf-cli-releases.ota.here.com/index.html[s3].
 
 Download the archive file, unpack and run:
 
@@ -67,7 +67,7 @@ After signing the delegations the file will need to be converted back to an unsi
 9. The delegation and targets are ready for the client to validate:
 
    garage-sign targets pull --repo paris
-   garage-sign delegations pull --repo paris --name supplier01 
+   garage-sign delegations pull --repo paris --name supplier01
 
 
 == Offline signing use case
