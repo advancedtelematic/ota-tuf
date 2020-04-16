@@ -2,13 +2,13 @@ package com.advancedtelematic.libtuf_server.repo.client
 
 import java.util.UUID
 
+
 import akka.actor.ActorSystem
 import akka.http.scaladsl.marshalling.Marshal
 import akka.http.scaladsl.model.Uri.Path.Slash
 import akka.http.scaladsl.model.Uri.{Path, Query}
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.unmarshalling.FromEntityUnmarshaller
-
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
 import akka.stream.scaladsl.Source
@@ -24,21 +24,17 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyType, RepoId, SignedPayload, TargetFilename, TargetName, TargetVersion}
-import io.circe.generic.semiauto._
+import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest
 import com.advancedtelematic.libtuf_server.repo.client.ReposerverClient.{KeysNotReady, NotFound, RootNotInKeyserver}
-import io.circe.generic.semiauto._
 import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libats.codecs.CirceCodecs._
-import com.advancedtelematic.libtuf_server.repo.server.DataType._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libats.http.HttpCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
+import com.advancedtelematic.libtuf.data.ClientDataType.{RootRole, TargetsRole}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
-import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf_server.data.Requests.CreateRepositoryRequest
+import io.circe.generic.semiauto._
 
 object ReposerverClient {
 
@@ -87,6 +83,8 @@ trait ReposerverClient {
                            hardwareIds: Seq[HardwareIdentifier] = Seq.empty): Future[Unit]
 
   def targetExists(namespace: Namespace, targetFilename: TargetFilename): Future[Boolean]
+
+  def fetchTargets(namespace: Namespace): Future[SignedPayload[TargetsRole]]
 }
 
 object ReposerverHttpClient extends ServiceHttpClientSupport {
@@ -175,6 +173,15 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
       case Left(err) if err.status == StatusCodes.NotFound => FastFuture.successful(false)
       case Left(err) => FastFuture.failed(err)
       case Right(_) => FastFuture.successful(true)
+    }
+  }
+
+  override def fetchTargets(namespace: Namespace): Future[SignedPayload[TargetsRole]] = {
+    val req = HttpRequest(HttpMethods.GET, uri = apiUri(Path("user_repo/targets.json")))
+
+    execHttpUnmarshalledWithNamespace[SignedPayload[TargetsRole]](namespace, req).handleErrors {
+      case error if error.status == StatusCodes.NotFound =>
+        FastFuture.failed(NotFound)
     }
   }
 

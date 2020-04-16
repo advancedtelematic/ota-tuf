@@ -279,6 +279,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
             onComplete(targetStore.find(repoId, filename)) {
               case Success(_) => complete((StatusCodes.OK, HttpEntity.Empty))
               case Failure(e@Errors.TargetNotFoundError) => complete((e.responseCode, HttpEntity.Empty))
+              case Failure(e) => failWith(e)
             }
           } ~
           get {
