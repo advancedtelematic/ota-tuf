@@ -67,7 +67,11 @@ class ReposerverHttpClientSpec extends TufReposerverSpec
     client.addTarget(ns, "filename", Uri("http://example.com"),
                      Sha256Digest.digest("hi".getBytes), 42, BINARY).futureValue shouldBe(())
 
-    client.targetExists(ns, "filename".refineTry[ValidTargetFilename].get).futureValue shouldBe true
+    val validTargetFilename = "filename".refineTry[ValidTargetFilename].get
+
+    client.targetExists(ns, validTargetFilename).futureValue shouldBe true
+
+    client.fetchTargets(ns).futureValue.signed.targets.contains(validTargetFilename)
   }
 
   keyTypeTest("can add target with content") { keyType =>
@@ -101,4 +105,18 @@ class ReposerverHttpClientSpec extends TufReposerverSpec
     client.addTarget(Namespace("non-existant-namespace"), "filename", Uri("http://example.com"),
                      Sha256Digest.digest("hi".getBytes), 42, BINARY).failed.futureValue shouldBe ReposerverClient.NotFound
   }
+
+  keyTypeTest("fetching targets for non-existing repo leads to error") { keyType =>
+    val ns = genNs
+
+    client.fetchTargets(ns).failed.futureValue shouldBe ReposerverClient.NotFound
+  }
+
+  keyTypeTest("fetches empty targets") { keyType =>
+    val ns = genNs
+    client.createRoot(ns, keyType).futureValue shouldBe a[RepoId]
+
+    client.fetchTargets(ns).futureValue.signed.targets shouldBe 'empty
+  }
+
 }
