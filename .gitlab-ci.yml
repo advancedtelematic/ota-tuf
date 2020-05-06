@@ -52,7 +52,7 @@ test:
   before_script:
     - ./deploy/gitlab-db-setup.sh mysql db
   script:
-    - sbt -sbt-dir ./.sbt -ivy ./.ivy2 ut:test
+    - sbt -sbt-dir ./.sbt -ivy ./.ivy2 clean coverage ut:test coverageReport sonarScan
   cache:
     paths:
       - .ivy2/

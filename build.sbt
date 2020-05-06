@@ -74,12 +74,32 @@ lazy val commonSettings = Seq(
   Versioning.settings ++
   commonDeps
 
+lazy val sonarSettings = Seq(
+  sonarProperties ++= Map(
+    "sonar.projectName" -> "OTA Connect TUF",
+    "sonar.projectKey" -> "ota-connect-tuf",
+    "sonar.sources" -> "src/main/scala",
+    "sonar.tests" -> "src/test/scala",
+    "sonar.host.url" -> "http://sonar.in.here.com",
+    "sonar.links.issue" -> "https://saeljira.it.here.com/projects/OTA/issues",
+    "sonar.links.scm" -> "https://main.gitlab.in.here.com/olp/edge/ota/connect/back-end/ota-tuf",
+    "sonar.links.ci" -> "https://main.gitlab.in.here.com/olp/edge/ota/connect/back-end/ota-tuf/pipelines",
+    "sonar.language" -> "scala",
+    "sonar.projectVersion" -> version.value,
+    "sonar.modules" -> "libtuf,libtuf-server,keyserver,reposerver,cli",
+    "libtuf.sonar.projectName" -> "OTA Connect Libtuf",
+    "libtuf-server.sonar.projectName" -> "OTA Connect Libtuf Server",
+    "keyserver.sonar.projectName" -> "OTA Connect TUF Keyserver",
+    "reposerver.sonar.projectName" -> "OTA Connect TUF Repository Server",
+    "cli.sonar.projectName" -> "OTA Connect TUF CLI (garage-sign)",
+  )
+)
+
 lazy val libtuf = (project in file("libtuf"))
   .enablePlugins(BuildInfoPlugin, Versioning.Plugin)
   .configs(commonConfigs:_*)
   .settings(commonSettings)
   .settings(Publish.settings)
-
 
 lazy val libtuf_server = (project in file("libtuf-server"))
   .enablePlugins(BuildInfoPlugin, Versioning.Plugin)
@@ -128,3 +148,5 @@ lazy val ota_tuf = (project in file("."))
   .settings(Publish.disable)
   .settings(Release.settings(libtuf, libtuf_server, keyserver, reposerver))
   .aggregate(libtuf_server, libtuf, keyserver, reposerver, cli)
+  .settings(sonarSettings)
+  .settings(aggregate in sonarScan := false)
