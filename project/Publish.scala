@@ -34,7 +34,7 @@ object Publish {
 
   lazy val disable = Seq(
     publishArtifact := false,
-    publish := (),
-    publishLocal := ()
+    publish := {},
+    publishLocal := {}
   )
 }
