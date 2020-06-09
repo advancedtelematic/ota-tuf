@@ -40,8 +40,8 @@ import sttp.model.{StatusCode, Uri}
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
-class S3StorageResourceIntegrationSpec extends TufReposerverSpec
-  with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration {
+class S3StorageResourceIntegrationSpec
+  extends ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration {
 
   lazy val credentials = new Settings {}.s3Credentials
 
@@ -138,46 +138,9 @@ class S3StorageResourceIntegrationSpec extends TufReposerverSpec
 
     val client = new ReposerverHttpClient(URI.create("http://0.0.0.0"), testBackendWithFallback)
 
-    val targetFilename = eu.timepit.refined.refineV[ValidTargetFilename]("test-0.0.1").right.get
+    val targetInfo = uploadTargetFile(TargetName("test"), TargetVersion("0.0.1"), client)
 
-    val uploadFilePath = Files.createTempFile("s3upload", "txt")
-    Files.write(uploadFilePath, "“Como todos los hombres de la Biblioteca, he viajado en mi juventud“".getBytes(StandardCharsets.UTF_8))
-
-    val rootRole = fakeKeyserverClient.fetchRootRole(repoId).futureValue
-    val targetKeyId = rootRole.signed.roles(RoleType.TARGETS).keyids.head
-    val keyPair = fakeKeyserverClient.fetchKeyPair(repoId, targetKeyId).futureValue
-
-    client.uploadTarget(targetFilename, uploadFilePath, 10.seconds).futureValue
-
-    val (checksumHeader, version) = Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
-      header("x-ats-role-checksum").value -> responseAs[SignedPayload[TargetsRole]].signed.version
-    }
-
-    val custom = TargetCustom(TargetName("test"), TargetVersion("0.0.1"), Seq.empty, targetFormat = TargetFormat.BINARY.some,
-      cliUploaded = true.some).asJson
-    val uploadedFileChecksum = com.advancedtelematic.libtuf.crypt.Sha256FileDigest.from(uploadFilePath)
-    val newTargetsMap = Map(targetFilename -> ClientTargetItem(Map(uploadedFileChecksum.method -> uploadedFileChecksum.hash), uploadFilePath.toFile.length(), custom = custom.some))
-    val newTargets = TargetsRole(Instant.now().plus(30, ChronoUnit.DAYS), targets = newTargetsMap, version = version + 1)
-    val signature = TufCrypto.signPayload(keyPair.privkey, newTargets.asJson).toClient(keyPair.pubkey.id)
-    val signedPayload: SignedPayload[TargetsRole] = SignedPayload(List(signature), newTargets, newTargets.asJson)
-
-    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).addHeader(checksumHeader) ~> routes ~> check {
-      status shouldBe StatusCodes.NoContent
-    }
-
-    Get(apiUri(s"repo/${repoId.show}/targets/" + targetFilename.value)) ~> routes ~> check {
-      status shouldBe StatusCodes.Found
-      val uri = Uri.parse(header("Location").value.value()).right.get
-      uri.host should include("amazonaws.com")
-
-      val downloadPath = Files.createTempFile("s3download", "txt")
-      val req = basicRequest.get(uri).response(asPathAlways(downloadPath))
-      val resp = realClient.send(req).futureValue
-
-      val downloadedChecksum = Sha256FileDigest.from(resp.body)
-
-      downloadedChecksum shouldBe uploadedFileChecksum
-      downloadPath.toFile.length() shouldBe uploadFilePath.toFile.length()
-    }
+    updateTargetsMetadata(repoId, targetInfo)
+    downloadTarget(realClient, "amazonaws.com", repoId, targetInfo)
   }
 }

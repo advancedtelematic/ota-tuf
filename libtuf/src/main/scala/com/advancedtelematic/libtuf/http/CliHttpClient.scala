@@ -62,23 +62,31 @@ abstract class CliHttpClient(httpBackend: CliHttpBackend)(implicit ec: Execution
     else
       io.circe.parser.parse(new String(response.body)).flatMap(_.as[T]).toTry
 
-  protected def execHttp[T: ClassTag : Decoder](request: Request[Array[Byte], Nothing])
-                                               (errorHandler: PartialFunction[(Int, ErrorRepresentation), Future[T]] = defaultErrorHandler()): Future[Response[T]] =
-    httpBackend.send[Array[Byte]](request).flatMap { resp ⇒
-      if (resp.isSuccess)
-        Future.fromTry(tryParseResponse[T](resp).map(parsed => resp.copy(body = parsed)))
-      else {
-        val parsedErr = tryErrorParsing(resp)
+  protected def handleErrorResponse[T](request: Request[Array[Byte], Nothing], resp: Response[Array[Byte]])
+                                      (errorHandler: PartialFunction[(Int, ErrorRepresentation), Future[T]] = defaultErrorHandler()): Future[Response[T]] = {
+    val parsedErr = tryErrorParsing(resp)
 
-        if (errorHandler.isDefinedAt(resp.code.code, parsedErr)) {
-          errorHandler(resp.code.code, parsedErr).map(err => resp.copy(body = err))
-        } else {
-          log.debug(s"request failed: $request")
-          Future.failed {
-            val msg = s"${this.getClass.getSimpleName}|${request.method}|http/${resp.code}|${request.uri}|${parsedErr.description}"
-            CliHttpClientError(msg, parsedErr)
-          }
-        }
+    if (errorHandler.isDefinedAt(resp.code.code, parsedErr)) {
+      errorHandler(resp.code.code, parsedErr).map(err => resp.copy(body = err))
+    } else {
+      log.debug(s"request failed: $request")
+      Future.failed {
+        val msg = s"${this.getClass.getSimpleName}|${request.method}|http/${resp.code}|${request.uri}|${parsedErr.description}"
+        CliHttpClientError(msg, parsedErr)
       }
     }
+  }
+
+  protected def handleResponse[T: ClassTag : Decoder](request: Request[Array[Byte], Nothing], resp: Response[Array[Byte]])
+                                                     (errorHandler: PartialFunction[(Int, ErrorRepresentation), Future[T]] = defaultErrorHandler()): Future[Response[T]] = {
+    if (resp.isSuccess)
+      Future.fromTry(tryParseResponse[T](resp).map(parsed => resp.copy(body = parsed)))
+    else {
+      handleErrorResponse(request, resp)(errorHandler)
+    }
+  }
+
+  protected def execHttp[T: ClassTag : Decoder](request: Request[Array[Byte], Nothing])
+                                               (errorHandler: PartialFunction[(Int, ErrorRepresentation), Future[T]] = defaultErrorHandler()): Future[Response[T]] =
+    httpBackend.send[Array[Byte]](request).flatMap(handleResponse(request, _)(errorHandler))
 }

@@ -18,13 +18,15 @@ import com.advancedtelematic.libats.slick.monitoring.DatabaseMetrics
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverHttpClient
 import com.advancedtelematic.metrics.prometheus.PrometheusMetricsSupport
 import com.advancedtelematic.metrics.{AkkaHttpRequestMetrics, MetricsSupport}
+import com.advancedtelematic.tuf.reposerver
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
 import com.advancedtelematic.tuf.reposerver.target_store._
 import com.amazonaws.regions.Regions
 import com.typesafe.config.ConfigFactory
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.duration
 
 
 trait Settings {
@@ -45,9 +47,18 @@ trait Settings {
     new S3Credentials(accessKey, secretKey, bucketId, region)
   }
 
+  lazy val azureSettings = {
+    val azureConfig = _config.getConfig("storage.azure")
+    val connectionString = azureConfig.getString("connectionString")
+    val signatureTtl = FiniteDuration.apply(azureConfig.getDuration("signatureTtl").getSeconds, duration.SECONDS)
+    reposerver.target_store.AzureTargetStoreEngine.BlobStorageSettings(connectionString, signatureTtl)
+  }
+
   lazy val outOfBandUploadLimit = _config.getBytes("storage.outOfBandUploadLimit")
 
   lazy val useS3 = _config.getString("storage.type").equals("s3")
+
+  lazy val useAzure = _config.getString("storage.type").equals("azure")
 
   lazy val userRepoSizeLimit = _config.getLong("reposerver.sizeLimit")
 
@@ -76,7 +87,13 @@ object Boot extends BootApp
 
   val messageBusPublisher = MessageBus.publisher(system, config)
 
-  val targetStoreEngine = if(useS3) new S3TargetStoreEngine(s3Credentials) else LocalTargetStoreEngine(targetStoreRoot)
+  val targetStoreEngine = if(useS3) {
+    new S3TargetStoreEngine(s3Credentials)
+  } else if (useAzure) {
+    new AzureTargetStoreEngine(azureSettings)
+  } else {
+    LocalTargetStoreEngine(targetStoreRoot)
+  }
 
   def targetStore(implicit requestTracing: ServerRequestTracing) = TargetStore(keyStoreClient,  targetStoreEngine, messageBusPublisher)
 

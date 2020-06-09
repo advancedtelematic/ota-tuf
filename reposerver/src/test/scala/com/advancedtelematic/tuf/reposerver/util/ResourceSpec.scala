@@ -1,6 +1,7 @@
 package com.advancedtelematic.tuf.reposerver.util
 
-import java.nio.file.Files
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Path}
 import java.security.PublicKey
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -16,21 +17,24 @@ import com.advancedtelematic.libats.test.DatabaseSpec
 import scala.concurrent.Future
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.ws.Message
 import akka.http.scaladsl.server.{Directive1, Directives, Route}
 import akka.http.scaladsl.util.FastFuture
+import akka.stream.scaladsl.{Flow, Source}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 
 import scala.concurrent.duration._
 import scala.collection.JavaConverters._
 import scala.util.Try
 import akka.testkit.TestDuration
+import akka.util.ByteString
 import com.advancedtelematic.libats.auth.NamespaceDirectives
-import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libats.messaging.MemoryMessageBus
-import com.advancedtelematic.libtuf.crypt.TufCrypto
+import com.advancedtelematic.libtuf.crypt.{Sha256FileDigest, TufCrypto}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType
-import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RoleKeys, RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RepoId
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.http.{NamespaceValidation, TufReposerverRoutes}
@@ -39,6 +43,9 @@ import com.advancedtelematic.tuf.reposerver.target_store.{LocalTargetStoreEngine
 import scala.concurrent.Promise
 import cats.syntax.either._
 import com.advancedtelematic.libats.http.tracing.NullServerRequestTracing
+import com.advancedtelematic.libtuf.http.ReposerverHttpClient
+import com.advancedtelematic.tuf.reposerver.util.ResourceSpec.TargetInfo
+import sttp.client.{NothingT, SttpBackend}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -204,12 +211,30 @@ trait HttpClientSpecSupport {
   }
 }
 
+object ResourceSpec {
+  final case class TargetInfo(name: TargetName, version: TargetVersion, targetFilename: TargetFilename, localFilePath: Path, checksum: Checksum)
+
+  object TargetInfo {
+    def generate(name: TargetName, version: TargetVersion): TargetInfo = {
+      val targetFilename = eu.timepit.refined.refineV[ValidTargetFilename](s"${name.value}-${version.value}").right.get
+
+      val uploadFilePath = Files.createTempFile("s3upload", "txt")
+      Files.write(uploadFilePath, "“Como todos los hombres de la Biblioteca, he viajado en mi juventud“".getBytes(StandardCharsets.UTF_8))
+      val uploadedFileChecksum = com.advancedtelematic.libtuf.crypt.Sha256FileDigest.from(uploadFilePath)
+      TargetInfo(name, version, targetFilename, uploadFilePath, uploadedFileChecksum)
+    }
+  }
+}
+
 trait ResourceSpec extends TufReposerverSpec
   with ScalatestRouteTest
   with DatabaseSpec
   with FakeHttpClientSpec
   with LongHttpRequest
   with Directives {
+
+  import cats.syntax.show._
+  import org.scalatest.OptionValues._
 
   def apiUri(path: String): String = "/api/v1/" + path
 
@@ -231,4 +256,56 @@ trait ResourceSpec extends TufReposerverSpec
   lazy val routes = new TufReposerverRoutes(fakeKeyserverClient, namespaceValidation, targetStore, messageBusPublisher).routes
 
   implicit lazy val tracing = new NullServerRequestTracing
+
+  protected def uploadTargetFile(name: TargetName, version: TargetVersion, client: ReposerverHttpClient): TargetInfo = {
+    val target = TargetInfo.generate(name, version)
+    client.uploadTarget(target.targetFilename, target.localFilePath, 10.seconds).futureValue
+    target
+  }
+
+  protected def updateTargetsMetadata(repoId: RepoId, targetInfo: TargetInfo): Unit = {
+    import cats.syntax.option._
+    import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+    import io.circe.syntax._
+    import com.advancedtelematic.libtuf.data.TufCodecs._
+
+    val rootRole = fakeKeyserverClient.fetchRootRole(repoId).futureValue
+    val targetKeyId = rootRole.signed.roles(RoleType.TARGETS).keyids.head
+    val keyPair = fakeKeyserverClient.fetchKeyPair(repoId, targetKeyId).futureValue
+
+    val (checksumHeader, version) = Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
+      header("x-ats-role-checksum").value -> responseAs[SignedPayload[TargetsRole]].signed.version
+    }
+
+    val custom = TargetCustom(targetInfo.name, targetInfo.version, Seq.empty, targetFormat = TargetFormat.BINARY.some,
+      cliUploaded = true.some).asJson
+    val newTargetsMap = Map(targetInfo.targetFilename -> ClientTargetItem(Map(targetInfo.checksum.method -> targetInfo.checksum.hash), targetInfo.localFilePath.toFile.length(), custom = custom.some))
+    val newTargets = TargetsRole(Instant.now().plus(30, ChronoUnit.DAYS), targets = newTargetsMap, version = version + 1)
+    val signature = TufCrypto.signPayload(keyPair.privkey, newTargets.asJson).toClient(keyPair.pubkey.id)
+    val signedPayload: SignedPayload[TargetsRole] = SignedPayload(List(signature), newTargets, newTargets.asJson)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).addHeader(checksumHeader) ~> routes ~> check {
+      status shouldBe StatusCodes.NoContent
+    }
+  }
+
+  def downloadTarget(client: SttpBackend[Future, Source[ByteString, Any], NothingT], redirectEndpointSuyffix: String, repoId: RepoId, targetInfo: TargetInfo): Unit = {
+    import sttp.client._
+    import sttp.model.Uri
+
+    Get(apiUri(s"repo/${repoId.show}/targets/" + targetInfo.targetFilename.value)) ~> routes ~> check {
+      status shouldBe StatusCodes.Found
+      val uri = Uri.parse(header("Location").value.value()).right.get
+      uri.host should include(redirectEndpointSuyffix)
+
+      val downloadPath = Files.createTempFile("s3download", "txt")
+      val req = basicRequest.get(uri).response(asPathAlways(downloadPath))
+      val resp = client.send(req).futureValue
+
+      val downloadedChecksum = Sha256FileDigest.from(resp.body)
+
+      downloadedChecksum shouldBe targetInfo.checksum
+      downloadPath.toFile.length() shouldBe targetInfo.localFilePath.toFile.length()
+    }
+  }
 }
