@@ -12,6 +12,8 @@ variables:
   MYSQL_USER: "ota_tuf"
   MYSQL_PASSWORD: "ota_tuf"
   VAULT_ADDR: "http://vault.sit-ota.aws.in.here.com"
+  # The same image have to be used by test and code coverage jobs:
+  TEST_IMAGE: advancedtelematic/gitlab-jobs:0.2.4
 
 build CI nginx:
   stage: prepare
@@ -44,7 +46,7 @@ test:
         - --character-set-server=utf8
         - --collation-server=utf8_unicode_ci
         - --max_connections=1000
-  image: advancedtelematic/gitlab-jobs:0.2.2
+  image: $TEST_IMAGE
   variables:
     DB_URL: "jdbc:mariadb://db:3306/ota_tuf"
     MTLS_REPOSERVER_URI: "https://tuf-nginx:8181/"
@@ -67,11 +69,11 @@ test:
   cache:
     paths:
       - .ivy2/
-      - .sbt
+      - .sbt/
 
 code coverage:
   extends: .report_scala_coverage
-  image: advancedtelematic/gitlab-jobs:0.2.2
+  image: $TEST_IMAGE
   before_script:
     - sbt -sbt-dir ./.sbt -ivy ./.ivy2 coverageAggregate
 
@@ -167,5 +169,5 @@ trigger sit reposerver deploy:
 
 include:
   - project: olp/edge/ota/infra/security
-    ref: v0.0.5
+    ref: v0.0.7
     file: /shared.yaml
