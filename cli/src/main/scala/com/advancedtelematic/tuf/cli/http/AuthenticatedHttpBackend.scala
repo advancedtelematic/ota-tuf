@@ -20,7 +20,11 @@ import scala.language.higherKinds
 
 protected class AuthPlusCliHttpBackend[F[_], S, WS_HANDLER[_]](token: AuthPlusToken, delegate: SttpBackend[F, S, WS_HANDLER]) extends SttpBackend[F, S, WS_HANDLER] {
   override def send[T](request: Request[T, S]): F[Response[T]] = {
-    val authReq = request.auth.bearer(token.value)
+    val authReq = if(request.uri.host.endsWith(".amazonaws.com")) {
+      request
+    } else {
+      request.auth.bearer(token.value)
+    }
     delegate.send(authReq)
   }
 

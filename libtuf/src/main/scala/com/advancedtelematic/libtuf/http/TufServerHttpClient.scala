@@ -11,15 +11,17 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TargetFilename, TufKeyPair}
 import com.advancedtelematic.libtuf.http.CliHttpClient.CliHttpBackend
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleChecksumNotValid, RoleNotFound, TargetsResponse, UploadTargetTooBig}
+import com.azure.storage.blob.BlobClientBuilder
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import org.slf4j.LoggerFactory
 import sttp.client._
-import sttp.model.{StatusCode, Uri}
+import sttp.model.{Headers, StatusCode, Uri}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, _}
 import scala.util.control.NoStackTrace
+import scala.util.Try
 
 object TufServerHttpClient {
   case class TargetsResponse(targets: SignedPayload[TargetsRole], checksum: Option[Refined[String, ValidChecksum]])
@@ -133,19 +135,41 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
     execHttp[SignedPayload[TargetsRole]](req)().map(_.body)
   }
 
+  private[this] def uploadToAzure(uri: Uri, inputPath: Path, timeout: Duration): Future[Unit] = {
+    val uploadResult = Try {
+      val client = new BlobClientBuilder().endpoint(uri.toString()).buildClient()
+      client.uploadFromFile(inputPath.toString, true)
+    }
+    Future.fromTry(uploadResult)
+  }
+
   override def uploadTarget(targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit] = {
     val req = basicRequest.put(apiUri(s"uploads/" + targetFilename.value))
       .body(inputPath)
       .readTimeout(timeout)
-      .followRedirects(true)
+      .followRedirects(false)
       .response(asByteArrayAlways)
 
-    val httpF = execHttp[Unit](req) {
-      case (StatusCode.PayloadTooLarge.code, err) if err.code == ErrorCodes.Reposerver.PayloadTooLarge =>
-        _log.debug(s"Error from server: $err")
-        Future.failed(UploadTargetTooBig(err.description))
-    }.map(_ => ())
+    val httpF: Future[Unit] = httpBackend.send(req).flatMap {
+      case r @ Response(_, StatusCode.Found, _, _, _) =>
+        r.header("Location").fold[Either[String, Uri]](Left("No 'Location' header found."))(x => Uri.parse(x)) match {
+          case Left(err) =>
+            Future.failed(new Throwable(err))
 
+          case Right(uri) if uri.host.endsWith("core.windows.net") =>
+            uploadToAzure(uri, inputPath, timeout)
+
+          case Right(uri) =>
+            execHttp[Unit](req.put(uri))(PartialFunction.empty).map(_ => ())
+        }
+
+      case resp =>
+        handleResponse[Unit](req, resp) {
+          case (StatusCode.PayloadTooLarge.code, err) if err.code == ErrorCodes.Reposerver.PayloadTooLarge =>
+            _log.debug(s"Error from server: $err")
+            Future.failed(UploadTargetTooBig(err.description))
+        }.map(_ => ())
+    }
     _log.info("Uploading file, this may take a while")
 
     def wait(): Future[Unit] = {
