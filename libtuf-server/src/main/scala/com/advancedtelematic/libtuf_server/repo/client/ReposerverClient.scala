@@ -105,7 +105,7 @@ class ReposerverHttpClient(reposerverUri: Uri, httpClient: HttpRequest => Future
   import ServiceHttpClient._
 
   private def apiUri(path: Path) =
-    reposerverUri.withPath(Path("/api") / "v1" ++ Slash(path))
+    reposerverUri.withPath(reposerverUri.path / "api" / "v1" ++ Slash(path))
 
   override def createRoot(namespace: Namespace, keyType: KeyType): Future[RepoId] =
     Marshal(CreateRepositoryRequest(keyType)).to[RequestEntity].flatMap { entity =>
