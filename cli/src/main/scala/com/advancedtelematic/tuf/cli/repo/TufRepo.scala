@@ -407,14 +407,20 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
     assert(newTargetsName.isDefined, "new targets key name must be defined when moving root off line in tuf-reposerver")
 
     for {
+      // read new root key pair from local filesystem:
       (newRootPubKey, newRootPrivKey) <- keyStorage.readKeyPair(newRootName).toFuture
+      // read new public target key from local filesystem:
       (newTargetsPubKey, _) <- keyStorage.readKeyPair(newTargetsName.get).toFuture
+      // get the unsigned root metadata from server:
       oldRootRole <- repoClient.root().map(_.signed)
+      // make sure target metadata has been pulled from server (won't be used in this function):
       _ <- ensureTargetsPulled(repoClient, oldRootRole)
       oldRootPubKeyId = oldKeyId.getOrElse(oldRootRole.roles(RoleType.ROOT).keyids.last)
       oldRootPubKey = oldRootRole.keys(oldRootPubKeyId)
+      // pull and delete old root key from server and store it locally under the given name:
       oldRootPrivKey <- deleteOrReadKey(repoClient, oldRootName, oldRootPubKeyId)
       _ <- keyStorage.writeKeys(oldRootName, oldRootPubKey, oldRootPrivKey).toFuture
+      // create new root metadata based on the old one with new keys and version:
       newRootRole = oldRootRole
         .withRoleKeys(RoleType.ROOT, threshold = 1, newRootPubKey)
         .withRoleKeys(RoleType.TARGETS, threshold = 1, newTargetsPubKey)
@@ -423,8 +429,10 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
       newRootSignature = TufCrypto.signPayload(newRootPrivKey, newRootRole.asJson).toClient(newRootPubKey.id)
       newRootOldSignature = TufCrypto.signPayload(oldRootPrivKey, newRootRole.asJson).toClient(oldRootPubKeyId)
       newSignedRoot = SignedPayload(Seq(newRootSignature, newRootOldSignature), newRootRole, newRootRole.asJson)
+      // upload the new root metadata:
       _ = log.debug(s"pushing ${newSignedRoot.asJson.spaces2}")
       _ <- repoClient.pushSignedRoot(newSignedRoot)
+      // also save it locally:
       _ <- writeSignedRole(newSignedRoot).toFuture
     } yield newSignedRoot
   }
