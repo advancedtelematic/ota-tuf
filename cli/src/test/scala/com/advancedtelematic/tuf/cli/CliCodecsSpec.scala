@@ -16,15 +16,17 @@ class CliCodecsSpec extends FunSuite {
         json"""{
                 "reposerver" : "https://tuf-reposerver-pub.gw.staging.atsgarage.com:443",
                 "auth" : {
-                  "server" : "https://auth-plus.gw.staging.atsgarage.com:443",
+                  "server" : "https://ota-test.auth.eu-west-1.amazoncognito.com/oauth2/token",
                   "client_id" : "fc134fb9-2848-473b-9503-ed6bfd231ee9",
-                  "client_secret" : "secret"
+                  "client_secret" : "secret",
+                  "scope" : "ota-treehub/namespaece.default"
                 },
                 "treehub" : {
                   "oauth2" : {
-                    "server" : "https://auth-plus.gw.staging.atsgarage.com:443",
+                    "server" : "https://ota-test.auth.eu-west-1.amazoncognito.com/oauth2/token",
                     "client_id" : "fc134fb9-2848-473b-9503-ed6bfd231ee9",
-                    "client_secret" : "secret"
+                    "client_secret" : "secret",
+                    "scope" : "ota-treehub/namespaece.default"
                   },
                   "no_auth" : false,
                   "ostree" : {

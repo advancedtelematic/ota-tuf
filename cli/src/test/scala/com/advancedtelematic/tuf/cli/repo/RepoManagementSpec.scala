@@ -4,18 +4,20 @@ import java.net.URI
 import java.nio.file.{Files, Path, Paths}
 import java.time.Instant
 
-import io.circe.jawn._
-import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, JsonSignedPayload, KeyType, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
-import com.advancedtelematic.tuf.cli.DataType._
 import cats.syntax.either._
+import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.{Ed25519KeyType, KeyType, RsaKeyType, SignedPayload, TufKey, TufPrivateKey}
+import com.advancedtelematic.tuf.cli.DataType._
 import com.advancedtelematic.tuf.cli.repo.TufRepo.{MissingCredentialsZipFile, RepoAlreadyInitialized}
-import com.advancedtelematic.tuf.cli.util.{CliSpec, KeyTypeSpecSupport, RandomNames}
+import com.advancedtelematic.tuf.cli.util.{CliSpec, KeyTypeSpecSupport}
+import io.circe.jawn._
 import io.circe.syntax._
+import org.scalatest.OptionValues._
+import org.scalatest.TryValues._
 
-import scala.util.{Failure, Success, Try}
+import scala.util.{Success, Try}
 
 class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
   lazy val credentialsZipNoTargets = Paths.get(this.getClass.getResource("/credentials_no_targets.zip").toURI)
@@ -23,6 +25,7 @@ class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
   lazy val credentialsZipNoTufRepoEd25519 = Paths.get(this.getClass.getResource("/credentials_no_tufrepo_ed25519.zip").toURI)
   lazy val credentialsZipNoAuthEd25519 = Paths.get(this.getClass.getResource("/credentials_no_auth_ed25519.zip").toURI)
   lazy val credentialsZipTlsAuthEd25519 = Paths.get(this.getClass.getResource("/credentials_tls-auth_ed25519.zip").toURI)
+  lazy val credentialsZipAuthPlusLegacy = Paths.get(this.getClass.getResource("/credentials_auth_plus_legacy.zip").toURI)
 
   import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -32,59 +35,52 @@ class RepoManagementSpec extends CliSpec with KeyTypeSpecSupport {
 
   test("credentials.zip without tufrepo.url throws proper error") {
     val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipNoTufRepoEd25519)
-    repoT.failed.get shouldBe MissingCredentialsZipFile("tufrepo.url")
+    repoT.failure.exception shouldBe MissingCredentialsZipFile("tufrepo.url")
+  }
+
+  test("legacy auth+ credentials.zip treehub.json are still parsed successfully") {
+    val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipAuthPlusLegacy)
+    repoT.success.value.treehubConfig.success.value.oauth2.value.scope shouldBe "none"
   }
 
   test("throws error for already initialized repos") {
     val path = randomRepoPath
 
     val repoT = RepoManagement.initialize(RepoServer, path, credentialsZipEd25519)
-    repoT shouldBe a[Success[_]]
+    repoT.success
 
     val repoF = RepoManagement.initialize(RepoServer, path, credentialsZipEd25519)
-    repoF shouldBe Failure(RepoAlreadyInitialized(path))
+    repoF.failure.exception shouldBe RepoAlreadyInitialized(path)
   }
 
   test("can initialize repo from ZIP file") {
     val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipEd25519)
-    repoT shouldBe a[Success[_]]
+    repoT.success
   }
 
   test("can initialize repo from ZIP file specifying custom repo") {
     val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipEd25519, repoUri = Some(new URI("https://ats.com")))
-    repoT shouldBe a[Success[_]]
-    repoT.flatMap(_.repoServerUri).get.toString shouldBe "https://ats.com"
+    repoT.success.value.repoServerUri.get.toString shouldBe "https://ats.com"
   }
 
   test("can initialize repo from ZIP file without targets keys") {
     val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipNoTargets)
-    repoT shouldBe a[Success[_]]
-    repoT.get.repoPath.resolve("keys/targets.pub").toFile.exists() shouldBe false
+    repoT.success.value.repoPath.resolve("keys/targets.pub").toFile.exists() shouldBe false
   }
 
   test("can read auth config for an initialized repo") {
     val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipEd25519)
-
-    repoT shouldBe a[Success[_]]
-
-    repoT.get.authConfig.get.get shouldBe a[OAuthConfig]
+    repoT.success.value.authConfig.get.get shouldBe a[OAuthConfig]
   }
 
   test("skips auth when no_auth: true") {
     val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipNoAuthEd25519)
-
-    repoT shouldBe a[Success[_]]
-
-    repoT.get.authConfig.get shouldBe None
+    repoT.success.value.authConfig.get shouldBe None
   }
 
   test("reads targets root.json from credentials.zip if present") {
     val repoT = RepoManagement.initialize(RepoServer, randomRepoPath, credentialsZipEd25519)
-    repoT shouldBe a[Success[_]]
-
-    val repo = repoT.get
-
-    repo.readSignedRole[RootRole].get.signed shouldBe a[RootRole]
+    repoT.success.value.readSignedRole[RootRole].get.signed shouldBe a[RootRole]
   }
 
   def keyTypeZipTest(name: String)(fn: (Path, KeyType) => Any): Unit = {

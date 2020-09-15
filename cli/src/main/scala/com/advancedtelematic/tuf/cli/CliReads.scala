@@ -27,7 +27,7 @@ object CliCodecs {
   implicit val config: Configuration = Configuration.default.withDefaults
 
   implicit val authConfigDecoder: Decoder[OAuthConfig] = deriveConfiguredDecoder
-  implicit val authConfigEncoder: Encoder[OAuthConfig] = deriveConfiguredCodec
+  implicit val authConfigEncoder: Encoder[OAuthConfig] = deriveConfiguredEncoder
 
   implicit val mutualTlsConfigEncoder: Encoder[MutualTlsConfig] = deriveConfiguredEncoder
   implicit val mutualTlsConfigDecoder: Decoder[MutualTlsConfig] = deriveConfiguredDecoder

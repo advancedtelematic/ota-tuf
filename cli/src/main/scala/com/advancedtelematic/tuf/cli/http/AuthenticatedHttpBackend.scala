@@ -5,7 +5,7 @@ import java.nio.file.Path
 import java.security.{KeyStore, SecureRandom}
 
 import com.advancedtelematic.libtuf.http.CliHttpClient.CliHttpBackend
-import com.advancedtelematic.tuf.cli.DataType.AuthPlusToken
+import com.advancedtelematic.tuf.cli.DataType.OAuth2Token
 import io.netty.handler.ssl.{SslContextBuilder, SupportedCipherSuiteFilter}
 import javax.net.ssl.{KeyManagerFactory, SSLContext, TrustManagerFactory, X509TrustManager}
 import sttp.client.{SttpBackend, _}
@@ -18,7 +18,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import scala.language.higherKinds
 
-protected class AuthPlusCliHttpBackend[F[_], S, WS_HANDLER[_]](token: AuthPlusToken, delegate: SttpBackend[F, S, WS_HANDLER]) extends SttpBackend[F, S, WS_HANDLER] {
+protected class AuthPlusCliHttpBackend[F[_], S, WS_HANDLER[_]](token: OAuth2Token, delegate: SttpBackend[F, S, WS_HANDLER]) extends SttpBackend[F, S, WS_HANDLER] {
   override def send[T](request: Request[T, S]): F[Response[T]] = {
     val authReq = if(request.uri.host.endsWith(".amazonaws.com")) {
       request
@@ -46,7 +46,7 @@ object AuthenticatedHttpBackend {
     AsyncHttpClientFutureBackend()
   }
 
-  def authPlusHttpBackend(token: AuthPlusToken): CliHttpBackend = {
+  def authPlusHttpBackend(token: OAuth2Token): CliHttpBackend = {
     val sttpBackend = AsyncHttpClientFutureBackend()
     val backend = Slf4jLoggingBackend[Future, Nothing, Nothing](Slf4jCurlBackend[Future, Nothing, Nothing](sttpBackend))
     new AuthPlusCliHttpBackend[Future, Nothing, Nothing](token, backend)
