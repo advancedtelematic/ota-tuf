@@ -39,7 +39,7 @@ case class Config(command: Command,
                   repoType: Option[TufServerType] = RepoServer.some,
                   repoName: Option[RepoName] = None,
                   delegationName: DelegatedRoleName = "<empty>".unsafeApply,
-                  rootKey: KeyName = KeyName("default-key"),
+                  rootKey: Option[KeyName] = None,
                   keyType: KeyType = KeyType.default,
                   oldRootKey: KeyName = KeyName("default-key"),
                   keyNames: List[KeyName]= List.empty,
@@ -242,7 +242,7 @@ object Cli extends App with VersionInfo {
         .children(
           repoNameOpt(this),
           opt[KeyName]("name").abbr("n").required()
-            .toConfigParam('rootKey)
+            .toConfigOptionParam('rootKey)
             .text("The base filename for your keys. Generated files will be named `<key-name>.sec` and `<key-name>.pub`."),
           opt[KeyType]("type")
             .abbr("t")
@@ -260,9 +260,8 @@ object Cli extends App with VersionInfo {
       .children(
         repoNameOpt(this),
         opt[KeyName]("new-root")
-          .text("The new Root key that you want to add to the `root.json` file (should already exist).")
-          .required()
-          .toConfigParam('rootKey),
+          .text("(Optional) The new Root key that you want to add to the `root.json` file. If not provided, you'll have to manually sign and push it with `root sign` and `root push`.")
+          .toConfigOptionParam('rootKey),
         opt[KeyName]("new-targets")
           .text("(Only for the repo server) The new Targets key that you want to add to the `root.json` file (should already exist).")
           .action { (keyName: KeyName, c) => c.copy(keyNames = List(keyName)) },

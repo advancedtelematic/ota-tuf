@@ -310,7 +310,7 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
   def uploadTarget(repoClient: S, targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit]
 
   def moveRootOffline(repoClient: S,
-                      newRootName: KeyName,
+                      newRootName: Option[KeyName],
                       oldRootName: KeyName,
                       oldKeyId: Option[KeyId],
                       newTargetsName: Option[KeyName],
@@ -399,7 +399,7 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
     signRole[TargetsRole](version, targetsKeys, expiration)
 
   override def moveRootOffline(repoClient: ReposerverClient,
-                               newRootName: KeyName,
+                               newRootName: Option[KeyName],
                                oldRootName: KeyName,
                                oldKeyId: Option[KeyId],
                                newTargetsName: Option[KeyName],
@@ -407,10 +407,6 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
     assert(newTargetsName.isDefined, "new targets key name must be defined when moving root off line in tuf-reposerver")
 
     for {
-      // read new root key pair from local filesystem:
-      (newRootPubKey, newRootPrivKey) <- keyStorage.readKeyPair(newRootName).toFuture
-      // read new public target key from local filesystem:
-      (newTargetsPubKey, _) <- keyStorage.readKeyPair(newTargetsName.get).toFuture
       // get the unsigned root metadata from server:
       oldRootRole <- repoClient.root().map(_.signed)
       // make sure target metadata has been pulled from server (won't be used in this function):
@@ -420,11 +416,20 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
       // pull and delete old root key from server and store it locally under the given name:
       oldRootPrivKey <- deleteOrReadKey(repoClient, oldRootName, oldRootPubKeyId)
       _ <- keyStorage.writeKeys(oldRootName, oldRootPubKey, oldRootPrivKey).toFuture
-      // create new root metadata based on the old one with new keys and version:
-      newRootRole = oldRootRole
-        .withRoleKeys(RoleType.ROOT, threshold = 1, newRootPubKey)
+      // read new public target key from local filesystem:
+      (newTargetsPubKey, _) <- keyStorage.readKeyPair(newTargetsName.get).toFuture
+      // even if new root is not supplied, we still have to add target role keys
+      oldRootRoleWithTargets = oldRootRole
         .withRoleKeys(RoleType.TARGETS, threshold = 1, newTargetsPubKey)
         .withVersion(oldRootRole.version + 1)
+        .copy(expires = rootExpireTime)
+      // and save it locally:
+      _ <- if (newRootName.isEmpty) writeUnsignedRole(oldRootRoleWithTargets).toFuture else Future.successful("Continue")
+      // read new root key pair from local filesystem if new root key name was supplied:
+      (newRootPubKey, newRootPrivKey) <- keyStorage.readKeyPair(newRootName.get).toFuture if newRootName.isDefined
+      // create new root metadata based on the old one with new keys and version:
+      newRootRole = oldRootRoleWithTargets
+        .withRoleKeys(RoleType.ROOT, threshold = 1, newRootPubKey)
         .copy(expires = rootExpireTime)
       newRootSignature = TufCrypto.signPayload(newRootPrivKey, newRootRole.asJson).toClient(newRootPubKey.id)
       newRootOldSignature = TufCrypto.signPayload(oldRootPrivKey, newRootRole.asJson).toClient(oldRootPubKeyId)
@@ -477,7 +482,7 @@ class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRep
   }
 
   override def moveRootOffline(repoClient: DirectorClient,
-                               newRootName: KeyName,
+                               newRootName: Option[KeyName],
                                oldRootName: KeyName,
                                oldKeyId: Option[KeyId],
                                newTargetsName: Option[KeyName],
@@ -485,13 +490,13 @@ class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRep
     assert(newTargetsName.isEmpty, "new targets key name must be empty for director")
 
     for {
-      (newRootPubKey, newRootPrivKey) <- keyStorage.readKeyPair(newRootName).toFuture
       oldRootRole <- repoClient.root().map(_.signed)
       _ <- ensureTargetsOnline(repoClient, oldRootRole)
       oldRootPubKeyId = oldKeyId.getOrElse(oldRootRole.roles(RoleType.ROOT).keyids.last)
       oldRootPubKey = oldRootRole.keys(oldRootPubKeyId)
       oldRootPrivKey <- deleteOrReadKey(repoClient, oldRootName, oldRootPubKeyId)
       _ <- keyStorage.writeKeys(oldRootName, oldRootPubKey, oldRootPrivKey).toFuture
+      (newRootPubKey, newRootPrivKey) <- keyStorage.readKeyPair(newRootName.get).toFuture if newRootName.isDefined
       newRootRole = oldRootRole
         .withRoleKeys(RoleType.ROOT, threshold = 1, newRootPubKey)
         .withVersion(oldRootRole.version + 1)
