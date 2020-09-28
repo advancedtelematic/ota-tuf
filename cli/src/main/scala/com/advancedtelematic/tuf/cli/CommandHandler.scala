@@ -85,6 +85,9 @@ object CommandHandler {
           config.keyNames.headOption,
           Instant.now().plus(DEFAULT_ROOT_LIFETIME))
           .map(_ => log.info(s"root keys moved offline, root.json saved to ${tufRepo.repoPath}"))
+          .recover {
+            case _:java.util.NoSuchElementException => log.warn(s"root keys moved offline, but you'll have to manually sign and push key!")
+          }
       }
 
     case GetTargets =>
@@ -166,7 +169,8 @@ object CommandHandler {
       CliUtil.verifyRootFile(config.inputPath.valueOrConfigError).map(_ => ())
 
     case GenRepoKeys =>
-      tufRepo.genKeys(config.rootKey, config.keyType, config.keySize).map(_ => ())
+      assert(config.rootKey.isDefined, "The base filename for keys must be defined when generating a new key.")
+      tufRepo.genKeys(config.rootKey.get, config.keyType, config.keySize).map(_ => ())
 
     case PullRoot =>
       repoServer.flatMap(client => tufRepo.pullRoot(client, config.force))
