@@ -421,7 +421,6 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
       // even if new root is not supplied, we still have to add target role keys
       oldRootRoleWithTargets = oldRootRole
         .withRoleKeys(RoleType.TARGETS, threshold = 1, newTargetsPubKey)
-        .withVersion(oldRootRole.version + 1)
         .copy(expires = rootExpireTime)
       // and save it locally:
       _ <- if (newRootName.isEmpty) writeUnsignedRole(oldRootRoleWithTargets).toFuture else Future.successful("Continue")
@@ -430,6 +429,7 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
       // create new root metadata based on the old one with new keys and version:
       newRootRole = oldRootRoleWithTargets
         .withRoleKeys(RoleType.ROOT, threshold = 1, newRootPubKey)
+        .withVersion(oldRootRole.version + 1)
         .copy(expires = rootExpireTime)
       newRootSignature = TufCrypto.signPayload(newRootPrivKey, newRootRole.asJson).toClient(newRootPubKey.id)
       newRootOldSignature = TufCrypto.signPayload(oldRootPrivKey, newRootRole.asJson).toClient(oldRootPubKeyId)
