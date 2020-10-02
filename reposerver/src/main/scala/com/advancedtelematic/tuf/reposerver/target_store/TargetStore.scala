@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.target_store
 
+import java.net.URL
 import java.time.Instant
 
 import cats.implicits._
@@ -13,7 +14,7 @@ import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{GetSignedUrlResult, InitMultipartUploadResult, MultipartUploadId, RepoId, TargetFilename, UploadPartETag}
 import com.advancedtelematic.libtuf_server.data.Messages.PackageStorageUsage
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport
@@ -82,6 +83,18 @@ class TargetStore(roleKeyStore: KeyserverClient,
 
   def buildStorageUrl(repoId: RepoId, targetFilename: TargetFilename, length: Long): Future[Uri] =
     engine.buildStorageUri(repoId, targetFilename, length)
+
+  def initiateMultipartUpload(repoId: RepoId, filename: TargetFilename): Future[InitMultipartUploadResult] = {
+    engine.initiateMultipartUpload(repoId, filename)
+  }
+
+  def buildSignedURL(repoId: RepoId, filename: TargetFilename, uploadId: MultipartUploadId, partNumber: String, md5: String, contentLength: Int): Future[GetSignedUrlResult] = {
+    engine.buildSignedURL(repoId, filename, uploadId, partNumber, md5, contentLength)
+  }
+
+  def completeMultipartUpload(repoId: RepoId, filename: TargetFilename, uploadId: MultipartUploadId, partETags: Seq[UploadPartETag]): Future[Unit] = {
+    engine.completeMultipartUpload(repoId, filename, uploadId, partETags)
+  }
 
   def retrieve(repoId: RepoId, targetFilename: TargetFilename): Future[HttpResponse] = {
     targetItemRepo.findByFilename(repoId, targetFilename).flatMap { item =>

@@ -149,8 +149,8 @@ class UserReposerverClientSpec extends TufReposerverSpec
 
       val err = client.uploadTarget(targetFilename, uploadFilePath, 10.seconds).failed.futureValue
 
-      err shouldBe a[UploadTargetTooBig]
-      err.getMessage shouldBe "File being uploaded is too large (3000000001), maximum size is 3000000000"
+      err shouldBe a[CliHttpClientError]
+      err.getMessage should endWith("File being uploaded is too large (3000000001), maximum size is 3000000000")
 
     } finally {
       Files.delete(uploadFilePath)

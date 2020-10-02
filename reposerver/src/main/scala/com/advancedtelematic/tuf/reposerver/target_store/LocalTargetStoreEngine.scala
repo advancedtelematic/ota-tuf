@@ -12,7 +12,8 @@ import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
 import akka.stream.scaladsl.{FileIO, Sink, Source}
 import akka.util.ByteString
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType
+import com.advancedtelematic.libtuf.data.TufDataType.{MultipartUploadId, RepoId, TargetFilename}
 import com.advancedtelematic.tuf.reposerver.http.Errors
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{TargetBytes, TargetRetrieveResult, TargetStoreResult}
 import org.slf4j.LoggerFactory
@@ -99,6 +100,18 @@ class LocalTargetStoreEngine(root: File)(implicit val system: ActorSystem, val m
     }
   }
 
-  override def buildStorageUri(repoId: RepoId, filename: TargetFilename, length: Long): Future[Uri] =
+  private lazy val notSupportedForLocalStorageError =
     FastFuture.failed(new IllegalArgumentException("out of band storage of target is not supported for local storage"))
+
+  override def buildStorageUri(repoId: RepoId, filename: TargetFilename, length: Long): Future[Uri] =
+    notSupportedForLocalStorageError
+
+  override def initiateMultipartUpload(repoId: RepoId, filename: TargetFilename): Future[TufDataType.InitMultipartUploadResult] =
+    notSupportedForLocalStorageError
+
+  override def buildSignedURL(repoId: RepoId, filename: TargetFilename, uploadId: MultipartUploadId, partNumber: String, md5: String, contentLength: Int): Future[TufDataType.GetSignedUrlResult] =
+    notSupportedForLocalStorageError
+
+  override def completeMultipartUpload(repoId: RepoId, filename: TargetFilename, uploadId: TufDataType.MultipartUploadId, partETags: Seq[TufDataType.UploadPartETag]): Future[Unit] =
+    notSupportedForLocalStorageError
 }

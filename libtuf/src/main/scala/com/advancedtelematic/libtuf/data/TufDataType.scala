@@ -1,5 +1,6 @@
 package com.advancedtelematic.libtuf.data
 
+import java.net.{URI, URL}
 import java.security.{PrivateKey, PublicKey}
 import java.util.UUID
 
@@ -193,4 +194,15 @@ object TufDataType {
   case class RSATufKeyPair(override val pubkey: RSATufKey, override val privkey: RSATufPrivateKey) extends TufKeyPair
   case class Ed25519TufKeyPair(override val pubkey: Ed25519TufKey, override val privkey: Ed25519TufPrivateKey) extends TufKeyPair
   case class EcPrime256TufKeyPair(override val pubkey: EcPrime256TufKey, override val privkey: EcPrime256TufPrivateKey) extends TufKeyPair
+
+  case class MultipartUploadId(value: String) extends AnyVal
+  case class ETag(value: String) extends AnyVal
+  case class UploadPartETag(part: Int, eTag: ETag)
+
+  case class InitMultipartUploadResult(uploadId: MultipartUploadId, partSize: Long)
+  case class CompleteUploadRequest(uploadId: MultipartUploadId, partETags: Seq[UploadPartETag])
+  case class GetSignedUrlResult(uri: URI)
+  object GetSignedUrlResult {
+    def apply(url: URL): GetSignedUrlResult = GetSignedUrlResult(url.toURI)
+  }
 }

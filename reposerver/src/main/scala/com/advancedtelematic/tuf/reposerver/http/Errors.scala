@@ -36,11 +36,18 @@ object Errors {
     RawError(com.advancedtelematic.libtuf.data.ErrorCodes.Reposerver.PayloadTooLarge, StatusCodes.PayloadTooLarge,
       s"File being uploaded is too large ($size), maximum size is $max")
 
+  def FilePartTooLarge(size: Long, max: Long) =
+    RawError(com.advancedtelematic.libtuf.data.ErrorCodes.Reposerver.PayloadTooLarge, StatusCodes.PayloadTooLarge,
+      s"Part of the file being uploaded is too large ($size), maximum part size for multipart upload is $max")
+
   def PayloadSignatureInvalid(errors: NonEmptyList[String]) =
     JsonError(ErrorCodes.PayloadSignatureInvalid, StatusCodes.BadRequest, errors.asJson, "Invalid payload signature")
 
   def InvalidOfflineTargets(errors: NonEmptyList[String]) =
     JsonError(ErrorCodes.InvalidOfflineTargets, StatusCodes.BadRequest, errors.asJson, "Invalid offline targets")
+
+  case class NotImplemented(message: String)
+    extends com.advancedtelematic.libats.http.Errors.Error(com.advancedtelematic.libtuf.data.ErrorCodes.Reposerver.NotImplemented, StatusCodes.NotImplemented, message)
 
   case class NoRepoForNamespace(ns: Namespace)
     extends com.advancedtelematic.libats.http.Errors.Error(ErrorCodes.NoRepoForNamespace, StatusCodes.NotFound, s"No repository exists for namespace ${ns.get}")

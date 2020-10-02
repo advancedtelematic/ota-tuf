@@ -60,6 +60,8 @@ trait Settings {
 
   lazy val useAzure = _config.getString("storage.type").equals("azure")
 
+  lazy val multipartUploadPartSize = _config.getBytes("storage.multipart.partSize")
+
   lazy val userRepoSizeLimit = _config.getLong("reposerver.sizeLimit")
 
   // not using Config.getDuration() here because that parses different formats than what Akka uses
