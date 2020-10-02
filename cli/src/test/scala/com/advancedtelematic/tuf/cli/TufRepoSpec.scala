@@ -4,16 +4,18 @@ import java.net.URI
 import java.nio.file.Files
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.util.Base64
 
 import cats.syntax.either._
 import cats.syntax.option._
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
+import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType, SignedPayload, TargetFilename, TargetFormat, TargetName, TargetVersion, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType, RsaKeyType, SignedPayload, TargetFilename, TargetFormat, TargetName, TargetVersion, ValidSignature, ValidTargetFilename}
 import com.advancedtelematic.tuf.cli.DataType.KeyName
 import com.advancedtelematic.tuf.cli.repo.RepoServerRepo
 import com.advancedtelematic.tuf.cli.repo.TufRepo.{RoleMissing, RootPullError}
@@ -23,10 +25,11 @@ import eu.timepit.refined.refineV
 import io.circe.jawn._
 import io.circe.syntax._
 import org.scalactic.source.Position
+import org.scalatest.{EitherValues, TryValues}
 
-import scala.util.Success
+import scala.util.{Failure, Success}
 
-class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
+class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with EitherValues {
 
   import com.advancedtelematic.tuf.cli.util.TufRepoInitializerUtil._
 
@@ -81,7 +84,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
 
     val path = repo.deleteTarget(fakeTargetFilename).get
 
-    val role = parseFile(path.toFile).flatMap(_.as[TargetsRole]).valueOr(throw _)
+    val role = parseFile(path.toFile).flatMap(_.as[TargetsRole]).right.value
 
     role.targets.keys shouldNot contain(fakeTargetFilename)
   }
@@ -141,11 +144,67 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
     val pub = repo.genKeys(targetsKeyName, keyType).get.pubkey
 
     val path = repo.signTargets(Seq(targetsKeyName), defaultExpiration).get
-    val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).valueOr(throw _)
+    val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).right.value
 
     payload.signatures.map(_.keyid) should contain(pub.id)
 
     payload.isValidFor(pub) shouldBe true
+  }
+
+  test("add external RSA signature to targets") {
+    val repo = initRepo[RepoServerRepo](RsaKeyType)
+    val targetsKeyName = KeyName("somekey")
+    val targetsKeyPair = repo.genKeys(targetsKeyName, KeyType.default).get
+
+    val unsignedTargets = repo.readUnsignedRole[TargetsRole].get
+    val signature = TufCrypto.signPayload(targetsKeyPair.privkey, unsignedTargets.asJson).sig
+
+    // signTargets() below expects a signed root
+    repo.addRootKeys(List(targetsKeyName)).get
+    repo.signRoot(Seq(KeyName("root")), defaultExpiration).get
+
+    repo.signTargets(Seq.empty, defaultExpiration, keyId = Some(targetsKeyPair.pubkey.id), signature = Some(signature)).get
+  }
+
+  test("compare old and new 'targets sign'") {
+    // sign targets the old way
+    val repo = initRepo[RepoServerRepo](RsaKeyType)
+    val targetsKeyName = KeyName("somekey")
+    val targetsKeyPair = repo.genKeys(targetsKeyName, KeyType.default).get
+
+    // signTargets() below expects a signed root
+    repo.addRootKeys(List(targetsKeyName)).get
+    repo.signRoot(Seq(KeyName("root")), defaultExpiration).get
+
+    val path = repo.signTargets(Seq(targetsKeyName), defaultExpiration).get
+    val targetsJson = parseFile(path.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).right.value
+    // signing has bumped the version, so update the unsigned targets.json
+    repo.writeUnsignedRole[TargetsRole](targetsJson.signed)
+    targetsJson.signatures.length shouldBe 1
+    val signature = targetsJson.signatures.head.sig
+
+    // signTargets() below expects a signed root
+    repo.addRootKeys(List(targetsKeyName)).get
+    repo.signRoot(Seq(KeyName("root")), defaultExpiration).get
+
+    val newPath = repo.signTargets(Seq.empty, defaultExpiration, keyId = Some(targetsKeyPair.pubkey.id), signature = Some(signature)).get
+    newPath shouldBe path
+    val newTargetsJson = parseFile(path.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).right.value
+    newTargetsJson shouldBe targetsJson
+  }
+
+  test("cannot add invalid signature") {
+    val repo = initRepo[RepoServerRepo](RsaKeyType)
+    val targetsKeyName = KeyName("somekey")
+    val targetsKeyPair = repo.genKeys(targetsKeyName, KeyType.default).get
+    val wrongSignature = Some(Refined.unsafeApply[String, ValidSignature](Base64.getEncoder.encodeToString("wrong signature".getBytes)))
+
+    // signTargets() below expects a signed root
+    repo.addRootKeys(List(targetsKeyName)).get
+    repo.signRoot(Seq(KeyName("root")), defaultExpiration).get
+
+    repo.signTargets(Seq.empty, defaultExpiration, keyId = Some(targetsKeyPair.pubkey.id), signature = wrongSignature)
+      .failure.exception.getMessage startsWith("wrong signature")
   }
 
   reposerverTest("saves targets.json and checksum to file when pulling") { (repo, client) =>
@@ -307,7 +366,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
     val pub02 = repo.genKeys(keyname02, keyType).get.pubkey
 
     val path = repo.signRoot(Seq(keyname, keyname02), defaultExpiration).get
-    val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[RootRole]]).valueOr(throw _)
+    val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[RootRole]]).right.value
 
     payload.isValidFor(pub) shouldBe true
     payload.isValidFor(pub02) shouldBe true
@@ -318,7 +377,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport {
     val _ = repo.genKeys(keyname, KeyType.default).get.pubkey
 
     val path = repo.signRoot(Seq(keyname), defaultExpiration).get
-    val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[RootRole]]).valueOr(throw _)
+    val payload = parseFile(path.toFile).flatMap(_.as[SignedPayload[RootRole]]).right.value
 
     payload.signed.version shouldBe 2
   }
