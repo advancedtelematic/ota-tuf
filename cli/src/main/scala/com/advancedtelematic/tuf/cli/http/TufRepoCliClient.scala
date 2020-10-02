@@ -35,7 +35,7 @@ object TufRepoCliClient {
     repo.authConfig match {
       case Success(Some(ac: OAuthConfig)) =>
         for {
-          token <- AuthPlusClient.tokenFor(ac)
+          token <- OAuth2Client.tokenFor(ac)
           _ = log.debug(s"client token: ${token.value}")
           repoUri <- repo.repoServerUri.toFuture
         } yield httpClientBuilder.apply(repoUri, AuthenticatedHttpBackend.authPlusHttpBackend(token))

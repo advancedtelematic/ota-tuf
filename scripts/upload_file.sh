@@ -9,10 +9,11 @@ function usage {
 
 function get_token {
     treehub_creds=$(unzip -qc "$1" treehub.json)
-    auth_plus=$(jq -r '.oauth2.server' <<<"$treehub_creds")
+    auth_server=$(jq -r '.oauth2.server' <<<"$treehub_creds")
     client_id=$(jq -r '.oauth2.client_id' <<<"$treehub_creds")
     client_secret=$(jq -r '.oauth2.client_secret' <<<"$treehub_creds")
-    curl -s -u "$client_id:$client_secret" "$auth_plus/token" -d grant_type=client_credentials | jq -r .access_token
+    scope=$(jq -r '.oauth2.scope' <<<"$treehub_creds")
+    curl -s -u "$client_id:$client_secret" "$auth_server" -d grant_type=client_credentials -d scope=$scope | jq -r .access_token
 }
 
 while getopts ":hc:i:t:v:f:" opt; do
