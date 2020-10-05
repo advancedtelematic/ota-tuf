@@ -81,7 +81,7 @@ object CommandHandler {
         tufRepo.moveRootOffline(client,
           config.rootKey,
           config.oldRootKey,
-          config.oldKeyId,
+          config.keyId,
           config.keyNames.headOption,
           Instant.now().plus(DEFAULT_ROOT_LIFETIME))
           .map(_ => log.info(s"root keys moved offline, root.json saved to ${tufRepo.repoPath}"))
@@ -142,7 +142,7 @@ object CommandHandler {
 
     case SignTargets =>
       tufRepo
-        .signTargets(config.keyNames, expirationDate(config), config.version)
+        .signTargets(config.keyNames, expirationDate(config), config.version, config.keyId, config.signature)
         .map(p => log.info(s"signed targets.json to $p"))
 
 

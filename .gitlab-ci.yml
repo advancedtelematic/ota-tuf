@@ -73,6 +73,7 @@ test:
 
 code coverage:
   extends: .report_scala_coverage
+  allow_failure: true
   image: $TEST_IMAGE
   before_script:
     - sbt -sbt-dir ./.sbt -ivy ./.ivy2 coverageAggregate

@@ -12,7 +12,7 @@ import ch.qos.logback.classic.{Level, Logger}
 import com.advancedtelematic.libats.data.DataType.Checksum
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedPathPattern, DelegatedRoleName}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, TargetFilename, TargetFormat, TargetName, TargetVersion}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, TargetFilename, TargetFormat, TargetName, TargetVersion, ValidSignature}
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.RoleChecksumNotValid
 import com.advancedtelematic.libtuf.http.{DirectorClient, ReposerverClient}
 import com.advancedtelematic.tuf.cli.CliConfigOptionOps._
@@ -32,6 +32,7 @@ import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import com.advancedtelematic.libtuf.data.ValidatedString._
 import DelegatedRoleName._
+import eu.timepit.refined.api.Refined
 
 case class Config(command: Command,
                   home: Path = Paths.get("tuf"),
@@ -44,8 +45,9 @@ case class Config(command: Command,
                   oldRootKey: KeyName = KeyName("default-key"),
                   keyNames: List[KeyName]= List.empty,
                   keyIds: List[KeyId]= List.empty,
-                  oldKeyId: Option[KeyId] = None,
+                  keyId: Option[KeyId] = None,
                   version: Option[Int] = None,
+                  signature: Option[Refined[String, ValidSignature]] = None,
                   expireOn: Option[Instant] = None,
                   expireAfter: Option[Period] = None,
                   length: Long = -1L,
@@ -271,7 +273,7 @@ object Cli extends App with VersionInfo {
           .toConfigParam('oldRootKey),
         opt[KeyId]("old-keyid")
           .text("(Optional) The ID of the key that you want to remove from the `root.json` file. This app will try to use the last key defined in the current `root.json` file.")
-          .toConfigOptionParam('oldKeyId)
+          .toConfigOptionParam('keyId)
       )
 
     cmd("root")
@@ -369,15 +371,20 @@ object Cli extends App with VersionInfo {
           ),
         cmd("sign")
           .toCommand(SignTargets)
-          .text("Signs your `targets.json` file with a specific key.")
+          .text("Signs your `targets.json` file with a specific key or adds a given signature.")
           .children(
             opt[KeyName]("key-name")
               .action { (arg, c) => c.copy(keyNames = List(arg)) }
-              .required()
               .text("The path to the public key to use for signing."),
             opt[Int]("version")
               .text("The version number to use for the signed metadata. Overrides the version in the unsigned `targets.json` file.")
-              .toConfigOptionParam('version)
+              .toConfigOptionParam('version),
+            opt[Refined[String, ValidSignature]]("signature")
+              .text("The external rsassa-pss-sha256 signature to add (after being verified)")
+              .toConfigOptionParam('signature),
+            opt[KeyId]("key-id")
+              .text("The ID of the key in root.json the external signature has been created with")
+              .toConfigOptionParam('keyId)
           )
           .children(expirationOpts(this):_*),
         cmd("pull")

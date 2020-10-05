@@ -19,7 +19,8 @@ import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, DelegatedPathPattern, DelegatedRoleName, Delegations, MetaPath, RootRole, TargetsRole, TufRole, TufRoleOps}
 import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, KeyId, KeyType, RoleType, SignedPayload, TargetFilename, TufKey, TufKeyPair, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.{RSASSA_PSS_SHA256, SignatureMethod}
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, KeyId, KeyType, RoleType, SignedPayload, TargetFilename, TufKey, TufKeyPair, TufPrivateKey, ValidSignature}
 import com.advancedtelematic.libtuf.data.{ClientDataType, RootRoleValidation}
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleNotFound, TargetsResponse}
 import com.advancedtelematic.libtuf.http._
@@ -227,9 +228,25 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
     } yield path
   }
 
+  protected def addSignature[T : Decoder : Encoder](key: TufKey, validSignature: Refined[String, ValidSignature])
+                                                   (implicit tufRole: TufRole[T]): Try[Path] = {
+    val clientSignature = ClientSignature(key.id, RSASSA_PSS_SHA256, validSignature)
+
+    for {
+      unsigned <- readUnsignedRole[T]
+      _ <- Try {
+             if (!TufCrypto.isValid(clientSignature, key, unsigned.asJson)) {
+               throw new Exception(s"wrong signature $clientSignature")
+             }
+           }
+      signedRole = SignedPayload(Seq(clientSignature), unsigned, unsigned.asJson)
+      path <- writeSignedRole(signedRole)
+    } yield path
+  }
+
   protected def deleteOrReadKey(reposerverClient: S, keyName: KeyName, keyId: KeyId): Future[TufPrivateKey] = {
     keyStorage.readPrivateKey(keyName).toFuture.recoverWith { case _ =>
-      log.info(s"Could not read old private key locally, fetching before deleting from server")
+      log.info("Could not read old private key locally, fetching before deleting from server")
 
       for {
         keyPair ← reposerverClient.fetchKeyPair(keyId)
@@ -325,7 +342,8 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
   def addTargetDelegation(name: DelegatedRoleName, key: List[TufKey],
                           delegatedPaths: List[DelegatedPathPattern], threshold: Int): Try[Path]
 
-  def signTargets(targetsKeys: Seq[KeyName], expiration: Instant => Instant, version: Option[Int] = None): Try[Path]
+  def signTargets(targetsKeys: Seq[KeyName], expiration: Instant => Instant, version: Option[Int] = None,
+                  keyId: Option[KeyId] = None, signature: Option[Refined[String, ValidSignature]] = None): Try[Path]
 
   def pullVerifyTargets(reposerverClient: S, rootRole: RootRole): Future[SignedPayload[TargetsRole]]
 
@@ -395,8 +413,18 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
     } yield path
   }
 
-  override def signTargets(targetsKeys: Seq[KeyName], expiration: Instant => Instant, version: Option[Int] = None): Try[Path] =
-    signRole[TargetsRole](version, targetsKeys, expiration)
+  override def signTargets(targetsKeys: Seq[KeyName], expiration: Instant => Instant, version: Option[Int] = None,
+                           keyId: Option[KeyId] = None, signature: Option[Refined[String, ValidSignature]] = None): Try[Path] =
+    (keyId, signature, version) match {
+      case (Some(keyId), Some(validSignature), None) =>
+        for {
+          root <- readSignedRole[RootRole]
+          key <- Try(root.signed.keys(keyId))
+          path <- addSignature[TargetsRole](key, validSignature)
+        } yield path
+      case (None, None, _) => signRole[TargetsRole](version, targetsKeys, expiration)
+      case _ => Failure(new Exception("If you pass a signature you also need to pass a key id, but you can't pass a version"))
+    }
 
   override def moveRootOffline(repoClient: ReposerverClient,
                                newRootName: Option[KeyName],
@@ -519,7 +547,8 @@ class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRep
   override def deleteTarget(filename: TargetFilename): Try[Path] =
     Failure(CommandNotSupportedByRepositoryType(Director, "deleteTarget"))
 
-  override def signTargets(targetsKeys: Seq[KeyName], expiration: Instant => Instant, version: Option[Int]): Try[Path] =
+  def signTargets(targetsKeys: Seq[KeyName], expiration: Instant => Instant, version: Option[Int] = None,
+                  keyId: Option[KeyId] = None, signature: Option[Refined[String, ValidSignature]] = None): Try[Path] =
     Failure(CommandNotSupportedByRepositoryType(Director, "signTargets"))
 
   override def pullVerifyTargets(client: DirectorClient, rootRole: RootRole): Future[SignedPayload[TargetsRole]] =
