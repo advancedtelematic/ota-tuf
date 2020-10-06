@@ -181,7 +181,7 @@ object CommandHandler {
         .map(_ => log.info("Pushed root.json"))
 
     case SignRoot =>
-      tufRepo.signRoot(config.keyNames, expirationDate(config))
+      tufRepo.signRoot(config.keyNames, expirationDate(config), config.keyId, config.signature)
         .map(p => log.info(s"signed root.json saved to $p"))
 
     case AddRootKey =>

@@ -17,7 +17,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RootR
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType, RsaKeyType, SignedPayload, TargetFilename, TargetFormat, TargetName, TargetVersion, ValidSignature, ValidTargetFilename}
 import com.advancedtelematic.tuf.cli.DataType.KeyName
-import com.advancedtelematic.tuf.cli.repo.RepoServerRepo
+import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, RepoServerRepo}
 import com.advancedtelematic.tuf.cli.repo.TufRepo.{RoleMissing, RootPullError}
 import com.advancedtelematic.tuf.cli.util.{CliSpec, FakeReposerverTufServerClient, KeyTypeSpecSupport}
 import eu.timepit.refined.api.Refined
@@ -190,7 +190,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
     newTargetsJson shouldBe targetsJson
   }
 
-  test("cannot add invalid signature") {
+  test("cannot add invalid signature to targets") {
     val repo = initRepo[RepoServerRepo](RsaKeyType)
     val targetsKeyName = KeyName("somekey")
     val targetsKeyPair = repo.genKeys(targetsKeyName, KeyType.default).get
@@ -201,6 +201,54 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
     repo.signRoot(Seq(KeyName("root")), defaultExpiration).get
 
     repo.signTargets(Seq.empty, defaultExpiration, keyId = Some(targetsKeyPair.pubkey.id), signature = wrongSignature)
+      .failure.exception.getMessage startsWith("wrong signature")
+  }
+
+  test("add external RSA signature to root") {
+    val repo = initRepo[RepoServerRepo](RsaKeyType)
+    val rootKeyName = KeyName("root")
+    val rootKeyId = repo.keyIdsByName(List(rootKeyName)).success.value.head
+    val privateKeyPath = repo.repoPath.resolve("keys").resolve(rootKeyName.privateKeyName)
+    val privateRootKey = CliKeyStorage.readPrivateKey(privateKeyPath).success.value
+
+    repo.signRoot(Seq(rootKeyName), defaultExpiration).success.value
+    val unsignedRoot = repo.readUnsignedRole[RootRole].success.value
+    val signature = TufCrypto.signPayload(privateRootKey, unsignedRoot.asJson).sig
+
+    repo.signRoot(Seq.empty, defaultExpiration, keyId = Some(rootKeyId), sig = Some(signature)).success.value
+  }
+
+  test("compare old and new 'root sign'") {
+    val repo = initRepo[RepoServerRepo](RsaKeyType)
+    val rootKeyName = KeyName("root")
+    val rootKeyId = repo.keyIdsByName(List(rootKeyName)).success.value.head
+
+    val path = repo.signRoot(Seq(rootKeyName), defaultExpiration).success.value
+    val rootJson = parseFile(path.toFile).flatMap(_.as[SignedPayload[RootRole]]).right.value
+
+    rootJson.signatures.length shouldBe 1
+
+    val signature = rootJson.signatures.head.sig
+
+    // signing has bumped the version, so update the unsigned root.json
+    repo.writeUnsignedRole[RootRole](rootJson.signed)
+
+    val newPath = repo.signRoot(Seq.empty, defaultExpiration, keyId = Some(rootKeyId), sig = Some(signature)).success.value
+
+    newPath shouldBe path
+
+    val newRootJson = parseFile(path.toFile).flatMap(_.as[SignedPayload[RootRole]]).right.value
+
+    newRootJson shouldBe rootJson
+  }
+
+  test("cannot add invalid signature to root") {
+    val repo = initRepo[RepoServerRepo](RsaKeyType)
+    val rootKeyName = KeyName("root")
+    val rootKeyId = repo.keyIdsByName(List(rootKeyName)).success.value.head
+    val wrongSignature = Some(Refined.unsafeApply[String, ValidSignature](Base64.getEncoder.encodeToString("wrong signature".getBytes)))
+
+    repo.signRoot(Seq.empty, defaultExpiration, keyId = Some(rootKeyId), sig = wrongSignature)
       .failure.exception.getMessage startsWith("wrong signature")
   }
 

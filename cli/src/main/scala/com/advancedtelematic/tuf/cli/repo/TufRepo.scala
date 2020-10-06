@@ -19,8 +19,8 @@ import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, DelegatedPathPattern, DelegatedRoleName, Delegations, MetaPath, RootRole, TargetsRole, TufRole, TufRoleOps}
 import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.{RSASSA_PSS_SHA256, SignatureMethod}
-import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, KeyId, KeyType, RoleType, SignedPayload, TargetFilename, TufKey, TufKeyPair, TufPrivateKey, ValidSignature}
+import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.RSASSA_PSS_SHA256
+import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, KeyId, KeyType, RoleType, SignedPayload, TargetFilename, TufKey, TufKeyPair, TufPrivateKey, ValidSignatureType}
 import com.advancedtelematic.libtuf.data.{ClientDataType, RootRoleValidation}
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleNotFound, TargetsResponse}
 import com.advancedtelematic.libtuf.http._
@@ -204,8 +204,17 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
     _ <- client.pushSignedRoot(signedRoot)
   } yield ()
 
-  def signRoot(keys: Seq[KeyName], validExpiration: Instant => Instant, version: Option[Int] = None): Try[Path] =
-    signRole[RootRole](version, keys, validExpiration)
+  def signRoot(keys: Seq[KeyName], expiration: Instant => Instant, keyId: Option[KeyId] = None, sig: Option[ValidSignatureType] = None): Try[Path] =
+    (keyId, sig) match {
+      case (Some(keyId), Some(validSignature)) =>
+        for {
+          root <- readSignedRole[RootRole]
+          key <- Try(root.signed.keys(keyId))
+          path <- addSignature[RootRole](key, validSignature)
+        } yield path
+      case (None, None) => signRole[RootRole](None, keys, expiration)
+      case _ => Failure(new Exception("If you pass a signature you also need to pass a key id"))
+    }
 
   import cats.implicits._
 
@@ -228,7 +237,7 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
     } yield path
   }
 
-  protected def addSignature[T : Decoder : Encoder](key: TufKey, validSignature: Refined[String, ValidSignature])
+  protected def addSignature[T : Decoder : Encoder](key: TufKey, validSignature: ValidSignatureType)
                                                    (implicit tufRole: TufRole[T]): Try[Path] = {
     val clientSignature = ClientSignature(key.id, RSASSA_PSS_SHA256, validSignature)
 
@@ -343,7 +352,7 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
                           delegatedPaths: List[DelegatedPathPattern], threshold: Int): Try[Path]
 
   def signTargets(targetsKeys: Seq[KeyName], expiration: Instant => Instant, version: Option[Int] = None,
-                  keyId: Option[KeyId] = None, signature: Option[Refined[String, ValidSignature]] = None): Try[Path]
+                  keyId: Option[KeyId] = None, signature: Option[ValidSignatureType] = None): Try[Path]
 
   def pullVerifyTargets(reposerverClient: S, rootRole: RootRole): Future[SignedPayload[TargetsRole]]
 
@@ -414,7 +423,7 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
   }
 
   override def signTargets(targetsKeys: Seq[KeyName], expiration: Instant => Instant, version: Option[Int] = None,
-                           keyId: Option[KeyId] = None, signature: Option[Refined[String, ValidSignature]] = None): Try[Path] =
+                           keyId: Option[KeyId] = None, signature: Option[ValidSignatureType] = None): Try[Path] =
     (keyId, signature, version) match {
       case (Some(keyId), Some(validSignature), None) =>
         for {
@@ -548,7 +557,7 @@ class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRep
     Failure(CommandNotSupportedByRepositoryType(Director, "deleteTarget"))
 
   def signTargets(targetsKeys: Seq[KeyName], expiration: Instant => Instant, version: Option[Int] = None,
-                  keyId: Option[KeyId] = None, signature: Option[Refined[String, ValidSignature]] = None): Try[Path] =
+                  keyId: Option[KeyId] = None, signature: Option[ValidSignatureType] = None): Try[Path] =
     Failure(CommandNotSupportedByRepositoryType(Director, "signTargets"))
 
   override def pullVerifyTargets(client: DirectorClient, rootRole: RootRole): Future[SignedPayload[TargetsRole]] =
