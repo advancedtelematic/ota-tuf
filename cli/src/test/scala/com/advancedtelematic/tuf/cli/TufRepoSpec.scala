@@ -172,14 +172,11 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
     val targetsKeyName = KeyName("somekey")
     val targetsKeyPair = repo.genKeys(targetsKeyName, KeyType.default).get
 
-    // signTargets() below expects a signed root
-    repo.addRootKeys(List(targetsKeyName)).get
-    repo.signRoot(Seq(KeyName("root")), defaultExpiration).get
-
     val path = repo.signTargets(Seq(targetsKeyName), defaultExpiration).get
     val targetsJson = parseFile(path.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).right.value
     // signing has bumped the version, so update the unsigned targets.json
     repo.writeUnsignedRole[TargetsRole](targetsJson.signed)
+
     targetsJson.signatures.length shouldBe 1
     val signature = targetsJson.signatures.head.sig
 
