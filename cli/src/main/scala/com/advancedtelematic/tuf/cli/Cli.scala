@@ -12,7 +12,7 @@ import ch.qos.logback.classic.{Level, Logger}
 import com.advancedtelematic.libats.data.DataType.Checksum
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedPathPattern, DelegatedRoleName}
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, TargetFilename, TargetFormat, TargetName, TargetVersion, ValidSignature}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, KeyId, KeyType, TargetFilename, TargetFormat, TargetName, TargetVersion, ValidSignatureType}
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.RoleChecksumNotValid
 import com.advancedtelematic.libtuf.http.{DirectorClient, ReposerverClient}
 import com.advancedtelematic.tuf.cli.CliConfigOptionOps._
@@ -32,7 +32,6 @@ import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import com.advancedtelematic.libtuf.data.ValidatedString._
 import DelegatedRoleName._
-import eu.timepit.refined.api.Refined
 
 case class Config(command: Command,
                   home: Path = Paths.get("tuf"),
@@ -43,11 +42,11 @@ case class Config(command: Command,
                   rootKey: Option[KeyName] = None,
                   keyType: KeyType = KeyType.default,
                   oldRootKey: KeyName = KeyName("default-key"),
+                  signature: Option[ValidSignatureType] = None,
                   keyNames: List[KeyName]= List.empty,
                   keyIds: List[KeyId]= List.empty,
                   keyId: Option[KeyId] = None,
                   version: Option[Int] = None,
-                  signature: Option[Refined[String, ValidSignature]] = None,
                   expireOn: Option[Instant] = None,
                   expireAfter: Option[Period] = None,
                   length: Long = -1L,
@@ -311,8 +310,16 @@ object Cli extends App with VersionInfo {
         cmd("sign")
           .toCommand(SignRoot)
           .text("Signs your root-of-trust metadata with a specific key and sets the expiry.")
-          .children(manyKeyNamesOpt(this).text("The path to the public key to use for signing."))
+          .children(manyKeyNamesOpt(this).optional.text("The path to the public key to use for signing."))
           .children(expirationOpts(this):_*)
+          .children(
+            opt[ValidSignatureType]("signature")
+              .toConfigOptionParam('signature)
+              .text("The external signature to add to root.json."),
+            opt[KeyId]("key-id")
+              .toConfigOptionParam('keyId)
+              .text("The ID of the key the external signature has been created with.")
+          )
       )
 
     cmd("targets")
@@ -379,7 +386,7 @@ object Cli extends App with VersionInfo {
             opt[Int]("version")
               .text("The version number to use for the signed metadata. Overrides the version in the unsigned `targets.json` file.")
               .toConfigOptionParam('version),
-            opt[Refined[String, ValidSignature]]("signature")
+            opt[ValidSignatureType]("signature")
               .text("The external rsassa-pss-sha256 signature to add (after being verified)")
               .toConfigOptionParam('signature),
             opt[KeyId]("key-id")

@@ -51,7 +51,8 @@ object TufDataType {
     ValidationUtils.validHexValidation(ValidKeyId(), length = 64)
 
   case class ValidSignature()
-  case class Signature(sig: Refined[String, ValidSignature], method: SignatureMethod = SignatureMethod.RSASSA_PSS_SHA256)
+  type ValidSignatureType = Refined[String, ValidSignature]
+  case class Signature(sig: ValidSignatureType, method: SignatureMethod = SignatureMethod.RSASSA_PSS_SHA256)
   implicit val validSignature: Validate.Plain[String, ValidSignature] =
     ValidationUtils.validBase64Validation(ValidSignature())
 
@@ -78,7 +79,7 @@ object TufDataType {
   case class RepoId(uuid: UUID) extends UUIDKey
   object RepoId extends UUIDKeyObj[RepoId]
 
-  case class ClientSignature(keyid: KeyId, method: SignatureMethod, sig: Refined[String, ValidSignature]) {
+  case class ClientSignature(keyid: KeyId, method: SignatureMethod, sig: ValidSignatureType) {
     def toSignature: Signature = Signature(sig, method)
   }
 
