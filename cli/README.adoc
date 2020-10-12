@@ -203,6 +203,13 @@ or
 
     cat tuf/myrepo/root.json
 
+== Finding the role JSON files
+
+Initially you can find the signed root.json in credentials.zip which you provide when initializing the repository.
+
+The unsigned versions of root.json and targets.json are pulled from the OTA server with `root pull` and `targets pull` respectively and are stored under __tuf/<reponame>/roles/unsigned__ path.
+If you haven't previously created any targets - `targets init` will create the unsigned targets.json.
+
 == Managing an offline root.json
 
 A root.json can be managed entirely offline by a user using `garage-sign`.
