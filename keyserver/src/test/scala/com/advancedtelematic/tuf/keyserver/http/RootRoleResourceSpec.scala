@@ -696,7 +696,6 @@ class RootRoleResourceSpec extends TufKeyserverSpec
 
     val keyPair = keyType.crypto.generateKeyPair(keyType.crypto.defaultKeySize)
 
-    val rootKeyId = oldRootRole.roles(RoleType.ROOT).keyids.head
     val rootRole = oldRootRole.withRoleKeys(RoleType.ROOT, keyPair.pubkey)
 
     val signedPayload = JsonSignedPayload(List(signWithKeyPair(keyPair.pubkey.id, keyPair.privkey, rootRole)), rootRole.asJson)

@@ -7,7 +7,7 @@ import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RoleType, TufKey}
 
 object RootManipulationOps {
-  implicit class RootManipulationOps(rootRole: RootRole) {
+  implicit class RootRoleExtension(val rootRole: RootRole) extends AnyVal {
 
     def roleKeys(roleTypes: RoleType*): List[TufKey] = {
       val keyids = rootRole.roles.filterKeys(roleTypes.contains).values.map(_.keyids).toSet.flatten
@@ -34,7 +34,7 @@ object RootManipulationOps {
     }
 
     def withRoleKeys(roleType: RoleType, threshold: Int, keys: TufKey*): RootRole = {
-      val newRoles = rootRole.roles + (roleType -> RoleKeys(keys.map(_.id), threshold))
+      val newRoles = rootRole.roles + (roleType -> RoleKeys(keys.map(_.id).distinct, threshold))
 
       val newKeys = newRoles.values.flatMap(_.keyids).toSet[KeyId].map { keyid =>
         rootRole.keys.get(keyid).orElse(keys.find(_.id == keyid)).get
