@@ -19,6 +19,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, DelegatedPathPattern, DelegatedRoleName, Delegations, MetaPath, RootRole, TargetsRole, TufRole, TufRoleOps}
 import com.advancedtelematic.libtuf.data.RootManipulationOps._
 import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.RSASSA_PSS_SHA256
 import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, KeyId, KeyType, RoleType, SignedPayload, TargetFilename, TufKey, TufKeyPair, TufPrivateKey, ValidSignatureType}
 import com.advancedtelematic.libtuf.data.{ClientDataType, RootRoleValidation}
@@ -128,17 +129,17 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
     keys <- keyNames.traverse(keyStorage.readPublicKey)
   } yield keys.map(_.id)
 
-  def removeRootKeys(keyIds: List[KeyId]): Try[Path] = for {
+  def removeRoleKeys(roleType: RoleType, keyIds: List[KeyId]): Try[(Path,Int)] = for {
     unsignedRoot <- readUnsignedRole[RootRole]
-    newRoot = unsignedRoot.removeRoleKeys(RoleType.ROOT, keyIds.toSet)
+    (newRoot, deleteCount) = unsignedRoot.removeRoleKeys(roleType, keyIds.toSet)
     path <- writeUnsignedRole(newRoot)
-  } yield path
+  } yield (path, deleteCount)
 
-  def addRootKeys(keyNames: List[KeyName]): Try[Path] =
+  def addRoleKeys(roleType: RoleType, keyNames: List[KeyName]): Try[Path] =
     for {
       unsignedRoot <- readUnsignedRole[RootRole]
       keys <- keyNames.traverse(keyStorage.readPublicKey)
-      newRoot = unsignedRoot.addRoleKeys(RoleType.ROOT, keys:_*)
+      newRoot = unsignedRoot.addRoleKeys(roleType, keys:_*)
       path <- writeUnsignedRole(newRoot)
     } yield path
 
@@ -454,7 +455,7 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
       oldRootPrivKey <- deleteOrReadKey(repoClient, oldRootName, oldRootPubKeyId)
       _ <- keyStorage.writeKeys(oldRootName, oldRootPubKey, oldRootPrivKey).toFuture
       // read new public target key from local filesystem:
-      (newTargetsPubKey, _) <- keyStorage.readKeyPair(newTargetsName.get).toFuture
+      newTargetsPubKey <- keyStorage.readPublicKey(newTargetsName.get).toFuture
       // even if new root is not supplied, we still have to add target role keys
       oldRootRoleWithTargets = oldRootRole
         .withRoleKeys(RoleType.TARGETS, threshold = 1, newTargetsPubKey)

@@ -11,7 +11,7 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RootRole, TargetCustom}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
-import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, TargetFilename, TargetFormat, TargetName, TargetVersion, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RoleType, TargetFilename, TargetFormat, TargetName, TargetVersion, ValidTargetFilename}
 import com.advancedtelematic.libtuf.http.{ReposerverClient, TufServerClient}
 import com.advancedtelematic.tuf.cli.CliConfigOptionOps._
 import com.advancedtelematic.tuf.cli.Commands._
@@ -185,13 +185,22 @@ object CommandHandler {
         .map(p => log.info(s"signed root.json saved to $p"))
 
     case AddRootKey =>
-      tufRepo.addRootKeys(config.keyNames)
+      tufRepo.addRoleKeys(RoleType.ROOT, config.keyNames)
         .map(p => log.info(s"keys added to unsigned root.json saved to $p"))
 
     case RemoveRootKey =>
       tufRepo.keyIdsByName(config.keyNames).flatMap { keyIds =>
-        tufRepo.removeRootKeys(config.keyIds ++ keyIds)
-      }.map(p => log.info(s"keys removed from unsigned root.json saved to $p"))
+        tufRepo.removeRoleKeys(RoleType.ROOT, config.keyIds ++ keyIds)
+      }.map { case (p, c) => log.info(s"$c keys removed from unsigned root.json saved to $p") }
+
+    case AddTargetsKey =>
+      tufRepo.addRoleKeys(RoleType.TARGETS, config.keyNames)
+        .map(p => log.info(s"keys added to unsigned targets.json saved to $p"))
+
+    case RemoveTargetsKey =>
+      tufRepo.keyIdsByName(config.keyNames).flatMap { keyIds =>
+        tufRepo.removeRoleKeys(RoleType.TARGETS, config.keyIds ++ keyIds)
+      }.map { case (p, c) => log.info(s"$c keys removed from unsigned targets.json saved to $p") }
 
     case ExportRepository =>
       RepoManagement.export(tufRepo, config.keyNames.head, config.outputPath.valueOrConfigError)

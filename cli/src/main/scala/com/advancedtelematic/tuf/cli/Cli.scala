@@ -307,6 +307,23 @@ object Cli extends App with VersionInfo {
                   .text("The ID of the public key that you want to remove. You can use the `--key-name` command instead."),
               ).text("Removes a specific key from the list of keys authorized to sign the root-of-trust metadata.")
           ).text("Manages keys that are permitted to sign the root-of-trust metadata."),
+        cmd("targets-key")
+          .children(
+            cmd("add")
+              .toCommand(AddTargetsKey)
+              .children(
+                manyKeyNamesOpt(this).text("The path to the public key that you want to add.")
+              ).text("Adds a specific key to the list of keys authorized to sign the targets metadata."),
+            cmd("remove")
+              .toCommand(RemoveTargetsKey)
+              .children(
+                manyKeyNamesOpt(this).text("The name of the file with the keys that you want to remove. You can use the `--key-id` command instead."),
+                opt[KeyId]("key-id")
+                  .unbounded()
+                  .action { (arg, c) => c.copy(keyIds = arg :: c.keyIds) }
+                  .text("The ID of the public key that you want to remove. You can use the `--key-name` command instead."),
+              ).text("Removes a specific key from the list of keys authorized to sign the targets metadata.")
+          ).text("Manages keys that are permitted to sign the targets metadata."),
         cmd("sign")
           .toCommand(SignRoot)
           .text("Signs your root-of-trust metadata with a specific key and sets the expiry.")

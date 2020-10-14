@@ -6,8 +6,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.Base64
 
-import cats.syntax.either._
-import cats.syntax.option._
+import cats.implicits._
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
@@ -15,7 +14,8 @@ import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType, RsaKeyType, SignedPayload, TargetFilename, TargetFormat, TargetName, TargetVersion, ValidSignature, ValidTargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType._
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType, RsaKeyType, SignedPayload, TargetFormat, TargetName, TargetVersion, ValidSignature, ValidTargetFilename}
 import com.advancedtelematic.tuf.cli.DataType.KeyName
 import com.advancedtelematic.tuf.cli.repo.{CliKeyStorage, RepoServerRepo}
 import com.advancedtelematic.tuf.cli.repo.TufRepo.{RoleMissing, RootPullError}
@@ -27,7 +27,7 @@ import io.circe.syntax._
 import org.scalactic.source.Position
 import org.scalatest.{EitherValues, TryValues}
 
-import scala.util.{Failure, Success}
+import scala.util.Success
 
 class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with EitherValues {
 
@@ -160,7 +160,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
     val signature = TufCrypto.signPayload(targetsKeyPair.privkey, unsignedTargets.asJson).sig
 
     // signTargets() below expects a signed root
-    repo.addRootKeys(List(targetsKeyName)).get
+    repo.addRoleKeys(RoleType.ROOT, List(targetsKeyName)).get
     repo.signRoot(Seq(KeyName("root")), defaultExpiration).get
 
     repo.signTargets(Seq.empty, defaultExpiration, keyId = Some(targetsKeyPair.pubkey.id), signature = Some(signature)).get
@@ -181,7 +181,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
     val signature = targetsJson.signatures.head.sig
 
     // signTargets() below expects a signed root
-    repo.addRootKeys(List(targetsKeyName)).get
+    repo.addRoleKeys(RoleType.ROOT, List(targetsKeyName)).get
     repo.signRoot(Seq(KeyName("root")), defaultExpiration).get
 
     val newPath = repo.signTargets(Seq.empty, defaultExpiration, keyId = Some(targetsKeyPair.pubkey.id), signature = Some(signature)).get
@@ -197,7 +197,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
     val wrongSignature = Some(Refined.unsafeApply[String, ValidSignature](Base64.getEncoder.encodeToString("wrong signature".getBytes)))
 
     // signTargets() below expects a signed root
-    repo.addRootKeys(List(targetsKeyName)).get
+    repo.addRoleKeys(RoleType.ROOT, List(targetsKeyName)).get
     repo.signRoot(Seq(KeyName("root")), defaultExpiration).get
 
     repo.signTargets(Seq.empty, defaultExpiration, keyId = Some(targetsKeyPair.pubkey.id), signature = wrongSignature)
@@ -278,7 +278,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
     val keyname = KeyName("somekey")
     val keyPair = repo.genKeys(keyname, KeyType.default).get
 
-    repo.addRootKeys(List(keyname)).get
+    repo.addRoleKeys(RoleType.ROOT, List(keyname)).get
 
     val rootRole = repo.readUnsignedRole[RootRole].get
 
@@ -286,32 +286,51 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
     rootRole.roles(RoleType.ROOT).keyids should contain(keyPair.pubkey.id)
   }
 
-  reposerverTest("removes root key from unsigned root") { (repo, _) =>
+  private def removeRoleKeyTest(repo: RepoServerRepo, roleType: RoleType) = {
     val keyname = KeyName("somekey")
     val keyPair = repo.genKeys(keyname, KeyType.default).get
 
-    repo.addRootKeys(List(keyname)).get
-    val keyIds = repo.keyIdsByName(List(KeyName("root"))).get
-    repo.removeRootKeys(keyIds).get
+    repo.addRoleKeys(roleType, List(keyname)).get
+    repo.readUnsignedRole[RootRole].get.roles(roleType).keyids.length shouldBe 2
+
+    // role type name is "targets", key name is "target"
+    val keyIds = repo.keyIdsByName(List(KeyName(roleType.show.stripSuffix("s")))).get
+    repo.removeRoleKeys(roleType, keyIds).get
 
     val rootRole = repo.readUnsignedRole[RootRole].get
 
-    rootRole.roles(RoleType.ROOT).keyids shouldBe Seq(keyPair.pubkey.id)
+    rootRole.roles(roleType).keyids shouldBe Seq(keyPair.pubkey.id)
   }
 
-  reposerverTest("can remove keys using key ids") { (repo, _) =>
+  reposerverTest("removes root key from unsigned root") { (repo, _) =>
+    removeRoleKeyTest(repo, RoleType.ROOT)
+  }
+
+  reposerverTest("removes root key from unsigned targets") { (repo, _) =>
+    removeRoleKeyTest(repo, RoleType.TARGETS)
+  }
+
+  def removeKeyIdTest(repo: RepoServerRepo, roleType: RoleType): Unit = {
     val keyname = KeyName("somekey")
     val keyPair = repo.genKeys(keyname, KeyType.default).get
     val othername = KeyName("otherkey")
     val otherKeyPair = repo.genKeys(othername, KeyType.default).get
 
-    repo.addRootKeys(List(keyname, othername))
-    repo.removeRootKeys(List(keyPair.pubkey.id))
+    repo.addRoleKeys(roleType, List(keyname, othername)).get
+    repo.removeRoleKeys(roleType, List(keyPair.pubkey.id)).get
 
     val rootRole = repo.readUnsignedRole[RootRole].get
 
-    rootRole.roles(RoleType.ROOT).keyids should contain(otherKeyPair.pubkey.id)
-    rootRole.roles(RoleType.ROOT).keyids shouldNot contain(keyPair.pubkey.id)
+    rootRole.roles(roleType).keyids should contain(otherKeyPair.pubkey.id)
+    rootRole.roles(roleType).keyids shouldNot contain(keyPair.pubkey.id)
+  }
+
+  reposerverTest("can remove root keys using key ids") { (repo, _) =>
+    removeKeyIdTest(repo, RoleType.ROOT)
+  }
+
+  reposerverTest("can remove target keys using key ids") { (repo, _) =>
+    removeKeyIdTest(repo, RoleType.TARGETS)
   }
 
   reposerverTest("pull succeeds when new root.json is valid against local root.json") { (repo, server) =>
