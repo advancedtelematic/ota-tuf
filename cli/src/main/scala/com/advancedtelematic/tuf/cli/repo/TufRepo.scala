@@ -442,7 +442,8 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
                                oldKeyId: Option[KeyId],
                                newTargetsName: Option[KeyName],
                                rootExpireTime: Instant): Future[SignedPayload[RootRole]] = {
-    assert(newTargetsName.isDefined, "new targets key name must be defined when moving root off line in tuf-reposerver")
+    assert(newRootName.isEmpty || newTargetsName.isDefined,
+           "new targets key name must be defined when moving root off line in tuf-reposerver")
 
     for {
       // get the unsigned root metadata from server:
@@ -454,19 +455,15 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
       // pull and delete old root key from server and store it locally under the given name:
       oldRootPrivKey <- deleteOrReadKey(repoClient, oldRootName, oldRootPubKeyId)
       _ <- keyStorage.writeKeys(oldRootName, oldRootPubKey, oldRootPrivKey).toFuture
-      // read new public target key from local filesystem:
-      newTargetsPubKey <- keyStorage.readPublicKey(newTargetsName.get).toFuture
-      // even if new root is not supplied, we still have to add target role keys
-      oldRootRoleWithTargets = oldRootRole
-        .withRoleKeys(RoleType.TARGETS, threshold = 1, newTargetsPubKey)
-        .copy(expires = rootExpireTime)
-      // and save it locally:
-      _ <- if (newRootName.isEmpty) writeUnsignedRole(oldRootRoleWithTargets).toFuture else Future.successful("Continue")
+
       // read new root key pair from local filesystem if new root key name was supplied:
       (newRootPubKey, newRootPrivKey) <- keyStorage.readKeyPair(newRootName.get).toFuture if newRootName.isDefined
+      // read new public target key from local filesystem:
+      newTargetsPubKey <- keyStorage.readPublicKey(newTargetsName.get).toFuture
       // create new root metadata based on the old one with new keys and version:
-      newRootRole = oldRootRoleWithTargets
+      newRootRole = oldRootRole
         .withRoleKeys(RoleType.ROOT, threshold = 1, newRootPubKey)
+        .withRoleKeys(RoleType.TARGETS, threshold = 1, newTargetsPubKey)
         .withVersion(oldRootRole.version + 1)
         .copy(expires = rootExpireTime)
       newRootSignature = TufCrypto.signPayload(newRootPrivKey, newRootRole.asJson).toClient(newRootPubKey.id)

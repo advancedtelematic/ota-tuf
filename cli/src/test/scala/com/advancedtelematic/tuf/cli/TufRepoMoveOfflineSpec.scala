@@ -153,19 +153,6 @@ class TufRepoMoveOfflineSpec extends CliSpec {
     repo.repoPath.resolve("roles/targets.json.checksum").toFile.exists() shouldBe true
   }
 
-  test("saves unsigned roles when root key is not supplied") {
-    val repo = initRepo[RepoServerRepo](KeyType.default)
-    val client = FakeReposerverTufServerClient(KeyType.default)
-
-    Files.delete(repo.repoPath.resolve("roles/unsigned/root.json"))
-
-    val result = OfflineMover.reposerverWithoutRoot(repo, client)
-
-    ScalaFutures.whenReady(result.failed) { _ =>
-      repo.repoPath.resolve("roles/unsigned/root.json").toFile.exists shouldBe true
-    }
-  }
-
   test("doesn't save unsigned roles when root key is supplied") {
     val repo = initRepo[RepoServerRepo](KeyType.default)
     val client = FakeReposerverTufServerClient(KeyType.default)
@@ -205,9 +192,7 @@ private object OfflineMover {
   def reposerverWithoutRoot(repo: TufRepo[ReposerverClient], client: FakeReposerverTufServerClient)
                            (implicit ec: ExecutionContext): Future[SignedPayload[RootRole]] = {
     val oldRootName = KeyName(s"oldroot${repo.name}")
-    val newTargetsName = KeyName("target")
-
-    repo.moveRootOffline(client, None, oldRootName, None, Option(newTargetsName), Instant.now().plusSeconds(60))
+    repo.moveRootOffline(client, None, oldRootName, None, None, Instant.now().plusSeconds(60))
   }
 
   def directorWithoutRoot(repo: TufRepo[DirectorClient], client: FakeReposerverTufServerClient)
@@ -216,6 +201,7 @@ private object OfflineMover {
 
     repo.moveRootOffline(client, None, oldRootName, None, None, Instant.now().plusSeconds(60))
   }
+
   def reposerver(repo: TufRepo[ReposerverClient], keyType: KeyType, client: FakeReposerverTufServerClient)
            (implicit ec: ExecutionContext): Future[(TufKey, TufKey, SignedPayload[RootRole])] = {
     val oldRootName = KeyName(s"oldroot${repo.name}")
