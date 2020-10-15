@@ -204,6 +204,22 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
       .failure.exception.getMessage startsWith("wrong signature")
   }
 
+  test("get canonical unsigned root") {
+    val repo = initRepo[RepoServerRepo]
+    val unsignedJson = repo.getCanonicalRoot()
+
+    import com.advancedtelematic.libtuf.crypt.CanonicalJson._
+
+    unsignedJson.get shouldBe repo.readUnsignedRole[RootRole].get.asJson.canonical
+  }
+
+  test("canonical unsigned root doesn't end with new line") {
+    val repo = initRepo[RepoServerRepo]
+    val unsignedJson = repo.getCanonicalRoot()
+
+    unsignedJson.get shouldNot endWith ("\n")
+  }
+
   test("add external RSA signature to root") {
     val repo = initRepo[RepoServerRepo](RsaKeyType)
     val rootKeyName = KeyName("root")

@@ -18,6 +18,7 @@ object Commands {
   case object PushTargets extends Command
   case object AddTargetsKey extends Command
   case object RemoveTargetsKey extends Command
+  case object GetUnsignedRoot extends Command
   case object PullRoot extends Command
   case object PushRoot extends Command
   case object AddRootKey extends Command
