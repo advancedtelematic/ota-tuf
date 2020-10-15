@@ -443,7 +443,7 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
                                newTargetsName: Option[KeyName],
                                rootExpireTime: Instant): Future[SignedPayload[RootRole]] = {
     assert(newRootName.isEmpty || newTargetsName.isDefined,
-           "new targets key name must be defined when moving root off line in tuf-reposerver")
+           "new targets key name must be defined when moving root offline in tuf-reposerver")
 
     for {
       // get the unsigned root metadata from server:
