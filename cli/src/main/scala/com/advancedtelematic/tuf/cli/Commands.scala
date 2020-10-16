@@ -7,6 +7,7 @@ object Commands {
   case object InitRepo extends Command
   case object MoveOffline extends Command
   case object GetTargets extends Command
+  case object GetUnsignedTargets extends Command
   case object InitTargets extends Command
   case object AddTarget extends Command
   case object AddUploadedTarget extends Command
