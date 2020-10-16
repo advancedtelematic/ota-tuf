@@ -396,6 +396,9 @@ object Cli extends App with VersionInfo {
               .text("""The exact name of the target to remove.
                           |Should be in one of the following forms: `<name>_<version>` for OSTree images, or `<name>-<version>` for binary images.""".stripMargin)
           ),
+        cmd("get-unsigned")
+          .toCommand(GetUnsignedTargets)
+          .text("Generates an unsigned `targets.json` file in a canonical JSON form."),
         cmd("sign")
           .toCommand(SignTargets)
           .text("Signs your `targets.json` file with a specific key or adds a given signature.")

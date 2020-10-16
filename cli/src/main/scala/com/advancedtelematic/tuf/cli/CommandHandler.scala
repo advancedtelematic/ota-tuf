@@ -95,6 +95,12 @@ object CommandHandler {
         tufRepo.pullTargets(client).map { targetsResponse => log.info(targetsResponse.asJson.spaces2) }
       }
 
+    case GetUnsignedTargets =>
+      tufRepo
+        .canonicalTargets
+        .map(_.getBytes)
+        .map(config.outputPath.streamOrStdout.write)
+
     case InitTargets =>
       tufRepo
         .initTargets(config.version.valueOrConfigError, config.expireOn.getOrElse(Instant.now().plus(DEFAULT_TARGET_LIFETIME)))
@@ -173,8 +179,10 @@ object CommandHandler {
       tufRepo.genKeys(config.rootKey.get, config.keyType, config.keySize).map(_ => ())
 
     case GetUnsignedRoot =>
-      tufRepo.getCanonicalRoot()
-        .map(json => config.outputPath.streamOrStdout.write(json.getBytes))
+      tufRepo
+        .canonicalRoot
+        .map(_.getBytes)
+        .map(config.outputPath.streamOrStdout.write)
 
     case PullRoot =>
       repoServer.flatMap(client => tufRepo.pullRoot(client, config.force))

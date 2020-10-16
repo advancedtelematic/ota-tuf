@@ -125,7 +125,9 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
     checkPerms(rolesPath.resolve("unsigned"))
   }
 
-  def getCanonicalRoot(): Try[String] = generateCanonical[RootRole]
+  def canonicalRoot: Try[String] = generateCanonical[RootRole]
+
+  def canonicalTargets: Try[String] = generateCanonical[TargetsRole]
 
   def keyIdsByName(keyNames: List[KeyName]): Try[List[KeyId]] = for {
     keys <- keyNames.traverse(keyStorage.readPublicKey)
@@ -145,7 +147,7 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
       path <- writeUnsignedRole(newRoot)
     } yield path
 
-  private def generateCanonical[T : Decoder : Encoder](implicit tufRole: TufRole[T]): Try[String] =
+  private def generateCanonical[T : Decoder : Encoder : TufRole]: Try[String] =
     readUnsignedRole[T].map(json => json.asJson.canonical)
 
   private def validateSameVersion(from: SignedPayload[RootRole], to: SignedPayload[RootRole]): Future[Unit] = {
