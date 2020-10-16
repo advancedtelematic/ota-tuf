@@ -1,4 +1,7 @@
 import CustomSettings._
+import java.nio.file.Files.{copy => fileCopy}
+import java.nio.file.Paths.{get => createPath}
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 
 def itFilter(name: String): Boolean = name endsWith "IntegrationSpec"
 
@@ -139,7 +142,30 @@ lazy val cli = (project in file("cli"))
     executableScriptName := "garage-sign",
     mappings in Universal += (file("cli/LICENSE") -> "docs/LICENSE"),
     s3Bucket := "ota-tuf-cli-releases",
-    libraryDependencies += "com.typesafe" % "config" % "1.3.4" % Test
+    libraryDependencies += "com.typesafe" % "config" % "1.3.4" % Test,
+    reinstallGarageSign := {
+      val home = sys.env("HOME")
+      val bin = sys.env("PATH")
+                  .split(":")
+                  .filter { p =>
+                    val f = new File(p + "/garage-sign")
+                    p.startsWith(home) && f.isFile && f.isOwnerExecutable
+                  }
+                  .head
+      val targetDir = (new File(bin)).getParent
+
+      stage.value
+      val stagingDir = (stagingDirectory in Universal).value
+      val files = (stagingDir ** "*").get
+      files.foreach { file =>
+        val p = file.getAbsolutePath
+        if (file.isFile && p.length > stagingDir.absolutePath.length) {
+          val relPath = p.substring(stagingDir.getAbsolutePath.length + 1)
+          fileCopy(file.toPath, createPath(s"$targetDir/$relPath"), REPLACE_EXISTING)
+        }
+      }
+      println(s"Done installing to $targetDir.")
+    }
   )
   .dependsOn(libtuf)
 
@@ -150,3 +176,6 @@ lazy val ota_tuf = (project in file("."))
   .aggregate(libtuf_server, libtuf, keyserver, reposerver, cli)
   .settings(sonarSettings)
   .settings(aggregate in sonarScan := false)
+
+lazy val reinstallGarageSign = taskKey[Unit]("Reinstall garage-sign in a dir in the home directory")
+
