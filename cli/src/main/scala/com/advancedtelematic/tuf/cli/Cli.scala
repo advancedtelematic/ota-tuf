@@ -290,6 +290,9 @@ object Cli extends App with VersionInfo {
         cmd("push")
           .toCommand(PushRoot)
           .text("Uploads local `root.json` file to OTA Connect. If the file does not have a valid signature, it will be rejected by the server."),
+        cmd("get-unsigned")
+          .toCommand(GetUnsignedRoot)
+          .text("Generates an unsigned `root.json` file in a canonical JSON form."),
         cmd("key")
           .children(
             cmd("add")

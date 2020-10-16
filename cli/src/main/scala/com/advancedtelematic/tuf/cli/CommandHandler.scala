@@ -172,6 +172,10 @@ object CommandHandler {
       assert(config.rootKey.isDefined, "The base filename for keys must be defined when generating a new key.")
       tufRepo.genKeys(config.rootKey.get, config.keyType, config.keySize).map(_ => ())
 
+    case GetUnsignedRoot =>
+      tufRepo.getCanonicalRoot()
+        .map(json => config.outputPath.streamOrStdout.write(json.getBytes))
+
     case PullRoot =>
       repoServer.flatMap(client => tufRepo.pullRoot(client, config.force))
         .map(_ => log.info("Pulled root.json"))
