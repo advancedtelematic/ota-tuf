@@ -42,7 +42,9 @@ case class Config(command: Command,
                   rootKey: Option[KeyName] = None,
                   keyType: KeyType = KeyType.default,
                   oldRootKey: KeyName = KeyName("default-key"),
+                 // TODO OTA-5317 remove signature once SignRoot uses signatures
                   signature: Option[ValidSignatureType] = None,
+                  signatures: Option[Map[KeyName, ValidSignatureType]] = None,
                   keyNames: List[KeyName]= List.empty,
                   keyIds: List[KeyId]= List.empty,
                   keyId: Option[KeyId] = None,
@@ -409,12 +411,9 @@ object Cli extends App with VersionInfo {
             opt[Int]("version")
               .text("The version number to use for the signed metadata. Overrides the version in the unsigned `targets.json` file.")
               .toConfigOptionParam('version),
-            opt[ValidSignatureType]("signature")
-              .text("The external rsassa-pss-sha256 signature to add (after being verified)")
-              .toConfigOptionParam('signature),
-            opt[KeyId]("key-id")
-              .text("The ID of the key in root.json the external signature has been created with")
-              .toConfigOptionParam('keyId)
+            opt[Map[KeyName, ValidSignatureType]]("signatures")
+              .action { (m, c) => if (m.isEmpty) c.copy(signatures = None) else c.copy(signatures = Some(m)) }
+              .text("The external rsassa-pss-sha256 signatures to add (after being verified)")
           )
           .children(expirationOpts(this):_*),
         cmd("pull")
