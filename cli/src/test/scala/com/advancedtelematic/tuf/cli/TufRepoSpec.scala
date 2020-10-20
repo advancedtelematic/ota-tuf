@@ -160,17 +160,36 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
     val signature = TufCrypto.signPayload(targetsKeyPair.privkey, unsignedTargets.asJson).sig
 
     // signTargets() below expects a signed root
-    repo.addRoleKeys(RoleType.ROOT, List(targetsKeyName)).get
-    repo.signRoot(Seq(KeyName("root")), defaultExpiration).get
+    repo.addRoleKeys(RoleType.ROOT, List(targetsKeyName)).success
+    repo.signRoot(Seq(KeyName("root")), defaultExpiration).success
 
-    repo.signTargets(Seq.empty, defaultExpiration, keyId = Some(targetsKeyPair.pubkey.id), signature = Some(signature)).get
+    repo.signTargets(Seq.empty, defaultExpiration, signatures = Some(Map(targetsKeyName -> signature))).success
+  }
+
+  test("add multiple external RSA signatures to targets") {
+    val repo = initRepo[RepoServerRepo](RsaKeyType)
+    val targetsKey1Name = KeyName("somekey")
+    val targetsKey2Name = KeyName("someotherkey")
+    val targetsKey1Pair = repo.genKeys(targetsKey1Name, KeyType.default).success.value
+    val targetsKey2Pair = repo.genKeys(targetsKey2Name, KeyType.default).success.value
+
+    val unsignedTargets = repo.readUnsignedRole[TargetsRole].success.value
+    val signature1 = TufCrypto.signPayload(targetsKey1Pair.privkey, unsignedTargets.asJson).sig
+    val signature2 = TufCrypto.signPayload(targetsKey2Pair.privkey, unsignedTargets.asJson).sig
+
+    // signTargets() below expects a signed root
+    repo.addRoleKeys(RoleType.ROOT, List(targetsKey1Name)).success
+    repo.signRoot(Seq(KeyName("root")), defaultExpiration).success
+
+    val signatures = Map(targetsKey1Name -> signature1, targetsKey2Name -> signature2)
+    repo.signTargets(Seq.empty, defaultExpiration, signatures = Some(signatures)).success
   }
 
   test("compare old and new 'targets sign'") {
     // sign targets the old way
     val repo = initRepo[RepoServerRepo](RsaKeyType)
     val targetsKeyName = KeyName("somekey")
-    val targetsKeyPair = repo.genKeys(targetsKeyName, KeyType.default).get
+    val _ = repo.genKeys(targetsKeyName, KeyType.default).success.value
 
     val path = repo.signTargets(Seq(targetsKeyName), defaultExpiration).get
     val targetsJson = parseFile(path.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).right.value
@@ -184,7 +203,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
     repo.addRoleKeys(RoleType.ROOT, List(targetsKeyName)).get
     repo.signRoot(Seq(KeyName("root")), defaultExpiration).get
 
-    val newPath = repo.signTargets(Seq.empty, defaultExpiration, keyId = Some(targetsKeyPair.pubkey.id), signature = Some(signature)).get
+    val newPath = repo.signTargets(Seq.empty, defaultExpiration, signatures = Some(Map(targetsKeyName -> signature))).get
     newPath shouldBe path
     val newTargetsJson = parseFile(path.toFile).flatMap(_.as[SignedPayload[TargetsRole]]).right.value
     newTargetsJson shouldBe targetsJson
@@ -192,16 +211,22 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
 
   test("cannot add invalid signature to targets") {
     val repo = initRepo[RepoServerRepo](RsaKeyType)
-    val targetsKeyName = KeyName("somekey")
-    val targetsKeyPair = repo.genKeys(targetsKeyName, KeyType.default).get
-    val wrongSignature = Some(Refined.unsafeApply[String, ValidSignature](Base64.getEncoder.encodeToString("wrong signature".getBytes)))
+    val targetsKey1Name = KeyName("somekey")
+    val targetsKey2Name = KeyName("someotherkey")
+    val targetsKey1Pair = repo.genKeys(targetsKey1Name, KeyType.default).success.value
+    val targetsKey2Pair = repo.genKeys(targetsKey2Name, KeyType.default).success.value
+
+    val wrongSignature = Refined.unsafeApply[String, ValidSignature](Base64.getEncoder.encodeToString("wrong signature".getBytes))
+    val unsignedTargets = repo.readUnsignedRole[TargetsRole].success.value
+    val signature2 = TufCrypto.signPayload(targetsKey2Pair.privkey, unsignedTargets.asJson).sig
 
     // signTargets() below expects a signed root
-    repo.addRoleKeys(RoleType.ROOT, List(targetsKeyName)).get
+    repo.addRoleKeys(RoleType.ROOT, List(targetsKey1Name)).get
     repo.signRoot(Seq(KeyName("root")), defaultExpiration).get
 
-    repo.signTargets(Seq.empty, defaultExpiration, keyId = Some(targetsKeyPair.pubkey.id), signature = wrongSignature)
-      .failure.exception.getMessage startsWith "wrong signature"
+    val signatures = Map(targetsKey1Name -> wrongSignature, targetsKey2Name -> signature2)
+    val path = repo.signTargets(Seq.empty, defaultExpiration, signatures = Some(signatures))
+    path.failure.exception.getMessage shouldBe s"Wrong signature: keyId: ${targetsKey1Pair.pubkey.id} signature: ${wrongSignature.value}"
   }
 
   test("get canonical unsigned root") {

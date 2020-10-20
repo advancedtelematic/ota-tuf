@@ -148,7 +148,7 @@ object CommandHandler {
 
     case SignTargets =>
       tufRepo
-        .signTargets(config.keyNames, expirationDate(config), config.version, config.keyId, config.signature)
+        .signTargets(config.keyNames, expirationDate(config), config.version, config.signatures)
         .map(p => log.info(s"signed targets.json to $p"))
 
 
