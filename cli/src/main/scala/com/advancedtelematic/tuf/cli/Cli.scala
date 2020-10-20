@@ -165,6 +165,8 @@ object Cli extends App with VersionInfo {
 
     version("version").text("Prints the current binary version.")
 
+    note(" " + sys.props("line.separator"))
+
     cmd("user-keys").children(
       keysPathOpt(this),
       cmd("gen")
@@ -184,6 +186,8 @@ object Cli extends App with VersionInfo {
           opt[Path]("input").abbr("i").required().toConfigOptionParam('inputPath).text("The path to the file with your public key.")
         )
     ).text("Manages keys stored outside of a specific repository’s directory.")
+
+    note(" " + sys.props("line.separator"))
 
     cmd("delegations").children(
       cmd("init")
@@ -220,6 +224,8 @@ object Cli extends App with VersionInfo {
         ).text("Adds a new target to a delegated Targets metadata file.")
     ).text("Manages delegation metadata.")
 
+    note(" " + sys.props("line.separator"))
+
     cmd("init")
       .toCommand(InitRepo)
       .text("Creates an empty local repository.")
@@ -237,6 +243,8 @@ object Cli extends App with VersionInfo {
           .toConfigOptionParam('repoType)
           .optional()
       )
+
+    note(" " + sys.props("line.separator"))
 
     cmd("key").children(
       cmd("generate")
@@ -257,6 +265,8 @@ object Cli extends App with VersionInfo {
         )
     ).text("Manages keys stored in a specific local repository’s directory.")
 
+    note(" " + sys.props("line.separator"))
+
     cmd("move-offline")
       .toCommand(MoveOffline)
       .text("Removes online keys from OTA Connect, and updates the environment to use locally stored offline keys.")
@@ -276,6 +286,8 @@ object Cli extends App with VersionInfo {
           .text("(Optional) The ID of the key that you want to remove from the `root.json` file. This app will try to use the last key defined in the current `root.json` file.")
           .toConfigOptionParam('keyId)
       )
+
+    note(" " + sys.props("line.separator"))
 
     cmd("root")
       .text("Manages root-of-trust metadata for a repository.")
@@ -343,6 +355,8 @@ object Cli extends App with VersionInfo {
               .text("The ID of the key the external signature has been created with.")
           )
       )
+
+    note(" " + sys.props("line.separator"))
 
     cmd("targets")
       .text("""(Only for repositories of type `reposerver`) Manages Targets metadata.
@@ -445,7 +459,7 @@ object Cli extends App with VersionInfo {
               .text("The timeout for the HTTP request of the upload, in seconds.")
               .toConfigParam('timeout),
           )
-          .text("""Uploads a binary to the repository. 
+          .text("""Uploads a binary to the repository.
                   |Note that this will not make the binary available on its own.
                   |After the upload completes successfully, add it to your `targets.json` file using the `targets add-uploaded` command.
                   |""".stripMargin),
@@ -469,6 +483,8 @@ object Cli extends App with VersionInfo {
           )
       )
 
+    note(" " + sys.props("line.separator"))
+
     cmd("export-credentials")
       .text("Exports settings and keys to the .zip file with your provisioning credentials.")
       .toCommand(ExportRepository)
@@ -480,6 +496,8 @@ object Cli extends App with VersionInfo {
           .text("The name of the file to which you want to export our credentials.")
           .required().toConfigOptionParam('outputPath)
       )
+
+    note(" " + sys.props("line.separator"))
 
     cmd("get-targets")
       .toCommand(GetTargets)
