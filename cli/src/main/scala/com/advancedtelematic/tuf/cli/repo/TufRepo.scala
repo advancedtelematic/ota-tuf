@@ -29,6 +29,7 @@ import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoConfig, _}
 import com.advancedtelematic.tuf.cli.Errors.CommandNotSupportedByRepositoryType
 import com.advancedtelematic.tuf.cli.TryToFuture._
 import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
+import com.advancedtelematic.tuf.cli.repo.TufRepoOps.MapSequencer
 import com.advancedtelematic.tuf.cli.{CliCodecs, CliUtil}
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.refineV
@@ -212,22 +213,25 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
     _ <- client.pushSignedRoot(signedRoot)
   } yield ()
 
-  def signRoot(keys: Seq[KeyName], expiration: Instant => Instant, keyId: Option[KeyId] = None, sig: Option[ValidSignatureType] = None): Try[Path] =
-    (keyId, sig) match {
-      case (Some(keyId), Some(validSignature)) =>
-        for {
-          root <- readSignedRole[RootRole]
-          key <- Try(root.signed.keys(keyId))
-          path <- addSignature[RootRole](key, validSignature)
-        } yield path
+  def signRoot(keys: Seq[KeyName], expiration: Instant => Instant, keyName: Option[KeyName] = None, sigs: Option[Map[KeyName, ValidSignatureType]] = None): Try[Path] =
+    (keyName, sigs) match {
+      case (Some(kn), Some(validSignatures)) => signAndAdd[RootRole](kn, validSignatures)
+      case (None, Some(validSignatures)) => addSignatures[RootRole](validSignatures)
       case (None, None) => signRole[RootRole](None, keys, expiration)
       case _ => Failure(new Exception("If you pass a signature you also need to pass a key id"))
     }
 
+  private def transformRole[T : Decoder : Encoder : TufRole](fn: T => Try[SignedPayload[T]]) =
+    for {
+      unsignedRole <- readUnsignedRole[T]
+      signedRole <- fn(unsignedRole)
+      path <- writeSignedRole(signedRole)
+    } yield path
+
   import cats.implicits._
 
   protected def signRole[T : Decoder : Encoder](version: Option[Int], keys: Seq[KeyName], validExpiration: Instant => Instant)
-                                               (implicit tufRole: TufRole[T]): Try[Path] = {
+                                               (implicit tufRole: TufRole[T]): Try[Path] = transformRole[T] { unsigned =>
     def signatures(payload: T): Try[List[ClientSignature]] =
       keys.toList.traverse { key =>
         keyStorage.readKeyPair(key).map { case (pub, priv) =>
@@ -236,46 +240,48 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
       }
 
     for {
-      unsigned <- readUnsignedRole[T]
       expiration <- Try(validExpiration(unsigned.expires))
       newUnsigned = tufRole.refreshRole(unsigned, oldV => version.getOrElse(oldV + 1), expiration)
       sigs <- signatures(newUnsigned)
-      signedRole = SignedPayload(sigs, newUnsigned, newUnsigned.asJson)
-      path <- writeSignedRole(signedRole)
-    } yield path
+    } yield SignedPayload(sigs, newUnsigned, newUnsigned.asJson)
   }
 
-  // TODO OTA-5317 signRoot should use addSignature(signatures) and then we should remove this method.
-  protected def addSignature[T : Decoder : Encoder](key: TufKey, validSignature: ValidSignatureType)
-                                                   (implicit tufRole: TufRole[T]): Try[Path] = {
-    val clientSignature = ClientSignature(key.id, RSASSA_PSS_SHA256, validSignature)
-
-    for {
-      unsigned <- readUnsignedRole[T]
-      _ <- Try {
-             if (!TufCrypto.isValid(clientSignature, key, unsigned.asJson)) {
-               throw new Exception(s"wrong signature $clientSignature")
-             }
-           }
-      signedRole = SignedPayload(Seq(clientSignature), unsigned, unsigned.asJson)
-      path <- writeSignedRole(signedRole)
-    } yield path
-  }
-
-  protected def addSignatures[T : Decoder : Encoder](signatures: Map[TufKey, ValidSignatureType])
-                                                    (implicit tufRole: TufRole[T]): Try[Path] = {
-    val clientSignatures = signatures.transform { case (key, sig) => ClientSignature(key.id, RSASSA_PSS_SHA256, sig) }
-
-    for {
-      unsignedRole <- readUnsignedRole[T]
-      invalidSignature = clientSignatures.find { case (key, cs) => !TufCrypto.isValid(cs, key, unsignedRole.asJson) }.map(_._2)
-      signedRole <- invalidSignature match {
-        case None => Success(SignedPayload(clientSignatures.values.toSeq, unsignedRole, unsignedRole.asJson))
-        case Some(cs) => Failure(new Exception(s"Wrong signature: keyId: ${cs.keyid} signature: ${cs.sig.value}"))
+  private def clientSignatures(signatures: Map[KeyName, ValidSignatureType]): Try[Map[TufKey, ClientSignature]] = {
+    signatures
+      .map { case (key, sig) => (keyStorage.readPublicKey(key), sig) }
+      .sequence
+      .map { sigs =>
+        sigs.transform { case (key, sig) => ClientSignature(key.id, RSASSA_PSS_SHA256, sig) }
       }
-      path <- writeSignedRole(signedRole)
-    } yield path
   }
+
+  private def invalidSignature[T : Encoder](unsignedRole: T, clientSignatures: Map[TufKey, ClientSignature]) =
+    clientSignatures.find { case (key, cs) => !TufCrypto.isValid(cs, key, unsignedRole.asJson) }.map(_._2)
+
+  protected def signAndAdd[T : Decoder : Encoder : TufRole](keyName: KeyName, signatures: Map[KeyName, ValidSignatureType]): Try[Path] =
+    transformRole[T] { unsignedRole =>
+      clientSignatures(signatures).flatMap { cs =>
+        invalidSignature(unsignedRole, cs) match {
+          case None =>
+            keyStorage.readKeyPair(keyName).map { case (pub, priv) =>
+              val keySig = TufCrypto.signPayload(priv, unsignedRole.asJson).toClient(pub.id)
+              SignedPayload(keySig +: cs.values.toSeq, unsignedRole, unsignedRole.asJson)
+            }
+          case Some(cs) =>
+            Failure(new Exception(s"Wrong signature: keyId: ${cs.keyid} signature: ${cs.sig.value}"))
+        }
+      }
+    }
+
+  protected def addSignatures[T : Decoder : Encoder : TufRole](signatures: Map[KeyName, ValidSignatureType]): Try[Path] =
+    transformRole[T] { unsignedRole =>
+      clientSignatures(signatures).flatMap { cs =>
+        invalidSignature(unsignedRole, cs) match {
+          case None => Success(SignedPayload(cs.values.toSeq, unsignedRole, unsignedRole.asJson))
+          case Some(cs) => Failure(new Exception(s"Wrong signature: keyId: ${cs.keyid} signature: ${cs.sig.value}"))
+        }
+      }
+    }
 
   protected def deleteOrReadKey(reposerverClient: S, keyName: KeyName, keyId: KeyId): Future[TufPrivateKey] = {
     keyStorage.readPrivateKey(keyName).toFuture.recoverWith { case _ =>
@@ -455,10 +461,7 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
                            signatures: Option[Map[KeyName, ValidSignatureType]] = None): Try[Path] =
     (signatures, version) match {
       case (Some(sigs), None) =>
-        sigs
-          .map { case (key, sig) => (keyStorage.readPublicKey(key), sig) }
-          .sequence
-          .flatMap(addSignatures[TargetsRole])
+        addSignatures[TargetsRole](sigs)
       case (None, _) =>
         signRole[TargetsRole](version, targetsKeys, expiration)
       case _ => Failure(new Exception("If you pass a signature you can't pass a version"))

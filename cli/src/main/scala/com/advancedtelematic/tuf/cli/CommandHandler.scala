@@ -80,7 +80,7 @@ object CommandHandler {
       repoServer.flatMap { client =>
         tufRepo.moveRootOffline(client,
           config.rootKey,
-          config.oldRootKey,
+          config.oldRootKey.get,
           config.keyId,
           config.keyNames.headOption,
           Instant.now().plus(DEFAULT_ROOT_LIFETIME))
@@ -193,7 +193,7 @@ object CommandHandler {
         .map(_ => log.info("Pushed root.json"))
 
     case SignRoot =>
-      tufRepo.signRoot(config.keyNames, expirationDate(config), config.keyId, config.signature)
+      tufRepo.signRoot(config.keyNames, expirationDate(config), config.oldRootKey, config.signatures)
         .map(p => log.info(s"signed root.json saved to $p"))
 
     case AddRootKey =>

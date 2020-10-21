@@ -256,7 +256,6 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
   test("add external RSA signature to root") {
     val repo = initRepo[RepoServerRepo](RsaKeyType)
     val rootKeyName = KeyName("root")
-    val rootKeyId = repo.keyIdsByName(List(rootKeyName)).success.value.head
     val privateKeyPath = repo.repoPath.resolve("keys").resolve(rootKeyName.privateKeyName)
     val privateRootKey = CliKeyStorage.readPrivateKey(privateKeyPath).success.value
 
@@ -264,13 +263,12 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
     val unsignedRoot = repo.readUnsignedRole[RootRole].success.value
     val signature = TufCrypto.signPayload(privateRootKey, unsignedRoot.asJson).sig
 
-    repo.signRoot(Seq.empty, defaultExpiration, keyId = Some(rootKeyId), sig = Some(signature)).success.value
+    repo.signRoot(Seq.empty, defaultExpiration, keyName = Some(rootKeyName), sigs = Some(Map(rootKeyName -> signature))).success.value
   }
 
   test("compare old and new 'root sign'") {
     val repo = initRepo[RepoServerRepo](RsaKeyType)
     val rootKeyName = KeyName("root")
-    val rootKeyId = repo.keyIdsByName(List(rootKeyName)).success.value.head
 
     val path = repo.signRoot(Seq(rootKeyName), defaultExpiration).success.value
     val rootJson = parseFile(path.toFile).flatMap(_.as[SignedPayload[RootRole]]).right.value
@@ -282,7 +280,7 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
     // signing has bumped the version, so update the unsigned root.json
     repo.writeUnsignedRole[RootRole](rootJson.signed)
 
-    val newPath = repo.signRoot(Seq.empty, defaultExpiration, keyId = Some(rootKeyId), sig = Some(signature)).success.value
+    val newPath = repo.signRoot(Seq.empty, defaultExpiration, sigs = Some(Map(rootKeyName -> signature))).success.value
 
     newPath shouldBe path
 
@@ -291,13 +289,41 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
     newRootJson shouldBe rootJson
   }
 
+  test("sign and add same signature to root") {
+    val repo = initRepo[RepoServerRepo](RsaKeyType)
+    val rootKeyName = KeyName("root")
+
+    val path = repo.signRoot(Seq(rootKeyName), defaultExpiration).success.value
+    val rootJson = parseFile(path.toFile).flatMap(_.as[SignedPayload[RootRole]]).right.value
+
+    rootJson.signatures.length shouldBe 1
+
+    // signing has bumped the version, so update the unsigned root.json
+    repo.writeUnsignedRole[RootRole](rootJson.signed)
+
+    val signature = rootJson.signatures.head.sig
+    val newPath = repo.signRoot(Seq.empty, identity, keyName = Some(rootKeyName), sigs = Some(Map(rootKeyName -> signature))).success.value
+
+    newPath shouldBe path
+
+    val newRootJson = parseFile(path.toFile).flatMap(_.as[SignedPayload[RootRole]]).right.value
+    newRootJson.signatures.length shouldBe 2
+
+    val publicKeyPath = repo.repoPath.resolve("keys").resolve(rootKeyName.publicKeyName)
+    val publicRootKey = CliKeyStorage.readPublicKey(publicKeyPath).success.value
+
+    // the 2 signatures are different, but they are both valid
+    newRootJson.signatures.foreach { sig =>
+      TufCrypto.isValid(sig, publicRootKey, newRootJson.signed.asJson)
+    }
+  }
+
   test("cannot add invalid signature to root") {
     val repo = initRepo[RepoServerRepo](RsaKeyType)
     val rootKeyName = KeyName("root")
-    val rootKeyId = repo.keyIdsByName(List(rootKeyName)).success.value.head
-    val wrongSignature = Some(Refined.unsafeApply[String, ValidSignature](Base64.getEncoder.encodeToString("wrong signature".getBytes)))
+    val wrongSignature = Refined.unsafeApply[String, ValidSignature](Base64.getEncoder.encodeToString("wrong signature".getBytes))
 
-    repo.signRoot(Seq.empty, defaultExpiration, keyId = Some(rootKeyId), sig = wrongSignature)
+    repo.signRoot(Seq.empty, defaultExpiration, keyName = Some(rootKeyName), sigs = Some(Map(rootKeyName -> wrongSignature)))
       .failure.exception.getMessage startsWith("wrong signature")
   }
 
