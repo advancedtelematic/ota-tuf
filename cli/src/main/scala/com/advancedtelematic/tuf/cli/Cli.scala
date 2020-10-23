@@ -41,9 +41,7 @@ case class Config(command: Command,
                   delegationName: DelegatedRoleName = "<empty>".unsafeApply,
                   rootKey: Option[KeyName] = None,
                   keyType: KeyType = KeyType.default,
-                  oldRootKey: KeyName = KeyName("default-key"),
-                 // TODO OTA-5317 remove signature once SignRoot uses signatures
-                  signature: Option[ValidSignatureType] = None,
+                  oldRootKey: Option[KeyName] = None,
                   signatures: Option[Map[KeyName, ValidSignatureType]] = None,
                   keyNames: List[KeyName]= List.empty,
                   keyIds: List[KeyId]= List.empty,
@@ -281,7 +279,7 @@ object Cli extends App with VersionInfo {
         opt[KeyName]("old-root-alias")
           .text("The alias of the old Root key. The old Root key will be saved under this name.")
           .required()
-          .toConfigParam('oldRootKey),
+          .toConfigOptionParam('oldRootKey),
         opt[KeyId]("old-keyid")
           .text("(Optional) The ID of the key that you want to remove from the `root.json` file. This app will try to use the last key defined in the current `root.json` file.")
           .toConfigOptionParam('keyId)
@@ -347,12 +345,13 @@ object Cli extends App with VersionInfo {
           .children(manyKeyNamesOpt(this).optional.text("The path to the public key to use for signing."))
           .children(expirationOpts(this):_*)
           .children(
-            opt[ValidSignatureType]("signature")
-              .toConfigOptionParam('signature)
-              .text("The external signature to add to root.json."),
-            opt[KeyId]("key-id")
-              .toConfigOptionParam('keyId)
-              .text("The ID of the key the external signature has been created with.")
+            opt[KeyName]("old-root-alias")
+              .optional
+              .toConfigOptionParam('oldRootKey)
+              .text("The alias of the old root key."),
+            opt[Map[KeyName, ValidSignatureType]]("signatures")
+              .toConfigOptionParam('signatures)
+              .text("The external signatures to add to root.json.")
           )
       )
 
@@ -547,12 +546,9 @@ object Cli extends App with VersionInfo {
       else
         TufRepo.readConfig(repoPath.value).map(_.repoServerType).getOrElse(RepoServer)
 
-    repoType match {
-      case RepoServer if (config.command == MoveOffline) && config.keyNames.isEmpty =>
-        "Missing argument: target key name required to move repo server offline".asLeft
-      case r =>
-        r.asRight
-    }
+    // add checks depending on the repo type here
+
+    repoType.asRight
   }
 
   val default = Config(command = Help)
