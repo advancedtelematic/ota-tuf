@@ -283,6 +283,17 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
       }
     }
 
+  def incrementRootVersion: Try[Path] = for {
+      unsigned <- readUnsignedRole[RootRole]
+      path <- writeUnsignedRole(unsigned.withVersion(unsigned.version + 1))
+    } yield path
+
+  def incrementTargetVersion: Try[Path] = for {
+      unsigned <- readUnsignedRole[TargetsRole]
+      path <- writeUnsignedRole(unsigned.copy(version = unsigned.version + 1))
+    } yield path
+
+
   protected def deleteOrReadKey(reposerverClient: S, keyName: KeyName, keyId: KeyId): Future[TufPrivateKey] = {
     keyStorage.readPrivateKey(keyName).toFuture.recoverWith { case _ =>
       log.info("Could not read old private key locally, fetching before deleting from server")

@@ -520,4 +520,30 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
 
     payload.signed.version shouldBe 2
   }
+
+  reposerverTest("inc-version for unsigned root") { (repo, _) =>
+
+    val currRootRole = repo.readUnsignedRole[RootRole].success.value
+
+    currRootRole.version shouldBe 1
+
+    repo.incrementRootVersion.success.value
+
+    val resultRootRole = repo.readUnsignedRole[RootRole].success.value
+
+    resultRootRole.version shouldBe 2
+  }
+
+  reposerverTest("inc-version for unsigned target") { (repo, _) =>
+
+    val currTargetRole = repo.readUnsignedRole[TargetsRole].success.value
+
+    currTargetRole.version shouldBe 11
+
+    repo.incrementTargetVersion.success.value
+
+    val resultTargetRole = repo.readUnsignedRole[TargetsRole].success.value
+
+    resultTargetRole.version shouldBe 12
+  }
 }

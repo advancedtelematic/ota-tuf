@@ -363,7 +363,10 @@ object Cli extends App with VersionInfo {
             opt[Map[KeyName, ValidSignatureType]]("signatures")
               .toConfigOptionParam('signatures)
               .text("The external signatures to add to root.json.")
-          )
+          ),
+        cmd("increment-version")
+          .toCommand(IncrementRootJsonVersion)
+          .text("Increment version of root.json.")
       )
 
     note(" " + sys.props("line.separator"))
@@ -490,7 +493,10 @@ object Cli extends App with VersionInfo {
                   .text("The path to the public key that you want to add as a delegation key.")
                   .action { (arg, c) => c.copy(keyPaths = arg :: c.keyPaths) }
               )
-          )
+          ),
+        cmd("increment-version")
+          .toCommand(IncrementTargetJsonVersion)
+          .text("Increment version of target.json.")
       )
 
     note(" " + sys.props("line.separator"))
