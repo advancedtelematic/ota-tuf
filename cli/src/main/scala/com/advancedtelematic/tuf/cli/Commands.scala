@@ -35,5 +35,6 @@ object Commands {
   case object AddDelegationToTarget extends Command
   case object AddTargetToDelegation extends Command
   case object ImportClientTls extends Command
+  case object ImportPublicKey extends Command
 }
 
