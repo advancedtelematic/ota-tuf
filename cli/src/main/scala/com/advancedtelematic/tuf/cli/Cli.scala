@@ -182,6 +182,17 @@ object Cli extends App with VersionInfo {
         .toCommand(IdUserKey)
         .children(
           opt[Path]("input").abbr("i").required().toConfigOptionParam('inputPath).text("The path to the file with your public key.")
+        ),
+      cmd("importpub")
+        .toCommand(ImportPublicKey)
+        .text("Imports a public key and stores it on a configurable location")
+        .children(
+          manyKeyNamesOpt(this).text("The path to the public key that you want to add."),
+          opt[Path]("input")
+            .abbr("i")
+            .required()
+            .toConfigOptionParam('inputPath)
+            .text("The path to the file with your public key.")
         )
     ).text("Manages keys stored outside of a specific repository’s directory.")
 

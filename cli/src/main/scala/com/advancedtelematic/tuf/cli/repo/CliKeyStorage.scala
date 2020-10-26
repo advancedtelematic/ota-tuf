@@ -38,7 +38,7 @@ class CliKeyStorage private (root: Path) {
     def privateKeyPath: Path = root.resolve(v.privateKeyName)
   }
 
-  private def writePublic(keyName: KeyName, tufKey: TufKey): Try[Unit] = Try {
+  def writePublic(keyName: KeyName, tufKey: TufKey): Try[Unit] = Try {
     Files.write(keyName.publicKeyPath, tufKey.asJson.spaces2.getBytes)
   }
 

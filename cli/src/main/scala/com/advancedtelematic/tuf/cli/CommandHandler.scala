@@ -271,5 +271,12 @@ object CommandHandler {
       TufRepo.importTlsCerts(tufRepo.repoPath, config.inputPath.valueOrConfigError, config.serverCertPath)
         .map(_ => log.info("Certificate(s) imported"))
         .toFuture
+
+    case ImportPublicKey =>
+      CliKeyStorage.readPublicKey(config.inputPath.valueOrConfigError).flatMap { key =>
+        config.keyNames.map { keyName =>
+          userKeyStorage.writePublic(keyName, key)
+        }.sequence_
+      }
   }
 }
