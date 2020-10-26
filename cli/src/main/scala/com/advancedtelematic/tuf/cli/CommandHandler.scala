@@ -207,7 +207,7 @@ object CommandHandler {
 
     case AddTargetsKey =>
       tufRepo.addRoleKeys(RoleType.TARGETS, config.keyNames)
-        .map(p => log.info(s"keys added to unsigned targets.json saved to $p"))
+        .map(p => log.info(s"target keys added to unsigned root.json saved to $p"))
 
     case RemoveTargetsKey =>
       tufRepo.keyIdsByName(config.keyNames).flatMap { keyIds =>
