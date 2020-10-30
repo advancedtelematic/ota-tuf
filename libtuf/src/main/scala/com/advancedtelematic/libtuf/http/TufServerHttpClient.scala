@@ -1,29 +1,32 @@
 package com.advancedtelematic.libtuf.http
 
-import java.io.{BufferedInputStream, File, FileInputStream, FileNotFoundException, InputStream}
-import java.net.{URI, URL}
-import java.nio.file.Path
-import java.security.MessageDigest
-import java.util.Base64
 import com.advancedtelematic.libats.data.DataType.{Checksum, ValidChecksum}
+import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.ErrorCodes
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{CompleteUploadRequest, ETag, GetSignedUrlResult, InitMultipartUploadResult, KeyId, MultipartUploadId, SignedPayload, TargetFilename, TufKeyPair, UploadPartETag}
-import com.advancedtelematic.libtuf.http.CliHttpClient.{CliHttpBackend, CliHttpClientError}
-import com.advancedtelematic.libtuf.http.TufServerHttpClient.{BinaryFileIntegrityCheckFailed, RoleChecksumNotValid, RoleNotFound, TargetsResponse, UploadTargetTooBig}
-import com.azure.storage.blob.BlobClientBuilder
+import com.advancedtelematic.libtuf.http.CliHttpClient.{CliHttpBackend, CliHttpClientError, UnknownErrorRepr}
+import com.advancedtelematic.libtuf.http.TufServerHttpClient._
+import com.azure.storage.blob.specialized.BlockBlobClient
+import com.azure.storage.blob.{BlobAsyncClient, BlobClientBuilder}
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import org.bouncycastle.util.encoders.Hex
 import org.slf4j.LoggerFactory
 import sttp.client._
-import sttp.model.{Header, HeaderNames, Headers, StatusCode, Uri}
+import sttp.model.{Header, HeaderNames, StatusCode, Uri}
 
+import java.io._
+import java.net.{URI, URL}
+import java.nio.file.Path
+import java.security.MessageDigest
+import java.util.{Base64, UUID}
 import scala.annotation.tailrec
+import scala.collection.JavaConverters._
+import scala.concurrent._
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContext, Future, _}
 import scala.util.control.NoStackTrace
 import scala.util.{Failure, Success, Try}
 
@@ -37,6 +40,12 @@ object TufServerHttpClient {
   case class UploadTargetTooBig(msg: String) extends Exception(msg) with NoStackTrace
 
   case class BinaryFileIntegrityCheckFailed(msg: String) extends Exception(msg) with NoStackTrace
+
+  case class UriIsNotSupported(uri: Uri) extends Exception(s"redirect URI: $uri is not supported") with NoStackTrace
+
+  case class TargetUploadFailed(uri: Uri) extends Exception(s"target upload failed for URI: $uri") with NoStackTrace
+
+  case class UnexpectedResponse(msg: String) extends Exception(msg) with NoStackTrace
 }
 
 trait TufServerClient {
@@ -153,7 +162,7 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
     multipartUploadResult.recoverWith {
       case e: CliHttpClientError if e.remoteError.code == ErrorCodes.Reposerver.NotImplemented =>
         //Multipart upload is not supported for Azure Blob Storage.
-        uploadByPreSignedUrl(targetFilename, inputPath, timeout, force)
+        azureMultipartUpload(targetFilename, inputPath, timeout, force)
     }
   }
 
@@ -228,32 +237,25 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
     }
   }
 
-  private[this] def uploadToAzure(uri: Uri, inputPath: Path, timeout: Duration): Future[Unit] = {
-    val uploadResult = Try {
-      val client = new BlobClientBuilder().endpoint(uri.toString()).buildClient()
-      client.uploadFromFile(inputPath.toString, true)
-    }
-    Future.fromTry(uploadResult)
-  }
-
-  private def uploadByPreSignedUrl(targetFilename: TargetFilename, inputPath: Path, timeout: Duration, force: Boolean): Future[Unit] = {
+  private def getAzureUploadUri(targetFilename: TargetFilename,
+                                timeout: Duration,
+                                force: Boolean): Future[Uri] = {
     val req = basicRequest.put(apiUri(s"uploads/" + targetFilename.value).params("force" -> force.toString))
-      .body(inputPath)
       .readTimeout(timeout)
       .followRedirects(false)
       .response(asByteArrayAlways)
 
-    val httpF: Future[Unit] = httpBackend.send(req).flatMap {
+    httpBackend.send(req).flatMap {
       case r @ Response(_, StatusCode.Found, _, _, _) =>
         r.header("Location").fold[Either[String, Uri]](Left("No 'Location' header found."))(x => Uri.parse(x)) match {
           case Left(err) =>
             Future.failed(new Throwable(err))
 
-          case Right(uri) if uri.host.endsWith("core.windows.net") =>
-            uploadToAzure(uri, inputPath, timeout)
+          case Right(uri) if uri.host.endsWith("core.windows.net")  =>
+            Future.successful(uri)
 
           case Right(uri) =>
-            execHttp[Unit](req.put(uri))(PartialFunction.empty).map(_ => ())
+            Future.failed(UriIsNotSupported(uri))
         }
 
       case resp =>
@@ -261,25 +263,49 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
           case (StatusCode.PayloadTooLarge.code, err) if err.code == ErrorCodes.Reposerver.PayloadTooLarge =>
             _log.debug(s"Error from server: $err")
             Future.failed(UploadTargetTooBig(err.description))
-        }.map(_ => ())
+          case (statusCode, errRepr) =>
+            Future.failed(CliHttpClientError(s"Bad StatusCode $statusCode during redirect URI fetch", errRepr))
+        }.flatMap(_ => Future.failed(UnexpectedResponse(s"Unexpected response during redirect URI fetch")))
     }
-    _log.info("Uploading file, this may take a while")
+  }
 
-    def wait(): Future[Unit] = {
-      if(httpF.isCompleted) {
-        println("")
-        httpF
+
+  private def azureMultipartUpload(targetFilename: TargetFilename, inputPath: Path, timeout: Duration, force: Boolean): Future[Unit] = {
+    val partSize = BlobAsyncClient.BLOB_DEFAULT_UPLOAD_BLOCK_SIZE
+
+    val inputFile = inputPath.toFile
+    val totalSize = inputFile.length()
+    val inputStream = new FileInputStream(inputFile)
+
+    def processChunk(client: BlockBlobClient, eTags: Seq[String] = Seq.empty, bytesProcessed: Long = 0): Future[Seq[String]] = {
+
+      val available = inputStream.available()
+      val bufferSize = Math.min(partSize, available)
+      val eTag = Base64.getEncoder.encodeToString(UUID.randomUUID().toString.getBytes())
+      val byteBuffer = new Array[Byte](bufferSize)
+      inputStream.read(byteBuffer)
+      val subStream = new ByteArrayInputStream(byteBuffer)
+
+      if (bufferSize == 0) {
+        inputStream.close()
+        Future.successful(eTags)
       } else {
-        Future {
-          blocking {
-            print(".")
-            Thread.sleep(1000)
-          }
-        }.flatMap(_ => wait())
+        Future(client.stageBlock(eTag, subStream, bufferSize)).flatMap { _ =>
+          printProgress(totalSize, bytesProcessed + bufferSize)
+          processChunk(client, eTags :+ eTag, bytesProcessed + bufferSize)
+        }
       }
     }
 
-    wait()
+    _log.info("Uploading file, this may take a while")
+    for {
+      uploadUri <- getAzureUploadUri(targetFilename, timeout, force)
+      client = new BlobClientBuilder().endpoint(uploadUri.toString()).buildClient().getBlockBlobClient
+      tags <- processChunk(client)
+      _ <- Future(client.commitBlockList(tags.asJava))
+    } yield {
+      _log.info(s"Upload completed")
+    }
   }
 
   private def s3MultipartUpload(targetFilename: TargetFilename, inputFile: File, uploadId: MultipartUploadId, partSize: Long, timeout: Duration): Future[Unit] = {
