@@ -281,5 +281,12 @@ object CommandHandler {
       tufRepo.incrementTargetVersion
         .map(p => log.info(s"Version incremented for unsigned target.json saved to $p"))
         .toFuture
+
+    case ImportPublicKey =>
+      CliKeyStorage.readPublicKey(config.inputPath.valueOrConfigError).flatMap { key =>
+        config.keyNames.map { keyName =>
+          userKeyStorage.writePublic(keyName, key)
+        }.sequence_
+      }
   }
 }
