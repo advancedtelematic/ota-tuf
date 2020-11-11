@@ -15,5 +15,6 @@ object ErrorCodes {
 
   object Reposerver {
     val PayloadTooLarge = ErrorCode("payload_too_large")
+    val NotImplemented = ErrorCode("not_implemented")
   }
 }

@@ -2,12 +2,15 @@ package com.advancedtelematic.libtuf.http
 
 import com.advancedtelematic.libats.data
 import com.advancedtelematic.libats.data.ErrorRepresentation
-import com.advancedtelematic.libtuf.http.CliHttpClient.{CliHttpBackend, CliHttpClientError}
+import com.advancedtelematic.libtuf.http.CliHttpClient.{CliHttpBackend, CliHttpClientError, CliRequest, CliResponse, HttpClient}
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Json}
 import org.slf4j.LoggerFactory
-import sttp.client.SttpBackend
+import sttp.client.SttpClientException.{ConnectException, ReadException}
+import sttp.client.{Request, Response, SttpBackend}
+import sttp.model.StatusCode
 
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.util.control.NoStackTrace
@@ -16,9 +19,24 @@ import scala.util.{Success, Try}
 object CliHttpClient {
   type CliHttpBackend = SttpBackend[Future, Nothing, Nothing]
 
+  type CliRequest = Request[Array[Byte], Nothing]
+  type CliResponse = Response[Array[Byte]]
+  type HttpClient = CliRequest => Future[CliResponse]
+
   case class CliHttpClientError(msg: String, remoteError: ErrorRepresentation) extends Throwable(msg) with NoStackTrace
 
   def UnknownErrorRepr(msg: String) = ErrorRepresentation(data.ErrorCode("unknown_error_repr"), msg)
+
+  val defaultRetryStatuses =
+    Set(
+      StatusCode.InternalServerError,
+      StatusCode.BadGateway,
+      StatusCode.ServiceUnavailable,
+      StatusCode.GatewayTimeout,
+      StatusCode.TooManyRequests
+    )
+
+  val defaultBackoffs = List(1.second, 2.seconds, 4.seconds, 8.seconds, 16.seconds, 32.seconds)
 }
 
 abstract class CliHttpClient(httpBackend: CliHttpBackend)(implicit ec: ExecutionContext) {
@@ -31,15 +49,17 @@ abstract class CliHttpClient(httpBackend: CliHttpBackend)(implicit ec: Execution
 
   private def defaultErrorHandler[T](): PartialFunction[(Int, ErrorRepresentation), Future[T]] = PartialFunction.empty
 
+  protected val defaultHttpClient: HttpClient = (request: CliRequest) => httpBackend.send[Array[Byte]](request)
+
   protected def execJsonHttp[Res: ClassTag : Decoder, Req: Encoder]
-  (request: Request[Array[Byte], Nothing], entity: Req)
+  (request: CliRequest, entity: Req, httpClient: HttpClient = defaultHttpClient)
   (errorHandler: PartialFunction[(Int, ErrorRepresentation), Future[Res]] = defaultErrorHandler()): Future[Res] = {
 
     val req = request
       .body(entity.asJson.noSpaces.getBytes)
       .contentType("application/json")
 
-    execHttp(req)(errorHandler).map(_.body)
+    execHttp(req, httpClient)(errorHandler).map(_.body)
   }
 
   private def tryErrorParsing(response: Response[Array[Byte]]): ErrorRepresentation = {
@@ -86,7 +106,41 @@ abstract class CliHttpClient(httpBackend: CliHttpBackend)(implicit ec: Execution
     }
   }
 
-  protected def execHttp[T: ClassTag : Decoder](request: Request[Array[Byte], Nothing])
+  protected def execHttp[T: ClassTag : Decoder](request: CliRequest, httpClient: HttpClient = defaultHttpClient)
                                                (errorHandler: PartialFunction[(Int, ErrorRepresentation), Future[T]] = defaultErrorHandler()): Future[Response[T]] =
-    httpBackend.send[Array[Byte]](request).flatMap(handleResponse(request, _)(errorHandler))
+    httpClient(request).flatMap(handleResponse(request, _)(errorHandler))
+
+  protected def retryingHttpClient(statuses: Set[StatusCode] = CliHttpClient.defaultRetryStatuses,
+                                   backoffs: List[Duration] = CliHttpClient.defaultBackoffs,
+                                   httpClient: HttpClient = defaultHttpClient): HttpClient = (request: CliRequest) => {
+
+    def retryOrResult(result: Future[CliResponse], msg: String) = backoffs match {
+      case head :: tail =>
+        log.warn(s"$msg. Retrying in $head. Request: $request")
+        wait(head).flatMap(_ => retryingHttpClient(statuses, tail, httpClient)(request))
+      case Nil => result
+    }
+
+    httpClient(request).flatMap { response =>
+      if (statuses.contains(response.code)) {
+        retryOrResult(Future.successful(response), s"Received status code ${response.code}")
+      } else {
+        Future.successful(response)
+      }
+    }.recoverWith {
+      case e: ConnectException =>
+        retryOrResult(Future.failed(e), s"Connection error: ${e.getMessage}")
+      case e: ReadException =>
+        retryOrResult(Future.failed(e), s"Read error: ${e.getMessage}")
+    }
+  }
+
+  /**
+   * Don't use this on server side.
+   */
+  private def wait(duration: Duration): Future[Unit] = Future {
+    Thread.sleep(duration.toMillis)
+    ()
+  }
+
 }

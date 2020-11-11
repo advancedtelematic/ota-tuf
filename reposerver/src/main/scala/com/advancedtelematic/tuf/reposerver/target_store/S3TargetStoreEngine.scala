@@ -6,26 +6,28 @@ import java.time.{Duration, Instant}
 import java.util.Date
 
 import scala.async.Async._
+import scala.collection.JavaConverters._
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{FileIO, Source, StreamConverters}
 import akka.util.ByteString
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{GetSignedUrlResult, InitMultipartUploadResult, MultipartUploadId, RepoId, TargetFilename, UploadPartETag}
+import com.advancedtelematic.tuf.reposerver.Settings
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{TargetRedirect, TargetRetrieveResult, TargetStoreResult}
 import com.amazonaws.HttpMethod
 import com.amazonaws.auth.{AWSCredentials, AWSCredentialsProvider}
 import com.amazonaws.regions.Regions
-import com.amazonaws.services.s3.AmazonS3ClientBuilder
-import com.amazonaws.services.s3.model.{CannedAccessControlList, GeneratePresignedUrlRequest, ObjectMetadata, PutObjectRequest}
+import com.amazonaws.services.s3.{AmazonS3ClientBuilder, Headers}
+import com.amazonaws.services.s3.model.{CannedAccessControlList, CompleteMultipartUploadRequest, GeneratePresignedUrlRequest, InitiateMultipartUploadRequest, ObjectMetadata, PartETag, PutObjectRequest}
 import org.slf4j.LoggerFactory
 
 import scala.concurrent._
 import scala.concurrent.Future
 import scala.util.Try
 
-class S3TargetStoreEngine(credentials: S3Credentials)(implicit val system: ActorSystem, val mat: ActorMaterializer) extends TargetStoreEngine {
+class S3TargetStoreEngine(credentials: S3Credentials)(implicit val system: ActorSystem, val mat: ActorMaterializer) extends TargetStoreEngine with Settings {
 
   import system.dispatcher
 
@@ -130,6 +132,31 @@ class S3TargetStoreEngine(credentials: S3Credentials)(implicit val system: Actor
       url.toString
     }
   }
+
+  override def initiateMultipartUpload(repoId: RepoId, filename: TargetFilename): Future[InitMultipartUploadResult] = FastFuture {
+    val objectId: String = storageFilename(repoId, filename).toString
+    val req = new InitiateMultipartUploadRequest(bucketId, objectId)
+    Try(s3client.initiateMultipartUpload(req))
+      .map(rs => InitMultipartUploadResult(MultipartUploadId(rs.getUploadId), multipartUploadPartSize))
+  }
+
+  override def buildSignedURL(repoId: RepoId, filename: TargetFilename, uploadId: MultipartUploadId, partNumber: String, md5: String, contentLength: Int): Future[GetSignedUrlResult] = FastFuture {
+    val objectId: String = storageFilename(repoId, filename).toString
+    val req = new GeneratePresignedUrlRequest(bucketId, objectId, HttpMethod.PUT)
+    req.addRequestParameter("uploadId", uploadId.value)
+    req.addRequestParameter("partNumber", partNumber)
+    req.setContentMd5(md5)
+    req.putCustomRequestHeader(Headers.CONTENT_LENGTH, contentLength.toString)
+    Try(s3client.generatePresignedUrl(req)).map(GetSignedUrlResult.apply)
+  }
+
+  override def completeMultipartUpload(repoId: RepoId, filename: TargetFilename, uploadId: MultipartUploadId, partETags: Seq[UploadPartETag]): Future[Unit] =
+    FastFuture {
+      val objectId: String = storageFilename(repoId, filename).toString
+      val eTags = partETags.map(t => new PartETag(t.part, t.eTag.value))
+      val req = new CompleteMultipartUploadRequest(bucketId, objectId, uploadId.value, eTags.asJava)
+      Try(s3client.completeMultipartUpload(req))
+    }
 }
 
 class S3Credentials(accessKey: String, secretKey: String, val bucketId: String, val region: Regions)

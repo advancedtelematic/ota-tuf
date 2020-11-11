@@ -9,7 +9,7 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.util.ByteString
 import com.advancedtelematic.libats.data.DataType.Checksum
-import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetFilename}
+import com.advancedtelematic.libtuf.data.TufDataType.{GetSignedUrlResult, InitMultipartUploadResult, MultipartUploadId, RepoId, TargetFilename, UploadPartETag}
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{TargetRetrieveResult, TargetStoreResult}
 import org.slf4j.LoggerFactory
@@ -35,6 +35,12 @@ trait TargetStoreEngine {
   def store(repoId: RepoId, filename: TargetFilename, fileData: Source[ByteString, Any]): Future[TargetStoreResult]
 
   def buildStorageUri(repoId: RepoId, filename: TargetFilename, length: Long): Future[Uri]
+
+  def initiateMultipartUpload(repoId: RepoId, filename: TargetFilename): Future[InitMultipartUploadResult]
+
+  def buildSignedURL(repoId: RepoId, filename: TargetFilename, uploadId: MultipartUploadId, partNumber: String, md5: String, contentLength: Int): Future[GetSignedUrlResult]
+
+  def completeMultipartUpload(repoId: RepoId, filename: TargetFilename, uploadId: MultipartUploadId, partETags: Seq[UploadPartETag]): Future[Unit]
 
   def retrieve(repoId: RepoId, filename: TargetFilename): Future[TargetRetrieveResult]
 

@@ -118,4 +118,13 @@ object TufCodecs {
                   .leftMap(ex => DecodingFailure(ex.getMessage, cursor.history))
     } yield pair
   }
+
+  implicit val multipartUploadIdCodec: Codec[MultipartUploadId] = Codec.from(anyValStringDecoder, anyValStringEncoder)
+  implicit val eTagCodec: Codec[ETag] = Codec.from(anyValStringDecoder, anyValStringEncoder)
+
+  implicit val uploadPartETagCodec: Codec[UploadPartETag] = deriveCodec
+  implicit val initMultipartUploadResultCodec: Codec[InitMultipartUploadResult] = deriveCodec
+  implicit val getSignedUrlResultCodec: Codec[GetSignedUrlResult] = deriveCodec
+  implicit val completeUploadRequestCodec: Codec[CompleteUploadRequest] = deriveCodec
+
 }

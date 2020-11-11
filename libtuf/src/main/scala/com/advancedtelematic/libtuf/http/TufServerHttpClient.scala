@@ -1,27 +1,31 @@
 package com.advancedtelematic.libtuf.http
 
+import java.io.{File, FileInputStream}
 import java.net.URI
 import java.nio.file.Path
+import java.security.MessageDigest
+import java.util.Base64
 
 import com.advancedtelematic.libats.data.DataType.ValidChecksum
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.ErrorCodes
 import com.advancedtelematic.libtuf.data.TufCodecs._
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, SignedPayload, TargetFilename, TufKeyPair}
-import com.advancedtelematic.libtuf.http.CliHttpClient.CliHttpBackend
+import com.advancedtelematic.libtuf.data.TufDataType.{CompleteUploadRequest, ETag, GetSignedUrlResult, InitMultipartUploadResult, KeyId, MultipartUploadId, SignedPayload, TargetFilename, TufKeyPair, UploadPartETag}
+import com.advancedtelematic.libtuf.http.CliHttpClient.{CliHttpBackend, CliHttpClientError}
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleChecksumNotValid, RoleNotFound, TargetsResponse, UploadTargetTooBig}
 import com.azure.storage.blob.BlobClientBuilder
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import org.slf4j.LoggerFactory
 import sttp.client._
-import sttp.model.{Headers, StatusCode, Uri}
+import sttp.model.{Header, HeaderNames, Headers, StatusCode, Uri}
 
+import scala.+:
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, _}
 import scala.util.control.NoStackTrace
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 object TufServerHttpClient {
   case class TargetsResponse(targets: SignedPayload[TargetsRole], checksum: Option[Refined[String, ValidChecksum]])
@@ -135,6 +139,20 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
     execHttp[SignedPayload[TargetsRole]](req)().map(_.body)
   }
 
+  override def uploadTarget(targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit] = {
+    val multipartUploadResult = for {
+      inputFile <- Future.fromTry(Try(inputPath.toFile))
+      initResult <- initMultipartUpload(targetFilename, inputFile.length())
+      result <- s3MultipartUpload(targetFilename, inputFile, initResult.uploadId, initResult.partSize, timeout)
+    } yield result
+
+    multipartUploadResult.recoverWith {
+      case e: CliHttpClientError if e.remoteError.code == ErrorCodes.Reposerver.NotImplemented =>
+        //Multipart upload is not supported for Azure Blob Storage.
+        uploadByPreSignedUrl(targetFilename, inputPath, timeout)
+    }
+  }
+
   private[this] def uploadToAzure(uri: Uri, inputPath: Path, timeout: Duration): Future[Unit] = {
     val uploadResult = Try {
       val client = new BlobClientBuilder().endpoint(uri.toString()).buildClient()
@@ -143,7 +161,7 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
     Future.fromTry(uploadResult)
   }
 
-  override def uploadTarget(targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit] = {
+  private def uploadByPreSignedUrl(targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit] = {
     val req = basicRequest.put(apiUri(s"uploads/" + targetFilename.value))
       .body(inputPath)
       .readTimeout(timeout)
@@ -187,6 +205,118 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
     }
 
     wait()
+  }
+
+  private def s3MultipartUpload(targetFilename: TargetFilename, inputFile: File, uploadId: MultipartUploadId, partSize: Long, timeout: Duration): Future[Unit] = {
+
+    val totalSize = inputFile.length()
+    val inputStream: FileInputStream = new FileInputStream(inputFile)
+
+    def processChunk(inputStream: FileInputStream, part: Int = 1, bytesProcessed: Long = 0, eTags: Seq[UploadPartETag] = Seq.empty): Future[Seq[UploadPartETag]] = {
+
+      val available = inputStream.available()
+      val bufferSize = Math.min(partSize, available).toInt
+      val byteBuffer = new Array[Byte](bufferSize)
+      inputStream.read(byteBuffer)
+
+      if (bufferSize == 0) {
+        inputStream.close()
+        Future.successful(eTags)
+      } else {
+        getSignedUrlAndUploadPart(targetFilename, uploadId, part, byteBuffer, timeout)
+          .flatMap { tag =>
+            printProgress(totalSize, bytesProcessed + bufferSize)
+            processChunk(inputStream, part + 1, bytesProcessed + bufferSize, tag +: eTags)
+          }
+      }
+    }
+
+    for {
+      tags <- processChunk(inputStream)
+      _ <- completeMultipartUpload(targetFilename, uploadId, tags)
+    } yield {
+      _log.info(s"Upload completed")
+    }
+  }
+
+  private def printProgress(total: Long, current: Long): Unit = {
+    def toMb(value: Long) = BigDecimal(value.toDouble / 1024 / 1024).setScale(2, BigDecimal.RoundingMode.HALF_UP)
+
+    val str = s"Uploading: uploaded ${toMb(current)}Mb of ${toMb(total)}Mb"
+    _log.info(str)
+  }
+
+  private def initMultipartUpload(targetFilename: TargetFilename, fileSize: Long): Future[InitMultipartUploadResult] = {
+    val req = http
+      .post(apiUri(s"multipart/initiate/" + targetFilename.value).params("fileSize" -> fileSize.toString))
+      .followRedirects(false)
+
+    execHttp[InitMultipartUploadResult](req)().map(_.body)
+  }
+
+  private def getSignedUrlAndUploadPart(targetFilename: TargetFilename, uploadId: MultipartUploadId, part: Int, data: Array[Byte], timeout: Duration): Future[UploadPartETag] = {
+    val digest = MessageDigest.getInstance("MD5").digest(data)
+    val md5Hash = Base64.getEncoder.encodeToString(digest)
+    val contentLength = data.length
+
+    for {
+      url <- getSignedUrl(targetFilename, uploadId, part, md5Hash, contentLength)
+      eTag <- uploadPart(url, part, data, md5Hash, timeout)
+    } yield eTag
+  }
+
+  private def getSignedUrl(targetFilename: TargetFilename, uploadId: MultipartUploadId, part: Int, md5Hash: String, length: Int): Future[URI] = {
+    val url = apiUri(s"multipart/url/${targetFilename.value}")
+      .params(("part" -> part.toString),
+        ("uploadId" -> uploadId.value),
+        ("md5" -> md5Hash),
+        ("contentLength" -> length.toString))
+
+    val req = http.get(url).followRedirects(false)
+
+    val rs = execHttp[GetSignedUrlResult](req, retryingHttpClient())().map(_.body)
+
+    rs.onComplete {
+      case Success(v) => _log.debug(s"Get signed URL response: $v")
+      case Failure(e) => _log.error(s"Get signed URL error: ${e.getMessage}")
+    }
+
+    rs.map(_.uri)
+  }
+
+  private def uploadPart(uri: URI, part: Int, data: Array[Byte], md5Hash: String, timeout: Duration): Future[UploadPartETag] = {
+
+    val req = http.put(Uri(uri))
+      .body(data)
+      .readTimeout(timeout)
+      .header(HeaderNames.ContentMd5, md5Hash)
+      .header(Header.contentLength(data.length))
+      .followRedirects(false)
+
+    retryingHttpClient()(req).flatMap { response =>
+      response.header(HeaderNames.Etag) match {
+        case Some(eTag) =>
+          _log.debug("Uploaded part ETag: " + eTag)
+          Future.successful(UploadPartETag(part, ETag(eTag)))
+        case None =>
+          Future.failed(new Exception("ETag not found in response headers"))
+      }
+    }
+  }
+
+  def completeMultipartUpload(targetFilename: TargetFilename, uploadId: MultipartUploadId, partETags: Seq[UploadPartETag]): Future[Unit] = {
+    val req = http
+      .put(apiUri(s"multipart/complete/" + targetFilename.value))
+      .followRedirects(false)
+
+    val rs = execJsonHttp[Unit, CompleteUploadRequest](req, CompleteUploadRequest(uploadId, partETags), retryingHttpClient())()
+
+    rs.onComplete {
+      case Success(v) => _log.debug(s"Complete multipart upload response: $v")
+      case Failure(e) => _log.error(s"Complete multipart upload error: ${e.getMessage}")
+    }
+
+    rs.map(_ => ())
   }
 }
 

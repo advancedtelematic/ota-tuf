@@ -14,8 +14,9 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import com.advancedtelematic.libats.data.DataType.{Checksum, HashMethod, ValidChecksum}
 import com.advancedtelematic.libtuf.data.TufDataType
-import com.advancedtelematic.libtuf.data.TufDataType.TargetFilename
+import com.advancedtelematic.libtuf.data.TufDataType.{MultipartUploadId, RepoId, TargetFilename}
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
+import com.advancedtelematic.tuf.reposerver.http.Errors
 import com.advancedtelematic.tuf.reposerver.target_store.AzureTargetStoreEngine.BlobStorageSettings
 import com.azure.core.util.logging.ClientLogger
 import com.azure.identity.{ClientSecretCredentialBuilder, DefaultAzureCredentialBuilder}
@@ -149,4 +150,15 @@ class AzureTargetStoreEngine(private val settings: BlobStorageSettings)(implicit
     mkBlobClient(repoId, filename).delete().toFuture.toScala.map(_ => ())
   }
 
+  private lazy val multipartUploadIsNotSupportedError =
+    FastFuture.failed(Errors.NotImplemented("Multipart upload is not supported by Azure blob storage"))
+
+  override def initiateMultipartUpload(repoId: RepoId, filename: TargetFilename): Future[TufDataType.InitMultipartUploadResult] =
+    multipartUploadIsNotSupportedError
+
+  override def buildSignedURL(repoId: RepoId, filename: TargetFilename, uploadId: MultipartUploadId, partNumber: String, md5: String, contentLength: Int): Future[TufDataType.GetSignedUrlResult] =
+    multipartUploadIsNotSupportedError
+
+  override def completeMultipartUpload(repoId: RepoId, filename: TargetFilename, uploadId: TufDataType.MultipartUploadId, partETags: Seq[TufDataType.UploadPartETag]): Future[Unit] =
+    multipartUploadIsNotSupportedError
 }

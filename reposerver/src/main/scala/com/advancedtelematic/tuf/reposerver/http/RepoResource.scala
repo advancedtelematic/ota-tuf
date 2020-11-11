@@ -43,7 +43,7 @@ import slick.jdbc.MySQLProfile.api._
 import scala.async.Async._
 import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: NamespaceValidation,
                    targetStore: TargetStore, tufTargetsPublisher: TufTargetsPublisher)
@@ -72,6 +72,28 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
         case Some(cl) if cl <= outOfBandUploadLimit => provide(cl)
         case Some(cl) => failWith(Errors.PayloadTooLarge(cl, outOfBandUploadLimit))
         case None => reject(MissingHeaderRejection("Content-Length"))
+      }
+
+  private val withMultipartUploadFileSizeCheck: Directive1[Long] =
+    parameter('fileSize.as[Long]).flatMap { fileSize =>
+      if (fileSize > outOfBandUploadLimit)
+        failWith(Errors.PayloadTooLarge(fileSize, outOfBandUploadLimit))
+      else provide(fileSize)
+    }
+
+  private val withMultipartUploadPartSizeCheck: Directive1[Long] =
+    parameters('contentLength.as[Int], 'part.as[Int])
+      .tmap { case (partContentLength, partNumber) =>
+        val totalFileSize = multipartUploadPartSize * (partNumber - 1) + partContentLength
+        (partContentLength, totalFileSize)
+      }
+      .tflatMap {
+        case (partContentLength, _) if partContentLength > multipartUploadPartSize =>
+          failWith(Errors.FilePartTooLarge(partContentLength, multipartUploadPartSize))
+        case (_, totalFileSize) if totalFileSize > outOfBandUploadLimit =>
+          failWith(Errors.PayloadTooLarge(totalFileSize, outOfBandUploadLimit))
+        case (_, totalFileSize) =>
+          provide(totalFileSize)
       }
 
   val log = LoggerFactory.getLogger(this.getClass)
@@ -262,6 +284,26 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
           }
           onSuccess(f) { uri =>
             redirect(uri, StatusCodes.Found)
+          }
+        }
+      } ~
+      pathPrefix("multipart") {
+        (post & path("initiate" / TargetFilenamePath) & withMultipartUploadFileSizeCheck) { (fileName, _) =>
+          val rs = for {
+            exists <- targetItemRepo.exists(repoId, fileName)
+            result <- if (exists) Future.failed(new EntityAlreadyExists[TargetItem]()) else targetStore.initiateMultipartUpload(repoId, fileName)
+          } yield result
+          complete(rs)
+        } ~
+        (get & path("url" / TargetFilenamePath) & parameters('part, 'uploadId.as[MultipartUploadId], 'md5, 'contentLength.as[Int])) {
+          (filename, partId, uploadId, md5, contentLength) =>
+            withMultipartUploadPartSizeCheck { _ =>
+              complete(targetStore.buildSignedURL(repoId, filename, uploadId, partId, md5, contentLength))
+            }
+        } ~
+        (put & path("complete" / TargetFilenamePath)) { filename =>
+          entity(as[CompleteUploadRequest]) { body =>
+            complete(targetStore.completeMultipartUpload(repoId, filename, body.uploadId, body.partETags))
           }
         }
       } ~
