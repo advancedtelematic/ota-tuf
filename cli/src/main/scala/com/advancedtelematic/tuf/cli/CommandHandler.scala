@@ -285,7 +285,7 @@ object CommandHandler {
     case ImportPublicKey =>
       CliKeyStorage.readPublicKey(config.inputPath.valueOrConfigError).flatMap { key =>
         config.keyNames.map { keyName =>
-          userKeyStorage.writePublic(keyName, key)
+          userKeyStorage.writePublicKey(keyName, key)
         }.sequence_
       }
   }
