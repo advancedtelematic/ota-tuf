@@ -38,7 +38,7 @@ class CliKeyStorage private (root: Path) {
     def privateKeyPath: Path = root.resolve(v.privateKeyName)
   }
 
-  def writePublic(keyName: KeyName, tufKey: TufKey): Try[Unit] = Try {
+  private def writePublic(keyName: KeyName, tufKey: TufKey): Try[Unit] = Try {
     Files.write(keyName.publicKeyPath, tufKey.asJson.spaces2.getBytes)
   }
 
@@ -59,6 +59,14 @@ class CliKeyStorage private (root: Path) {
     val currentPerms = Files.getPosixFilePermissions(root)
     if(currentPerms.asScala != Set(OWNER_READ, OWNER_WRITE, OWNER_EXECUTE))
       log.warn(s"Permissions for $root are too open")
+  }
+
+  def writePublicKey(name: KeyName, pub: TufKey): Try[Unit] = {
+    for {
+      _ <- ensureKeysDirCreated()
+      _ <- writePublic(name, pub)
+      _ = log.info(s"Saved public key to ${root.relativize(name.publicKeyPath)}}")
+    } yield ()
   }
 
   def writeKeys(name: KeyName, pub: TufKey, priv: TufPrivateKey): Try[Unit] = {
