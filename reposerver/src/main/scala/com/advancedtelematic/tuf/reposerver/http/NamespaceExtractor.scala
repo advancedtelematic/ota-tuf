@@ -35,8 +35,8 @@ class DatabaseNamespaceValidation(extractor: Directive1[Namespace])
 }
 
 object NamespaceValidation {
-  private lazy val fromConfig: Directive1[Namespace] = NamespaceDirectives.fromConfig().map(_.namespace)
+  private lazy val default: Directive1[Namespace] = NamespaceDirectives.defaultNamespaceExtractor.map(_.namespace)
 
   def withDatabase(implicit ec: ExecutionContext, db: Database): NamespaceValidation =
-    new DatabaseNamespaceValidation(fromConfig)
+    new DatabaseNamespaceValidation(default)
 }
