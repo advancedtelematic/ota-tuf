@@ -20,6 +20,7 @@ object ErrorCodes {
   val DelegationNotDefined = ErrorCode("delegations_not_defined")
   val PayloadSignatureInvalid = ErrorCode("payload_signature_invalid")
   val InvalidOfflineTargets = ErrorCode("invalid_offline_targets")
+  val RequestCanceledByUpstream = ErrorCode("request_canceled_by_upstream")
 }
 
 object Errors {
@@ -51,4 +52,7 @@ object Errors {
 
   case class NoRepoForNamespace(ns: Namespace)
     extends com.advancedtelematic.libats.http.Errors.Error(ErrorCodes.NoRepoForNamespace, StatusCodes.NotFound, s"No repository exists for namespace ${ns.get}")
+
+  case class RequestCanceledByUpstream(ex: Throwable)
+    extends com.advancedtelematic.libats.http.Errors.Error(ErrorCodes.RequestCanceledByUpstream, StatusCodes.BadRequest, ex.getMessage, Some(ex))
 }
