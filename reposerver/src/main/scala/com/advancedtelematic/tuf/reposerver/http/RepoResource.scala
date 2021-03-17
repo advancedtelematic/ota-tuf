@@ -1,7 +1,7 @@
 package com.advancedtelematic.tuf.reposerver.http
 
 import akka.http.scaladsl.model.headers.{RawHeader, `Content-Length`}
-import akka.http.scaladsl.model.{HttpEntity, StatusCodes, Uri}
+import akka.http.scaladsl.model.{EntityStreamException, HttpEntity, ParsingException, StatusCodes, Uri}
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.unmarshalling.PredefinedFromStringUnmarshallers.CsvSeq
 import akka.http.scaladsl.unmarshalling._
@@ -33,7 +33,7 @@ import com.advancedtelematic.libtuf_server.repo.server.RepoRoleRefresh
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
 import com.advancedtelematic.tuf.reposerver.db._
 import com.advancedtelematic.tuf.reposerver.delegations.DelegationsManagement
-import com.advancedtelematic.tuf.reposerver.http.Errors.NoRepoForNamespace
+import com.advancedtelematic.tuf.reposerver.http.Errors.{NoRepoForNamespace, RequestCanceledByUpstream}
 import com.advancedtelematic.tuf.reposerver.http.RoleChecksumHeader._
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
@@ -315,7 +315,14 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
             }
           } ~
           put {
-            addTargetFromContent(namespace, filename, repoId)
+            handleExceptions {
+              ExceptionHandler {
+                case e: EntityStreamException if e.getMessage.contains("The HTTP parser was receiving an entity when the underlying connection was closed unexpectedly") =>
+                  failWith(RequestCanceledByUpstream(e))
+                case e: ParsingException if e.getMessage.contains("Unexpected end of multipart entity") =>
+                  failWith(RequestCanceledByUpstream(e))
+              }
+            }(addTargetFromContent(namespace, filename, repoId))
           } ~
           head {
             onComplete(targetStore.find(repoId, filename)) {
