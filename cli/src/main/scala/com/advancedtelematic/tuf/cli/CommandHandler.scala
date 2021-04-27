@@ -283,10 +283,9 @@ object CommandHandler {
         .toFuture
 
     case ImportPublicKey =>
-      CliKeyStorage.readPublicKey(config.inputPath.valueOrConfigError).flatMap { key =>
-        config.keyNames.map { keyName =>
-          userKeyStorage.writePublicKey(keyName, key)
-        }.sequence_
-      }
+      CliKeyStorage
+        .forRepo(tufRepo.repoPath)
+        .importPublicKey(config.inputPath.valueOrConfigError, config.keyNames)
+        .toFuture
   }
 }

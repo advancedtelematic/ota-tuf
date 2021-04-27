@@ -187,6 +187,7 @@ object Cli extends App with VersionInfo {
         .toCommand(ImportPublicKey)
         .text("Imports a public key and stores it on a configurable location")
         .children(
+          repoNameOpt(this),
           manyKeyNamesOpt(this).text("The path to the public key that you want to add."),
           opt[Path]("input")
             .abbr("i")

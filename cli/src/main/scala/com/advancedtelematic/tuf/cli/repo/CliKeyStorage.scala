@@ -1,17 +1,21 @@
 package com.advancedtelematic.tuf.cli.repo
 
-import java.nio.file.attribute.{PosixFilePermission, PosixFilePermissions}
-import java.nio.file.{FileAlreadyExistsException, Files, Path}
-import PosixFilePermission._
-import scala.collection.JavaConverters._
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, TufKey, TufKeyPair, TufPrivateKey}
+import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.{EcPrime256KeyType, Ed25519KeyType, KeyType, RsaKeyType, TufKey, TufKeyPair, TufPrivateKey}
 import com.advancedtelematic.tuf.cli.DataType.KeyName
+import io.circe.jawn._
+import io.circe.syntax._
+import net.i2p.crypto.eddsa.Utils
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
+import org.bouncycastle.openssl.{PEMKeyPair, PEMParser}
 import org.slf4j.LoggerFactory
 
-import scala.util.Try
-import com.advancedtelematic.libtuf.data.TufCodecs._
-import io.circe.syntax._
-import io.circe.jawn._
+import java.io.StringReader
+import java.nio.file.attribute.PosixFilePermission._
+import java.nio.file.attribute.{PosixFilePermission, PosixFilePermissions}
+import java.nio.file.{FileAlreadyExistsException, Files, Path}
+import scala.collection.JavaConverters._
+import scala.util.{Failure, Success, Try}
 
 
 object CliKeyStorage {
@@ -65,7 +69,7 @@ class CliKeyStorage private (root: Path) {
     for {
       _ <- ensureKeysDirCreated()
       _ <- writePublic(name, pub)
-      _ = log.info(s"Saved public key to ${root.relativize(name.publicKeyPath)}}")
+      _ = log.info(s"Saved public key to ${root.relativize(name.publicKeyPath)}")
     } yield ()
   }
 
@@ -95,4 +99,54 @@ class CliKeyStorage private (root: Path) {
     pub <- readPublicKey(keyName)
     priv <- readPrivateKey(keyName)
   } yield (pub, priv)
+
+  def importPublicKey(pemPath: Path, keyNames: List[KeyName]): Try[Unit] = {
+    import cats.instances.list._
+    import cats.instances.try_._
+    import cats.syntax.traverse._
+
+    for {
+      key <- readPublicKeyPem(pemPath)
+      _ <- keyNames.traverse(keyName => writePublicKey(keyName, key))
+    } yield ()
+  }
+
+  private def readPublicKeyPem(path: Path): Try[TufKey] = {
+    val tryReadPemFile = Try {
+      val source = scala.io.Source.fromFile(path.toFile)
+      val pem = source.mkString
+      source.close()
+      pem
+    }
+
+    val pemToPublicKeyInfo = (pem: String) => Try {
+      val parser = new PEMParser(new StringReader(pem))
+      parser.readObject() match {
+        case key: SubjectPublicKeyInfo => key
+        case keyPair: PEMKeyPair => keyPair.getPublicKeyInfo
+      }
+    }
+
+    val tryParseRSA = (pem: String) =>
+      RsaKeyType.crypto.parsePublic(pem)
+
+    val tryParseEcPrime256 = (pem: String) =>
+      pemToPublicKeyInfo(pem)
+        .map(k => Utils.bytesToHex(k.getEncoded))
+        .flatMap(EcPrime256KeyType.crypto.parsePublic)
+
+    val tryParseEd25519 = (pem: String) =>
+      pemToPublicKeyInfo(pem)
+        .map(k => Utils.bytesToHex(k.getPublicKeyData.getBytes))
+        .flatMap(Ed25519KeyType.crypto.parsePublic)
+
+    val publicKeyTry = (pem: String) =>
+      tryParseRSA(pem).orElse(tryParseEcPrime256(pem)).orElse(tryParseEd25519(pem))
+        .transform(key => Success(key), _ => Failure(new Exception(s"Cannot parse public key from $path")))
+
+    for {
+      pem <- tryReadPemFile
+      publicKey <- publicKeyTry(pem)
+    } yield publicKey
+  }
 }
