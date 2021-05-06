@@ -210,6 +210,7 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
 
   def pushRoot(client: S): Future[Unit] = for {
     signedRoot <- readSignedRole[RootRole].toFuture
+    _ <- CliUtil.verifyRoot(signedRoot)
     _ <- client.pushSignedRoot(signedRoot)
   } yield ()
 

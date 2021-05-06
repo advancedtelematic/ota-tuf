@@ -50,4 +50,15 @@ object CliUtil {
         Future.failed(InvalidPayload("Invalid root.json file"))
     }
   }
+
+  def verifyRoot(payload: SignedPayload[RootRole]): Future[SignedPayload[RootRole]] = {
+    TufCrypto.payloadSignatureIsValid(payload.signed, payload) match {
+      case Valid(rr) =>
+        Future.successful(rr)
+
+      case Invalid(err) =>
+        err.map(_log.error)
+        Future.failed(InvalidPayload("Invalid root.json file"))
+    }
+  }
 }
