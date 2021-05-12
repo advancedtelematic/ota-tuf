@@ -6,11 +6,10 @@ import java.nio.file.attribute.PosixFilePermission._
 import java.nio.file.attribute.PosixFilePermissions
 import java.nio.file.{Files, Path}
 import java.time.Instant
-
 import cats.data.NonEmptyList
 import cats.data.Validated.{Invalid, Valid}
 import cats.implicits._
-import com.advancedtelematic.libats.data.DataType.ValidChecksum
+import com.advancedtelematic.libats.data.DataType.{Checksum, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.KeyListToKeyMapOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
@@ -403,6 +402,8 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
   def pullTargets(reposerverClient: S): Future[SignedPayload[TargetsRole]]
 
   def pushTargets(reposerverClient: S): Future[SignedPayload[TargetsRole]]
+
+  def verifyUploadedBinary(reposerverClient: S, targetFilename: TargetFilename, localFileChecksum: Checksum): Future[Unit]
 }
 
 class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRepo[ReposerverClient](repoPath) {
@@ -546,6 +547,10 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
   override def uploadTarget(repoClient: ReposerverClient, targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit] = {
     repoClient.uploadTarget(targetFilename, inputPath, timeout)
   }
+
+  override def verifyUploadedBinary(repoClient: ReposerverClient, targetFilename: TargetFilename, localFileChecksum: Checksum): Future[Unit] = {
+    repoClient.verifyUploadedBinary(targetFilename, localFileChecksum)
+  }
 }
 
 class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRepo[DirectorClient](repoPath) {
@@ -617,4 +622,7 @@ class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRep
 
   override def uploadTarget(repoClient: DirectorClient, targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit] =
     Future.failed(CommandNotSupportedByRepositoryType(Director, "uploadTarget"))
+
+  override def verifyUploadedBinary(reposerverClient: DirectorClient, targetFilename: TargetFilename, localFileChecksum: Checksum): Future[Unit] =
+    Future.failed(CommandNotSupportedByRepositoryType(Director, "verifyUploadedBinary"))
 }

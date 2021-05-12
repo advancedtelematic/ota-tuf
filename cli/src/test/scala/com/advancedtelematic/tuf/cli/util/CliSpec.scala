@@ -5,8 +5,7 @@ import java.security.Security
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
-
-import com.advancedtelematic.libats.data.DataType.ValidChecksum
+import com.advancedtelematic.libats.data.DataType.{Checksum, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -158,4 +157,7 @@ class FakeReposerverTufServerClient(val keyType: KeyType) extends ReposerverClie
     uploaded.put(targetFilename, inputPath)
     Future.successful(())
   }
+
+  override def verifyUploadedBinary(targetFilename: TargetFilename, localFileChecksum: Checksum): Future[Unit] =
+    Future.successful(())
 }

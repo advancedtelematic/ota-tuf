@@ -124,21 +124,36 @@ object CommandHandler {
 
     case AddUploadedTarget =>
       val file = config.inputPath.valueOrConfigError
+      val localFileChecksum = Sha256FileDigest.from(file)
 
       val itemT = buildClientTarget(
         config.targetName.valueOrConfigError,
         config.targetVersion.valueOrConfigError,
         file.toFile.length(),
-        Sha256FileDigest.from(file),
+        localFileChecksum,
         config.hardwareIds,
         uri = None,
         format = TargetFormat.BINARY,
         cliUploaded = true
       )
 
-      itemT
-        .flatMap((tufRepo.addTarget _).tupled)
-        .map(p => log.info(s"added uploaded target to $p"))
+      for {
+        (filename, targetItem) <- Future.fromTry(itemT)
+        client <- repoServer
+        _      <- if (config.verifyIntegrity) tufRepo.verifyUploadedBinary(client, filename, localFileChecksum) else Future.unit
+        path   <- Future.fromTry(tufRepo.addTarget(filename, targetItem))
+      } yield log.info(s"Added uploaded target to $path")
+
+
+    case VerifyUploadedTarget =>
+      val file = config.inputPath.valueOrConfigError
+      val localFileChecksum = Sha256FileDigest.from(file)
+      for {
+        filename <- Future.fromTry(targetFilenameFrom(config.targetName.valueOrConfigError, config.targetVersion.valueOrConfigError))
+        client   <- repoServer
+        _        <- tufRepo.verifyUploadedBinary(client, filename, localFileChecksum)
+      } yield ()
+
 
     case DeleteTarget =>
       tufRepo

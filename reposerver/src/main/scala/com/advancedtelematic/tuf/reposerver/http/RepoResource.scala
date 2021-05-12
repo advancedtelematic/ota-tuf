@@ -7,6 +7,7 @@ import akka.http.scaladsl.unmarshalling.PredefinedFromStringUnmarshallers.CsvSeq
 import akka.http.scaladsl.unmarshalling._
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
+import com.advancedtelematic.libats.codecs.CirceCodecs.checkSumCodec
 import com.advancedtelematic.libats.data.RefinedUtils._
 import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity}
 import com.advancedtelematic.libats.http.RefinedMarshallingSupport._
@@ -285,6 +286,9 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
           onSuccess(f) { uri =>
             redirect(uri, StatusCodes.Found)
           }
+        } ~
+        (get & path(TargetFilenamePath)) { fileName =>
+            complete(targetStore.retrieveFromManaged(repoId, fileName))
         }
       } ~
       pathPrefix("multipart") {

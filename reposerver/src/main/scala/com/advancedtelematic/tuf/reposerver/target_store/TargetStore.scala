@@ -2,7 +2,6 @@ package com.advancedtelematic.tuf.reposerver.target_store
 
 import java.net.URL
 import java.time.Instant
-
 import cats.implicits._
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
@@ -129,7 +128,7 @@ class TargetStore(roleKeyStore: KeyserverClient,
     HttpResponse(StatusCodes.Found, List(Location(uri)))
   }
 
-  private def retrieveFromManaged(repoId: RepoId, targetFilename: TargetFilename): Future[HttpResponse] = {
+  def retrieveFromManaged(repoId: RepoId, targetFilename: TargetFilename): Future[HttpResponse] = {
     // TODO: Publish usage/inflight https://advancedtelematic.atlassian.net/browse/PRO-2803
     engine.retrieve(repoId, targetFilename).map {
       case TargetBytes(bytes, size) =>
