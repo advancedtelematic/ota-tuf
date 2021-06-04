@@ -1,27 +1,27 @@
 package com.advancedtelematic.libtuf.http
 
-import java.io.{File, FileInputStream}
-import java.net.URI
+import java.io.{BufferedInputStream, File, FileInputStream, FileNotFoundException, InputStream}
+import java.net.{URI, URL}
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.Base64
-
-import com.advancedtelematic.libats.data.DataType.ValidChecksum
+import com.advancedtelematic.libats.data.DataType.{Checksum, ValidChecksum}
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, RootRole, TargetsRole}
 import com.advancedtelematic.libtuf.data.ErrorCodes
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{CompleteUploadRequest, ETag, GetSignedUrlResult, InitMultipartUploadResult, KeyId, MultipartUploadId, SignedPayload, TargetFilename, TufKeyPair, UploadPartETag}
 import com.advancedtelematic.libtuf.http.CliHttpClient.{CliHttpBackend, CliHttpClientError}
-import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleChecksumNotValid, RoleNotFound, TargetsResponse, UploadTargetTooBig}
+import com.advancedtelematic.libtuf.http.TufServerHttpClient.{BinaryFileIntegrityCheckFailed, RoleChecksumNotValid, RoleNotFound, TargetsResponse, UploadTargetTooBig}
 import com.azure.storage.blob.BlobClientBuilder
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
+import org.bouncycastle.util.encoders.Hex
 import org.slf4j.LoggerFactory
 import sttp.client._
 import sttp.model.{Header, HeaderNames, Headers, StatusCode, Uri}
 
-import scala.+:
+import scala.annotation.tailrec
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, _}
 import scala.util.control.NoStackTrace
@@ -35,6 +35,8 @@ object TufServerHttpClient {
   case class RoleNotFound(msg: String) extends Exception(s"role not found: $msg") with NoStackTrace
 
   case class UploadTargetTooBig(msg: String) extends Exception(msg) with NoStackTrace
+
+  case class BinaryFileIntegrityCheckFailed(msg: String) extends Exception(msg) with NoStackTrace
 }
 
 trait TufServerClient {
@@ -57,6 +59,8 @@ trait ReposerverClient extends TufServerClient {
   def pushTargets(role: SignedPayload[TargetsRole], previousChecksum: Option[Refined[String, ValidChecksum]]): Future[Unit]
 
   def uploadTarget(targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit]
+
+  def verifyUploadedBinary(targetFilename: TargetFilename, localFileChecksum: Checksum): Future[Unit]
 }
 
 trait DirectorClient extends TufServerClient
@@ -153,6 +157,77 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
     }
   }
 
+  def verifyUploadedBinary(targetFilename: TargetFilename, localFileChecksum: Checksum): Future[Unit] = {
+
+    val req = http
+      .get(apiUri(s"uploads/" + targetFilename.value))
+      .followRedirects(false)
+
+    _log.info(s"Verifying uploaded file integrity. It could take a few minutes. Please wait.")
+
+    defaultHttpClient(req).flatMap {
+      case rs if rs.isRedirect =>
+        rs.header("Location") match {
+          case Some(signedUrl) =>
+            shaDigestFromUrl(new URL(signedUrl)) match {
+              case Success(serverFileChecksum) if serverFileChecksum == localFileChecksum.hash.value =>
+                _log.info(s"Integrity verification successful")
+                Future.successful(())
+
+              case Success(serverFileChecksum) if serverFileChecksum != localFileChecksum.hash.value =>
+                val msg = s"Local file checksum (${localFileChecksum.hash}) not equal uploaded file checksum ($serverFileChecksum)"
+                _log.error(s"Integrity verification failed. $msg")
+                Future.failed(BinaryFileIntegrityCheckFailed(msg))
+
+              case Failure(_: FileNotFoundException) =>
+                val msg = s"File $targetFilename not found in server storage. Please upload file"
+                _log.error(s"Integrity verification failed. $msg")
+                Future.failed(BinaryFileIntegrityCheckFailed(msg))
+
+              case Failure(exception) =>
+                _log.error(s"Integrity verification failed. ${exception.getMessage}")
+                Future.failed(BinaryFileIntegrityCheckFailed(exception.getMessage))
+            }
+
+          case None =>
+            val msg = s"Cannot retrieve URL for download binary file"
+            _log.error(s"Integrity verification failed. $msg")
+            Future.failed(BinaryFileIntegrityCheckFailed(msg))
+        }
+
+      case rs =>
+        val msg = s"Unexpected response from server: Status: ${rs.code}"
+        _log.error(s"Integrity verification failed. $msg")
+        Future.failed(BinaryFileIntegrityCheckFailed(msg))
+    }
+  }
+
+  private def shaDigestFromUrl(url: URL): Try[String] = {
+    val bufferSize = 1024 * 32
+    val byteBuffer: Array[Byte] = new Array[Byte](bufferSize)
+
+    @tailrec
+    def process(inputStream: InputStream, processedBytes: Long = 0, shaDigest: MessageDigest = MessageDigest.getInstance("SHA-256")): String = {
+      val readBytesCount: Int = inputStream.read(byteBuffer, 0, bufferSize)
+
+      if (readBytesCount == -1) {
+        inputStream.close()
+        println()
+        Hex.toHexString(shaDigest.digest())
+      } else {
+        val totalProcessedBytes = processedBytes + readBytesCount
+        printRewriteLine(s"Processed: ${toMb(totalProcessedBytes)}Mb")
+        shaDigest.update(byteBuffer.take(readBytesCount))
+        process(inputStream, totalProcessedBytes, shaDigest)
+      }
+    }
+
+    Try {
+      val is = new BufferedInputStream(url.openStream())
+      process(is)
+    }
+  }
+
   private[this] def uploadToAzure(uri: Uri, inputPath: Path, timeout: Duration): Future[Unit] = {
     val uploadResult = Try {
       val client = new BlobClientBuilder().endpoint(uri.toString()).buildClient()
@@ -221,6 +296,7 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
 
       if (bufferSize == 0) {
         inputStream.close()
+        println()
         Future.successful(eTags)
       } else {
         getSignedUrlAndUploadPart(targetFilename, uploadId, part, byteBuffer, timeout)
@@ -240,10 +316,14 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
   }
 
   private def printProgress(total: Long, current: Long): Unit = {
-    def toMb(value: Long) = BigDecimal(value.toDouble / 1024 / 1024).setScale(2, BigDecimal.RoundingMode.HALF_UP)
-
     val str = s"Uploading: uploaded ${toMb(current)}Mb of ${toMb(total)}Mb"
-    _log.info(str)
+    printRewriteLine(str)
+  }
+
+  private def toMb(value: Long) = BigDecimal(value.toDouble / 1024 / 1024).setScale(2, BigDecimal.RoundingMode.HALF_UP)
+
+  private def printRewriteLine(msg: String): Unit = {
+    print(s"\u001B[100D$msg")
   }
 
   private def initMultipartUpload(targetFilename: TargetFilename, fileSize: Long): Future[InitMultipartUploadResult] = {

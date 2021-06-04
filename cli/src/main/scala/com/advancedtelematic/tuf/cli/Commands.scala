@@ -11,6 +11,7 @@ object Commands {
   case object InitTargets extends Command
   case object AddTarget extends Command
   case object AddUploadedTarget extends Command
+  case object VerifyUploadedTarget extends Command
   case object DeleteTarget extends Command
   case object SignTargets extends Command
   case object SignRoot extends Command

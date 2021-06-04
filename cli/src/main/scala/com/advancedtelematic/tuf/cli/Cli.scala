@@ -68,7 +68,8 @@ case class Config(command: Command,
                   force: Boolean = false,
                   reposerverUrl: Option[URI] = None,
                   verbose: Boolean = false,
-                  inplace: Boolean = false)
+                  inplace: Boolean = false,
+                  verifyIntegrity: Boolean = false)
 
 object Cli extends App with VersionInfo {
 
@@ -414,8 +415,27 @@ object Cli extends App with VersionInfo {
             opt[List[HardwareIdentifier]]("hardwareids")
               .required()
               .toConfigParam('hardwareIds)
-              .text("The types of hardware with which this image is compatible.")
+              .text("The types of hardware with which this image is compatible."),
+            opt[Unit]("verifyIntegrity")
+              .action { (_, c) => c.copy(verifyIntegrity = true) }
+              .text("Verify integrity of a target that you previously uploaded before adding to metadata.")
           ).text("Adds a target that you previously uploaded to OTA Connect using the `targets upload` command."),
+        cmd("verify-uploaded")
+          .toCommand(VerifyUploadedTarget)
+          .children(
+            opt[Path]('i', "input")
+              .required()
+              .toConfigOptionParam('inputPath)
+              .text("The path to the binary file."),
+            opt[TargetName]("name")
+              .required()
+              .toConfigOptionParam('targetName)
+              .text("The name of the target."),
+            opt[TargetVersion]("version")
+              .required()
+              .toConfigOptionParam('targetVersion)
+              .text("The version string of the target.")
+          ).text("Verify integrity of a target that you previously uploaded to OTA Connect using the `targets upload` command."),
         cmd("delete")
           .toCommand(DeleteTarget)
           .text("Deletes a single target. This target can no longer be installed on devices.")
