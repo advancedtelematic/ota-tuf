@@ -1,7 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.db
 
 import java.time.Instant
-
 import akka.http.scaladsl.model.Uri
 import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libtuf.data.ClientDataType.{DelegatedRoleName, TargetCustom}
@@ -13,7 +12,7 @@ import com.advancedtelematic.libtuf_server.data.Requests.TargetComment
 import com.advancedtelematic.tuf.reposerver.db.DBDataType.{DbDelegation, DbSignedRole}
 import SlickValidatedString._
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.StorageMethod.StorageMethod
-import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.{RepoNamespace, TargetItem}
 
 object Schema {
   import com.advancedtelematic.libats.slick.codecs.SlickRefined._
@@ -56,13 +55,13 @@ object Schema {
 
   protected [db] val signedRoles = TableQuery[SignedRoleTable]
 
-  class RepoNamespaceTable(tag: Tag) extends Table[(RepoId, Namespace)](tag, "repo_namespaces") {
+  class RepoNamespaceTable(tag: Tag) extends Table[RepoNamespace](tag, "repo_namespaces") {
     def repoId = column[RepoId]("repo_id")
     def namespace = column[Namespace]("namespace")
 
     def pk = primaryKey("repo_namespaces_pk", namespace)
 
-    override def * = (repoId, namespace)
+    override def * = (repoId, namespace) <> ((RepoNamespace.apply _).tupled, RepoNamespace.unapply)
   }
 
   protected [db] val repoNamespaces = TableQuery[RepoNamespaceTable]
