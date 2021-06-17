@@ -58,7 +58,7 @@ trait ReposerverClient extends TufServerClient {
 
   def pushTargets(role: SignedPayload[TargetsRole], previousChecksum: Option[Refined[String, ValidChecksum]]): Future[Unit]
 
-  def uploadTarget(targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit]
+  def uploadTarget(targetFilename: TargetFilename, inputPath: Path, timeout: Duration, force: Boolean = false): Future[Unit]
 
   def verifyUploadedBinary(targetFilename: TargetFilename, localFileChecksum: Checksum): Future[Unit]
 }
@@ -143,17 +143,17 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
     execHttp[SignedPayload[TargetsRole]](req)().map(_.body)
   }
 
-  override def uploadTarget(targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit] = {
+  override def uploadTarget(targetFilename: TargetFilename, inputPath: Path, timeout: Duration, force: Boolean = false): Future[Unit] = {
     val multipartUploadResult = for {
       inputFile <- Future.fromTry(Try(inputPath.toFile))
-      initResult <- initMultipartUpload(targetFilename, inputFile.length())
+      initResult <- initMultipartUpload(targetFilename, inputFile.length(), force)
       result <- s3MultipartUpload(targetFilename, inputFile, initResult.uploadId, initResult.partSize, timeout)
     } yield result
 
     multipartUploadResult.recoverWith {
       case e: CliHttpClientError if e.remoteError.code == ErrorCodes.Reposerver.NotImplemented =>
         //Multipart upload is not supported for Azure Blob Storage.
-        uploadByPreSignedUrl(targetFilename, inputPath, timeout)
+        uploadByPreSignedUrl(targetFilename, inputPath, timeout, force)
     }
   }
 
@@ -236,8 +236,8 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
     Future.fromTry(uploadResult)
   }
 
-  private def uploadByPreSignedUrl(targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit] = {
-    val req = basicRequest.put(apiUri(s"uploads/" + targetFilename.value))
+  private def uploadByPreSignedUrl(targetFilename: TargetFilename, inputPath: Path, timeout: Duration, force: Boolean): Future[Unit] = {
+    val req = basicRequest.put(apiUri(s"uploads/" + targetFilename.value).params("force" -> force.toString))
       .body(inputPath)
       .readTimeout(timeout)
       .followRedirects(false)
@@ -326,9 +326,9 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
     print(s"\u001B[100D$msg")
   }
 
-  private def initMultipartUpload(targetFilename: TargetFilename, fileSize: Long): Future[InitMultipartUploadResult] = {
+  private def initMultipartUpload(targetFilename: TargetFilename, fileSize: Long, force: Boolean): Future[InitMultipartUploadResult] = {
     val req = http
-      .post(apiUri(s"multipart/initiate/" + targetFilename.value).params("fileSize" -> fileSize.toString))
+      .post(apiUri(s"multipart/initiate/" + targetFilename.value).params("fileSize" -> fileSize.toString, "force" -> force.toString))
       .followRedirects(false)
 
     execHttp[InitMultipartUploadResult](req)().map(_.body)

@@ -374,7 +374,7 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
     rootRolesF
   }
 
-  def uploadTarget(repoClient: S, targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit]
+  def uploadTarget(repoClient: S, targetFilename: TargetFilename, inputPath: Path, timeout: Duration, force: Boolean): Future[Unit]
 
   def moveRootOffline(repoClient: S,
                       newRootName: Option[KeyName],
@@ -544,8 +544,8 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
 
   }
 
-  override def uploadTarget(repoClient: ReposerverClient, targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit] = {
-    repoClient.uploadTarget(targetFilename, inputPath, timeout)
+  override def uploadTarget(repoClient: ReposerverClient, targetFilename: TargetFilename, inputPath: Path, timeout: Duration, force: Boolean): Future[Unit] = {
+    repoClient.uploadTarget(targetFilename, inputPath, timeout, force)
   }
 
   override def verifyUploadedBinary(repoClient: ReposerverClient, targetFilename: TargetFilename, localFileChecksum: Checksum): Future[Unit] = {
@@ -620,7 +620,7 @@ class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRep
   override def addTargetDelegation(name: DelegatedRoleName, key: List[TufKey], delegatedPaths: List[DelegatedPathPattern], threshold: Int): Try[Path] =
     Failure(CommandNotSupportedByRepositoryType(Director, "addTargetDelegation"))
 
-  override def uploadTarget(repoClient: DirectorClient, targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit] =
+  override def uploadTarget(repoClient: DirectorClient, targetFilename: TargetFilename, inputPath: Path, timeout: Duration, force: Boolean): Future[Unit] =
     Future.failed(CommandNotSupportedByRepositoryType(Director, "uploadTarget"))
 
   override def verifyUploadedBinary(reposerverClient: DirectorClient, targetFilename: TargetFilename, localFileChecksum: Checksum): Future[Unit] =

@@ -277,9 +277,9 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
         }
       } ~
       pathPrefix("uploads") {
-        (put & path(TargetFilenamePath) & withContentLengthCheck) { (filename, cl) =>
+        (put & path(TargetFilenamePath) & withContentLengthCheck & parameter('force.as[Boolean] ? false)) { (filename, cl, force) =>
           val f = async {
-            if(await(targetItemRepo.exists(repoId, filename)))
+            if(await(targetItemRepo.exists(repoId, filename)) && !force)
               throw new EntityAlreadyExists[TargetItem]()
             await(targetStore.buildStorageUrl(repoId, filename, cl))
           }
@@ -292,9 +292,9 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
         }
       } ~
       pathPrefix("multipart") {
-        (post & path("initiate" / TargetFilenamePath) & withMultipartUploadFileSizeCheck) { (fileName, _) =>
+        (post & path("initiate" / TargetFilenamePath) & withMultipartUploadFileSizeCheck & parameter('force.as[Boolean] ? false)) { (fileName, _, force) =>
           val rs = for {
-            exists <- targetItemRepo.exists(repoId, fileName)
+            exists <- if (force) Future.successful(false) else targetItemRepo.exists(repoId, fileName)
             result <- if (exists) Future.failed(new EntityAlreadyExists[TargetItem]()) else targetStore.initiateMultipartUpload(repoId, fileName)
           } yield result
           complete(rs)

@@ -152,7 +152,7 @@ class FakeReposerverTufServerClient(val keyType: KeyType) extends ReposerverClie
     Option(pushedDelegations.get(name)).getOrElse(throw new IllegalArgumentException("[test] delegation not found"))
   }
 
-  override def uploadTarget(targetFilename: TargetFilename, inputPath: Path, timeout: Duration): Future[Unit] = {
+  override def uploadTarget(targetFilename: TargetFilename, inputPath: Path, timeout: Duration, force: Boolean): Future[Unit] = {
     _log.info(s"Received upload for $targetFilename, $inputPath")
     uploaded.put(targetFilename, inputPath)
     Future.successful(())
