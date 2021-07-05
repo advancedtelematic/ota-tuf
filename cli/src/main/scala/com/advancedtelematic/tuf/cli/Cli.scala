@@ -492,6 +492,10 @@ object Cli extends App with VersionInfo {
               .optional()
               .text("The timeout for the HTTP request of the upload, in seconds.")
               .toConfigParam('timeout),
+            opt[Unit]("force")
+              .action { (_, c) => c.copy(force = true) }
+              .text("Force upload of a binary file. This parameter skips checking whether the file has already been added to the targets.")
+              .hidden()
           )
           .text("""Uploads a binary to the repository.
                   |Note that this will not make the binary available on its own.

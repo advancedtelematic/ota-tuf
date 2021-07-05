@@ -3,12 +3,11 @@ package com.advancedtelematic.tuf.cli
 import java.net.URI
 import java.time.{Instant, Period, ZoneOffset}
 import java.util.concurrent.TimeUnit
-
 import cats.implicits._
 import com.advancedtelematic.libats.data.DataType.Checksum
 import com.advancedtelematic.libtuf.crypt.Sha256FileDigest
 import com.advancedtelematic.libtuf.data.ClientCodecs._
-import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RootRole, TargetCustom}
+import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RoleType, TargetFilename, TargetFormat, TargetName, TargetVersion, ValidTargetFilename}
@@ -40,12 +39,19 @@ object CommandHandler {
     refineV[ValidTargetFilename](s"${name.value}-${version.value}").leftMap(s => new IllegalArgumentException(s)).toTry
   }
 
+  private def targetItemCreatedAt(targetFilename: TargetFilename)(role: TargetsRole): Option[Instant] =
+    role.targets.get(targetFilename)
+      .flatMap(_.custom.flatMap(_.as[TargetCustom].toOption))
+      .map(_.createdAt)
+
   private def buildClientTarget(name: TargetName, version: TargetVersion, length: Long, checksum: Checksum,
-                                hardwareIds: List[HardwareIdentifier], uri: Option[URI], format: TargetFormat, cliUploaded: Boolean = false): Try[(TargetFilename, ClientTargetItem)] =
+                                hardwareIds: List[HardwareIdentifier], uri: Option[URI], format: TargetFormat,
+                                cliUploaded: Boolean = false, currentTargetsRole: Option[TargetsRole] = None): Try[(TargetFilename, ClientTargetItem)] =
     for {
       targetFilename <- targetFilenameFrom(name, version)
+      createdAt = currentTargetsRole.flatMap(targetItemCreatedAt(targetFilename)).getOrElse(Instant.now())
       newTarget = {
-        val custom = TargetCustom(name, version, hardwareIds, format.some, uri, cliUploaded = cliUploaded.some)
+        val custom = TargetCustom(name, version, hardwareIds, format.some, uri, cliUploaded = cliUploaded.some, createdAt = createdAt)
         val clientHashes = Map(checksum.method -> checksum.hash)
         ClientTargetItem(clientHashes, length, custom.asJson.some)
       }
@@ -115,7 +121,8 @@ object CommandHandler {
         config.checksum.valueOrConfigError,
         config.hardwareIds,
         config.targetUri,
-        config.targetFormat
+        config.targetFormat,
+        currentTargetsRole = tufRepo.readUnsignedRole[TargetsRole].toOption
       )
 
       itemT
@@ -126,6 +133,7 @@ object CommandHandler {
       val file = config.inputPath.valueOrConfigError
       val localFileChecksum = Sha256FileDigest.from(file)
 
+
       val itemT = buildClientTarget(
         config.targetName.valueOrConfigError,
         config.targetVersion.valueOrConfigError,
@@ -134,7 +142,8 @@ object CommandHandler {
         config.hardwareIds,
         uri = None,
         format = TargetFormat.BINARY,
-        cliUploaded = true
+        cliUploaded = true,
+        currentTargetsRole = tufRepo.readUnsignedRole[TargetsRole].toOption
       )
 
       for {
@@ -171,7 +180,7 @@ object CommandHandler {
       for {
         filename <- Future.fromTry(targetFilenameFrom(config.targetName.valueOrConfigError, config.targetVersion.valueOrConfigError))
         client <- repoServer
-        _ <- tufRepo.uploadTarget(client, filename, config.inputPath.valueOrConfigError, Duration(config.timeout, TimeUnit.SECONDS))
+        _ <- tufRepo.uploadTarget(client, filename, config.inputPath.valueOrConfigError, Duration(config.timeout, TimeUnit.SECONDS), config.force)
       } yield log.info("Target uploaded. You can now add this target to your targets with `targets add`")
 
     case PullTargets =>
