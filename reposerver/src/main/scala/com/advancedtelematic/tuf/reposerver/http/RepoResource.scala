@@ -384,5 +384,8 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
         createRepo(namespace, repoId)
       } ~
       modifyRepoRoutes(repoId)
+    } ~
+    (path("repos") & parameters('offset.as[Long], 'limit.as[Long]) ) { (offset, limit) =>
+      complete(repoNamespaceRepo.list(offset, limit))
     }
 }

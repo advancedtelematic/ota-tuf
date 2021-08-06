@@ -2,7 +2,6 @@ package com.advancedtelematic.tuf.reposerver.http
 
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-
 import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
@@ -14,7 +13,7 @@ import cats.syntax.option._
 import cats.syntax.show._
 import com.advancedtelematic.libats.codecs.CirceCodecs._
 import com.advancedtelematic.libats.data.DataType.HashMethod
-import com.advancedtelematic.libats.data.ErrorRepresentation
+import com.advancedtelematic.libats.data.{ErrorRepresentation, PaginationResult}
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libats.http.Errors.RawError
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
@@ -28,6 +27,7 @@ import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
 import com.advancedtelematic.libtuf_server.data.Requests._
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.libtuf_server.repo.server.DataType.SignedRole
+import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.RepoNamespace
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleDbTestUtil._
 import com.advancedtelematic.tuf.reposerver.db.SignedRoleRepositorySupport
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{TargetBytes, TargetRetrieveResult}
@@ -1087,6 +1087,20 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
     Put(apiUri(s"repo/${repoId.show}/uploads/some/target/thing")).withHeaders(`Content-Length`(1024)) ~> routes ~> check {
       status shouldBe StatusCodes.Conflict
       responseAs[ErrorRepresentation].description should include("Entity already exists")
+    }
+  }
+
+  test("GET list of repo namespaces") {
+    withRandomNamepace { implicit ns =>
+      val newRepoId = Post(apiUri("user_repo"), CreateRepositoryRequest(KeyType.default)).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+        responseAs[RepoId]
+      }
+
+      Get(apiUri(s"repos?offset=0&limit=1000")) ~> routes ~> check {
+        responseAs[PaginationResult[RepoNamespace]].values.map(_.repoId) should contain(newRepoId)
+        status shouldBe StatusCodes.OK
+      }
     }
   }
 
