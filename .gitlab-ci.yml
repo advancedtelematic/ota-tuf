@@ -73,6 +73,8 @@ test:
 
 code coverage:
   extends: .report_scala_coverage
+  except:
+    - schedules
   allow_failure: true
   image: $TEST_IMAGE
   before_script:
