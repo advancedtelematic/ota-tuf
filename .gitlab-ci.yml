@@ -14,6 +14,7 @@ variables:
   # VAULT_ADDR: defined in GitLab variables
   # The same image have to be used by test and code coverage jobs:
   TEST_IMAGE: advancedtelematic/gitlab-jobs:0.2.5
+  TEST_IMAGE_SONAR: advancedtelematic/gitlab-jobs-sonar:0.0.3
 
 build CI nginx:
   stage: prepare
@@ -58,14 +59,20 @@ test:
     paths:
       - "libtuf/target/scala-*/scoverage-data"
       - "libtuf/target/scala-*/src_managed"
+      - "libtuf/target/scala-*/classes"
       - "libtuf-server/target/scala-*/scoverage-data"
       - "libtuf-server/target/scala-*/src_managed"
+      - "libtuf-server/target/scala-*/classes"
       - "keyserver/target/scala-*/scoverage-data"
       - "keyserver/target/scala-*/src_managed"
+      - "keyserver/target/scala-*/classes"
       - "cli/target/scala-*/scoverage-data"
       - "cli/target/scala-*/src_managed"
+      - "cli/target/scala-*/classes"
       - "reposerver/target/scala-*/scoverage-data"
       - "reposerver/target/scala-*/src_managed"
+      - "reposerver/target/scala-*/classes"
+
   cache:
     paths:
       - .ivy2/
@@ -73,13 +80,34 @@ test:
 
 code coverage:
   extends: .report_scala_coverage
+  needs: ["test"]
   except:
     - schedules
   allow_failure: true
-  image: $TEST_IMAGE
-  before_script:
-    - sbt -sbt-dir ./.sbt -ivy ./.ivy2 coverageAggregate
-
+  image: $TEST_IMAGE_SONAR
+  script:
+    - sbt -Dsonar.login=$SONARQUBE_TOKEN -sbt-dir ./.sbt -ivy ./.ivy2 coverageReport sonarScan
+    - mv keyserver/target/scala-*/scoverage-report/ keyserver-coverage
+    - mv libtuf/target/scala-*/scoverage-report/ libtuf-coverage
+    - mv libtuf-server/target/scala-*/scoverage-report/ libtuf-server-coverage
+    - mv cli/target/scala-*/scoverage-report/ cli-coverage
+    - mv reposerver/target/scala-*/scoverage-report/ reposerver-coverage
+  artifacts:
+    expire_in: 3 weeks
+    paths:
+      - keyserver-coverage
+      - libtuf-coverage
+      - libtuf-server-coverage
+      - cli-coverage
+      - reposerver-coverage
+    reports:
+       cobertura: 
+       - "keyserver/target/scala-*/coverage-report/cobertura.xml"
+       - "libtuf/target/scala-*/coverage-report/cobertura.xml"
+       - "libtuf-server/target/scala-*/coverage-report/cobertura.xml"
+       - "cli/target/scala-*/coverage-report/cobertura.xml"
+       - "reposerver/target/scala-*/coverage-report/cobertura.xml"
+    
 release:
   stage: release
   except:
@@ -176,5 +204,5 @@ include:
   - template: Dependency-Scanning.gitlab-ci.yml
   - template: License-Scanning.gitlab-ci.yml
   - project: olp/edge/ota/infra/security
-    ref: v0.0.9
+    ref: v0.1.0
     file: /shared.yaml
