@@ -80,10 +80,11 @@ lazy val commonSettings = Seq(
 lazy val sonarSettings = Seq(
   sonarProperties ++= Map(
     "sonar.projectName" -> "OTA Connect TUF",
+    "sonar.sourceEncoding" -> "UTF-8",
     "sonar.projectKey" -> "ota-connect-tuf",
     "sonar.sources" -> "src/main/scala",
     "sonar.tests" -> "src/test/scala",
-    "sonar.host.url" -> "http://sonar.in.here.com",
+    "sonar.host.url" -> "https://sonar7.devtools.in.here.com",
     "sonar.links.issue" -> "https://saeljira.it.here.com/projects/OTA/issues",
     "sonar.links.scm" -> "https://main.gitlab.in.here.com/olp/edge/ota/connect/back-end/ota-tuf",
     "sonar.links.ci" -> "https://main.gitlab.in.here.com/olp/edge/ota/connect/back-end/ota-tuf/pipelines",
@@ -91,10 +92,20 @@ lazy val sonarSettings = Seq(
     "sonar.projectVersion" -> version.value,
     "sonar.modules" -> "libtuf,libtuf-server,keyserver,reposerver,cli",
     "libtuf.sonar.projectName" -> "OTA Connect Libtuf",
+    "libtuf.sonar.java.binaries" -> "./target/scala-*/classes",
+    "libtuf.sonar.scala.coverage.reportPaths"->"target/scala-2.12/scoverage-report/scoverage.xml",
     "libtuf-server.sonar.projectName" -> "OTA Connect Libtuf Server",
+    "libtuf-server.sonar.java.binaries" -> "./target/scala-*/classes",
+    "libtuf-server.sonar.scala.coverage.reportPaths"->"target/scala-2.12/scoverage-report/scoverage.xml",
     "keyserver.sonar.projectName" -> "OTA Connect TUF Keyserver",
+    "keyserver.sonar.java.binaries" -> "./target/scala-*/classes",
+    "keyserver.sonar.scala.coverage.reportPaths"->"target/scala-2.12/scoverage-report/scoverage.xml",
     "reposerver.sonar.projectName" -> "OTA Connect TUF Repository Server",
+    "reposerver.sonar.java.binaries" -> "./target/scala-*/classes",
+    "reposerver.sonar.scala.coverage.reportPaths"->"target/scala-2.12/scoverage-report/scoverage.xml",
     "cli.sonar.projectName" -> "OTA Connect TUF CLI (garage-sign)",
+    "cli.sonar.java.binaries" -> "./target/scala-*/classes",
+    "cli.sonar.scala.coverage.reportPaths"->"target/scala-2.12/scoverage-report/scoverage.xml",
   )
 )
 
