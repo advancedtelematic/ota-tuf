@@ -1,7 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.http
 
 import java.time.Instant
-
 import cats.syntax.option._
 import cats.syntax.either._
 import akka.http.scaladsl.model.Uri
@@ -59,7 +58,7 @@ class OfflineSignedRoleStorageSpec extends TufReposerverSpec with DatabaseSpec w
   val subject = new OfflineSignedRoleStorage(keyserver)
 
   val signedRoleGeneration = TufRepoSignedRoleGeneration(keyserver)
-  val targetRoleGeneration = new TargetRoleEdit(keyserver, signedRoleGeneration)
+  val targetRoleGeneration = new TargetRoleEdit(signedRoleGeneration)
 
   def storeOffline(repoId: RepoId, targets: Map[TargetFilename, ClientTargetItem], version: Int): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole[TargetsRole])]] = {
     val targetsRole = TargetsRole(Instant.now.plusSeconds(3600), targets, version)

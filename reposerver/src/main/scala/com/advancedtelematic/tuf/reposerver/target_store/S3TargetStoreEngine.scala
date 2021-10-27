@@ -4,13 +4,12 @@ import java.io.File
 import java.time.temporal.ChronoUnit
 import java.time.{Duration, Instant}
 import java.util.Date
-
 import scala.async.Async._
 import scala.collection.JavaConverters._
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.util.FastFuture
-import akka.stream.ActorMaterializer
+import akka.stream.Materializer
 import akka.stream.scaladsl.{FileIO, Source, StreamConverters}
 import akka.util.ByteString
 import com.advancedtelematic.libtuf.data.TufDataType.{GetSignedUrlResult, InitMultipartUploadResult, MultipartUploadId, RepoId, TargetFilename, UploadPartETag}
@@ -27,7 +26,7 @@ import scala.concurrent._
 import scala.concurrent.Future
 import scala.util.Try
 
-class S3TargetStoreEngine(credentials: S3Credentials)(implicit val system: ActorSystem, val mat: ActorMaterializer) extends TargetStoreEngine with Settings {
+class S3TargetStoreEngine(credentials: S3Credentials)(implicit val system: ActorSystem, val mat: Materializer) extends TargetStoreEngine with Settings {
 
   import system.dispatcher
 

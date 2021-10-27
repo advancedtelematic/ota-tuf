@@ -160,4 +160,6 @@ class FakeReposerverTufServerClient(val keyType: KeyType) extends ReposerverClie
 
   override def verifyUploadedBinary(targetFilename: TargetFilename, localFileChecksum: Checksum): Future[Unit] =
     Future.successful(())
+
+  override def cleanOsTreeStorage(): Future[Unit] = Future.unit
 }

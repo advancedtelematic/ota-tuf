@@ -3,12 +3,13 @@ package com.advancedtelematic.tuf.reposerver.http
 import com.advancedtelematic.libats.data.DataType.{Checksum, Namespace}
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, TargetCustom}
-import com.advancedtelematic.libtuf.data.TufDataType.TargetFilename
+import com.advancedtelematic.libtuf.data.TufDataType.{TargetFilename, TargetFormat, TargetName, TargetVersion}
 import com.advancedtelematic.libtuf_server.data.Messages.TufTargetAdded
 import cats.implicits._
 
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libats.codecs.CirceCodecs._
+import com.advancedtelematic.libats.messaging_datatype.Messages.OSTreeTargetDelete
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 
@@ -22,6 +23,10 @@ class TufTargetsPublisher(messageBus: MessageBusPublisher)(implicit ec: Executio
       messageBus.publish(TufTargetAdded(namespace, filename, checksum,
                                         clientTargetItem.length, clientTargetItem.customParsed[TargetCustom]))
     }
+  }
+
+  def deleteOsTreeTargets(namespace: Namespace): Future[Unit] = {
+      messageBus.publish(OSTreeTargetDelete(namespace))
   }
 
   private def newTargetsFromExisting(allTargets: Map[TargetFilename, ClientTargetItem], existing: Seq[TargetFilename]) =

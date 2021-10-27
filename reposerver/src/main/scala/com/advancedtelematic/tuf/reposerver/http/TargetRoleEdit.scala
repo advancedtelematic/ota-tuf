@@ -1,7 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.http
 
-import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, TargetFilename}
-import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
+import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, TargetFilename, TargetFormat}
 import com.advancedtelematic.libtuf_server.repo.server.SignedRoleGeneration
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import com.advancedtelematic.tuf.reposerver.db.{FilenameCommentRepository, TargetItemRepositorySupport}
@@ -9,7 +8,7 @@ import com.advancedtelematic.tuf.reposerver.db.{FilenameCommentRepository, Targe
 import scala.concurrent.{ExecutionContext, Future}
 import slick.jdbc.MySQLProfile.api._
 
-class TargetRoleEdit(roleSigningClient: KeyserverClient, signedRoleGeneration: SignedRoleGeneration)
+class TargetRoleEdit(signedRoleGeneration: SignedRoleGeneration)
                     (implicit val db: Database, val ec: ExecutionContext)
   extends TargetItemRepositorySupport with FilenameCommentRepository.Support {
 
@@ -23,4 +22,16 @@ class TargetRoleEdit(roleSigningClient: KeyserverClient, signedRoleGeneration: S
     _ <- targetItemRepo.deleteItemAndComments(filenameCommentRepo)(repoId, filename)
     _ <- signedRoleGeneration.regenerateAllSignedRoles(repoId)
   } yield ()
+
+  def deleteOsTreeTargets(repoId: RepoId): Future[Seq[TargetItem]] = for {
+    _             <- signedRoleGeneration.ensureTargetsCanBeSigned(repoId)
+    osTreeTargets <- deleteOsTreeItemAndComments(repoId)
+    _             <- signedRoleGeneration.regenerateAllSignedRoles(repoId)
+  } yield osTreeTargets
+
+  private def deleteOsTreeItemAndComments(repoId: RepoId): Future[Seq[TargetItem]] = for {
+    targetItems   <- targetItemRepo.findFor(repoId)
+    osTreeTargets = targetItems.filter(_.custom.exists(_.targetFormat.exists(_ == TargetFormat.OSTREE)))
+    _             <- targetItemRepo.deleteItemsAndComments(filenameCommentRepo)(repoId, osTreeTargets.map(_.filename).toSet)
+  } yield osTreeTargets
 }

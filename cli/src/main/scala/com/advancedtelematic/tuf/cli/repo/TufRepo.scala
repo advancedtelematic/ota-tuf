@@ -404,6 +404,8 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
   def pushTargets(reposerverClient: S): Future[SignedPayload[TargetsRole]]
 
   def verifyUploadedBinary(reposerverClient: S, targetFilename: TargetFilename, localFileChecksum: Checksum): Future[Unit]
+
+  def cleanOsTreeStorage(reposerverClient: S): Future[Unit]
 }
 
 class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRepo[ReposerverClient](repoPath) {
@@ -551,6 +553,10 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
   override def verifyUploadedBinary(repoClient: ReposerverClient, targetFilename: TargetFilename, localFileChecksum: Checksum): Future[Unit] = {
     repoClient.verifyUploadedBinary(targetFilename, localFileChecksum)
   }
+
+  override def cleanOsTreeStorage(reposerverClient: ReposerverClient): Future[Unit] = {
+    reposerverClient.cleanOsTreeStorage()
+  }
 }
 
 class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRepo[DirectorClient](repoPath) {
@@ -625,4 +631,7 @@ class DirectorRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRep
 
   override def verifyUploadedBinary(reposerverClient: DirectorClient, targetFilename: TargetFilename, localFileChecksum: Checksum): Future[Unit] =
     Future.failed(CommandNotSupportedByRepositoryType(Director, "verifyUploadedBinary"))
+
+  override def cleanOsTreeStorage(reposerverClient: DirectorClient): Future[Unit] =
+    Future.failed(CommandNotSupportedByRepositoryType(Director, "cleanOsTreeStorage"))
 }

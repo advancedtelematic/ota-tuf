@@ -23,6 +23,7 @@ import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.http.HttpCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 
 trait RepoResourceSpecUtil extends ResourceSpec with SignedRoleRepositorySupport with ScalaFutures with ScalatestRouteTest { this: Suite ⇒
   implicit val ec = executor
@@ -40,10 +41,22 @@ trait RepoResourceSpecUtil extends ResourceSpec with SignedRoleRepositorySupport
     RequestTargetItem(Uri("https://ats.com/testfile"), checksum, targetFormat = None, name = None, version = None, hardwareIds = Seq.empty, length = "hi".getBytes.length)
   }
 
-  def addTargetToRepo(repoId: RepoId = RepoId.generate(), keyType: KeyType = KeyType.default): RepoId = {
+  def addTargetToRepo(repoId: RepoId = RepoId.generate(),
+                      keyType: KeyType = KeyType.default,
+                      fileContent: String = "hi",
+                      name: Option[TargetName] = None,
+                      version: Option[TargetVersion] = None,
+                      targetFormat: Option[TargetFormat] = None): RepoId = {
     fakeKeyserverClient.createRoot(repoId, keyType).futureValue
 
-    Post(apiUri(s"repo/${repoId.show}/targets/myfile_01"), testFile) ~> routes ~> check {
+    val filename = s"${name.fold("myfile")(_.value)}_${version.fold("01")(_.value)}"
+
+    val testFile = {
+      val checksum = Sha256Digest.digest(fileContent.getBytes)
+      RequestTargetItem(Uri("https://ats.com/testfile"), checksum, targetFormat = targetFormat, name = name, version = version, hardwareIds = Seq.empty, length = fileContent.getBytes.length)
+    }
+
+    Post(apiUri(s"repo/${repoId.show}/targets/$filename"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       repoId
     }

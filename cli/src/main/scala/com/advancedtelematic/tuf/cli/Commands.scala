@@ -39,5 +39,6 @@ object Commands {
   case object ImportPublicKey extends Command
   case object IncrementRootJsonVersion extends Command
   case object IncrementTargetJsonVersion extends Command
+  case object CleanOsTreeStorage extends Command
 }
 

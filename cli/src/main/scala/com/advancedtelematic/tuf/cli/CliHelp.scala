@@ -3,10 +3,13 @@ package com.advancedtelematic.tuf.cli
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libtuf.data.ErrorCodes
 import com.advancedtelematic.libtuf.http.CliHttpClient.CliHttpClientError
-import com.advancedtelematic.tuf.cli.Errors.{CommandNotSupportedByRepositoryType, PastDate}
+import com.advancedtelematic.tuf.cli.Errors.{ActionNotConfirmed, CommandNotSupportedByRepositoryType, PastDate}
 import com.advancedtelematic.tuf.cli.repo.TufRepo.TargetsPullError
 import io.circe.syntax._
 import org.slf4j.LoggerFactory
+
+import scala.concurrent.Future
+import scala.io.StdIn
 
 object CliHelp {
 
@@ -52,5 +55,15 @@ object CliHelp {
 
     case PastDate() =>
       _log.error("The metadata expiration date lies in the past, use --force if you really want to use it")
+
+    case ActionNotConfirmed =>
+      _log.info("Operation has not confirmed")
   }
+
+  def askUserConsent(message: String): Future[Unit] = {
+    _log.info(message)
+    val userInput = StdIn.readLine("Confirm [yes/no]: ")
+    if (userInput.toLowerCase == "yes") Future.unit else Future.failed(ActionNotConfirmed)
+  }
+
 }

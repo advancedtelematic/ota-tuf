@@ -58,7 +58,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   private implicit val signedRoleGeneration = TufRepoSignedRoleGeneration(keyserverClient)
   private val offlineSignedRoleStorage = new OfflineSignedRoleStorage(keyserverClient)
   private val roleRefresher = new RepoRoleRefresh(keyserverClient, new TufRepoSignedRoleProvider(), new TufRepoTargetItemsProvider())
-  private val targetRoleGeneration = new TargetRoleEdit(keyserverClient, signedRoleGeneration)
+  private val targetRoleGeneration = new TargetRoleEdit(signedRoleGeneration)
   private val delegations = new DelegationsManagement()
 
   /*
@@ -235,6 +235,13 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
     } yield StatusCodes.NoContent
   }
 
+  def deleteOsTreeTargets(repoId: RepoId, namespace: Namespace): Route = complete {
+    for {
+      _ <- targetRoleGeneration.deleteOsTreeTargets(repoId)
+      _ <- tufTargetsPublisher.deleteOsTreeTargets(namespace)
+    } yield StatusCodes.NoContent
+  }
+
   def saveOfflineTargetsRole(repoId: RepoId, namespace: Namespace, signedPayload: SignedPayload[TargetsRole],
                              checksum: Option[RoleChecksum]): Future[SignedRole[TargetsRole]] = for {
     (newItems, newSignedRole) <- offlineSignedRoleStorage.saveTargetRole(targetStore)(repoId, signedPayload, checksum)
@@ -351,6 +358,11 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
             }
           }
         }
+      } ~
+      pathPrefix("ostree") {
+        (pathEnd & delete) {
+            deleteOsTreeTargets(repoId, namespace)
+          }
       } ~
       pathPrefix("comments") {
         pathEnd {

@@ -25,7 +25,7 @@ lazy val commonDeps = libraryDependencies ++= {
 }
 
 lazy val serverDependencies = libraryDependencies ++= {
-  lazy val akkaV = "2.5.26"
+  lazy val akkaV = "2.6.5"
   lazy val akkaHttpV = "10.1.11"
   lazy val libatsV = libatsVersion.value
   lazy val slickV = "3.2.0"
@@ -65,7 +65,7 @@ lazy val commonSettings = Seq(
   resolvers += "ATS Releases" at "https://nexus.ota.here.com/content/repositories/releases",
   resolvers += "ATS Snapshots" at "https://nexus.ota.here.com/content/repositories/snapshots",
   resolvers += "version99 Empty loggers" at "https://version99.qos.ch",
-  libatsVersion := "0.3.0-109-ge12f057",
+  libatsVersion := "0.4.0-24-ge63c753",
   licenses += ("MPL-2.0", url("http://mozilla.org/MPL/2.0/")),
   buildInfoOptions += BuildInfoOption.ToMap,
   buildInfoOptions += BuildInfoOption.BuildTime,
