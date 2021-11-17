@@ -37,7 +37,9 @@ build CI nginx:
 test:
   stage: test
   except:
-    - schedules
+    refs:
+      - deploy/sit 
+      - schedules
   services:
     - name: advancedtelematic/tuf-nginx:latest
       alias: tuf-nginx
@@ -82,7 +84,9 @@ code coverage:
   extends: .report_scala_coverage
   needs: ["test"]
   except:
-    - schedules
+    refs:
+      - deploy/sit 
+      - schedules
   allow_failure: true
   image: $TEST_IMAGE_SONAR
   script:
