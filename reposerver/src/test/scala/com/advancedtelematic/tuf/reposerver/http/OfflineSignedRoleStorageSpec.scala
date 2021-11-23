@@ -48,7 +48,7 @@ class OfflineSignedRoleStorageSpec extends TufReposerverSpec with DatabaseSpec w
 
   val mockHashes = Map(HashMethod.SHA256 -> mockChecksum.hash)
 
-  val mockFilename = "my/filename".refineTry[ValidTargetFilename].get
+  val mockFilename = "my_filename".refineTry[ValidTargetFilename].get
 
   val mockTargetItems: Map[TargetFilename, ClientTargetItem] = Map(
     mockFilename -> ClientTargetItem(mockHashes, 1, Some(defaultCustom))
@@ -101,7 +101,7 @@ class OfflineSignedRoleStorageSpec extends TufReposerverSpec with DatabaseSpec w
 
     keyserver.createRoot(repoId).futureValue
 
-    val oldFilename = "my/oldfilename".refineTry[ValidTargetFilename].get
+    val oldFilename = "my_oldfilename".refineTry[ValidTargetFilename].get
 
     val oldTargetItem = TargetItem(repoId, oldFilename, mockUri.some, mockChecksum, 22, defaultCustom.as[TargetCustom].toOption, StorageMethod.Managed)
     targetRoleGeneration.addTargetItem(oldTargetItem).futureValue

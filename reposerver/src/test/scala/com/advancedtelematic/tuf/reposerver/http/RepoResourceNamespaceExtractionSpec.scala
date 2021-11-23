@@ -59,7 +59,7 @@ class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
         status shouldBe StatusCodes.OK
       }
 
-      Post(s"/repo/${repoId.show}/targets/myfile", testFile).namespaced ~> Route.seal(routes) ~> check {
+      Post(s"/repo/${repoId.show}/targets/my_file", testFile).namespaced ~> Route.seal(routes) ~> check {
         status shouldBe StatusCodes.OK
       }
 
@@ -68,7 +68,7 @@ class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
 
   test("reject when user repo does not belong to user namespace") {
     withNamespace("authnamespace") { implicit ns =>
-      Post(s"/user_repo/targets/myfile", testFile).namespaced ~> Route.seal(routes) ~> check {
+      Post(s"/user_repo/targets/my_file", testFile).namespaced ~> Route.seal(routes) ~> check {
         status shouldBe StatusCodes.NotFound
       }
     }
@@ -81,12 +81,12 @@ class RepoResourceNamespaceExtractionSpec extends TufReposerverSpec
         responseAs[RepoId]
       }
 
-      Post(s"/user_repo/targets/myfile", testFile).namespaced ~> Route.seal(routes) ~> check {
+      Post(s"/user_repo/targets/my_file", testFile).namespaced ~> Route.seal(routes) ~> check {
         status shouldBe StatusCodes.OK
       }
 
 
-      Put(s"/user_repo/comments/myfile", CommentRequest(TargetComment("comment"))).namespaced ~> Route.seal(routes) ~> check {
+      Put(s"/user_repo/comments/my_file", CommentRequest(TargetComment("comment"))).namespaced ~> Route.seal(routes) ~> check {
         status shouldBe StatusCodes.OK
       }
 

@@ -66,7 +66,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   }
 
   test("POST returns latest signed json") {
-    Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/my_file"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
       val signedPayload = responseAs[JsonSignedPayload]
@@ -74,52 +74,52 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
 
       val signed = signedPayload.signed
       val targetsRole = signed.as[TargetsRole].valueOr(throw _)
-      targetsRole.targets("myfile".refineTry[ValidTargetFilename].get).length shouldBe 2
+      targetsRole.targets("my_file".refineTry[ValidTargetFilename].get).length shouldBe 2
     }
   }
 
   test("POST returns json with previous elements") {
-    Post(apiUri(s"repo/${repoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/myfile_01"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
-    Post(apiUri(s"repo/${repoId.show}/targets/myfile02"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/myfile_02"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
       val signed = responseAs[JsonSignedPayload].signed
 
       val targetsRole = signed.as[TargetsRole].valueOr(throw _)
-      targetsRole.targets("myfile01".refineTry[ValidTargetFilename].get).length shouldBe 2
-      targetsRole.targets("myfile02".refineTry[ValidTargetFilename].get).length shouldBe 2
+      targetsRole.targets("myfile_01".refineTry[ValidTargetFilename].get).length shouldBe 2
+      targetsRole.targets("myfile_02".refineTry[ValidTargetFilename].get).length shouldBe 2
     }
   }
 
   test("POST returns json with valid hashes") {
-    Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/my_file"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
       val signed = responseAs[JsonSignedPayload].signed
 
       val targetsRole = signed.as[TargetsRole].valueOr(throw _)
-      targetsRole.targets("myfile".refineTry[ValidTargetFilename].get).hashes(HashMethod.SHA256) shouldBe testFile.checksum.hash
+      targetsRole.targets("my_file".refineTry[ValidTargetFilename].get).hashes(HashMethod.SHA256) shouldBe testFile.checksum.hash
     }
   }
 
   test("POSTing a file adds uri to custom field") {
     val urlTestFile = testFile.copy(
       uri = Uri("https://ats.com/urlTestFile"),
-      name = TargetName("myfilewithuri").some,
+      name = TargetName("my_filewithuri").some,
       version = TargetVersion("0.1.0").some,
       targetFormat = None
     )
 
-    Post(apiUri(s"repo/${repoId.show}/targets/myfilewithuri"), urlTestFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/my_filewithuri"), urlTestFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
 
       val signed = responseAs[JsonSignedPayload].signed
 
       val targetsRole = signed.as[TargetsRole].valueOr(throw _)
-      val item = targetsRole.targets("myfilewithuri".refineTry[ValidTargetFilename].get)
+      val item = targetsRole.targets("my_filewithuri".refineTry[ValidTargetFilename].get)
 
       item.customParsed[TargetCustom].flatMap(_.uri).map(_.toString) should contain(urlTestFile.uri.toString())
       item.customParsed[TargetCustom].flatMap(_.targetFormat).get shouldBe TargetFormat.BINARY
@@ -129,13 +129,13 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   test("fails if there is no root.json available") {
     val unexistingRepoId = RepoId.generate()
 
-    Post(apiUri(s"repo/${unexistingRepoId.show}/targets/otherfile"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${unexistingRepoId.show}/targets/other_file"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.FailedDependency
     }
   }
 
   test("GET for each role type returns the signed json with valid signatures") {
-    Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/my_file"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
@@ -215,7 +215,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
 
     Future { Thread.sleep(1100) }.futureValue
 
-    Post(apiUri(s"repo/${repoId.show}/targets/changesnapshot"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/change_snapshot"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
@@ -239,7 +239,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
 
     Future { Thread.sleep(1100) }.futureValue
 
-    Post(apiUri(s"repo/${repoId.show}/targets/changets"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/change_ts"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
@@ -365,7 +365,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   test("GET snapshots.json returns json with valid hashes") {
     val newRepoId = addTargetToRepo()
 
-    Post(apiUri(s"repo/${newRepoId.show}/targets/myfile"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${newRepoId.show}/targets/my_file"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
@@ -389,7 +389,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   test("fails for non existent targets") {
     val newRepoId = addTargetToRepo()
 
-    Delete(apiUri(s"repo/${newRepoId.show}/targets/doesnotexist")) ~> routes ~> check {
+    Delete(apiUri(s"repo/${newRepoId.show}/targets/doesnot_exist")) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
     }
   }
@@ -404,7 +404,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
       targetsRole.signed.targets shouldNot be(empty)
     }
 
-    Delete(apiUri(s"repo/${newRepoId.show}/targets/myfile01")) ~> routes ~> check {
+    Delete(apiUri(s"repo/${newRepoId.show}/targets/myfile_01")) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
@@ -419,19 +419,19 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   test("delete removes target from target store when target is managed") {
     val repoId = addTargetToRepo()
 
-    Put(apiUri(s"repo/${repoId.show}/targets/some/target?name=bananas&version=0.0.1"), form) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets/some_target?name=bananas&version=0.0.1"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
-    val targetFilename = refineV[ValidTargetFilename]("some/target").right.get
+    val targetFilename = refineV[ValidTargetFilename]("some_target").right.get
 
     localStorage.retrieve(repoId, targetFilename).futureValue shouldBe a[TargetBytes]
 
-    Delete(apiUri(s"repo/${repoId.show}/targets/some/target")) ~> routes ~> check {
+    Delete(apiUri(s"repo/${repoId.show}/targets/some_target")) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
-    Get(apiUri(s"repo/${repoId.show}/targets/some/target")) ~> routes ~> check {
+    Get(apiUri(s"repo/${repoId.show}/targets/some_target")) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
     }
 
@@ -444,7 +444,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
 
     fakeKeyserverClient.deletePrivateKey(repoId, root.signed.roles(RoleType.TARGETS).keyids.head).futureValue
 
-    Delete(apiUri(s"repo/${repoId.show}/targets/myfile01")) ~> routes ~> check {
+    Delete(apiUri(s"repo/${repoId.show}/targets/myfile_01")) ~> routes ~> check {
       status shouldBe StatusCodes.PreconditionFailed
       responseAs[ErrorRepresentation].code shouldBe KeyserverClient.RoleKeyNotFound.code
     }
@@ -453,7 +453,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   test("Bumps version number when adding a new target") {
     val newRepoId = addTargetToRepo()
 
-    Post(apiUri(s"repo/${newRepoId.show}/targets/myfile"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${newRepoId.show}/targets/my_file"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
@@ -521,7 +521,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
         responseAs[RepoId]
       }
 
-      Post(apiUri("user_repo/targets/myfile"), testFile).namespaced ~> routes ~> check {
+      Post(apiUri("user_repo/targets/my_file"), testFile).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.OK
 
         val signedPayload = responseAs[JsonSignedPayload]
@@ -537,7 +537,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
         responseAs[RepoId]
       }
 
-      Post(apiUri("user_repo/targets/myfile"), testFile).namespaced ~> routes ~> check {
+      Post(apiUri("user_repo/targets/my_file"), testFile).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.OK
 
         val signedPayload = responseAs[JsonSignedPayload]
@@ -588,17 +588,17 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   test("uploading a target changes targets json") {
     val repoId = addTargetToRepo()
 
-    Put(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing?name=name&version=version"), form) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets/some_target/funky/thing?name=name&version=version"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseAs[SignedPayload[TargetsRole]]
     }
 
-    Head(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing")) ~> routes ~> check {
+    Head(apiUri(s"repo/${repoId.show}/targets/some_target/funky/thing")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseEntity shouldBe HttpEntity.Empty
     }
 
-    Get(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing")) ~> routes ~> check {
+    Get(apiUri(s"repo/${repoId.show}/targets/some_target/funky/thing")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseEntity.dataBytes.runReduce(_ ++ _).futureValue shouldBe testEntity.getData()
     }
@@ -607,11 +607,11 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   test("uploading a target using raw body changes targets json") {
     val repoId = addTargetToRepo()
 
-    Put(apiUri(s"repo/${repoId.show}/targets/some/target/raw/thing?name=name&version=version"), testEntity) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets/some_target/raw/thing?name=name&version=version"), testEntity) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
-    Get(apiUri(s"repo/${repoId.show}/targets/some/target/raw/thing")) ~> routes ~> check {
+    Get(apiUri(s"repo/${repoId.show}/targets/some_target/raw/thing")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseEntity.dataBytes.runReduce(_ ++ _).futureValue shouldBe testEntity.getData()
     }
@@ -620,11 +620,11 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   keyTypeTest("uploading a target from a uri changes targets json") { keyType =>
     val repoId = addTargetToRepo(keyType = keyType)
 
-    Put(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing?name=name&version=version&fileUri=${fakeHttpClient.fileUri}")) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets/some_target/funky/thing?name=name&version=version&fileUri=${fakeHttpClient.fileUri}")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
-    Get(apiUri(s"repo/${repoId.show}/targets/some/target/funky/thing")) ~> routes ~> check {
+    Get(apiUri(s"repo/${repoId.show}/targets/some_target/funky/thing")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseEntity.dataBytes.runReduce(_ ++ _).futureValue shouldBe fakeHttpClient.fileBody.getData()
     }
@@ -633,7 +633,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   test("GET returns 404 if target does not exist") {
     val repoId = addTargetToRepo()
 
-    Get(apiUri(s"repo/${repoId.show}/targets/some/thing")) ~> routes ~> check {
+    Get(apiUri(s"repo/${repoId.show}/targets/some_thing")) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
     }
   }
@@ -641,7 +641,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   test("HEAD returns 404 if target does not exist") {
     val repoId = addTargetToRepo()
 
-    Head(apiUri(s"repo/${repoId.show}/targets/some/thing")) ~> routes ~> check {
+    Head(apiUri(s"repo/${repoId.show}/targets/some_thing")) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
       responseEntity shouldBe HttpEntity.Empty
     }
@@ -649,7 +649,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
 
   test("accept name/version, hardwareIds, targetFormat") {
     val repoId = addTargetToRepo()
-    val targetFilename: TargetFilename = Refined.unsafeApply("target/with/desc")
+    val targetFilename: TargetFilename = Refined.unsafeApply("target_with/desc")
 
     Put(apiUri(s"repo/${repoId.show}/targets/${targetFilename.value}?name=somename&version=someversion&hardwareIds=1,2,3&targetFormat=binary"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -667,9 +667,19 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
     }
   }
 
+  test("should return error if targetFilename does not contain `_` or `-`") {
+    val repoId: RepoId = RepoId.generate()
+    val keyType: KeyType = KeyType.default
+    fakeKeyserverClient.createRoot(repoId, keyType).futureValue
+    val targetFilename: TargetFilename = Refined.unsafeApply("testname.testversion")
+    Put(apiUri(s"repo/${repoId.show}/targets/${targetFilename.value}?name=testname&version=testversiona&hardwareIds=1,2,3&targetFormat=binary"), form) ~> routes ~> check {
+      status shouldBe StatusCodes.MethodNotAllowed
+    }
+  }
+
   test("Missing targetFormat gets set to BINARY") {
     val repoId = addTargetToRepo()
-    val targetFilename: TargetFilename = Refined.unsafeApply("target/with/desc")
+    val targetFilename: TargetFilename = Refined.unsafeApply("target_with/desc")
 
     Put(apiUri(s"repo/${repoId.show}/targets/${targetFilename.value}?name=somename&version=someversion&hardwareIds=1,2,3"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -686,7 +696,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
 
   test("on updates, updatedAt in target custom is updated, createdAt is unchanged") {
     val repoId = addTargetToRepo()
-    val targetFilename: TargetFilename = Refined.unsafeApply("target/to/update")
+    val targetFilename: TargetFilename = Refined.unsafeApply("target_to/update")
 
     Put(apiUri(s"repo/${repoId.show}/targets/${targetFilename.value}?name=somename&version=someversion"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
@@ -731,11 +741,11 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   keyTypeTest("accepts an offline signed targets.json") { keyType =>
     implicit val repoId = addTargetToRepo(keyType = keyType)
 
-    Put(apiUri(s"repo/${repoId.show}/targets/old/target?name=bananas&version=0.0.1"), form) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets/old_target?name=bananas&version=0.0.1"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
-    val targetFilename = refineV[ValidTargetFilename]("old/target").right.get
+    val targetFilename = refineV[ValidTargetFilename]("old_target").right.get
     localStorage.retrieve(repoId, targetFilename).futureValue shouldBe a[TargetRetrieveResult]
 
     val signedPayload = buildSignedTargetsRole(repoId, offlineTargets, version = 3)
@@ -805,7 +815,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
 
     fakeKeyserverClient.deletePrivateKey(repoId, root.signed.roles(RoleType.TARGETS).keyids.head).futureValue
 
-    Post(apiUri(s"repo/${repoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/myfile_01"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.PreconditionFailed
     }
   }
@@ -848,7 +858,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
-      responseAs[ErrorRepresentation].firstErrorCause.get should include("target item error some/file/name: new offline signed target items must contain custom metadata")
+      responseAs[ErrorRepresentation].firstErrorCause.get should include("target item error some_file/name: new offline signed target items must contain custom metadata")
     }
   }
 
@@ -933,7 +943,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   test("rejects offline targets.json if public keys are not available") {
     implicit val repoId = addTargetToRepo()
 
-    val targetFilename: TargetFilename = Refined.unsafeApply("some/file/name")
+    val targetFilename: TargetFilename = Refined.unsafeApply("some_file/name")
     val targets = Map(targetFilename -> ClientTargetItem(Map.empty, 0, None))
 
     val targetsRole = TargetsRole(Instant.now().plus(1, ChronoUnit.DAYS), targets, 2)
@@ -1005,7 +1015,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
                 |  "_type": "Targets",
                 |  "expires": "2219-12-13T15:37:21Z",
                 |  "targets": {
-                |    "myfile01": {
+                |    "myfile_01": {
                 |      "hashes": {
                 |        "sha256": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"
                 |      },
@@ -1046,21 +1056,21 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
       status shouldBe StatusCodes.NoContent
     }
 
-    Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/my_file"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
     Get(apiUri(s"repo/${repoId.show}/targets.json")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       val newJson = responseAs[JsonSignedPayload].signed
-      newJson.hcursor.downField("targets").downField("some/file/name").downField("custom").downField("proprietary")  shouldBe 'succeeded
+      newJson.hcursor.downField("targets").downField("some_file/name").downField("custom").downField("proprietary")  shouldBe 'succeeded
     }
   }
 
   test("PUT to uploads errors when using local storage") {
     val repoId = addTargetToRepo()
 
-    Put(apiUri(s"repo/${repoId.show}/uploads/mytarget")).withHeaders(`Content-Length`(1024)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/uploads/my_target")).withHeaders(`Content-Length`(1024)) ~> routes ~> check {
       status shouldBe StatusCodes.InternalServerError
       responseAs[ErrorRepresentation].description shouldBe "out of band storage of target is not supported for local storage"
     }
@@ -1069,7 +1079,7 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   test("PUT to uploads is rejected when file is too big") {
     val repoId = addTargetToRepo()
 
-    Put(apiUri(s"repo/${repoId.show}/uploads/mytarget")).withHeaders(`Content-Length`(3 * Math.pow(10, 9).toLong + 1)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/uploads/my_target")).withHeaders(`Content-Length`(3 * Math.pow(10, 9).toLong + 1)) ~> routes ~> check {
       status shouldBe StatusCodes.PayloadTooLarge
       responseAs[ErrorRepresentation].code shouldBe com.advancedtelematic.libtuf.data.ErrorCodes.Reposerver.PayloadTooLarge
       responseAs[ErrorRepresentation].description should include("File being uploaded is too large")
@@ -1079,12 +1089,12 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   test("cannot upload a target that still exists in targets.json") {
     val repoId = addTargetToRepo()
 
-    Put(apiUri(s"repo/${repoId.show}/targets/some/target/thing?name=name&version=version"), form) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/targets/some_target/thing?name=name&version=version"), form) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       responseAs[SignedPayload[TargetsRole]]
     }
 
-    Put(apiUri(s"repo/${repoId.show}/uploads/some/target/thing")).withHeaders(`Content-Length`(1024)) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/uploads/some_target/thing")).withHeaders(`Content-Length`(1024)) ~> routes ~> check {
       status shouldBe StatusCodes.Conflict
       responseAs[ErrorRepresentation].description should include("Entity already exists")
     }

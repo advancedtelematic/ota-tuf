@@ -43,7 +43,7 @@ trait RepoResourceSpecUtil extends ResourceSpec with SignedRoleRepositorySupport
   def addTargetToRepo(repoId: RepoId = RepoId.generate(), keyType: KeyType = KeyType.default): RepoId = {
     fakeKeyserverClient.createRoot(repoId, keyType).futureValue
 
-    Post(apiUri(s"repo/${repoId.show}/targets/myfile01"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/myfile_01"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       repoId
     }
@@ -67,7 +67,7 @@ trait RepoResourceSpecUtil extends ResourceSpec with SignedRoleRepositorySupport
     Map(filename -> ClientTargetItem(hashes, 0, targetCustomJson.some))
   }
 
-  val offlineTargetFilename: TargetFilename = Refined.unsafeApply("some/file/name")
+  val offlineTargetFilename: TargetFilename = Refined.unsafeApply("some_file/name")
 
   val offlineTargets = createOfflineTargets(offlineTargetFilename)
 }
