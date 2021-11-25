@@ -242,7 +242,7 @@ class RepoResourceDelegationsSpec extends TufReposerverSpec
 
     addDelegationToRepo()
 
-    Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
+    Post(apiUri(s"repo/${repoId.show}/targets/my_file"), testFile) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 

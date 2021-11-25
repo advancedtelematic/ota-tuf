@@ -22,7 +22,7 @@ class RepoResourceCommentSpec extends TufReposerverSpec with ResourceSpec with P
   test("set comment for existing repo id and package") {
     val repoId = addTargetToRepo()
 
-    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/comments/myfile_01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
   }
@@ -31,7 +31,7 @@ class RepoResourceCommentSpec extends TufReposerverSpec with ResourceSpec with P
     val repoId = RepoId.generate()
     fakeKeyserverClient.createRoot(repoId).futureValue
 
-    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/comments/myfile_01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
     }
   }
@@ -39,7 +39,7 @@ class RepoResourceCommentSpec extends TufReposerverSpec with ResourceSpec with P
   test("set comment for non-existing repo id and non-existing package") {
     val repoId = RepoId.generate()
 
-    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/comments/myfile_01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
     }
   }
@@ -47,11 +47,11 @@ class RepoResourceCommentSpec extends TufReposerverSpec with ResourceSpec with P
   test("get existing comment") {
     val repoId = addTargetToRepo()
 
-    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("ಠ_ಠ"))) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/comments/myfile_01"), CommentRequest(TargetComment("ಠ_ಠ"))) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
-    Get(apiUri(s"repo/${repoId.show}/comments/myfile01")) ~> routes ~> check {
+    Get(apiUri(s"repo/${repoId.show}/comments/myfile_01")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       entityAs[CommentRequest] shouldBe CommentRequest(TargetComment("ಠ_ಠ"))
     }
@@ -60,20 +60,20 @@ class RepoResourceCommentSpec extends TufReposerverSpec with ResourceSpec with P
   test("getting comment of deleted package fails") {
     val repoId = addTargetToRepo()
 
-    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("ಠ_ಠ"))) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/comments/myfile_01"), CommentRequest(TargetComment("ಠ_ಠ"))) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
-    Get(apiUri(s"repo/${repoId.show}/comments/myfile01")) ~> routes ~> check {
+    Get(apiUri(s"repo/${repoId.show}/comments/myfile_01")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       entityAs[CommentRequest] shouldBe CommentRequest(TargetComment("ಠ_ಠ"))
     }
 
-    Delete(apiUri(s"repo/${repoId.show}/targets/myfile01")) ~> routes ~> check {
+    Delete(apiUri(s"repo/${repoId.show}/targets/myfile_01")) ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
     }
 
-    Get(apiUri(s"repo/${repoId.show}/comments/myfile01")) ~> routes ~> check {
+    Get(apiUri(s"repo/${repoId.show}/comments/myfile_01")) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
     }
   }
@@ -81,7 +81,7 @@ class RepoResourceCommentSpec extends TufReposerverSpec with ResourceSpec with P
   test("trying to get missing comment for existing repo id and package returns 404") {
     val repoId = addTargetToRepo()
 
-    Get(apiUri(s"repo/${repoId.show}/comments/myfile01")) ~> routes ~> check {
+    Get(apiUri(s"repo/${repoId.show}/comments/myfile_01")) ~> routes ~> check {
       status shouldBe StatusCodes.NotFound
     }
   }
@@ -107,13 +107,13 @@ class RepoResourceCommentSpec extends TufReposerverSpec with ResourceSpec with P
   test("get existing comment list") {
     val repoId = addTargetToRepo()
 
-    Put(apiUri(s"repo/${repoId.show}/comments/myfile01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
+    Put(apiUri(s"repo/${repoId.show}/comments/myfile_01"), CommentRequest(TargetComment("comment"))) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
 
     Get(apiUri(s"repo/${repoId.show}/comments")) ~> routes ~> check {
       status shouldBe StatusCodes.OK
-      entityAs[Seq[FilenameComment]] shouldBe List(FilenameComment("myfile01".refineTry[ValidTargetFilename].get,
+      entityAs[Seq[FilenameComment]] shouldBe List(FilenameComment("myfile_01".refineTry[ValidTargetFilename].get,
         TargetComment("comment")))
     }
   }

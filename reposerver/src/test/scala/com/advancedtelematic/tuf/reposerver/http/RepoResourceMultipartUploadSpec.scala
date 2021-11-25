@@ -69,19 +69,19 @@ class RepoResourceMultipartUploadSpec extends TufReposerverSpec with ResourceSpe
   test("multipart upload flow work correct") {
     val namespace = createRepo()
 
-    val rs = Post(apiUri(s"user_repo/multipart/initiate/testFile.bin?fileSize=10000000")).addHeader(namespaceHeader(namespace)) ~> routes ~> check {
+    val rs = Post(apiUri(s"user_repo/multipart/initiate/test_File.bin?fileSize=10000000")).addHeader(namespaceHeader(namespace)) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       entityAs[InitMultipartUploadResult] shouldBe testInitMultipartUploadResult
       entityAs[InitMultipartUploadResult]
     }
 
-    Get(apiUri(s"user_repo/multipart/url/testFile.bin?part=1&uploadId=${rs.uploadId.value}&contentLength=10000000&md5=hash"))
+    Get(apiUri(s"user_repo/multipart/url/test_File.bin?part=1&uploadId=${rs.uploadId.value}&contentLength=10000000&md5=hash"))
       .addHeader(namespaceHeader(namespace)) ~> routes ~> check {
       status shouldBe StatusCodes.OK
       entityAs[GetSignedUrlResult] shouldBe testSignedURLResult
     }
 
-    Put(apiUri(s"user_repo/multipart/complete/testFile.bin"), CompleteUploadRequest(testInitMultipartUploadResult.uploadId, Seq(UploadPartETag(1, ETag("testETag")))))
+    Put(apiUri(s"user_repo/multipart/complete/test_File.bin"), CompleteUploadRequest(testInitMultipartUploadResult.uploadId, Seq(UploadPartETag(1, ETag("testETag")))))
       .addHeader(namespaceHeader(namespace)) ~> routes ~> check {
       status shouldBe StatusCodes.OK
     }
@@ -92,7 +92,7 @@ class RepoResourceMultipartUploadSpec extends TufReposerverSpec with ResourceSpe
 
     val testFileSize = outOfBandUploadLimit + 1
 
-    Post(apiUri(s"user_repo/multipart/initiate/testFile.bin?fileSize=$testFileSize")).addHeader(namespaceHeader(namespace)) ~> routes ~> check {
+    Post(apiUri(s"user_repo/multipart/initiate/test_File.bin?fileSize=$testFileSize")).addHeader(namespaceHeader(namespace)) ~> routes ~> check {
       status shouldBe StatusCodes.PayloadTooLarge
       entityAs[ErrorRepresentation].description shouldBe s"File being uploaded is too large ($testFileSize), maximum size is $outOfBandUploadLimit"
     }
@@ -103,7 +103,7 @@ class RepoResourceMultipartUploadSpec extends TufReposerverSpec with ResourceSpe
 
     val testPartSize = multipartUploadPartSize + 1
 
-    Get(apiUri(s"user_repo/multipart/url/testFile.bin?part=1&uploadId=uploadIdValue&contentLength=$testPartSize&md5=hash"))
+    Get(apiUri(s"user_repo/multipart/url/test_File.bin?part=1&uploadId=uploadIdValue&contentLength=$testPartSize&md5=hash"))
       .addHeader(namespaceHeader(namespace)) ~> routes ~> check {
       status shouldBe StatusCodes.PayloadTooLarge
       entityAs[ErrorRepresentation].description shouldBe s"Part of the file being uploaded is too large ($testPartSize), maximum part size for multipart upload is $multipartUploadPartSize"
@@ -117,7 +117,7 @@ class RepoResourceMultipartUploadSpec extends TufReposerverSpec with ResourceSpe
     val testPartNumber = totalFileSize / multipartUploadPartSize + 1
     val lastPartSize = totalFileSize % multipartUploadPartSize
 
-    Get(apiUri(s"user_repo/multipart/url/testFile.bin?part=$testPartNumber&uploadId=uploadIdValue&contentLength=$lastPartSize&md5=hash"))
+    Get(apiUri(s"user_repo/multipart/url/test_File.bin?part=$testPartNumber&uploadId=uploadIdValue&contentLength=$lastPartSize&md5=hash"))
       .addHeader(namespaceHeader(namespace)) ~> routes ~> check {
       status shouldBe StatusCodes.PayloadTooLarge
       entityAs[ErrorRepresentation].description shouldBe s"File being uploaded is too large ($totalFileSize), maximum size is $outOfBandUploadLimit"

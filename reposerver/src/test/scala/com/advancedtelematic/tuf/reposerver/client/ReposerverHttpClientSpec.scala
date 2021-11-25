@@ -62,12 +62,12 @@ class ReposerverHttpClientSpec extends TufReposerverSpec
     val ns = genNs
     client.createRoot(ns, keyType).futureValue shouldBe a[RepoId]
 
-    client.targetExists(ns, "filename".refineTry[ValidTargetFilename].get).futureValue shouldBe false
+    client.targetExists(ns, "file_name".refineTry[ValidTargetFilename].get).futureValue shouldBe false
 
-    client.addTarget(ns, "filename", Uri("http://example.com"),
+    client.addTarget(ns, "file_name", Uri("http://example.com"),
                      Sha256Digest.digest("hi".getBytes), 42, BINARY).futureValue shouldBe(())
 
-    val validTargetFilename = "filename".refineTry[ValidTargetFilename].get
+    val validTargetFilename = "file_name".refineTry[ValidTargetFilename].get
 
     client.targetExists(ns, validTargetFilename).futureValue shouldBe true
 
@@ -83,9 +83,9 @@ class ReposerverHttpClientSpec extends TufReposerverSpec
     val repoId = client.createRoot(ns, keyType).futureValue
     val content = FileIO.fromPath(tempFile)
 
-    client.addTargetFromContent(ns, "myfilename", None, Sha256Digest.digest("hi".getBytes), text.length, BINARY, content, TargetName("fakename"), TargetVersion("0.0.0")).futureValue shouldBe(())
+    client.addTargetFromContent(ns, "my_filename", None, Sha256Digest.digest("hi".getBytes), text.length, BINARY, content, TargetName("fakename"), TargetVersion("0.0.0")).futureValue shouldBe(())
 
-    val bytes = targetStore.retrieve(repoId, "myfilename".refineTry[ValidTargetFilename].get).flatMap {
+    val bytes = targetStore.retrieve(repoId, "my_filename".refineTry[ValidTargetFilename].get).flatMap {
       _.entity.dataBytes.runWith(Sink.reduce[ByteString](_ ++ _))
     }.futureValue
 
@@ -97,12 +97,12 @@ class ReposerverHttpClientSpec extends TufReposerverSpec
     val repoId = client.createRoot(ns, keyType).futureValue
     fakeKeyserverClient.forceKeyGenerationPending(repoId)
 
-    client.addTarget(ns, "filename", Uri("http://example.com"),
+    client.addTarget(ns, "file_name", Uri("http://example.com"),
       Sha256Digest.digest("hi".getBytes), 42, BINARY).failed.futureValue shouldBe ReposerverClient.KeysNotReady
   }
 
   test("can't add target to nonexistant repo") {
-    client.addTarget(Namespace("non-existant-namespace"), "filename", Uri("http://example.com"),
+    client.addTarget(Namespace("non-existant-namespace"), "file_name", Uri("http://example.com"),
                      Sha256Digest.digest("hi".getBytes), 42, BINARY).failed.futureValue shouldBe ReposerverClient.NotFound
   }
 

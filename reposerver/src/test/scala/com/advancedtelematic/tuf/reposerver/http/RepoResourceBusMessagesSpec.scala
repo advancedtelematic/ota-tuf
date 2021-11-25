@@ -60,7 +60,7 @@ class RepoResourceBusMessagesSpec extends TufReposerverSpec
     val targetCustomJson = TargetCustom(TargetName("name"), TargetVersion("version"), Seq.empty, TargetFormat.BINARY.some)
                               .asJson
                               .deepMerge(Json.obj("uri" -> Uri("https://ats.com").asJson))
-    val offlineTargetFilename2: TargetFilename = Refined.unsafeApply("another/file/name")
+    val offlineTargetFilename2: TargetFilename = Refined.unsafeApply("another_file/name")
     val offlineTargets2 = targetRole.targets.updated(offlineTargetFilename2, ClientTargetItem(hashes, 0, Some(targetCustomJson)))
     val signedPayload2 = buildSignedTargetsRole(repoId, offlineTargets2, targetRole.version + 1)
 
@@ -104,7 +104,7 @@ class RepoResourceBusMessagesSpec extends TufReposerverSpec
       }
 
 
-      Post(apiUri(s"repo/${repoId.show}/targets/myfile"), testFile) ~> routes ~> check {
+      Post(apiUri(s"repo/${repoId.show}/targets/my_file"), testFile) ~> routes ~> check {
         status shouldBe StatusCodes.OK
       }
 
@@ -131,7 +131,7 @@ class RepoResourceBusMessagesSpec extends TufReposerverSpec
         status shouldBe StatusCodes.OK
       }
 
-      Put(apiUri(s"repo/${repoId.show}/targets/some/file?name=pkgname&version=pkgversion&desc=wat"), form).namespaced ~> routes ~> check {
+      Put(apiUri(s"repo/${repoId.show}/targets/some_file?name=pkgname&version=pkgversion&desc=wat"), form).namespaced ~> routes ~> check {
         status shouldBe StatusCodes.OK
       }
 
