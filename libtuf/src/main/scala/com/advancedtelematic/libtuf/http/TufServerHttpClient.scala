@@ -70,6 +70,8 @@ trait ReposerverClient extends TufServerClient {
   def uploadTarget(targetFilename: TargetFilename, inputPath: Path, timeout: Duration, force: Boolean = false): Future[Unit]
 
   def verifyUploadedBinary(targetFilename: TargetFilename, localFileChecksum: Checksum): Future[Unit]
+
+  def cleanOsTreeStorage(): Future[Unit]
 }
 
 trait DirectorClient extends TufServerClient
@@ -423,6 +425,11 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
     }
 
     rs.map(_ => ())
+  }
+
+  override def cleanOsTreeStorage(): Future[Unit] = {
+    val req = http.delete(apiUri(s"ostree"))
+    execHttp[Unit](req)().map(_.body)
   }
 }
 

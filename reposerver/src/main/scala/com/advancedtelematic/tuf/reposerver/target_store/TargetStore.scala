@@ -13,7 +13,7 @@ import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.advancedtelematic.libats.messaging.MessageBusPublisher
 import com.advancedtelematic.libtuf.data.ClientDataType.TargetCustom
-import com.advancedtelematic.libtuf.data.TufDataType.{GetSignedUrlResult, InitMultipartUploadResult, MultipartUploadId, RepoId, TargetFilename, UploadPartETag}
+import com.advancedtelematic.libtuf.data.TufDataType.{GetSignedUrlResult, InitMultipartUploadResult, MultipartUploadId, RepoId, TargetFilename, TargetFormat, UploadPartETag}
 import com.advancedtelematic.libtuf_server.data.Messages.PackageStorageUsage
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.tuf.reposerver.db.TargetItemRepositorySupport

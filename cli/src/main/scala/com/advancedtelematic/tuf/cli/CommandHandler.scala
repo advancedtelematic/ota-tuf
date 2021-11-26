@@ -311,5 +311,14 @@ object CommandHandler {
         .forRepo(tufRepo.repoPath)
         .importPublicKey(config.inputPath.valueOrConfigError, config.keyNames)
         .toFuture
+
+    case CleanOsTreeStorage =>
+      for {
+        _      <- CliHelp.askUserConsent(s"This operation will remove all OSTree targets and cleanup OSTree storage for `${config.repoName.valueOrConfigError.value}` repo")
+        server <- repoServer
+        _      <- tufRepo.cleanOsTreeStorage(server)
+      } yield log.info("OSTree targets removed and initiated removing OSTree repositories from storage. It could take up to 5min. Please don't upload new repositories during this time.")
+
+
   }
 }

@@ -6,6 +6,7 @@ import akka.http.scaladsl.model.Multipart.FormData.BodyPart
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers._
 import akka.stream.scaladsl.Source
+import akka.testkit.TestProbe
 import akka.util.ByteString
 import cats.data.NonEmptyList
 import cats.syntax.either._
@@ -16,6 +17,7 @@ import com.advancedtelematic.libats.data.DataType.HashMethod
 import com.advancedtelematic.libats.data.{ErrorRepresentation, PaginationResult}
 import com.advancedtelematic.libats.data.RefinedUtils.RefineTry
 import com.advancedtelematic.libats.http.Errors.RawError
+import com.advancedtelematic.libats.messaging_datatype.Messages.OSTreeTargetDelete
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -24,6 +26,7 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, RoleType, _}
 import com.advancedtelematic.libtuf_server.crypto.Sha256Digest
+import com.advancedtelematic.libtuf_server.data.Messages.TufTargetAdded
 import com.advancedtelematic.libtuf_server.data.Requests._
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.libtuf_server.repo.server.DataType.SignedRole
@@ -1113,6 +1116,52 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
       }
     }
   }
+
+  test("Delete OSTree targets") {
+    withRandomNamepace { implicit ns =>
+      val newRepoId = Post(apiUri("user_repo"), CreateRepositoryRequest(KeyType.default)).namespaced ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+        responseAs[RepoId]
+      }
+
+      val osTreeTargetName = TargetName("ostree-target-test")
+      val binaryTargetName = TargetName("binary-target")
+
+      for {
+        (name, format) <- Seq(osTreeTargetName, binaryTargetName).zip(Seq(TargetFormat.OSTREE, TargetFormat.BINARY))
+        version        <- Seq(TargetVersion("0.1"), TargetVersion("0.2"), TargetVersion("0.3"))
+      } yield addTargetToRepo(repoId = newRepoId, name = Some(name), version = Some(version), targetFormat = Some(format))
+
+      Get(apiUri(s"repo/${newRepoId.show}/targets.json")) ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+
+        val targetsFilenames = responseAs[SignedPayload[TargetsRole]].signed.targets.keys.map(_.value)
+        targetsFilenames should have size 6
+        targetsFilenames.filter(_.startsWith(binaryTargetName.value)) should have size 3
+        targetsFilenames.filter(_.startsWith(osTreeTargetName.value)) should have size 3
+      }
+
+      val probe = TestProbe()
+      memoryMessageBus.subscribe[OSTreeTargetDelete](probe.testActor)
+
+      Delete(apiUri(s"repo/${newRepoId.show}/ostree")) ~> routes ~> check {
+        status shouldBe StatusCodes.NoContent
+      }
+
+      probe.expectMsgType[OSTreeTargetDelete]
+
+      Get(apiUri(s"repo/${newRepoId.show}/targets.json")) ~> routes ~> check {
+        status shouldBe StatusCodes.OK
+
+        val targetsFilenames = responseAs[SignedPayload[TargetsRole]].signed.targets.keys.map(_.value)
+        targetsFilenames should have size 3
+        targetsFilenames.filter(_.startsWith(binaryTargetName.value)) should have size 3
+        targetsFilenames.filter(_.startsWith(osTreeTargetName.value)) should have size 0
+      }
+
+    }
+  }
+
 
   implicit class ErrorRepresentationOps(value: ErrorRepresentation) {
     def firstErrorCause: Option[String] =

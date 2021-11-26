@@ -55,14 +55,17 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
   def persist(targetItem: TargetItem): Future[TargetItem] = db.run(persistAction(targetItem))
 
   def deleteItemAndComments(filenameComments: FilenameCommentRepository)(repoId: RepoId, filename: TargetFilename): Future[Unit] = db.run {
+    val deleteItemAction = targetItems.filter(_.repoId === repoId).filter(_.filename === filename).delete
     filenameComments.deleteAction(repoId, filename)
-      .andThen {
-        targetItems
-          .filter(_.repoId === repoId).filter(_.filename === filename)
-          .delete
-      }
-      .map(_ => ())
-      .transactionally
+      .andThen(deleteItemAction)
+      .map(_ => ()).transactionally
+  }
+
+  def deleteItemsAndComments(filenameComments: FilenameCommentRepository)(repoId: RepoId, filenames: Set[TargetFilename]): Future[Unit] = db.run {
+    val deleteItemsAction = targetItems.filter(_.repoId === repoId).filter(_.filename inSet filenames).delete
+    filenameComments.deleteAction(repoId, filenames)
+      .andThen(deleteItemsAction)
+      .map(_ => ()).transactionally
   }
 
   protected [db] def resetAction(repoId: RepoId): DBIO[Unit] =
@@ -291,9 +294,11 @@ protected [db] class FilenameCommentRepository()(implicit db: Database, ec: Exec
       .result
   }
 
-  def deleteAction(repoId: RepoId, filename: TargetFilename) =
-    filenameComments.filter(_.repoId === repoId).filter(_.filename === filename)
-      .delete
+  def deleteAction(repoId: RepoId, filename: TargetFilename): DBIO[Int] =
+    filenameComments.filter(_.repoId === repoId).filter(_.filename === filename).delete
+
+  def deleteAction(repoId: RepoId, filenames: Set[TargetFilename]): DBIO[Int] =
+    filenameComments.filter(_.repoId === repoId).filter(_.filename inSet filenames).delete
 }
 
 trait DelegationRepositorySupport extends DatabaseSupport {

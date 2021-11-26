@@ -519,9 +519,15 @@ object Cli extends App with VersionInfo {
                   .action { (arg, c) => c.copy(keyPaths = arg :: c.keyPaths) }
               )
           ),
+
         cmd("increment-version")
           .toCommand(IncrementTargetJsonVersion)
-          .text("Increment version of target.json.")
+          .text("Increment version of target.json."),
+
+        cmd("clean-ostree-storage")
+          .toCommand(CleanOsTreeStorage)
+          .text("Removes all OSTree images related to this repository")
+          .hidden()
       )
 
     note(" " + sys.props("line.separator"))

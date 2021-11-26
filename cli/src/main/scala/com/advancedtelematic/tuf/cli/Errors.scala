@@ -12,4 +12,5 @@ object Errors {
   case class CommandNotSupportedByRepositoryType(repoType: TufServerType, msg: String) extends Exception(msg) with NoStackTrace
   case class DelegationsAlreadySigned(path: Path) extends Exception(s"Delegations file $path is already signed, convert it to an unsigned file or provide an unsigned file")
   case class PastDate() extends Exception
+  case object ActionNotConfirmed extends Exception
 }
