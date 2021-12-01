@@ -36,9 +36,8 @@ object TufDataType {
 
   implicit val validTargetFilename: Validate.Plain[String, ValidTargetFilename] =
     Validate.fromPredicate(
-      f => f.nonEmpty && f.length < 254 && !f.contains("..") && (f.contains("_") || f.contains("-")),
-      _ => "TargetFilename cannot be empty or bigger than 254 chars or contain `..` " +
-        "or have anything but `_` or `-` in between software name and software version",
+      f => f.nonEmpty && f.length < 254 && !f.contains(".."),
+      _ => "TargetFilename cannot be empty or bigger than 254 chars or contain `..`",
       ValidTargetFilename()
     )
 

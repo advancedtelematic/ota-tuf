@@ -670,16 +670,6 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
     }
   }
 
-  test("should return error if targetFilename does not contain `_` or `-`") {
-    val repoId: RepoId = RepoId.generate()
-    val keyType: KeyType = KeyType.default
-    fakeKeyserverClient.createRoot(repoId, keyType).futureValue
-    val targetFilename: TargetFilename = Refined.unsafeApply("testname.testversion")
-    Put(apiUri(s"repo/${repoId.show}/targets/${targetFilename.value}?name=testname&version=testversiona&hardwareIds=1,2,3&targetFormat=binary"), form) ~> routes ~> check {
-      status shouldBe StatusCodes.MethodNotAllowed
-    }
-  }
-
   test("Missing targetFormat gets set to BINARY") {
     val repoId = addTargetToRepo()
     val targetFilename: TargetFilename = Refined.unsafeApply("target_with/desc")
