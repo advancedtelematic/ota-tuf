@@ -21,7 +21,6 @@ import slick.jdbc.MySQLProfile.api._
 
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success, Try}
 
 class SignedRootRoles(defaultRoleExpire: Duration = Duration.ofDays(365))
                      (implicit val db: Database, val ec: ExecutionContext)
@@ -35,6 +34,18 @@ extends KeyRepositorySupport with SignedRootRoleSupport {
   def findByVersion(repoId: RepoId, version: Int): Future[SignedPayload[RootRole]] =
     signedRootRoleRepo.findByVersion(repoId, version).map(_.content)
 
+  def generateNewVersionIfExpired(repoId: RepoId, version: Int): Future[SignedPayload[RootRole]] = {
+    findByVersion(repoId, version - 1).flatMap {
+      case signedPayload if signedPayload.signed.expires.isBefore(Instant.now.plus(1, ChronoUnit.HOURS)) =>
+        generateNewVersion(repoId, signedPayload).recoverWith {
+          case Errors.PrivateKeysNotFound =>
+            _log.info(s"Could not find private keys to refresh a role for repo $repoId, keys are offline, returning a MissingSignedRole error")
+            FastFuture.failed(SignedRootRoleRepository.MissingSignedRole)
+        }
+      case _ => FastFuture.failed(SignedRootRoleRepository.MissingSignedRole)
+    }
+  }
+
   def findForSign(repoId: RepoId): Future[RootRole] =
     find(repoId).map(prepareForSign)
 
@@ -45,17 +56,10 @@ extends KeyRepositorySupport with SignedRootRoleSupport {
     val signedRole = await(findAndPersist(repoId))
 
     if (signedRole.expiresAt.isBefore(Instant.now.plus(1, ChronoUnit.HOURS))) {
-      val versionedRole = signedRole.content.signed
-      val nextVersion = versionedRole.version + 1
-      val nextExpires = Instant.now.plus(defaultRoleExpire)
-      val newRole = versionedRole.copy(expires = nextExpires, version = nextVersion)
-
-      val f = signRootRole(newRole)
-        .flatMap(persistSignedPayload(repoId))
-        .map(_.content).recover {
-          case Errors.PrivateKeysNotFound =>
-            _log.info("Could not find private keys to refresh a role, keys are offline, returning an expired role")
-            signedRole.content
+      val f = generateNewVersion(repoId, signedRole.content).recover {
+        case Errors.PrivateKeysNotFound =>
+          _log.info("Could not find private keys to refresh a role, keys are offline, returning an expired role")
+          signedRole.content
       }
 
       await(f)
@@ -135,6 +139,16 @@ extends KeyRepositorySupport with SignedRootRoleSupport {
     assert(roles.nonEmpty, "no roles for new default root")
 
     RootRole(clientKeys, roles, expires = Instant.now.plus(defaultRoleExpire), version = 1)
+  }
+
+  private def generateNewVersion(repoId: RepoId, signedPayload: SignedPayload[RootRole]): Future[SignedPayload[RootRole]] = {
+    val versionedRole = signedPayload.signed
+    val nextVersion = versionedRole.version + 1
+    val nextExpires = Instant.now.plus(defaultRoleExpire)
+    val newRole = versionedRole.copy(expires = nextExpires, version = nextVersion)
+    signRootRole(newRole).flatMap(persistSignedPayload(repoId)).map(_.content).recoverWith {
+      case SignedRootRoleRepository.RootRoleExists => findByVersion(repoId, nextVersion)
+    }
   }
 }
 
