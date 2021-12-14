@@ -13,7 +13,7 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, _}
 import com.advancedtelematic.tuf.keyserver.daemon.DefaultKeyGenerationOp
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{KeyGenId, KeyGenRequest, KeyGenRequestStatus}
-import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport, SignedRootRoleSupport}
+import com.advancedtelematic.tuf.keyserver.db.{KeyGenRequestSupport, KeyRepositorySupport, SignedRootRoleRepository, SignedRootRoleSupport}
 import com.advancedtelematic.tuf.keyserver.roles.SignedRootRoles
 import com.advancedtelematic.tuf.util.{KeyTypeSpecSupport, TufKeyserverSpec}
 import io.circe.syntax._
@@ -95,6 +95,53 @@ class SignedRootRolesSpec extends TufKeyserverSpec with DatabaseSpec
       signedRootRole.signed.expires.isAfter(Instant.now.plus(30, ChronoUnit.DAYS)) shouldBe true
 
     }.futureValue
+  }
+
+  keyTypeTest("should generate a new version when the latest version is expired") { keyType =>
+    val expiredSignedRootRoles = new SignedRootRoles(Duration.ofMillis(1))
+    val repoId = RepoId.generate()
+    val rootKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
+      repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType.crypto.defaultKeySize, keyType)
+
+    val rootRole = for {
+      _ <- keyGenRepo.persist(rootKeyGenRequest)
+      _ <- keyGenerationOp(rootKeyGenRequest)
+      _ <- expiredSignedRootRoles.findFreshAndPersist(repoId)
+      role <- signedRootRoles.generateNewVersionIfExpired(repoId, 3)
+    } yield role
+
+    rootRole.futureValue.signed.version shouldBe 3
+  }
+
+  keyTypeTest("should return MissingSignedRole when the latest version is not expired") { keyType =>
+    val repoId = RepoId.generate()
+    val rootKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
+      repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType.crypto.defaultKeySize, keyType)
+
+    val rootRole = for {
+      _ <- keyGenRepo.persist(rootKeyGenRequest)
+      _ <- keyGenerationOp(rootKeyGenRequest)
+      _ <- signedRootRoles.findFreshAndPersist(repoId)
+      role <- signedRootRoles.generateNewVersionIfExpired(repoId, 3)
+    } yield role
+
+    rootRole.failed.futureValue shouldBe SignedRootRoleRepository.MissingSignedRole
+  }
+
+  keyTypeTest("should return MissingSignedRole when the previous version does not exist") { keyType =>
+    val expiredSignedRootRoles = new SignedRootRoles(Duration.ofMillis(1))
+    val repoId = RepoId.generate()
+    val rootKeyGenRequest = KeyGenRequest(KeyGenId.generate(),
+      repoId, KeyGenRequestStatus.REQUESTED, RoleType.ROOT, keyType.crypto.defaultKeySize, keyType)
+
+    val rootRole = for {
+      _ <- keyGenRepo.persist(rootKeyGenRequest)
+      _ <- keyGenerationOp(rootKeyGenRequest)
+      _ <- expiredSignedRootRoles.findFreshAndPersist(repoId)
+      role <- signedRootRoles.generateNewVersionIfExpired(repoId, 4)
+    } yield role
+
+    rootRole.failed.futureValue shouldBe SignedRootRoleRepository.MissingSignedRole
   }
 
   keyTypeTest("persists renewed root.json when old one expired") { keyType =>

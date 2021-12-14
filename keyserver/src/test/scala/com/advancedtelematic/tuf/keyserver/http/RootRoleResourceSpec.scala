@@ -769,6 +769,52 @@ class RootRoleResourceSpec extends TufKeyserverSpec
     }
   }
 
+  keyTypeTest("should return a generated version of root.json when the specified version doesn't exist and the latest version expired") { keyType =>
+    val repoId = RepoId.generate()
+
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(1, keyType)) ~> routes ~> check {
+      status shouldBe StatusCodes.Accepted
+      processKeyGenerationRequest(repoId).futureValue
+    }
+
+    new SignedRootRoles(defaultRoleExpire = Duration.ofMillis(1)).findFreshAndPersist(repoId).futureValue
+
+    Get(apiUri(s"root/${repoId.show}/3")) ~> routes ~> check {
+      status shouldBe StatusCodes.OK
+      responseAs[SignedPayload[RootRole]].signed.version shouldBe 3
+    }
+  }
+
+  keyTypeTest("should return NotFound when the specified version doesn't exist and the latest version is not expired") { keyType =>
+    val repoId = RepoId.generate()
+
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(1, keyType)) ~> routes ~> check {
+      status shouldBe StatusCodes.Accepted
+      processKeyGenerationRequest(repoId).futureValue
+    }
+
+    new SignedRootRoles().findFreshAndPersist(repoId).futureValue
+
+    Get(apiUri(s"root/${repoId.show}/2")) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
+    }
+  }
+
+  keyTypeTest("should return NotFound when the specified and previous versions don't exist") { keyType =>
+    val repoId = RepoId.generate()
+
+    Post(apiUri(s"root/${repoId.show}"), ClientRootGenRequest(1, keyType)) ~> routes ~> check {
+      status shouldBe StatusCodes.Accepted
+      processKeyGenerationRequest(repoId).futureValue
+    }
+
+    new SignedRootRoles(defaultRoleExpire = Duration.ofMillis(1)).findFreshAndPersist(repoId).futureValue
+
+    Get(apiUri(s"root/${repoId.show}/4")) ~> routes ~> check {
+      status shouldBe StatusCodes.NotFound
+    }
+  }
+
   test("keeps snapshot and timestamp keys online when storing user persisted root role ") {
     val repoId = RepoId.generate()
     generateRootRole(repoId, Ed25519KeyType).futureValue

@@ -85,7 +85,13 @@ class RootRoleResource()
         complete(f)
       } ~
       path(IntNumber) { version =>
-        complete(signedRootRoles.findByVersion(repoId, version))
+        val f = signedRootRoles
+          .findByVersion(repoId, version)
+          .recoverWith {
+            case SignedRootRoleRepository.MissingSignedRole =>
+              signedRootRoles.generateNewVersionIfExpired(repoId, version)
+          }
+        complete(f)
       } ~
       pathPrefix("private_keys") {
         path(KeyIdPath) { keyId =>
