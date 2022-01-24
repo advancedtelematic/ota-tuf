@@ -119,20 +119,24 @@ release:
   only:
     refs:
       - master
-  tags:
-    - docker-sock
-    - vault-token
   variables:
     AWS_BUCKET_ID: "ota-tuf-cli-releases"
     AWS_REGION: "eu-west-1"
-  image: advancedtelematic/gitlab-jobs:0.2.5
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_HOST: tcp://docker:2375
+  image: advancedtelematic/gitlab-jobs:0.3.3
+  services:
+    - docker:19.03.12-dind
   script:
     - git fetch origin
     - git describe
-    - export VAULT_TOKEN=$(cat /opt/vault/token)
     - gitlab-docker-login $VAULT_ADDR
     - eval $(set-vault-env -v $VAULT_ADDR --secret gitlab/ats-aws-key --secret gitlab/maven-publish)
     - sbt -x -sbt-dir ./.sbt -ivy ./.ivy2 -batch release
+    - docker tag advancedtelematic/tuf-keyserver:${CI_COMMIT_SHA} hcr.data.here.com/ota_saas/tuf-keyserver:${CI_COMMIT_SHA}
+    - docker push hcr.data.here.com/ota_saas/tuf-keyserver:${CI_COMMIT_SHA}
+    - docker tag advancedtelematic/tuf-reposerver:${CI_COMMIT_SHA} hcr.data.here.com/ota_saas/tuf-reposerver:${CI_COMMIT_SHA}
+    - docker push hcr.data.here.com/ota_saas/tuf-reposerver:${CI_COMMIT_SHA}
   cache:
     paths:
       - .ivy2/
