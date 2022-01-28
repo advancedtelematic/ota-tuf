@@ -253,7 +253,7 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
           case Left(err) =>
             Future.failed(new Throwable(err))
 
-          case Right(uri) if uri.host.endsWith("core.windows.net")  =>
+          case Right(uri) if uri.host.endsWith("core.windows.net") || uri.host.endsWith("core.chinacloudapi.cn")  =>
             Future.successful(uri)
 
           case Right(uri) =>
