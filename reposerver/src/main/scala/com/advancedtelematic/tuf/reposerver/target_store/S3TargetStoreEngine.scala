@@ -83,7 +83,7 @@ class S3TargetStoreEngine(credentials: S3Credentials)(implicit val system: Actor
     val storagePath = storageFilename(repoId, filename)
     val request = new PutObjectRequest(credentials.bucketId, storagePath.toString, file).withCannedAcl(CannedAccessControlList.AuthenticatedRead)
 
-    log.info(s"Uploading ${filename.value} to amazon s3")
+    log.info(s"Uploading ${filename.value} to amazon s3: $storagePath")
 
     async {
       await(Future { blocking { s3client.putObject(request) } })
