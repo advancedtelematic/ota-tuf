@@ -1,11 +1,12 @@
 package com.advancedtelematic.tuf.reposerver.http
 
+import akka.http.scaladsl.model.Multipart.BodyPart
 import akka.http.scaladsl.model.headers.{RawHeader, `Content-Length`}
-import akka.http.scaladsl.model.{EntityStreamException, HttpEntity, ParsingException, StatusCodes, Uri}
+import akka.http.scaladsl.model.{EntityStreamException, HttpEntity, Multipart, ParsingException, StatusCodes, Uri}
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.unmarshalling.PredefinedFromStringUnmarshallers.CsvSeq
 import akka.http.scaladsl.unmarshalling._
-import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.{Sink, Source}
 import akka.util.ByteString
 import com.advancedtelematic.libats.codecs.CirceCodecs.checkSumCodec
 import com.advancedtelematic.libats.data.RefinedUtils._
@@ -171,8 +172,25 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       concat(
         withSizeLimit(userRepoSizeLimit) {
           withRequestTimeout(userRepoUploadRequestTimeout) {
-            fileUpload("file") { case (_, file) =>
-              complete(storeTarget(namespace, repoId, filename, custom, file, size = None))
+            extractRequestContext { ctx =>
+              import ctx.materializer
+              entity(as[Multipart.FormData]) { formData =>
+                val resultF = formData.parts.mapAsync[Option[TargetItem]](1) {
+                  case b: BodyPart if b.name == "file" =>
+                    targetStore.store(repoId, filename, b.entity.dataBytes, custom, size = None).map(item => Some(item))
+                  case b: BodyPart =>
+                    b.entity.discardBytes().future().map(_ => None)
+                }
+                  .collect { case Some(targetItem: TargetItem) => targetItem }
+                  .runWith(Sink.headOption).flatMap {
+                    case Some(item) => addTargetItem(namespace, item)
+                    case None => Future.failed(Errors.FailedSoftwareUpload)
+                }
+                onSuccess(resultF) { result =>
+                  log.info(s"Successfully uploaded $filename for repoId $repoId")
+                  complete(result)
+                }
+              }
             }
           }
         },

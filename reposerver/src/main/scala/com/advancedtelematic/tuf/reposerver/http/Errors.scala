@@ -21,6 +21,7 @@ object ErrorCodes {
   val PayloadSignatureInvalid = ErrorCode("payload_signature_invalid")
   val InvalidOfflineTargets = ErrorCode("invalid_offline_targets")
   val RequestCanceledByUpstream = ErrorCode("request_canceled_by_upstream")
+  val FailedSoftwareUpload = ErrorCode("failed_software_upload")
 }
 
 object Errors {
@@ -32,6 +33,8 @@ object Errors {
   val RoleChecksumNotProvided = RawError(ErrorCodes.RoleChecksumNotProvided, StatusCodes.PreconditionRequired, "A targets role already exists, but no previous checksum was sent")
   val RoleChecksumMismatch = RawError(ErrorCodes.RoleChecksumMismatch, StatusCodes.PreconditionFailed, "Provided checksum of previous role does not match current checksum")
   val TooManyReposForNamespace = RawError(ErrorCodes.TooManyReposForNamespace, StatusCodes.BadRequest, "Too many repos found for this namespace. Use the /repo/:repo_id API instead")
+  val FailedSoftwareUpload = RawError(ErrorCodes.FailedSoftwareUpload, StatusCodes.InternalServerError, "Couldn't upload software version.")
+
 
   def PayloadTooLarge(size: Long, max: Long) =
     RawError(com.advancedtelematic.libtuf.data.ErrorCodes.Reposerver.PayloadTooLarge, StatusCodes.PayloadTooLarge,
