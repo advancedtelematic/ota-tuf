@@ -1,7 +1,8 @@
 package com.advancedtelematic.tuf.keyserver.daemon
 
-import java.security.Security
+import akka.actor.Scheduler
 
+import java.security.Security
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Route
 import com.advancedtelematic.tuf.keyserver.{Settings, VersionInfo}
@@ -27,6 +28,7 @@ object KeyGenerationDaemon extends BootApp
   import akka.http.scaladsl.server.Directives._
 
   implicit val _db = db
+  implicit val scheduler: Scheduler = system.scheduler
 
   Security.addProvider(new BouncyCastleProvider())
 

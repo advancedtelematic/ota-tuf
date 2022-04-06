@@ -7,7 +7,6 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.NoSuchElementException
 import java.util.concurrent.ConcurrentHashMap
-
 import com.advancedtelematic.libtuf.crypt.TufCrypto._
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import com.advancedtelematic.libtuf.data.TufDataType._
@@ -15,7 +14,7 @@ import io.circe.{Decoder, Encoder, Json}
 import com.advancedtelematic.libats.test.DatabaseSpec
 
 import scala.concurrent.Future
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Scheduler}
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.ws.Message
 import akka.http.scaladsl.server.{Directive1, Directives, Route}
@@ -237,6 +236,8 @@ trait ResourceSpec extends TufReposerverSpec
   import org.scalatest.OptionValues._
 
   def apiUri(path: String): String = "/api/v1/" + path
+
+  implicit val scheduler: Scheduler = system.scheduler
 
   val fakeKeyserverClient: FakeKeyserverClient = new FakeKeyserverClient
 

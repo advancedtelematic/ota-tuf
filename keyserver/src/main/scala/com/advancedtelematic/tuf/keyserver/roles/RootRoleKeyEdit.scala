@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.roles
 
+import akka.actor.Scheduler
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RepoId, TufKeyPair}
 import com.advancedtelematic.tuf.keyserver.db.{KeyRepository, KeyRepositorySupport}
 
@@ -13,7 +14,7 @@ import cats.instances.map
 import com.advancedtelematic.libtuf.data.RootManipulationOps._
 
 class RootRoleKeyEdit()
-                      (implicit val db: Database, val ec: ExecutionContext)
+                      (implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler)
   extends KeyRepositorySupport {
   val roleSigning = new RoleSigning()
   val signedRootRole = new SignedRootRoles()

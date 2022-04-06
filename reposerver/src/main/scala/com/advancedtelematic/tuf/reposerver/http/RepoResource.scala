@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.http
 
+import akka.actor.Scheduler
 import akka.http.scaladsl.model.Multipart.BodyPart
 import akka.http.scaladsl.model.headers.{RawHeader, `Content-Length`}
 import akka.http.scaladsl.model.{EntityStreamException, HttpEntity, Multipart, ParsingException, StatusCodes, Uri}
@@ -49,7 +50,7 @@ import scala.util.{Failure, Success, Try}
 
 class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: NamespaceValidation,
                    targetStore: TargetStore, tufTargetsPublisher: TufTargetsPublisher)
-                  (implicit val db: Database, val ec: ExecutionContext) extends Directives
+                  (implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler) extends Directives
   with TargetItemRepositorySupport
   with RepoNamespaceRepositorySupport
   with FilenameCommentRepository.Support

@@ -1,6 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.db
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Scheduler}
 import akka.stream.ActorMaterializer
 import akka.testkit.TestKitBase
 import com.advancedtelematic.libats.data.RefinedUtils._
@@ -20,6 +20,8 @@ class KeysToJsonEncodedMigrationSpec extends TufKeyserverSpec with TestKitBase w
   implicit val mat = ActorMaterializer()
 
   implicit val ec = ExecutionContext.Implicits.global
+
+  implicit val scheduler: Scheduler = system.scheduler
 
   val migration = new KeysToJsonEncodedMigration()
 

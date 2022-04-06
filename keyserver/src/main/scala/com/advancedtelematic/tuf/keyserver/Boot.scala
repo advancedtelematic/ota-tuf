@@ -1,7 +1,8 @@
 package com.advancedtelematic.tuf.keyserver
 
-import java.security.Security
+import akka.actor.Scheduler
 
+import java.security.Security
 import akka.event.Logging
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.{Directives, Route}
@@ -39,6 +40,7 @@ object Boot extends BootApp
   with PrometheusMetricsSupport {
 
   implicit val _db = db
+  implicit val scheduler: Scheduler = system.scheduler
 
   Security.addProvider(new BouncyCastleProvider)
 

@@ -2,7 +2,7 @@ package com.advancedtelematic.tuf.util
 
 import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import com.advancedtelematic.tuf.keyserver.http.TufKeyserverRoutes
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Scheduler}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.http.scaladsl.server.Route
 
@@ -65,6 +65,8 @@ trait ResourceSpec extends TufKeyserverSpec
   with DatabaseSpec
   with LongHttpRequest {
   def apiUri(path: String): String = "/api/v1/" + path
+
+  implicit val scheduler: Scheduler = system.scheduler
 
   lazy val routes = new TufKeyserverRoutes().routes
 }

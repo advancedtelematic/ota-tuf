@@ -1,6 +1,7 @@
 package com.advancedtelematic.tuf.reposerver.http
 
 
+import akka.actor.Scheduler
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, MetaItem, MetaPath, TargetsRole, TufRole}
 import com.advancedtelematic.libtuf.data.TufDataType.{RepoId, TargetFilename}
@@ -15,7 +16,7 @@ import slick.jdbc.MySQLProfile.api._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class TufRepoTargetItemsProvider()(implicit val db: Database, val ec: ExecutionContext) extends TargetsItemsProvider[Json]
+class TufRepoTargetItemsProvider()(implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler) extends TargetsItemsProvider[Json]
   with TargetItemRepositorySupport {
 
   val delegationsFind = new SignedRoleDelegationsFind()
@@ -35,7 +36,7 @@ class TufRepoTargetItemsProvider()(implicit val db: Database, val ec: ExecutionC
   }
 }
 
-class TufRepoSignedRoleProvider(implicit val db: Database, val ec: ExecutionContext) extends SignedRoleProvider with SignedRoleRepositorySupport {
+class TufRepoSignedRoleProvider(implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler) extends SignedRoleProvider with SignedRoleRepositorySupport {
   override def find[T: TufRole](repoId: RepoId): Future[SignedRole[T]] =
     signedRoleRepository.find(repoId)
 

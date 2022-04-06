@@ -1,8 +1,7 @@
 package db.migration
 
 import java.security.Security
-
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Scheduler}
 import akka.stream.ActorMaterializer
 import com.advancedtelematic.libats.slick.db.AppMigration
 import com.advancedtelematic.tuf.keyserver.db.KeysToJsonEncodedMigration
@@ -14,6 +13,7 @@ class R__MigrateKeysToJsonEncoded extends AppMigration  {
 
   implicit val system = ActorSystem(this.getClass.getSimpleName)
   implicit val materializer = ActorMaterializer()
+  implicit val scheduler: Scheduler = system.scheduler
   import system.dispatcher
 
   override def migrate(implicit db: Database) = new KeysToJsonEncodedMigration().run.map(_ => ())

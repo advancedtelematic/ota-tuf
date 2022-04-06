@@ -1,7 +1,8 @@
 package com.advancedtelematic.tuf.reposerver.http
 
-import java.time.Instant
+import akka.actor.{ActorSystem, Scheduler}
 
+import java.time.Instant
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -19,6 +20,9 @@ import scala.concurrent.ExecutionContext.Implicits
 
 // TODO: Should be moved to libtuf_server and tested without TufRepoProviders
 class SignedRoleGenerationSpec extends TufReposerverSpec with DatabaseSpec with SignedRoleRepositorySupport with ScalaFutures {
+  implicit val system: ActorSystem = ActorSystem(this.getClass.getSimpleName)
+  implicit val scheduler: Scheduler = system.scheduler
+
   override implicit val ec: ExecutionContext = Implicits.global
 
   override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(5, Seconds))

@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.http
 
+import akka.actor.Scheduler
 import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNel
@@ -28,7 +29,7 @@ import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import org.slf4j.LoggerFactory
 
 class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
-                                        (implicit val db: Database, val ec: ExecutionContext)
+                                        (implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler)
   extends SignedRoleRepositorySupport with TargetItemRepositorySupport{
 
   private val _log = LoggerFactory.getLogger(this.getClass)

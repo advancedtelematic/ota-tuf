@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.roles
 
+import akka.actor.Scheduler
 import akka.http.scaladsl.util.FastFuture
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.VersionedRole
@@ -14,7 +15,7 @@ import io.circe.syntax._
 import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 
-class RoleSigning()(implicit val db: Database, val ec: ExecutionContext)
+class RoleSigning()(implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler)
   extends SignedRootRoleSupport with KeyRepositorySupport {
 
   import com.advancedtelematic.libtuf.data.RootManipulationOps._

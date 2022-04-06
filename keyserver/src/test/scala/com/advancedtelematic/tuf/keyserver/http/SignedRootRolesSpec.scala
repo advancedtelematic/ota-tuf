@@ -1,9 +1,10 @@
 package com.advancedtelematic.tuf.keyserver.http
 
 
+import akka.actor.{ActorSystem, Scheduler}
+
 import java.time.temporal.ChronoUnit
 import java.time.{Duration, Instant}
-
 import com.advancedtelematic.libats.test.DatabaseSpec
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
@@ -30,6 +31,9 @@ class SignedRootRolesSpec extends TufKeyserverSpec with DatabaseSpec
   with KeyTypeSpecSupport
   with SignedRootRoleSupport
   with KeyRepositorySupport {
+
+  implicit val system: ActorSystem = ActorSystem(this.getClass.getSimpleName)
+  implicit val scheduler: Scheduler = system.scheduler
 
   implicit val ec = ExecutionContext.global
 

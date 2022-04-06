@@ -1,7 +1,8 @@
 package com.advancedtelematic.tuf.reposerver.db
 
-import java.time.Instant
+import akka.actor.{ActorSystem, Scheduler}
 
+import java.time.Instant
 import akka.http.scaladsl.model.StatusCodes
 import com.advancedtelematic.libats.data.DataType.{Checksum, HashMethod, ValidChecksum}
 import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, RoleType}
@@ -20,6 +21,8 @@ import scala.concurrent.ExecutionContext
 class DbSignedRoleRepositorySpec extends TufReposerverSpec with DatabaseSpec with PatienceConfiguration {
 
   implicit val ec = ExecutionContext.global
+  implicit val system: ActorSystem = ActorSystem(this.getClass.getSimpleName)
+  implicit val scheduler: Scheduler = system.scheduler
 
   override implicit def patienceConfig = PatienceConfig().copy(timeout = Span(10, Seconds))
 

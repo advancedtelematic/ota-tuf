@@ -1,8 +1,9 @@
 package com.advancedtelematic.tuf.keyserver.roles
 
+import akka.actor.Scheduler
+
 import java.time.temporal.ChronoUnit
 import java.time.{Duration, Instant}
-
 import akka.http.scaladsl.util.FastFuture
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNel
@@ -23,7 +24,7 @@ import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 
 class SignedRootRoles(defaultRoleExpire: Duration = Duration.ofDays(365))
-                     (implicit val db: Database, val ec: ExecutionContext)
+                     (implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler)
 extends KeyRepositorySupport with SignedRootRoleSupport {
 
   private val rootRoleGeneration = new KeyGenerationRequests()
@@ -153,7 +154,7 @@ extends KeyRepositorySupport with SignedRootRoleSupport {
 }
 
 class KeyGenerationRequests()
-                           (implicit val db: Database, val ec: ExecutionContext)
+                           (implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler)
   extends KeyGenRequestSupport with KeyRepositorySupport {
 
   private val DEFAULT_ROLES = RoleType.ALL
