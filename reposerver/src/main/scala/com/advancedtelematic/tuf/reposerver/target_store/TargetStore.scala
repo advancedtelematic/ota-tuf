@@ -3,7 +3,7 @@ package com.advancedtelematic.tuf.reposerver.target_store
 import java.net.URL
 import java.time.Instant
 import cats.implicits._
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Scheduler}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers.Location
@@ -32,7 +32,7 @@ object TargetStore {
   def apply(roleKeyStore: KeyserverClient,
             targetStoreEngine: TargetStoreEngine,
             messageBusPublisher: MessageBusPublisher)
-           (implicit db: Database, ec: ExecutionContext, system: ActorSystem, mat: Materializer): TargetStore = {
+           (implicit db: Database, ec: ExecutionContext, system: ActorSystem, mat: Materializer, scheduler: Scheduler): TargetStore = {
     val _http = Http()
     new TargetStore(roleKeyStore, targetStoreEngine, req => _http.singleRequest(req), messageBusPublisher)
   }
@@ -42,7 +42,7 @@ class TargetStore(roleKeyStore: KeyserverClient,
                   engine: TargetStoreEngine,
                   httpClient: HttpRequest => Future[HttpResponse],
                   messageBusPublisher: MessageBusPublisher)
-                 (implicit val db: Database, val ec: ExecutionContext)
+                 (implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler)
   extends TargetItemRepositorySupport {
 
   private val _log = LoggerFactory.getLogger(this.getClass)

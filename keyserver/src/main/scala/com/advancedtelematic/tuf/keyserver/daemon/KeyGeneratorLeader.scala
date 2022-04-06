@@ -1,7 +1,7 @@
 package com.advancedtelematic.tuf.keyserver.daemon
 
 import akka.actor.Status.{Failure, Success}
-import akka.actor.{Actor, ActorLogging, Props, Status, SupervisorStrategy}
+import akka.actor.{Actor, ActorLogging, Props, Scheduler, Status, SupervisorStrategy}
 import akka.routing.RoundRobinPool
 import cats.syntax.show._
 import com.advancedtelematic.tuf.keyserver.daemon.KeyGeneratorLeader.Tick
@@ -25,15 +25,15 @@ import scala.concurrent.{ExecutionContext, Future}
 object KeyGeneratorLeader {
   case object Tick
 
-  def props()(implicit db: Database, ec: ExecutionContext): Props =
+  def props()(implicit db: Database, ec: ExecutionContext, scheduler: Scheduler): Props =
     Props(new KeyGeneratorLeader(DefaultKeyGenerationOp()))
 
 
-  def props(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(implicit db: Database): Props =
+  def props(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(implicit db: Database, scheduler: Scheduler): Props =
     Props(new KeyGeneratorLeader(keyGenerationOp))
 }
 
-class KeyGeneratorLeader(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(implicit val db: Database) extends Actor with ActorLogging with KeyGenRequestSupport {
+class KeyGeneratorLeader(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(implicit val db: Database, val scheduler: Scheduler) extends Actor with ActorLogging with KeyGenRequestSupport {
 
   implicit val ec = context.dispatcher
 
@@ -93,11 +93,11 @@ object KeyGenerationOp {
 }
 
 object DefaultKeyGenerationOp {
-  def apply()(implicit db: Database,  ec: ExecutionContext): DefaultKeyGenerationOp =
+  def apply()(implicit db: Database,  ec: ExecutionContext, scheduler: Scheduler): DefaultKeyGenerationOp =
     new DefaultKeyGenerationOp()
 }
 
-class DefaultKeyGenerationOp()(implicit val db: Database, val ec: ExecutionContext)
+class DefaultKeyGenerationOp()(implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler)
   extends KeyGenerationOp
     with KeyGenRequestSupport
     with KeyRepositorySupport {
@@ -126,12 +126,12 @@ class DefaultKeyGenerationOp()(implicit val db: Database, val ec: ExecutionConte
 }
 
 object KeyGeneratorWorker {
-  def props(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(implicit db: Database): Props = {
+  def props(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(implicit db: Database, scheduler: Scheduler): Props = {
     Props(new KeyGeneratorWorker(keyGenerationOp))
   }
 }
 
-class KeyGeneratorWorker(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(implicit val db: Database) extends Actor
+class KeyGeneratorWorker(keyGenerationOp: KeyGenRequest => Future[Seq[Key]])(implicit val db: Database, val scheduler: Scheduler) extends Actor
   with ActorLogging
   with KeyGenRequestSupport
   with KeyRepositorySupport {

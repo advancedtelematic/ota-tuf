@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.http
 
+import akka.actor.Scheduler
 import akka.http.scaladsl.server.{Directives, _}
 import akka.stream.Materializer
 import com.advancedtelematic.libats.http.DefaultRejectionHandler._
@@ -20,7 +21,7 @@ class TufReposerverRoutes(keyserverClient: KeyserverClient,
                           messageBusPublisher: MessageBusPublisher,
                           metricsRoutes: Route = Directives.reject,
                           dependencyChecks: Seq[HealthCheck] = Seq.empty)
-                         (implicit val db: Database, val ec: ExecutionContext, mat: Materializer) extends VersionInfo {
+                         (implicit val db: Database, val ec: ExecutionContext, mat: Materializer, scheduler: Scheduler) extends VersionInfo {
 
   import Directives._
 

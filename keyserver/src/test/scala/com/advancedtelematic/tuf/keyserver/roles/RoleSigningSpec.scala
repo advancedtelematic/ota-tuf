@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.roles
 
+import akka.actor.{ActorSystem, Scheduler}
 import com.advancedtelematic.libtuf.crypt.CanonicalJson._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RepoId, RoleType, Signature, TufKeyPair}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType._
@@ -20,6 +21,9 @@ case class TestPayload(propertyB: String = "some B", propertyA: String = "some A
                        mapProp: Map[String, Int] = Map("bb" -> 1, "aa" -> 0))
 
 class RoleSigningSpec extends TufKeyserverSpec with DatabaseSpec with PatienceConfiguration with KeyTypeSpecSupport with KeyRepositorySupport {
+
+  implicit val system: ActorSystem = ActorSystem(this.getClass.getSimpleName)
+  implicit val scheduler: Scheduler = system.scheduler
 
   implicit val ec = ExecutionContext.global
 

@@ -1,12 +1,12 @@
 package com.advancedtelematic.tuf.keyserver.db
 
 import java.security.PublicKey
-
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Scheduler}
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Sink, Source}
 import akka.{Done, NotUsed}
 import com.advancedtelematic.libats.slick.codecs.SlickRefined._
+import com.advancedtelematic.libats.slick.db.DatabaseHelper.DatabaseWithRetry
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RSATufKey, TufKey}
@@ -22,13 +22,14 @@ class KeysToJsonEncodedMigration(implicit
                                  val db: Database,
                                  val mat: Materializer,
                                  val system: ActorSystem,
-                                 val ec: ExecutionContext) {
+                                 val ec: ExecutionContext,
+                                 val scheduler: Scheduler) {
 
   private val _log = LoggerFactory.getLogger(this.getClass)
 
   def backupKeys(implicit db: Database): Future[Done] = {
     val sql = sqlu"""create table `rsa_keys_pem` as select key_id, public_key from `keys` where key_type = 'RSA'"""
-    db.run(sql).map(_ => Done)
+    db.runWithRetry(sql).map(_ => Done)
   }
 
   def writeKey(keyId: KeyId, publicKey: PublicKey)(implicit db: Database): Future[TufKey] = {
@@ -43,7 +44,7 @@ class KeysToJsonEncodedMigration(implicit
     val rsaKey = RSATufKey(publicKey)
     val sql = sqlu"""update `keys` set public_key = $rsaKey where key_id = $keyId"""
 
-    db.run(sql).map(_ => rsaKey)
+    db.runWithRetry(sql).map(_ => rsaKey)
   }
 
   def existingKeys(implicit db: Database):  Source[(KeyId, PublicKey), NotUsed] = {

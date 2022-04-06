@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.delegations
 
+import akka.actor.Scheduler
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNel
 import com.advancedtelematic.libats.data.RefinedUtils._
@@ -18,7 +19,7 @@ import scala.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
-class SignedRoleDelegationsFind()(implicit val db: Database, val ec: ExecutionContext) extends DelegationRepositorySupport {
+class SignedRoleDelegationsFind()(implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler) extends DelegationRepositorySupport {
   import cats.implicits._
   import com.advancedtelematic.libtuf.crypt.CanonicalJson._
   import com.advancedtelematic.libtuf.data.TufCodecs._
@@ -51,7 +52,7 @@ class SignedRoleDelegationsFind()(implicit val db: Database, val ec: ExecutionCo
 }
 
 
-class DelegationsManagement()(implicit val db: Database, val ec: ExecutionContext)
+class DelegationsManagement()(implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler)
                                                   extends DelegationRepositorySupport with SignedRoleRepositorySupport {
   def create(repoId: RepoId, roleName: DelegatedRoleName, delegationMetadata: SignedPayload[TargetsRole])
             (implicit signedRoleGeneration: SignedRoleGeneration): Future[Unit] = async {

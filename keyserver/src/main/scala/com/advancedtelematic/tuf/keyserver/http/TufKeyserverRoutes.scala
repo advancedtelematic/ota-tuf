@@ -1,6 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.http
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Scheduler}
 import akka.http.scaladsl.server.{Directives, _}
 import akka.stream.Materializer
 import com.advancedtelematic.tuf.keyserver.VersionInfo
@@ -13,7 +13,7 @@ import slick.jdbc.MySQLProfile.api._
 
 
 class TufKeyserverRoutes(dependencyChecks: Seq[HealthCheck] = Seq.empty, metricsRoutes: Route = Directives.reject)
-                        (implicit val db: Database, val ec: ExecutionContext, system: ActorSystem, mat: Materializer) extends VersionInfo {
+                        (implicit val db: Database, val ec: ExecutionContext, system: ActorSystem, mat: Materializer, scheduler: Scheduler) extends VersionInfo {
 
   import Directives._
 

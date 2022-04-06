@@ -1,5 +1,7 @@
 package com.advancedtelematic.tuf.reposerver.http
 
+import akka.actor.{ActorSystem, Scheduler}
+
 import java.time.Instant
 import cats.syntax.option._
 import cats.syntax.either._
@@ -27,6 +29,9 @@ import org.scalatest.time.{Seconds, Span}
 
 class OfflineSignedRoleStorageSpec extends TufReposerverSpec with DatabaseSpec with PatienceConfiguration
   with TargetItemRepositorySupport {
+
+  implicit val system: ActorSystem = ActorSystem(this.getClass.getSimpleName)
+  implicit val scheduler: Scheduler = system.scheduler
 
   implicit val ec = scala.concurrent.ExecutionContext.global
 

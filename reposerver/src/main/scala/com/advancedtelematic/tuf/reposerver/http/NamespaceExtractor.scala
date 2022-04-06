@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.http
 
+import akka.actor.Scheduler
 import akka.http.scaladsl.server.{AuthorizationFailedRejection, Directive1, Directives}
 import com.advancedtelematic.libats.auth.NamespaceDirectives
 import com.advancedtelematic.libats.data.DataType.Namespace
@@ -16,7 +17,7 @@ abstract class NamespaceValidation(val extractor: Directive1[Namespace]) {
 }
 
 class DatabaseNamespaceValidation(extractor: Directive1[Namespace])
-                                 (implicit val ec: ExecutionContext, val db: Database)
+                                 (implicit val ec: ExecutionContext, val db: Database, val scheduler: Scheduler)
   extends NamespaceValidation(extractor) with RepoNamespaceRepositorySupport {
 
   import Directives._
@@ -37,6 +38,6 @@ class DatabaseNamespaceValidation(extractor: Directive1[Namespace])
 object NamespaceValidation {
   private lazy val default: Directive1[Namespace] = NamespaceDirectives.defaultNamespaceExtractor.map(_.namespace)
 
-  def withDatabase(implicit ec: ExecutionContext, db: Database): NamespaceValidation =
+  def withDatabase(implicit ec: ExecutionContext, db: Database, scheduler: Scheduler): NamespaceValidation =
     new DatabaseNamespaceValidation(default)
 }

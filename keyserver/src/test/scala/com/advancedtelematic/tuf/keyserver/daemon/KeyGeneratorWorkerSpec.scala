@@ -1,6 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.daemon
 
-import akka.actor.{ActorSystem, Props, Status}
+import akka.actor.{ActorSystem, Props, Scheduler, Status}
 import akka.testkit.{ImplicitSender, TestKitBase, TestProbe}
 import com.advancedtelematic.libats.http.Errors.MissingEntity
 import com.advancedtelematic.libats.test.DatabaseSpec
@@ -23,6 +23,7 @@ class KeyGeneratorWorkerSpec extends TufKeyserverSpec with TestKitBase with Data
   override implicit lazy val system: ActorSystem = ActorSystem("KeyGeneratorWorkerIntegrationSpec")
 
   implicit val ec = ExecutionContext.global
+  implicit val scheduler: Scheduler = system.scheduler
 
   val actorRef = system.actorOf(KeyGeneratorWorker.props(DefaultKeyGenerationOp()))
 

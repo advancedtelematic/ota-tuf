@@ -28,6 +28,8 @@ import com.advancedtelematic.libtuf_server.repo.server.Errors.SignedRoleNotFound
 import shapeless.ops.function.FnToProduct
 import shapeless.{Generic, HList, Succ}
 import SlickValidatedString._
+import akka.actor.Scheduler
+import com.advancedtelematic.libats.slick.db.DatabaseHelper.DatabaseWithRetry
 import com.advancedtelematic.libtuf_server.repo.server.SignedRoleProvider
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 
@@ -39,6 +41,7 @@ import slick.lifted.AbstractTable
 trait DatabaseSupport {
   implicit val ec: ExecutionContext
   implicit val db: Database
+  implicit val scheduler: Scheduler
 }
 
 object TargetItemRepositorySupport {
@@ -49,19 +52,19 @@ trait TargetItemRepositorySupport extends DatabaseSupport {
   lazy val targetItemRepo = new TargetItemRepository()
 }
 
-protected [db] class TargetItemRepository()(implicit db: Database, ec: ExecutionContext) {
+protected [db] class TargetItemRepository()(implicit db: Database, ec: ExecutionContext, scheduler: Scheduler) {
   import Schema.targetItems
 
-  def persist(targetItem: TargetItem): Future[TargetItem] = db.run(persistAction(targetItem))
+  def persist(targetItem: TargetItem): Future[TargetItem] = db.runWithRetry(persistAction(targetItem))
 
-  def deleteItemAndComments(filenameComments: FilenameCommentRepository)(repoId: RepoId, filename: TargetFilename): Future[Unit] = db.run {
+  def deleteItemAndComments(filenameComments: FilenameCommentRepository)(repoId: RepoId, filename: TargetFilename): Future[Unit] = db.runWithRetry {
     val deleteItemAction = targetItems.filter(_.repoId === repoId).filter(_.filename === filename).delete
     filenameComments.deleteAction(repoId, filename)
       .andThen(deleteItemAction)
       .map(_ => ()).transactionally
   }
 
-  def deleteItemsAndComments(filenameComments: FilenameCommentRepository)(repoId: RepoId, filenames: Set[TargetFilename]): Future[Unit] = db.run {
+  def deleteItemsAndComments(filenameComments: FilenameCommentRepository)(repoId: RepoId, filenames: Set[TargetFilename]): Future[Unit] = db.runWithRetry {
     val deleteItemsAction = targetItems.filter(_.repoId === repoId).filter(_.filename inSet filenames).delete
     filenameComments.deleteAction(repoId, filenames)
       .andThen(deleteItemsAction)
@@ -88,7 +91,7 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
     }.transactionally
   }
 
-  def findFor(repoId: RepoId): Future[Seq[TargetItem]] = db.run {
+  def findFor(repoId: RepoId): Future[Seq[TargetItem]] = db.runWithRetry {
     targetItems.filter(_.repoId === repoId).result
   }
 
@@ -101,7 +104,7 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
       }
   }
 
-  def findByFilename(repoId: RepoId, filename: TargetFilename): Future[TargetItem] = db.run {
+  def findByFilename(repoId: RepoId, filename: TargetFilename): Future[TargetItem] = db.runWithRetry {
     targetItems
       .filter(_.repoId === repoId)
       .filter(_.filename === filename)
@@ -110,7 +113,7 @@ protected [db] class TargetItemRepository()(implicit db: Database, ec: Execution
   }
 
   def usage(repoId: RepoId): Future[(Namespace, Long)] =
-    db.run {
+    db.runWithRetry {
       val usage = targetItems
         .filter(_.repoId === repoId)
         .map(_.length)
@@ -133,7 +136,7 @@ trait SignedRoleRepositorySupport extends DatabaseSupport {
   lazy val signedRoleRepository = new SignedRoleRepository()
 }
 
-protected [db] class SignedRoleRepository()(implicit val db: Database, val ec: ExecutionContext) {
+protected [db] class SignedRoleRepository()(implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler) {
   import DBDataType._
 
   private val signedRoleRepository = new DbSignedRoleRepository()
@@ -157,7 +160,7 @@ object DbSignedRoleRepository {
     RawError(ErrorCode("invalid_version_bump"), StatusCodes.Conflict, s"Cannot bump version from $oldVersion to $newVersion")
 }
 
-protected[db] class DbSignedRoleRepository()(implicit val db: Database, val ec: ExecutionContext) {
+protected[db] class DbSignedRoleRepository()(implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler) {
   import DbSignedRoleRepository.InvalidVersionBumpError
   import Schema.signedRoles
 
@@ -166,7 +169,7 @@ protected[db] class DbSignedRoleRepository()(implicit val db: Database, val ec: 
   import DBDataType._
 
   def persist(signedRole: DbSignedRole, forceVersion: Boolean = false): Future[DbSignedRole] =
-    db.run(persistAction(signedRole, forceVersion).transactionally)
+    db.runWithRetry(persistAction(signedRole, forceVersion).transactionally)
 
   protected [db] def persistAction(signedRole: DbSignedRole, forceVersion: Boolean): DBIO[DbSignedRole] = {
     signedRoles
@@ -184,12 +187,12 @@ protected[db] class DbSignedRoleRepository()(implicit val db: Database, val ec: 
       .map(_ => signedRole)
   }
 
-  def persistAll(signedRoles: List[DbSignedRole]): Future[Seq[DbSignedRole]] = db.run {
+  def persistAll(signedRoles: List[DbSignedRole]): Future[Seq[DbSignedRole]] = db.runWithRetry {
     DBIO.sequence(signedRoles.map(sr => persistAction(sr, forceVersion = false))).transactionally
   }
 
   def find(repoId: RepoId, roleType: RoleType): Future[DbSignedRole] =
-    db.run {
+    db.runWithRetry {
       signedRoles
         .filter(_.repoId === repoId)
         .filter(_.roleType === roleType)
@@ -198,7 +201,7 @@ protected[db] class DbSignedRoleRepository()(implicit val db: Database, val ec: 
         .failIfNone(SignedRoleNotFound(repoId, roleType))
     }
 
-  def storeAll(targetItemRepo: TargetItemRepository)(repoId: RepoId, signedRoles: List[DbSignedRole], items: Seq[TargetItem]): Future[Unit] = db.run {
+  def storeAll(targetItemRepo: TargetItemRepository)(repoId: RepoId, signedRoles: List[DbSignedRole], items: Seq[TargetItem]): Future[Unit] = db.runWithRetry {
     targetItemRepo.resetAction(repoId)
       .andThen(DBIO.sequence(signedRoles.map(sr => persistAction(sr, forceVersion = false))))
       .andThen(DBIO.sequence(items.map(targetItemRepo.createAction)))
@@ -218,7 +221,7 @@ trait RepoNamespaceRepositorySupport extends DatabaseSupport {
   lazy val repoNamespaceRepo = new RepoNamespaceRepository()
 }
 
-protected[db] class RepoNamespaceRepository()(implicit db: Database, ec: ExecutionContext) {
+protected[db] class RepoNamespaceRepository()(implicit db: Database, ec: ExecutionContext, scheduler: Scheduler) {
   import com.advancedtelematic.libats.slick.db.SlickPipeToUnit.pipeToUnit
   import Schema.repoNamespaces
 
@@ -226,7 +229,7 @@ protected[db] class RepoNamespaceRepository()(implicit db: Database, ec: Executi
 
   val AlreadyExists = EntityAlreadyExists[(RepoId, Namespace)]()
 
-  def persist(repoId: RepoId, namespace: Namespace): Future[Unit] = db.run {
+  def persist(repoId: RepoId, namespace: Namespace): Future[Unit] = db.runWithRetry {
     (repoNamespaces += RepoNamespace(repoId, namespace)).handleIntegrityErrors(AlreadyExists)
   }
 
@@ -235,7 +238,7 @@ protected[db] class RepoNamespaceRepository()(implicit db: Database, ec: Executi
       .flatMap(_ => FastFuture.failed(AlreadyExists))
       .recover { case MissingRepoNamespace => () }
 
-  def findFor(namespace: Namespace): Future[RepoId] = db.run {
+  def findFor(namespace: Namespace): Future[RepoId] = db.runWithRetry {
     repoNamespaces
       .filter(_.namespace === namespace)
       .map(_.repoId)
@@ -244,7 +247,7 @@ protected[db] class RepoNamespaceRepository()(implicit db: Database, ec: Executi
       .failIfNone(MissingRepoNamespace)
   }
 
-  def belongsTo(repoId: RepoId, namespace: Namespace): Future[Boolean] = db.run {
+  def belongsTo(repoId: RepoId, namespace: Namespace): Future[Boolean] = db.runWithRetry {
     repoNamespaces
       .filter(_.repoId === repoId)
       .filter(_.namespace === namespace)
@@ -253,7 +256,7 @@ protected[db] class RepoNamespaceRepository()(implicit db: Database, ec: Executi
       .map(_ > 0)
   }
 
-  def list(offset: Long, limit: Long): Future[PaginationResult[RepoNamespace]] = db.run {
+  def list(offset: Long, limit: Long): Future[PaginationResult[RepoNamespace]] = db.runWithRetry {
     repoNamespaces.paginateResult(offset, limit)
   }
 }
@@ -268,16 +271,16 @@ object FilenameCommentRepository {
   val PackageMissing = MissingEntity[TargetFilename]()
 }
 
-protected [db] class FilenameCommentRepository()(implicit db: Database, ec: ExecutionContext) {
+protected [db] class FilenameCommentRepository()(implicit db: Database, ec: ExecutionContext, scheduler: Scheduler) {
   import FilenameCommentRepository._
   import Schema.filenameComments
 
-  def persist(repoId: RepoId, filename: TargetFilename, comment: TargetComment): Future[Int] = db.run {
+  def persist(repoId: RepoId, filename: TargetFilename, comment: TargetComment): Future[Int] = db.runWithRetry {
     filenameComments.insertOrUpdate((repoId, filename, comment))
       .handleIntegrityErrors(PackageMissing)
   }
 
-  def find(repoId: RepoId, filename: TargetFilename): Future[TargetComment] = db.run {
+  def find(repoId: RepoId, filename: TargetFilename): Future[TargetComment] = db.runWithRetry {
     filenameComments
       .filter(_.repoId === repoId)
       .filter(_.filename === filename)
@@ -287,7 +290,7 @@ protected [db] class FilenameCommentRepository()(implicit db: Database, ec: Exec
       .failIfNone(CommentNotFound)
   }
 
-  def find(repoId: RepoId): Future[Seq[(TargetFilename, TargetComment)]] = db.run {
+  def find(repoId: RepoId): Future[Seq[(TargetFilename, TargetComment)]] = db.runWithRetry {
     filenameComments
       .filter(_.repoId === repoId)
       .map(filenameComment => (filenameComment.filename, filenameComment.comment))
@@ -305,13 +308,13 @@ trait DelegationRepositorySupport extends DatabaseSupport {
   lazy val delegationsRepo = new DelegationRepository()
 }
 
-protected [db] class DelegationRepository()(implicit db: Database, ec: ExecutionContext) {
+protected [db] class DelegationRepository()(implicit db: Database, ec: ExecutionContext, scheduler: Scheduler) {
 
-  def find(repoId: RepoId, roleNames: DelegatedRoleName*): Future[DbDelegation] = db.run {
+  def find(repoId: RepoId, roleNames: DelegatedRoleName*): Future[DbDelegation] = db.runWithRetry {
     Schema.delegations.filter(_.repoId === repoId).filter(_.roleName.inSet(roleNames)).result.failIfNotSingle(DelegationNotFound)
   }
 
-  def persist(repoId: RepoId, roleName: DelegatedRoleName, content: JsonSignedPayload): Future[Unit] = db.run {
+  def persist(repoId: RepoId, roleName: DelegatedRoleName, content: JsonSignedPayload): Future[Unit] = db.runWithRetry {
     Schema.delegations.insertOrUpdate(DbDelegation(repoId, roleName, content)).map(_ => ())
   }
 }

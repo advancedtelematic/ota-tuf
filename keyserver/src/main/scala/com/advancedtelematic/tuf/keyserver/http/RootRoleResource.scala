@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.keyserver.http
 
+import akka.actor.Scheduler
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.StatusCodes
 import akka.stream.Materializer
@@ -23,7 +24,7 @@ import slick.jdbc.MySQLProfile.api._
 import scala.concurrent.{ExecutionContext, Future}
 
 class RootRoleResource()
-                      (implicit val db: Database, val ec: ExecutionContext, mat: Materializer)
+                      (implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler, mat: Materializer)
   extends KeyGenRequestSupport {
   import ClientRootGenRequest._
   import akka.http.scaladsl.server.Directives._

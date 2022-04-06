@@ -1,5 +1,6 @@
 package com.advancedtelematic.tuf.reposerver.http
 
+import akka.actor.Scheduler
 import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, TargetFilename, TargetFormat}
 import com.advancedtelematic.libtuf_server.repo.server.SignedRoleGeneration
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
@@ -9,7 +10,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import slick.jdbc.MySQLProfile.api._
 
 class TargetRoleEdit(signedRoleGeneration: SignedRoleGeneration)
-                    (implicit val db: Database, val ec: ExecutionContext)
+                    (implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler)
   extends TargetItemRepositorySupport with FilenameCommentRepository.Support {
 
   def addTargetItem(targetItem: TargetItem): Future[JsonSignedPayload] = for {
