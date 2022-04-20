@@ -9,6 +9,7 @@ import com.advancedtelematic.libtuf.crypt.Sha256FileDigest
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RootRole, TargetCustom, TargetsRole}
 import com.advancedtelematic.libtuf.data.TufCodecs._
+import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RoleType, TargetFilename, TargetFormat, TargetName, TargetVersion, ValidTargetFilename}
 import com.advancedtelematic.libtuf.http.{ReposerverClient, TufServerClient}
@@ -319,6 +320,14 @@ object CommandHandler {
         _      <- tufRepo.cleanOsTreeStorage(server)
       } yield log.info("OSTree targets removed and initiated removing OSTree repositories from storage. It could take up to 5min. Please don't upload new repositories during this time.")
 
+    case SetRootThreshold =>
+      tufRepo.setThreshold(RoleType.ROOT, config.threshold)
+        .map(p => log.info(s"Set threshold to ${config.threshold} for Root role in unsigned root.json, saved to $p"))
+        .toFuture
 
+    case SetTargetsThreshold =>
+      tufRepo.setThreshold(RoleType.TARGETS, config.threshold)
+        .map(p => log.info(s"Set threshold to ${config.threshold} for Targets role in unsigned root.json, saved to $p"))
+        .toFuture
   }
 }

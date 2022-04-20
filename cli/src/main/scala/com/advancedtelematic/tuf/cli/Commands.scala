@@ -40,5 +40,7 @@ object Commands {
   case object IncrementRootJsonVersion extends Command
   case object IncrementTargetJsonVersion extends Command
   case object CleanOsTreeStorage extends Command
+  case object SetRootThreshold extends Command
+  case object SetTargetsThreshold extends Command
 }
 
