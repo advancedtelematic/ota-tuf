@@ -135,7 +135,7 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
 
   def removeRoleKeys(roleType: RoleType, keyIds: List[KeyId]): Try[(Path,Int)] = for {
     unsignedRoot <- readUnsignedRole[RootRole]
-    (newRoot, deleteCount) = unsignedRoot.removeRoleKeys(roleType, keyIds.toSet)
+    (newRoot, deleteCount) <- unsignedRoot.removeRoleKeys(roleType, keyIds.toSet)
     path <- writeUnsignedRole(newRoot)
   } yield (path, deleteCount)
 
@@ -293,6 +293,11 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
       path <- writeUnsignedRole(unsigned.copy(version = unsigned.version + 1))
     } yield path
 
+  def setThreshold(roleType: RoleType, threshold: Int): Try[Path] = for {
+    rootRole <- readUnsignedRole[RootRole]
+    newRootRole <- rootRole.withRoleThreshold(roleType, threshold)
+    path <- writeUnsignedRole(newRootRole)
+  } yield path
 
   protected def deleteOrReadKey(reposerverClient: S, keyName: KeyName, keyId: KeyId): Future[TufPrivateKey] = {
     keyStorage.readPrivateKey(keyName).toFuture.recoverWith { case _ =>

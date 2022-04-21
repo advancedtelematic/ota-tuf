@@ -69,7 +69,8 @@ case class Config(command: Command,
                   reposerverUrl: Option[URI] = None,
                   verbose: Boolean = false,
                   inplace: Boolean = false,
-                  verifyIntegrity: Boolean = false)
+                  verifyIntegrity: Boolean = false,
+                  threshold: Int = 1)
 
 object Cli extends App with VersionInfo {
 
@@ -368,7 +369,17 @@ object Cli extends App with VersionInfo {
           ),
         cmd("increment-version")
           .toCommand(IncrementRootJsonVersion)
-          .text("Increment version of root.json.")
+          .text("Increment version of root.json."),
+        cmd("set-threshold")
+          .toCommand(SetRootThreshold)
+          .text("Set threshold for Root role")
+          .children(
+            opt[Int]("threshold")
+              .abbr("t")
+              .required()
+              .toConfigParam('threshold)
+              .text("Threshold for Root role")
+          )
       )
 
     note(" " + sys.props("line.separator"))
@@ -452,10 +463,10 @@ object Cli extends App with VersionInfo {
         cmd("sign")
           .toCommand(SignTargets)
           .text("Signs your `targets.json` file with a specific key or adds a given signature.")
+          .children(manyKeyNamesOpt(this)
+            .optional
+            .text("The path to the public key to use for signing."))
           .children(
-            opt[KeyName]("key-name")
-              .action { (arg, c) => c.copy(keyNames = List(arg)) }
-              .text("The path to the public key to use for signing."),
             opt[Int]("version")
               .text("The version number to use for the signed metadata. Overrides the version in the unsigned `targets.json` file.")
               .toConfigOptionParam('version),
@@ -523,6 +534,17 @@ object Cli extends App with VersionInfo {
         cmd("increment-version")
           .toCommand(IncrementTargetJsonVersion)
           .text("Increment version of target.json."),
+
+        cmd("set-threshold")
+          .toCommand(SetTargetsThreshold)
+          .text("Set threshold for Targets role")
+          .children(
+            opt[Int]("threshold")
+              .abbr("t")
+              .required()
+              .toConfigParam('threshold)
+              .text("Threshold for Targets role")
+          ),
 
         cmd("clean-ostree-storage")
           .toCommand(CleanOsTreeStorage)

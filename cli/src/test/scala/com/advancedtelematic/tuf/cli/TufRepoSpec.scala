@@ -5,7 +5,6 @@ import java.nio.file.Files
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.Base64
-
 import cats.implicits._
 import com.advancedtelematic.libats.data.DataType.{HashMethod, ValidChecksum}
 import com.advancedtelematic.libtuf.crypt.SignedPayloadSignatureOps._
@@ -13,6 +12,7 @@ import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
 import com.advancedtelematic.libtuf.data.ClientDataType.{ClientTargetItem, RootRole, TargetCustom, TargetsRole}
+import com.advancedtelematic.libtuf.data.RootManipulationOps.{InvalidThresholdError, InvalidThresholdErrorMessage, NotEnoughKeysAfterRemovalMessage, RemoveRoleKeysError}
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType._
 import com.advancedtelematic.libtuf.data.TufDataType.{KeyType, RoleType, RsaKeyType, SignedPayload, TargetFormat, TargetName, TargetVersion, ValidSignature, ValidTargetFilename}
@@ -406,6 +406,52 @@ class TufRepoSpec extends CliSpec with KeyTypeSpecSupport with TryValues with Ei
 
   reposerverTest("can remove target keys using key ids") { (repo, _) =>
     removeKeyIdTest(repo, RoleType.TARGETS)
+  }
+
+  def removeRoleKeysWithThresholdTest(repo: RepoServerRepo, roleType: RoleType): Unit = {
+    val keyname = KeyName("somekey")
+    val keyPair = repo.genKeys(keyname, KeyType.default).get
+    repo.addRoleKeys(roleType, List(keyname)).get
+    repo.setThreshold(roleType, 2)
+
+    val removeRoleKeysFailure = repo.removeRoleKeys(roleType, List(keyPair.pubkey.id)).failure.exception
+
+    removeRoleKeysFailure shouldBe a [RemoveRoleKeysError]
+    removeRoleKeysFailure.getMessage shouldBe NotEnoughKeysAfterRemovalMessage
+    val keyids = repo.readUnsignedRole[RootRole].success.value.roles(roleType).keyids
+    keyids.length shouldBe 2
+    keyids should contain(keyPair.pubkey.id)
+  }
+
+  reposerverTest("cannot remove root keys if number of keys after removal would have been less than threshold") { (repo, _) =>
+    removeRoleKeysWithThresholdTest(repo, RoleType.ROOT)
+  }
+
+  reposerverTest("cannot remove target keys if number of keys after removal would have been less than threshold") { (repo, _) =>
+    removeRoleKeysWithThresholdTest(repo, RoleType.TARGETS)
+  }
+
+  test("sets threshold for specified role type in unsigned root.json") {
+    val repo = initRepo[RepoServerRepo]()
+    val keyName = KeyName("somekey")
+    repo.genKeys(keyName, KeyType.default)
+    repo.addRoleKeys(RoleType.ROOT, List(keyName))
+
+    repo.setThreshold(RoleType.ROOT, 2).success
+
+    val rootRole = repo.readUnsignedRole[RootRole].success.value
+    rootRole.roles(RoleType.ROOT).threshold shouldBe 2
+  }
+
+  test("threshold is not set in unsigned root.json when provided value is invalid") {
+    val repo = initRepo[RepoServerRepo]()
+
+    val setThresholdFailure = repo.setThreshold(RoleType.ROOT, 2).failure.exception
+
+    setThresholdFailure shouldBe a [InvalidThresholdError]
+    setThresholdFailure.getMessage shouldBe InvalidThresholdErrorMessage
+    val rootRole = repo.readUnsignedRole[RootRole].success.value
+    rootRole.roles(RoleType.ROOT).threshold shouldBe 1
   }
 
   reposerverTest("pull succeeds when new root.json is valid against local root.json") { (repo, server) =>

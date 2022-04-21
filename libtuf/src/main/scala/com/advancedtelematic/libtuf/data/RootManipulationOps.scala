@@ -1,12 +1,18 @@
 package com.advancedtelematic.libtuf.data
 
-import java.time.{Duration, Instant, Period}
-
 import com.advancedtelematic.libtuf.data.ClientDataType.{RoleKeys, RootRole}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
-import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, RoleType, TufKey}
+import com.advancedtelematic.libtuf.data.TufDataType.{KeyId, TufKey}
+
+import java.time.Period
+import scala.util.{Failure, Success, Try}
 
 object RootManipulationOps {
+  case class RemoveRoleKeysError(msg: String) extends Exception(msg)
+  case class InvalidThresholdError(msg: String) extends Exception(msg)
+  val InvalidThresholdErrorMessage = "Could not set threshold. Threshold value must be at least 1 and not greater than the number of keys for the role."
+  val NotEnoughKeysAfterRemovalMessage = "Could not remove keys because the number of keys after removing would have been less than threshold for the role."
+
   implicit class RootRoleExtension(val rootRole: RootRole) extends AnyVal {
 
     def roleKeys(roleTypes: RoleType*): List[TufKey] = {
@@ -26,11 +32,15 @@ object RootManipulationOps {
       withRoleKeys(roleType, existingKeys ++ newKeys:_*)
     }
 
-    def removeRoleKeys(roleType: RoleType, keyIds: Set[KeyId]): (RootRole, Int) = {
+    def removeRoleKeys(roleType: RoleType, keyIds: Set[KeyId]): Try[(RootRole, Int)] = {
       val oldKeyIds = rootRole.roles(roleType).keyids
       val newKeyIds = oldKeyIds.filterNot(keyIds.contains).toSet
-      val newKeys = rootRole.keys.filterKeys(newKeyIds.contains).values.toSeq
-      (withRoleKeys(roleType, newKeys:_*), oldKeyIds.size - newKeyIds.size)
+      if (newKeyIds.size >= rootRole.roles(roleType).threshold) {
+        val newKeys = rootRole.keys.filterKeys(newKeyIds.contains).values.toSeq
+        Success((withRoleKeys(roleType, newKeys:_*), oldKeyIds.size - newKeyIds.size))
+      } else {
+        Failure(RemoveRoleKeysError(NotEnoughKeysAfterRemovalMessage))
+      }
     }
 
     def withRoleKeys(roleType: RoleType, threshold: Int, keys: TufKey*): RootRole = {
@@ -47,5 +57,16 @@ object RootManipulationOps {
       val oldRoleKeys = rootRole.roles(roleType)
       withRoleKeys(roleType, oldRoleKeys.threshold, keys :_*)
     }
+
+    def withRoleThreshold(roleType: RoleType, threshold: Int): Try[RootRole] =
+      if (threshold >= 1 && threshold <= rootRole.roles(roleType).keyids.size) {
+        val newRoles = rootRole.roles.map {
+          case (_roleType, roleKeys) if _roleType == roleType => (roleType, RoleKeys(roleKeys.keyids, threshold))
+          case role => role
+        }
+        Success(rootRole.copy(roles = newRoles))
+      } else {
+        Failure(InvalidThresholdError(InvalidThresholdErrorMessage))
+      }
   }
 }
