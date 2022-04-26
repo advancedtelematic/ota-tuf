@@ -152,7 +152,7 @@ the server, with the new `root.json`.
     # verify unsigned targets.json, this should have been pulled
     # during `rotate`.
 
-    garage-sign targets sign --repo myrepo --key-name targets
+    garage-sign targets sign --repo myrepo --key-name myrepo-targets
 
     garage-sign targets push --repo myrepo
 
@@ -202,6 +202,34 @@ or
         └── root.json
 
     cat tuf/myrepo/root.json
+
+=== Rotate Offline Root Key
+
+After rotating an online root key, the environment is updated to use locally stored offline keys. In order to rotate an offline key, follow these steps:
+
+1. Get the current version of `root.json` from OTA Connect
+
+    garage-sign root pull --repo myrepo
+
+2. Generate a new root key
+
+    garage-sign key generate --repo myrepo --name new-offline-root --type rsa
+
+3. Add the generated key to the list of keys authorized to sign root-of-trust metadata:
+
+    garage-sign root key add --repo myrepo --key-name new-offline-root
+
+4. Remove the old key
+
+    garage-sign root key remove --repo myrepo --key-name old-root
+
+5. Sign `root.json` with both old and new keys
+
+    garage-sign root sign --repo myrepo --key-name old-root --key-name new-offline-root
+
+6. Upload local `root.json` to OTA Connect
+
+    garage-sign root push --repo myrepo
 
 == Finding the role JSON files
 
