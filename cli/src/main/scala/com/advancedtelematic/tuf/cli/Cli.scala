@@ -163,8 +163,6 @@ object Cli extends App with VersionInfo {
       c.copy(verbose = true)
     }
 
-    version("version").text("Prints the current binary version.")
-
     note(" " + sys.props("line.separator"))
 
     cmd("user-keys").children(
