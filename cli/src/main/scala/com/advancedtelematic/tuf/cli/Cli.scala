@@ -185,7 +185,7 @@ object Cli extends App with VersionInfo {
         ),
       cmd("importpub")
         .toCommand(ImportPublicKey)
-        .text("Imports a public key and stores it on a configurable location")
+        .text("Imports a public key and stores it in a configurable location")
         .children(
           repoNameOpt(this),
           manyKeyNamesOpt(this).text("The path to the public key that you want to add."),
@@ -327,7 +327,9 @@ object Cli extends App with VersionInfo {
             cmd("remove")
               .toCommand(RemoveRootKey)
               .children(
-                manyKeyNamesOpt(this).text("The name of the file with the keys that you want to remove. You can use the `--key-id` command instead."),
+                manyKeyNamesOpt(this)
+                  .optional()
+                  .text("The name of the file with the keys that you want to remove. You can use the `--key-id` command instead."),
                 opt[KeyId]("key-id")
                   .unbounded()
                   .action { (arg, c) => c.copy(keyIds = arg :: c.keyIds) }
@@ -344,7 +346,9 @@ object Cli extends App with VersionInfo {
             cmd("remove")
               .toCommand(RemoveTargetsKey)
               .children(
-                manyKeyNamesOpt(this).text("The name of the file with the keys that you want to remove. You can use the `--key-id` command instead."),
+                manyKeyNamesOpt(this)
+                  .optional()
+                  .text("The name of the file with the keys that you want to remove. You can use the `--key-id` command instead."),
                 opt[KeyId]("key-id")
                   .unbounded()
                   .action { (arg, c) => c.copy(keyIds = arg :: c.keyIds) }
@@ -370,13 +374,13 @@ object Cli extends App with VersionInfo {
           .text("Increment version of root.json."),
         cmd("set-threshold")
           .toCommand(SetRootThreshold)
-          .text("Set threshold for Root role")
+          .text("Sets threshold for Root role.")
           .children(
             opt[Int]("threshold")
               .abbr("t")
               .required()
               .toConfigParam('threshold)
-              .text("Threshold for Root role")
+              .text("Threshold for Root role.")
           )
       )
 
@@ -535,13 +539,13 @@ object Cli extends App with VersionInfo {
 
         cmd("set-threshold")
           .toCommand(SetTargetsThreshold)
-          .text("Set threshold for Targets role")
+          .text("Sets threshold for Targets role.")
           .children(
             opt[Int]("threshold")
               .abbr("t")
               .required()
               .toConfigParam('threshold)
-              .text("Threshold for Targets role")
+              .text("Threshold for Targets role.")
           ),
 
         cmd("clean-ostree-storage")
@@ -597,8 +601,8 @@ object Cli extends App with VersionInfo {
 
     checkConfig { c =>
       c.command match {
-        case RemoveRootKey if c.keyIds.isEmpty && c.keyNames.isEmpty =>
-          "To remove a root key you need to specify at least one key ID or key name".asLeft
+        case RemoveRootKey | RemoveTargetsKey if c.keyIds.isEmpty && c.keyNames.isEmpty =>
+          "To remove a root or targets key you need to specify at least one key ID or key name".asLeft
         case SignTargets | SignRoot if c.expireOn.isDefined && c.expireAfter.isDefined =>
           "The expiration date should be given with either `--expires` or `--expire-after`, not both".asLeft
         case _ =>
