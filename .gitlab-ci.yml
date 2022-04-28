@@ -38,12 +38,12 @@ test:
   stage: test
   except:
     refs:
-      - deploy/sit 
+      - deploy/sit
       - schedules
   services:
     - name: advancedtelematic/tuf-nginx:latest
       alias: tuf-nginx
-    - name: mariadb:10.2
+    - name: mariadb:10.4
       alias: db
       command:
         - --character-set-server=utf8
@@ -85,7 +85,7 @@ code coverage:
   needs: ["test"]
   except:
     refs:
-      - deploy/sit 
+      - deploy/sit
       - schedules
   allow_failure: true
   image: $TEST_IMAGE_SONAR
@@ -105,13 +105,13 @@ code coverage:
       - cli-coverage
       - reposerver-coverage
     reports:
-       cobertura: 
+       cobertura:
        - "keyserver/target/scala-*/coverage-report/cobertura.xml"
        - "libtuf/target/scala-*/coverage-report/cobertura.xml"
        - "libtuf-server/target/scala-*/coverage-report/cobertura.xml"
        - "cli/target/scala-*/coverage-report/cobertura.xml"
        - "reposerver/target/scala-*/coverage-report/cobertura.xml"
-    
+
 release:
   stage: release
   except:
