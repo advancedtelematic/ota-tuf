@@ -6,6 +6,12 @@ All notable changes to `garage-sign` will be documented in this file.
 ## Upcoming release
 
 
+## v0.7.5
+### Added
+- Added `garage-sign` commands to set threshold for the Root (`garage-sign root set-threshold`) and Targets (`garage-sign targets set-threshold`) roles.
+### Fixed
+- Fixed the commands to remove a key for the Root (`garage-sign root key remove`) and Targets (`garage-sign root targets-key remove`) roles using only `--key-id` option.
+
 ## v0.7.4
 ### Added
 - Added `--force` parameter to `garage-sign targets upload` command.
