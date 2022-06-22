@@ -105,12 +105,9 @@ code coverage:
       - cli-coverage
       - reposerver-coverage
     reports:
-       cobertura:
-       - "keyserver/target/scala-*/coverage-report/cobertura.xml"
-       - "libtuf/target/scala-*/coverage-report/cobertura.xml"
-       - "libtuf-server/target/scala-*/coverage-report/cobertura.xml"
-       - "cli/target/scala-*/coverage-report/cobertura.xml"
-       - "reposerver/target/scala-*/coverage-report/cobertura.xml"
+      coverage_report:
+        coverage_format: cobertura
+        path: "keyserver/target/scala-*/coverage-report/cobertura.xml, libtuf/target/scala-*/coverage-report/cobertura.xml, libtuf-server/target/scala-*/coverage-report/cobertura.xml, cli/target/scala-*/coverage-report/cobertura.xml, reposerver/target/scala-*/coverage-report/cobertura.xml"
 
 release:
   stage: release
@@ -212,5 +209,5 @@ include:
   - template: Dependency-Scanning.gitlab-ci.yml
   - template: License-Scanning.gitlab-ci.yml
   - project: olp/edge/ota/infra/security
-    ref: v0.1.0
+    ref: v0.1.1
     file: /shared.yaml
