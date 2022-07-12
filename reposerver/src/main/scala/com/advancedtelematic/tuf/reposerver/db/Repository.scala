@@ -8,7 +8,7 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.scaladsl.Source
 import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.data.{ErrorCode, PaginationResult}
+import com.advancedtelematic.libats.data.{ErrorCode, Limit, Offset, PaginationResult}
 import com.advancedtelematic.libats.http.Errors.{EntityAlreadyExists, MissingEntity, MissingEntityId, RawError}
 import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, RepoId, RoleType, TargetFilename}
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
@@ -256,7 +256,7 @@ protected[db] class RepoNamespaceRepository()(implicit db: Database, ec: Executi
       .map(_ > 0)
   }
 
-  def list(offset: Long, limit: Long): Future[PaginationResult[RepoNamespace]] = db.runWithRetry {
+  def list(offset: Offset, limit: Limit): Future[PaginationResult[RepoNamespace]] = db.runWithRetry {
     repoNamespaces.paginateResult(offset, limit)
   }
 }
