@@ -23,6 +23,8 @@ import com.advancedtelematic.libats.http.AnyvalMarshallingSupport._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.data.DataType.Namespace
+import com.advancedtelematic.libats.data.{Limit, Offset}
+import com.advancedtelematic.libats.http.FromLongUnmarshallers._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, TargetFilename, _}
 import com.advancedtelematic.libtuf_server.data.Marshalling._
@@ -62,6 +64,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   private val roleRefresher = new RepoRoleRefresh(keyserverClient, new TufRepoSignedRoleProvider(), new TufRepoTargetItemsProvider())
   private val targetRoleGeneration = new TargetRoleEdit(signedRoleGeneration)
   private val delegations = new DelegationsManagement()
+  implicit val limitUnmarshaller: Unmarshaller[String, Limit] = getLimitUnmarshaller()
 
   /*
     extractRequestEntity is needed for tests only. We should get this value from the `Content-Length` header.
@@ -416,7 +419,7 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
       } ~
       modifyRepoRoutes(repoId)
     } ~
-    (path("repos") & parameters('offset.as[Long], 'limit.as[Long]) ) { (offset, limit) =>
+    (path("repos") & parameters('offset.as[Offset], 'limit.as[Limit]) ) { (offset, limit) =>
       complete(repoNamespaceRepo.list(offset, limit))
     }
 }
