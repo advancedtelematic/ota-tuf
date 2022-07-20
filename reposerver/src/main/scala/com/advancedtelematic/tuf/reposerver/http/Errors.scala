@@ -22,6 +22,7 @@ object ErrorCodes {
   val InvalidOfflineTargets = ErrorCode("invalid_offline_targets")
   val RequestCanceledByUpstream = ErrorCode("request_canceled_by_upstream")
   val FailedSoftwareUpload = ErrorCode("failed_software_upload")
+  val BadCompleteMultipartUploadFormat = ErrorCode("bad_complete_multipart_upload_format")
 }
 
 object Errors {
@@ -34,6 +35,7 @@ object Errors {
   val RoleChecksumMismatch = RawError(ErrorCodes.RoleChecksumMismatch, StatusCodes.PreconditionFailed, "Provided checksum of previous role does not match current checksum")
   val TooManyReposForNamespace = RawError(ErrorCodes.TooManyReposForNamespace, StatusCodes.BadRequest, "Too many repos found for this namespace. Use the /repo/:repo_id API instead")
   val FailedSoftwareUpload = RawError(ErrorCodes.FailedSoftwareUpload, StatusCodes.InternalServerError, "Couldn't upload software version.")
+  val BadCompleteMultipartUploadFormat = RawError(ErrorCodes.BadCompleteMultipartUploadFormat, StatusCodes.BadRequest, "Request body for multipart upload completion was not well-formed")
 
 
   def PayloadTooLarge(size: Long, max: Long) =
