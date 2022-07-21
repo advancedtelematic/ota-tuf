@@ -24,6 +24,8 @@ import com.advancedtelematic.libtuf_server.repo.server.DataType._
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import com.advancedtelematic.tuf.reposerver.http.Errors
+import com.advancedtelematic.tuf.reposerver.http.Errors.BadCompleteMultipartUploadFormat
+import com.amazonaws.services.s3.model.AmazonS3Exception
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NoStackTrace
@@ -92,7 +94,9 @@ class TargetStore(roleKeyStore: KeyserverClient,
   }
 
   def completeMultipartUpload(repoId: RepoId, filename: TargetFilename, uploadId: MultipartUploadId, partETags: Seq[UploadPartETag]): Future[Unit] = {
-    engine.completeMultipartUpload(repoId, filename, uploadId, partETags)
+    engine.completeMultipartUpload(repoId, filename, uploadId, partETags).recoverWith {
+      case e: AmazonS3Exception if e.getStatusCode == 400 => Future.failed(BadCompleteMultipartUploadFormat)
+    }
   }
 
   def retrieve(repoId: RepoId, targetFilename: TargetFilename): Future[HttpResponse] = {

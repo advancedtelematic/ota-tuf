@@ -16,6 +16,7 @@ import com.advancedtelematic.tuf.reposerver.Settings
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStoreEngine.{TargetRetrieveResult, TargetStoreResult}
 import com.advancedtelematic.tuf.reposerver.target_store.{TargetStore, TargetStoreEngine}
 import com.advancedtelematic.tuf.reposerver.util.{RepoResourceSpecUtil, ResourceSpec, TufReposerverSpec}
+import com.amazonaws.services.s3.model.AmazonS3Exception
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 
 import scala.concurrent.Future
@@ -27,7 +28,7 @@ class RepoResourceMultipartUploadSpec extends TufReposerverSpec with ResourceSpe
   private val testInitMultipartUploadResult = InitMultipartUploadResult(MultipartUploadId("uploadID"), partSize = multipartUploadPartSize)
   private val testSignedURLResult = GetSignedUrlResult(new URL("https://fake.s3.url.com"))
 
-  private val fakeStorage: TargetStoreEngine = new TargetStoreEngine {
+  class TargetStoreEngineMock extends TargetStoreEngine {
     private val DefaultMockResultForNotUsedMethod = Future.failed(new Exception("Default mock result"))
 
     override def storeStream(repoId: RepoId, filename: TargetFilename, fileData: Source[ByteString, Any], size: Long): Future[TargetStoreResult] =
@@ -55,6 +56,15 @@ class RepoResourceMultipartUploadSpec extends TufReposerverSpec with ResourceSpe
       Future.unit
   }
 
+  class TargetStoreEngineMockWithS3Exception extends TargetStoreEngineMock {
+    override def completeMultipartUpload(repoId: RepoId, filename: TargetFilename, uploadId: MultipartUploadId, partETags: Seq[UploadPartETag]): Future[Unit] = {
+      val badRequestException = new AmazonS3Exception("Bad request exception")
+      badRequestException.setStatusCode(400)
+      Future.failed(badRequestException)
+    }
+  }
+
+  private val fakeStorage = new TargetStoreEngineMock
   private lazy val fakeTargetStore: TargetStore = new TargetStore(fakeKeyserverClient, fakeStorage, fakeHttpClient, messageBusPublisher)
   override lazy val routes: Route = new TufReposerverRoutes(fakeKeyserverClient, namespaceValidation, fakeTargetStore, messageBusPublisher).routes
 
@@ -121,6 +131,20 @@ class RepoResourceMultipartUploadSpec extends TufReposerverSpec with ResourceSpe
       .addHeader(namespaceHeader(namespace)) ~> routes ~> check {
       status shouldBe StatusCodes.PayloadTooLarge
       entityAs[ErrorRepresentation].description shouldBe s"File being uploaded is too large ($totalFileSize), maximum size is $outOfBandUploadLimit"
+    }
+  }
+
+  test("should return 400 error when complete multipart upload fails with 400") {
+    val fakeStorageWithS3Exception = new TargetStoreEngineMockWithS3Exception
+    val fakeTargetStore: TargetStore = new TargetStore(fakeKeyserverClient, fakeStorageWithS3Exception, fakeHttpClient, messageBusPublisher)
+    val routes: Route = new TufReposerverRoutes(fakeKeyserverClient, namespaceValidation, fakeTargetStore, messageBusPublisher).routes
+
+    val namespace = createRepo()
+
+    Put(apiUri(s"user_repo/multipart/complete/test_File.bin"), CompleteUploadRequest(testInitMultipartUploadResult.uploadId, Seq(UploadPartETag(1, ETag("testETag")))))
+      .addHeader(namespaceHeader(namespace)) ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+      entityAs[ErrorRepresentation].description shouldBe "Request body for multipart upload completion was not well-formed"
     }
   }
 
