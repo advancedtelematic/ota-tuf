@@ -201,6 +201,22 @@ trigger sit reposerver deploy:
     branch: master
 
 
+pages:
+  # the name of this job is pre-defined by Gitlab
+  stage: publish pages
+  only:
+    refs:
+      - schedules
+  # See https://github.com/advancedtelematic/infra-dockerfiles/tree/master/gitlab-jobs for latest version:
+  image: advancedtelematic/gitlab-jobs:0.2.5
+  script:
+    - mkdir -p public
+    - mv *-coverage public/
+  artifacts:
+    paths:
+      - public
+    expire_in: 30 days
+
 include:
   - project: "poit/spc/be/prodsec-secret-detection"
     file: "ITT-Secret-Detection.gitlab-ci.yml"
