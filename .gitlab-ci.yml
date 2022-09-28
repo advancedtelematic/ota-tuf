@@ -39,7 +39,6 @@ test:
   except:
     refs:
       - deploy/sit
-      - schedules
   services:
     - name: advancedtelematic/tuf-nginx:latest
       alias: tuf-nginx
@@ -86,7 +85,6 @@ code coverage:
   except:
     refs:
       - deploy/sit
-      - schedules
   allow_failure: true
   image: $TEST_IMAGE_SONAR
   script:
