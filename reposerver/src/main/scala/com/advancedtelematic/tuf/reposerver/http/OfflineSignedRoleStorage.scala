@@ -28,6 +28,8 @@ import com.advancedtelematic.tuf.reposerver.http.RoleChecksumHeader.RoleChecksum
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
 import org.slf4j.LoggerFactory
 
+import java.net.URI
+
 class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
                                         (implicit val db: Database, val ec: ExecutionContext, val scheduler: Scheduler)
   extends SignedRoleRepositorySupport with TargetItemRepositorySupport{
@@ -35,6 +37,9 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
   private val _log = LoggerFactory.getLogger(this.getClass)
 
   private val signedRoleGeneration = TufRepoSignedRoleGeneration(keyserverClient)
+
+  // Limited by DB field size, so no point making it configurable
+  private val MaxAllowedUriLength = 2000
 
   def store(repoId: RepoId, signedPayload: SignedPayload[TargetsRole]): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole[TargetsRole])]] =
     for {
@@ -63,6 +68,15 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
         .toRight(errorMsg(filename, "Invalid/Missing Checksum"))
     }
 
+    def validateUriLength(filename: TargetFilename, custom: TargetCustom): Either[String, Option[URI]] = {
+      custom.uri match {
+        case Some(uri) if uri.toString.length > MaxAllowedUriLength =>
+          Left(errorMsg(filename, s"The target uri is too long. Max allowed length is $MaxAllowedUriLength"))
+        case _ =>
+          Right(custom.uri)
+      }
+    }
+
     def validateExistingTarget(filename: TargetFilename, oldItem: TargetItem, newItem: ClientTargetItem): Either[String, TargetItem] =
       for {
         newTargetCustom <- newItem.custom match {
@@ -77,6 +91,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
         json <- item.custom.toRight(errorMsg(filename, "new offline signed target items must contain custom metadata"))
         targetCustom <- json.as[TargetCustom].leftMap(errorMsg(filename, _))
         checksum <- validateNewChecksum(filename, item)
+        _ <- validateUriLength(filename, targetCustom)
         storageMethod = if(targetCustom.cliUploaded.contains(true)) StorageMethod.CliManaged else StorageMethod.Unmanaged
       } yield TargetItem(repoId, filename, targetCustom.uri.map(_.toUri), checksum, item.length, Some(targetCustom), storageMethod)
 

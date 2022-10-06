@@ -46,7 +46,9 @@ import org.scalatest.prop.Whenever
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{Assertion, BeforeAndAfterAll, Inspectors}
 
+import java.net.URI
 import scala.concurrent.Future
+import scala.util.Random
 
 class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
   with ResourceSpec with BeforeAndAfterAll with Inspectors with Whenever with PatienceConfiguration with SignedRoleRepositorySupport {
@@ -877,6 +879,23 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
 
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
       status shouldBe StatusCodes.NoContent
+    }
+  }
+
+  test("reject request with too long uri in target custom") {
+    implicit val repoId = addTargetToRepo()
+
+    val testUri = new URI(s"https://example.com?query=${Random.alphanumeric.take(2000).mkString}")
+    val targetCustomJson = TargetCustom(TargetName("name"), TargetVersion("version"), Seq.empty, TargetFormat.BINARY.some, testUri.some).asJson
+
+    val hashes: ClientHashes = Map(HashMethod.SHA256 -> Refined.unsafeApply("8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"))
+    val targets = Map(offlineTargetFilename -> ClientTargetItem(hashes, 0, targetCustomJson.some))
+
+    val signedPayload = buildSignedTargetsRole(repoId, targets)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+      responseAs[ErrorRepresentation].firstErrorCause.get should include("The target uri is too long.")
     }
   }
 
