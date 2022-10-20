@@ -10,10 +10,12 @@ import com.advancedtelematic.libtuf_server.repo.server.DataType._
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType._
 import com.advancedtelematic.tuf.reposerver.db.{SignedRoleRepositorySupport, TargetItemRepositorySupport}
 import io.circe.Encoder
+import io.circe.syntax.EncoderOps
 import cats.implicits._
 import com.advancedtelematic.libats.data.DataType.Checksum
 import com.advancedtelematic.libats.http.Errors.MissingEntityId
 import com.advancedtelematic.libtuf.data.ClientCodecs._
+import com.advancedtelematic.libtuf.data.TufCodecs._
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
@@ -23,6 +25,7 @@ import scala.async.Async.{async, await}
 import scala.concurrent.{ExecutionContext, Future}
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
 import com.advancedtelematic.libtuf_server.repo.server.DataType.SignedRole
+import com.advancedtelematic.tuf.reposerver.Boot.targetsFileSizeLimit
 import com.advancedtelematic.tuf.reposerver.data.RepositoryDataType.TargetItem
 import com.advancedtelematic.tuf.reposerver.http.RoleChecksumHeader.RoleChecksum
 import com.advancedtelematic.tuf.reposerver.target_store.TargetStore
@@ -43,6 +46,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
 
   def store(repoId: RepoId, signedPayload: SignedPayload[TargetsRole]): Future[ValidatedNel[String, (Seq[TargetItem], SignedRole[TargetsRole])]] =
     for {
+      _ <- validateFileSize(signedPayload)
       validatedPayloadSig <- payloadSignatureIsValid(repoId, signedPayload)
       existingTargets <- targetItemRepo.findFor(repoId)
       targetItemsValidated = validatedPayloadSig.andThen(_ => validatedPayloadTargets(repoId, signedPayload, existingTargets))
@@ -57,6 +61,12 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
           FastFuture.successful(i)
       }
     } yield signedRoleValidated
+
+  private def validateFileSize(payload: SignedPayload[TargetsRole]): Future[Unit] = {
+    val fileSize = payload.asJsonSignedPayload.asJson.noSpaces.length
+    if (fileSize < targetsFileSizeLimit) Future.successful()
+    else FastFuture.failed(Errors.LargeTargetsFileSize)
+  }
 
   private def validatedPayloadTargets(repoId: RepoId, payload: SignedPayload[TargetsRole], existingTargets: Seq[TargetItem]): ValidatedNel[String, List[TargetItem]] = {
     def errorMsg(filename: TargetFilename, msg: Any): String = s"target item error ${filename.value}: $msg"

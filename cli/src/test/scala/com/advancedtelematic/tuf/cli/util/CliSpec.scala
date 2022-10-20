@@ -132,14 +132,14 @@ class FakeReposerverTufServerClient(val keyType: KeyType) extends ReposerverClie
     TargetsResponse(signedPayload, Option(Refined.unsafeApply("095c33175e5af42691c1b41d388c8ce842c7fbb792fcc6514b5436f7f80420db")))
   }
 
-  override def pushTargets(targetsRole: SignedPayload[TargetsRole], checksum: Option[Refined[String, ValidChecksum]]): Future[Unit] =
+  override def pushTargets(targetsRole: SignedPayload[TargetsRole], checksum: Option[Refined[String, ValidChecksum]]): Future[Option[Int]] =
     Try(checksum.get).flatMap { _ =>
       val lastRoot = rootRoles.asScala.maxBy(_._1)._2.signed
       val targetsPubKey = lastRoot.keys(lastRoot.roles(RoleType.TARGETS).keyids.head)
 
       if (targetsRole.isValidFor(targetsPubKey)) {
         unsignedTargets = targetsRole.signed
-        Success(())
+        Success(Some(1))
       } else
         Failure(new RuntimeException("[test] invalid signatures for targets role"))
     }.toFuture

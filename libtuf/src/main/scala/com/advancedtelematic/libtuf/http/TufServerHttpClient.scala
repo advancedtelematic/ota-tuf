@@ -13,6 +13,7 @@ import com.azure.storage.blob.specialized.BlockBlobClient
 import com.azure.storage.blob.{BlobAsyncClient, BlobClientBuilder}
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
+import io.circe.syntax.EncoderOps
 import org.bouncycastle.util.encoders.Hex
 import org.slf4j.LoggerFactory
 import sttp.client._
@@ -65,7 +66,7 @@ trait ReposerverClient extends TufServerClient {
 
   def targets(): Future[TargetsResponse]
 
-  def pushTargets(role: SignedPayload[TargetsRole], previousChecksum: Option[Refined[String, ValidChecksum]]): Future[Unit]
+  def pushTargets(role: SignedPayload[TargetsRole], previousChecksum: Option[Refined[String, ValidChecksum]]): Future[Option[Int]]
 
   def uploadTarget(targetFilename: TargetFilename, inputPath: Path, timeout: Duration, force: Boolean = false): Future[Unit]
 
@@ -132,16 +133,18 @@ class ReposerverHttpClient(uri: URI, httpBackend: CliHttpBackend)(implicit ec: E
     }
   }
 
-  def pushTargets(role: SignedPayload[TargetsRole], previousChecksum: Option[Refined[String, ValidChecksum]]): Future[Unit] = {
+  def pushTargets(role: SignedPayload[TargetsRole], previousChecksum: Option[Refined[String, ValidChecksum]]): Future[Option[Int]] = {
     val put = http.put(apiUri("targets"))
     val req = previousChecksum.map(e => put.header("x-ats-role-checksum", e.value)).getOrElse(put)
+      .body(role.asJson.noSpaces.getBytes)
+      .contentType("application/json")
 
-    execJsonHttp[Unit, SignedPayload[TargetsRole]](req, role) {
+    execHttp[Unit](req) {
       case (412, errorRepr) if errorRepr.code.code == "role_checksum_mismatch" =>
         Future.failed(RoleChecksumNotValid)
       case (428, _) =>
         Future.failed(RoleChecksumNotValid)
-    }
+    }.map(response => response.header("x-ats-targets-role-size-limit").map(_.toInt))
   }
 
   override def pushDelegation(name: DelegatedRoleName, delegation: SignedPayload[TargetsRole]): Future[Unit] = {

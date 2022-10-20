@@ -5,6 +5,7 @@ import cats.data.NonEmptyList
 import com.advancedtelematic.libats.data.DataType.Namespace
 import com.advancedtelematic.libats.data.ErrorCode
 import com.advancedtelematic.libats.http.Errors.{JsonError, RawError}
+import com.advancedtelematic.tuf.reposerver.Boot.targetsFileSizeLimit
 import io.circe.syntax._
 
 
@@ -23,6 +24,7 @@ object ErrorCodes {
   val RequestCanceledByUpstream = ErrorCode("request_canceled_by_upstream")
   val FailedSoftwareUpload = ErrorCode("failed_software_upload")
   val BadCompleteMultipartUploadFormat = ErrorCode("bad_complete_multipart_upload_format")
+  val LargeTargetsFileSize = ErrorCode("large_targets_file_size")
 }
 
 object Errors {
@@ -51,6 +53,9 @@ object Errors {
 
   def InvalidOfflineTargets(errors: NonEmptyList[String]) =
     JsonError(ErrorCodes.InvalidOfflineTargets, StatusCodes.BadRequest, errors.asJson, "Invalid offline targets")
+
+  def LargeTargetsFileSize: RawError =
+    RawError(ErrorCodes.LargeTargetsFileSize, StatusCodes.BadRequest, s"targets.json file size exceeds the limit of $targetsFileSizeLimit")
 
   case class NotImplemented(message: String)
     extends com.advancedtelematic.libats.http.Errors.Error(com.advancedtelematic.libtuf.data.ErrorCodes.Reposerver.NotImplemented, StatusCodes.NotImplemented, message)
