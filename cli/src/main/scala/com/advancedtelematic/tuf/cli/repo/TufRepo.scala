@@ -454,9 +454,19 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
 
       for {
         checksum <- readChecksum[TargetsRole].toFuture
-        _ <- reposerverClient.pushTargets(targets, checksum.some)
+        fileSizeLimit <- reposerverClient.pushTargets(targets, checksum.some)
+        _ <- printWarningForLargeFile(targets, fileSizeLimit)
       } yield targets
     }
+
+  private def printWarningForLargeFile(targets: SignedPayload[TargetsRole], fileSizeLimit: Option[Int]): Future[Unit] = Future {
+    fileSizeLimit.foreach { fsl =>
+      val fileSize = targets.asJson.noSpaces.length
+      if (fileSize > fsl * 0.75)
+        log.warn(s"targets.json file size is $fileSize and will soon reach the limit of $fileSizeLimit.\n" +
+          s"Remove unnecessary software updates to reduce the size of targets.json.")
+    }
+  }
 
   def deleteTarget(filename: TargetFilename): Try[Path] = for {
     targetsRole <- readUnsignedRole[TargetsRole]

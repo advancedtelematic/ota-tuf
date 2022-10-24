@@ -375,7 +375,9 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
           extractRoleChecksumHeader { checksum =>
             onSuccess(saveOfflineTargetsRole(repoId, namespace, signedPayload, checksum)) { newSignedRole =>
               respondWithCheckSum(newSignedRole.checksum.hash) {
-                complete(StatusCodes.NoContent)
+                respondWithHeader(RawHeader("x-ats-targets-role-size-limit", targetsFileSizeLimit.toString)) {
+                  complete(StatusCodes.NoContent)
+                }
               }
             }
           }

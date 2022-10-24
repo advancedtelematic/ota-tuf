@@ -18,6 +18,7 @@ import com.advancedtelematic.libtuf.data.ValidatedString._
 import com.advancedtelematic.libtuf.http.CliHttpClient.CliHttpClientError
 import com.advancedtelematic.libtuf.http.ReposerverHttpClient
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleChecksumNotValid, UploadTargetTooBig}
+import com.advancedtelematic.tuf.reposerver.Boot.targetsFileSizeLimit
 import com.advancedtelematic.tuf.reposerver.db.RepoNamespaceRepositorySupport
 import com.advancedtelematic.tuf.reposerver.util._
 import io.circe.syntax._
@@ -109,7 +110,7 @@ class UserReposerverClientSpec extends TufReposerverSpec
     val targets = TargetsRole(Instant.now, Map.empty, targetsResponse.targets.signed.version + 1)
     val signedTargets = fakeKeyserverClient.sign(repoId, RoleType.TARGETS, targets.asJson).futureValue
 
-    client.pushTargets(SignedPayload(signedTargets.signatures, targets, targets.asJson), targetsResponse.checksum).futureValue shouldBe (())
+    client.pushTargets(SignedPayload(signedTargets.signatures, targets, targets.asJson), targetsResponse.checksum).futureValue shouldBe Some(targetsFileSizeLimit)
   }
 
   test("can pull targets") {
