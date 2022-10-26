@@ -6,6 +6,13 @@ All notable changes to `garage-sign` will be documented in this file.
 ## Upcoming release
 
 
+## v0.7.6
+### Added
+- Added validation of targets.json size. The maximum size is 8,286,208 bytes.
+- Added a warning message when targets.json size reaches 75% of its maximum size.
+### Changed
+- When signing root.json or targets.json the expiration time is set to the default value if `--expires` or `--expire-after` options are not set and the previous expiration time is earlier than the default expiration time.
+
 ## v0.7.5
 ### Added
 - Added `garage-sign` commands to set threshold for the Root (`garage-sign root set-threshold`) and Targets (`garage-sign targets set-threshold`) roles.

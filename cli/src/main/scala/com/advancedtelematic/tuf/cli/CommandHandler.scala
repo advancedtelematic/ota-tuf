@@ -58,11 +58,15 @@ object CommandHandler {
       }
     } yield targetFilename -> newTarget
 
-  def expirationDate(config: Config, now: Instant = Instant.now())(previous: Instant): Instant = {
+  def expirationDate(config: Config, now: Instant = Instant.now(), defaultPeriod: Period)(previous: Instant): Instant = {
     val d = config.expireAfter
       .map(now.atOffset(ZoneOffset.UTC).plus(_).toInstant)
       .orElse(config.expireOn)
-      .getOrElse(previous)
+      .getOrElse {
+        val default = now.plus(defaultPeriod)
+        if (previous.isAfter(default)) previous
+        else default
+      }
 
     if (d.isBefore(now) && !config.force) throw PastDate()
     else d
@@ -173,7 +177,7 @@ object CommandHandler {
 
     case SignTargets =>
       tufRepo
-        .signTargets(config.keyNames, expirationDate(config), config.version, config.signatures)
+        .signTargets(config.keyNames, expirationDate(config = config, defaultPeriod = DEFAULT_TARGET_LIFETIME), config.version, config.signatures)
         .map(p => log.info(s"signed targets.json to $p"))
 
 
@@ -218,7 +222,7 @@ object CommandHandler {
         .map(_ => log.info("Pushed root.json"))
 
     case SignRoot =>
-      tufRepo.signRoot(config.keyNames, expirationDate(config), config.oldRootKey, config.signatures)
+      tufRepo.signRoot(config.keyNames, expirationDate(config = config, defaultPeriod = DEFAULT_ROOT_LIFETIME), config.oldRootKey, config.signatures)
         .map(p => log.info(s"signed root.json saved to $p"))
 
     case AddRootKey =>
