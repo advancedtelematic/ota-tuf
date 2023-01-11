@@ -1,6 +1,7 @@
 package com.advancedtelematic.tuf.reposerver.http
 
 import akka.actor.Scheduler
+import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.Multipart.BodyPart
 import akka.http.scaladsl.model.headers.{RawHeader, `Content-Length`}
 import akka.http.scaladsl.model.{EntityStreamException, HttpEntity, Multipart, ParsingException, StatusCodes, Uri}
@@ -23,13 +24,14 @@ import com.advancedtelematic.libats.http.AnyvalMarshallingSupport._
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libats.data.DataType.Namespace
-import com.advancedtelematic.libats.data.{Limit, Offset}
+import com.advancedtelematic.libats.data.{ErrorRepresentation, Limit, Offset}
 import com.advancedtelematic.libats.http.FromLongUnmarshallers._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, TargetFilename, _}
 import com.advancedtelematic.libtuf_server.data.Marshalling._
 import com.advancedtelematic.libtuf_server.data.Requests.{CommentRequest, CreateRepositoryRequest, _}
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
+import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient.RootRoleNotFound
 import com.advancedtelematic.libtuf_server.repo.client.ReposerverClient.RequestTargetItem
 import com.advancedtelematic.libtuf_server.repo.server.DataType.SignedRole
 import com.advancedtelematic.tuf.reposerver.Settings
@@ -218,7 +220,13 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
   private def withRepoIdHeader(repoId: RepoId) = respondWithHeader(RawHeader("x-ats-tuf-repo-id", repoId.uuid.toString))
 
   private def findRootByVersion(repoId: RepoId, version: Int): Route = {
-    complete(keyserverClient.fetchRootRole(repoId, version))
+    complete(
+      keyserverClient.fetchRootRole(repoId, version)
+        .map[ToResponseMarshallable](root => StatusCodes.OK -> root)
+        .recover[ToResponseMarshallable] {
+          case e@RootRoleNotFound => e.responseCode -> ErrorRepresentation(e.code, e.desc, None, Some(e.errorId))
+        }
+    )
   }
 
   private def findRole(repoId: RepoId, roleType: RoleType): Route = {

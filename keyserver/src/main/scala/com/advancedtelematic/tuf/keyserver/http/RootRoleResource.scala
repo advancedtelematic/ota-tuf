@@ -5,6 +5,7 @@ import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model.StatusCodes
 import akka.stream.Materializer
 import cats.data.Validated.{Invalid, Valid}
+import cats.syntax.option._
 import com.advancedtelematic.libats.data.ErrorRepresentation
 import com.advancedtelematic.libats.http.UUIDKeyAkka._
 import com.advancedtelematic.libtuf.data.ClientCodecs._
@@ -92,6 +93,12 @@ class RootRoleResource()
             case SignedRootRoleRepository.MissingSignedRole =>
               signedRootRoles.generateNewVersionIfExpired(repoId, version)
           }
+          .map[ToResponseMarshallable](root => StatusCodes.OK -> root)
+          .recover[ToResponseMarshallable] {
+            case e@SignedRootRoleRepository.MissingSignedRole =>
+              e.responseCode -> ErrorRepresentation(e.code, e.msg, e.cause.map(_.getMessage.asJson), e.errorId.some)
+          }
+
         complete(f)
       } ~
       pathPrefix("private_keys") {
