@@ -19,6 +19,7 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import slick.jdbc.MySQLProfile.api._
 import com.advancedtelematic.libtuf.crypt.TufCrypto
 import com.advancedtelematic.libtuf.data.ClientDataType.TufRole._
+import com.advancedtelematic.libtuf.data.ValidationUtils
 import com.advancedtelematic.libtuf_server.repo.server.Errors.SignedRoleNotFound
 
 import scala.async.Async.{async, await}
@@ -87,6 +88,16 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
       }
     }
 
+    def validateCharacters(filename: TargetFilename, item: ClientTargetItem): Either[String, Unit] = {
+      val notAllowedCharsInFileName = ValidationUtils.findNotAllowedCharacters(filename.value)
+      val notAllowedCharsInItem = item.custom.map(_.noSpaces).toList.flatMap(ValidationUtils.findNotAllowedCharacters)
+      val notAllowedChars = notAllowedCharsInFileName ++ notAllowedCharsInItem
+      if (notAllowedChars.nonEmpty)
+        Left(errorMsg(filename, s"Target metadata contains not supported characters: [${notAllowedChars.distinct.mkString(", ")}]"))
+      else
+        Right(())
+    }
+
     def validateExistingTarget(filename: TargetFilename, oldItem: TargetItem, newItem: ClientTargetItem): Either[String, TargetItem] =
       for {
         newTargetCustom <- newItem.custom match {
@@ -101,6 +112,7 @@ class OfflineSignedRoleStorage(keyserverClient: KeyserverClient)
         json <- item.custom.toRight(errorMsg(filename, "new offline signed target items must contain custom metadata"))
         targetCustom <- json.as[TargetCustom].leftMap(errorMsg(filename, _))
         checksum <- validateNewChecksum(filename, item)
+        _ <- validateCharacters(filename, item)
         _ <- validateUriLength(filename, targetCustom)
         storageMethod = if(targetCustom.cliUploaded.contains(true)) StorageMethod.CliManaged else StorageMethod.Unmanaged
       } yield TargetItem(repoId, filename, targetCustom.uri.map(_.toUri), checksum, item.length, Some(targetCustom), storageMethod)

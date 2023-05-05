@@ -38,4 +38,17 @@ object ValidationUtils {
       str => s"$str is not between $min and $max chars long",
       proof
     )
+
+  /*
+   * aktualizr calculates hash incorrectly when metadata contains chars > 0x7f
+   */
+  def findNotAllowedCharacters(string: String): List[String] = {
+    import scala.collection.JavaConverters._
+    string
+      .codePoints()
+      .iterator().asScala
+      .filter(_ > 0x7f)
+      .map(codePoint => String.valueOf(Character.toChars(codePoint)))
+      .toList
+  }
 }

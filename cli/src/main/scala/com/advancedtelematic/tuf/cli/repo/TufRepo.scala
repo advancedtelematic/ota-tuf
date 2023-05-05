@@ -21,7 +21,7 @@ import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.RoleType
 import com.advancedtelematic.libtuf.data.TufDataType.SignatureMethod.RSASSA_PSS_SHA256
 import com.advancedtelematic.libtuf.data.TufDataType.{ClientSignature, KeyId, KeyType, RoleType, SignedPayload, TargetFilename, TufKey, TufKeyPair, TufPrivateKey, ValidSignatureType}
-import com.advancedtelematic.libtuf.data.{ClientDataType, RootRoleValidation}
+import com.advancedtelematic.libtuf.data.{ClientDataType, RootRoleValidation, ValidationUtils}
 import com.advancedtelematic.libtuf.http.TufServerHttpClient.{RoleNotFound, TargetsResponse}
 import com.advancedtelematic.libtuf.http._
 import com.advancedtelematic.tuf.cli.DataType.{KeyName, RepoConfig, _}
@@ -69,6 +69,8 @@ object TufRepo {
   case class RoleMissing[T](rolePath: String)(implicit ev: TufRole[T]) extends Exception(s"Missing role ${ev.metaPath.toString()} at $rolePath") with NoStackTrace
 
   case class RootPullError(errors: NonEmptyList[String]) extends Exception("Could not validate a valid root.json chain:\n" + errors.toList.mkString("\n")) with NoStackTrace
+
+  case class NotSupportedCharactersError(chars: List[String]) extends Exception(s"Target item contains unsupported characters: [${chars.mkString(", ")}]. \nPlease remove them and try to add the target item one more time.") with NoStackTrace
 
   protected [cli] def readConfig(repoPath: => Path): Try[RepoConfig] =
     Try { new FileInputStream(repoPath.resolve("config.json").toFile) }
@@ -415,6 +417,7 @@ abstract class TufRepo[S <: TufServerClient](val repoPath: Path)(implicit ec: Ex
 
 class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufRepo[ReposerverClient](repoPath) {
   import TufRepoOps._
+  import TufRepo.NotSupportedCharactersError
 
   override val importedRootFile: Boolean = true
 
@@ -477,8 +480,17 @@ class RepoServerRepo(repoPath: Path)(implicit ec: ExecutionContext) extends TufR
     path <- writeUnsignedRole(newTargets)
   } yield path
 
+  private def validateCharacters(targetFilename: TargetFilename, targetItem: ClientTargetItem) = {
+    val maybeUnsupportedCharacters = ValidationUtils.findNotAllowedCharacters(targetFilename.value + targetItem.asJson.noSpaces)
+    if (maybeUnsupportedCharacters.nonEmpty)
+      Failure(NotSupportedCharactersError(maybeUnsupportedCharacters.distinct))
+    else
+      Success(())
+  }
+
   def addTarget(targetFilename: TargetFilename, targetItem: ClientTargetItem): Try[Path] = {
     for {
+      _ <- validateCharacters(targetFilename, targetItem)
       targetsRole <- readUnsignedRole[TargetsRole]
       newTargetRole = targetsRole.copy(targets = targetsRole.targets + (targetFilename -> targetItem))
       path <- writeUnsignedRole(newTargetRole)

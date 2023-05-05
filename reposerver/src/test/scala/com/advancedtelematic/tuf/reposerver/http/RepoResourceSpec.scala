@@ -635,6 +635,18 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
     }
   }
 
+  test("uploading a target should fail if metadata contains not supported characters") {
+    val repoId = addTargetToRepo()
+
+    val nonBrakingSpace = " "
+    val urlEncodedNonBrakingSpace = "%C2%A0"
+
+    Put(apiUri(s"repo/${repoId.show}/targets/some_target/funky/thing?name=na${urlEncodedNonBrakingSpace}me&version=version&fileUri=${fakeHttpClient.fileUri}")) ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+      responseAs[ErrorRepresentation].description shouldBe s"Target metadata contains not supported characters: [$nonBrakingSpace]"
+    }
+  }
+
   test("GET returns 404 if target does not exist") {
     val repoId = addTargetToRepo()
 
@@ -896,6 +908,22 @@ class RepoResourceSpec extends TufReposerverSpec with RepoResourceSpecUtil
     Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
       status shouldBe StatusCodes.BadRequest
       responseAs[ErrorRepresentation].firstErrorCause.get should include("The target uri is too long.")
+    }
+  }
+
+  test("reject request with special characters in target item") {
+    implicit val repoId = addTargetToRepo()
+
+    val targetCustomJson = TargetCustom(TargetName(s"name-😜"), TargetVersion("version"), Seq.empty, TargetFormat.BINARY.some).asJson
+
+    val hashes: ClientHashes = Map(HashMethod.SHA256 -> Refined.unsafeApply("8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"))
+    val targets = Map(offlineTargetFilename -> ClientTargetItem(hashes, 0, targetCustomJson.some))
+
+    val signedPayload = buildSignedTargetsRole(repoId, targets)
+
+    Put(apiUri(s"repo/${repoId.show}/targets"), signedPayload).withValidTargetsCheckSum ~> routes ~> check {
+      status shouldBe StatusCodes.BadRequest
+      responseAs[ErrorRepresentation].firstErrorCause.get should include(s"Target metadata contains not supported characters: [😜]")
     }
   }
 

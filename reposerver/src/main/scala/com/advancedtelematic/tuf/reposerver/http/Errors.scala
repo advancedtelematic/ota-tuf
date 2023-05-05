@@ -25,6 +25,7 @@ object ErrorCodes {
   val FailedSoftwareUpload = ErrorCode("failed_software_upload")
   val BadCompleteMultipartUploadFormat = ErrorCode("bad_complete_multipart_upload_format")
   val LargeTargetsFileSize = ErrorCode("large_targets_file_size")
+  val NotSupportedChars = ErrorCode("not_supported_chars")
 }
 
 object Errors {
@@ -53,6 +54,9 @@ object Errors {
 
   def InvalidOfflineTargets(errors: NonEmptyList[String]) =
     JsonError(ErrorCodes.InvalidOfflineTargets, StatusCodes.BadRequest, errors.asJson, "Invalid offline targets")
+
+  def NotSupportedChars(charsList: List[String]) =
+    RawError(ErrorCodes.NotSupportedChars, StatusCodes.BadRequest, s"Target metadata contains not supported characters: [${charsList.mkString(",")}]")
 
   def LargeTargetsFileSize: RawError =
     RawError(ErrorCodes.LargeTargetsFileSize, StatusCodes.BadRequest, s"targets.json file size exceeds the limit of $targetsFileSizeLimit")
