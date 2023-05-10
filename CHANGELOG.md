@@ -5,6 +5,10 @@ All notable changes to `garage-sign` will be documented in this file.
 
 ## Upcoming release
 
+## v0.7.7
+### Added
+- Added validation to the `garage-sign targets add` and `garage-sign targets add-uploaded` commands. Checks that the target item metadata doesn't contain unsupported characters.
+#### [Download](https://tuf-cli-releases.ota.here.com/cli-0.7.7.tgz)
 
 ## v0.7.6
 ### Added
@@ -12,12 +16,14 @@ All notable changes to `garage-sign` will be documented in this file.
 - Added a warning message when targets.json size reaches 75% of its maximum size.
 ### Changed
 - When signing root.json or targets.json the expiration time is set to the default value if `--expires` or `--expire-after` options are not set and the previous expiration time is earlier than the default expiration time.
+#### [Download](https://tuf-cli-releases.ota.here.com/cli-0.7.6.tgz)
 
 ## v0.7.5
 ### Added
 - Added `garage-sign` commands to set threshold for the Root (`garage-sign root set-threshold`) and Targets (`garage-sign targets set-threshold`) roles.
 ### Fixed
 - Fixed the commands to remove a key for the Root (`garage-sign root key remove`) and Targets (`garage-sign root targets-key remove`) roles using only `--key-id` option.
+#### [Download](https://tuf-cli-releases.ota.here.com/cli-0.7.5.tgz)
 
 ## v0.7.4
 ### Added
