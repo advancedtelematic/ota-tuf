@@ -28,6 +28,7 @@ import com.advancedtelematic.libats.data.{ErrorRepresentation, Limit, Offset}
 import com.advancedtelematic.libats.http.FromLongUnmarshallers._
 import com.advancedtelematic.libtuf.data.TufDataType.TargetFormat.TargetFormat
 import com.advancedtelematic.libtuf.data.TufDataType.{HardwareIdentifier, RepoId, TargetFilename, _}
+import com.advancedtelematic.libtuf.data.ValidationUtils
 import com.advancedtelematic.libtuf_server.data.Marshalling._
 import com.advancedtelematic.libtuf_server.data.Requests.{CommentRequest, CreateRepositoryRequest, _}
 import com.advancedtelematic.libtuf_server.keyserver.KeyserverClient
@@ -150,9 +151,24 @@ class RepoResource(keyserverClient: KeyserverClient, namespaceValidation: Namesp
 
   private def addTargetItem(namespace: Namespace, item: TargetItem): Future[JsonSignedPayload] =
     for {
+      _ <- validateTargetItem(item)
       result <- targetRoleGeneration.addTargetItem(item)
       _ <- tufTargetsPublisher.targetAdded(namespace, item)
     } yield result
+
+  private def validateTargetItem(item: TargetItem): Future[Unit] = {
+    val notAllowedCharsInName = ValidationUtils.findNotAllowedCharacters(item.filename.value)
+    val notAllowedCharsInCustom = item.custom.toList.flatMap { item =>
+      ValidationUtils.findNotAllowedCharacters(item.uri.map(_.toString).getOrElse("")) ++
+        ValidationUtils.findNotAllowedCharacters(item.name.value) ++
+        ValidationUtils.findNotAllowedCharacters(item.version.value) ++
+        ValidationUtils.findNotAllowedCharacters(item.proprietary.noSpaces)
+    }
+
+    val notAllowedChars = notAllowedCharsInName ++ notAllowedCharsInCustom
+    if (notAllowedChars.nonEmpty) Future.failed(Errors.NotSupportedChars(notAllowedChars.distinct))
+    else Future.successful(())
+  }
 
   private def addTarget(namespace: Namespace, filename: TargetFilename, repoId: RepoId, clientItem: RequestTargetItem): Route =
     complete {
