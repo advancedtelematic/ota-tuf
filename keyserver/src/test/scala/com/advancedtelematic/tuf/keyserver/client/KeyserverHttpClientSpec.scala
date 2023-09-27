@@ -1,12 +1,12 @@
 package com.advancedtelematic.tuf.keyserver.client
 
 import java.security.interfaces.RSAPublicKey
-
-import com.advancedtelematic.libats.http.Errors.RemoteServiceError
+import com.advancedtelematic.libats.http.Errors.{JsonError, RemoteServiceError}
 import com.advancedtelematic.libats.http.tracing.NullServerRequestTracing
 import com.advancedtelematic.libats.http.tracing.Tracing.ServerRequestTracing
 import com.advancedtelematic.libtuf.data.ClientCodecs._
 import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
+import com.advancedtelematic.libtuf.data.ErrorCodes
 import com.advancedtelematic.libtuf.data.TufDataType.{EcPrime256TufKey, Ed25519KeyType, Ed25519TufKey, JsonSignedPayload, KeyId, KeyType, RepoId, RoleType, RsaKeyType, SignedPayload, ValidKeyId}
 import com.advancedtelematic.libtuf_server.keyserver.{KeyserverClient, KeyserverHttpClient}
 import com.advancedtelematic.tuf.keyserver.data.KeyServerDataType.{Key, KeyGenId, KeyGenRequest, KeyGenRequestStatus}
@@ -114,7 +114,8 @@ class KeyserverHttpClientSpec extends TufKeyserverSpec
     } yield updated
 
     val failure = f.failed.futureValue
-    failure shouldBe a[RemoteServiceError]
+    failure shouldBe a[JsonError]
+    failure.asInstanceOf[JsonError].code shouldBe ErrorCodes.KeyServer.InvalidRootRole
   }
 
   keyTypeTest("fetches a root key pair ") { keyType =>

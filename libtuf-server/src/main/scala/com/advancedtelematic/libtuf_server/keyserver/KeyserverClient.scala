@@ -17,6 +17,7 @@ import com.advancedtelematic.libtuf.data.ClientDataType.RootRole
 import com.advancedtelematic.libtuf.data.TufCodecs._
 import com.advancedtelematic.libtuf.data.TufDataType.RoleType.{RoleType, _}
 import com.advancedtelematic.libtuf.data.TufDataType.{JsonSignedPayload, KeyId, KeyType, RepoId, SignedPayload, TufKeyPair}
+import com.advancedtelematic.libtuf_server.repo.server.Errors.InvalidOfflineRoot
 import io.circe.Json
 
 import scala.concurrent.Future
@@ -115,7 +116,7 @@ class KeyserverHttpClient(uri: Uri, httpClient: HttpRequest => Future[HttpRespon
     val req = HttpRequest(HttpMethods.POST, uri = apiUri(Path("root") / repoId.show / "unsigned"))
     execJsonHttp[Unit, SignedPayload[RootRole]](req, signedPayload).handleErrors {
       case remoteError if remoteError.status == StatusCodes.BadRequest =>
-        Future.failed(remoteError)
+        Future.failed(InvalidOfflineRoot(remoteError))
     }
   }
 
